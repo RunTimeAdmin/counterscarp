@@ -22,7 +22,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for upgrade diffs
       
@@ -110,7 +110,7 @@ jobs:
       
       - name: Upload Blocker Report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: blocker-report
           path: |
@@ -129,7 +129,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -204,7 +204,7 @@ jobs:
             });
       
       - name: Upload Advisory Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: advisory-report
           path: |
@@ -221,7 +221,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
@@ -242,7 +242,7 @@ jobs:
           python solana_analyzer.py ./programs > solana-report.txt
       
       - name: Upload Solana Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: solana-security-report
           path: solana-report.txt
@@ -253,7 +253,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
