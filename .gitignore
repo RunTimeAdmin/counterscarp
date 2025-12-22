@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Reports
+ACTION_PLAN_*.md
+audit_report_*.html
+audit_report_*.md
+scan_output.txt
+*.log
+
+# Config overrides
+sentinel-custom.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.coverage
+htmlcov/
