@@ -643,7 +643,7 @@ See LICENSE for details.
 
 **Built by:**
 - CyberShield Austin (professional security audits)
-- TokenAudit (crypto security education)
+- [@defiauditccie](https://twitter.com/defiauditccie) (Twitter/X)
 
 **Powered by:**
 - [Slither](https://github.com/crytic/slither) - Trail of Bits
@@ -662,12 +662,12 @@ See LICENSE for details.
 ## 📧 **Support**
 
 **Professional Audits:**
-- CyberShield Austin via TokenAudit
-- Twitter: [@TokenAudit](https://twitter.com/tokenaudit)
-- Scam Detection: [scamhoundcrypto.com](https://scamhoundcrypto.com)
+- CyberShield Austin
+- Twitter: [@defiauditccie](https://twitter.com/defiauditccie)
+- Website: [scamhoundcrypto.com](https://scamhoundcrypto.com)
 
 **GitHub:**
-- Issues: [github.com/CyberShieldAustin/sentinel-engine/issues](https://github.com/CyberShieldAustin/sentinel-engine/issues)
+- Issues: [github.com/RunTimeAdmin/sentinel-engine/issues](https://github.com/RunTimeAdmin/sentinel-engine/issues)
 
 ---
 
