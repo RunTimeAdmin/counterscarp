@@ -1,0 +1,230 @@
+# ============================================================================
+# Sentinel Engine Configuration
+# Per-project security analysis settings
+# ============================================================================
+
+[engine]
+# Engine-wide settings
+name = "Sentinel Security Engine"
+version = "2.2"
+
+# Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
+fail_on_severity = "HIGH"
+
+# Maximum findings before stopping scan (0 = unlimited)
+max_findings = 0
+
+
+# ============================================================================
+# Heuristic Rule Configuration
+# Enable/disable specific rules and set custom severity overrides
+# ============================================================================
+
+[heuristics]
+# Global toggle for all heuristic scanning
+enabled = true
+
+# Severity override: upgrade or downgrade rule severity
+# Format: RULE_ID = "NEW_SEVERITY"
+[heuristics.severity_overrides]
+# Example: Downgrade timestamp usage from MEDIUM to LOW for time-based contracts
+# BLOCK_TIMESTAMP_RANDOMNESS = "LOW"
+
+# Rule-specific toggles: disable individual rules
+[heuristics.disabled_rules]
+# Format: RULE_ID = true (to disable)
+# Examples:
+# BLOCK_TIMESTAMP_RANDOMNESS = true  # Allow timestamp usage in this project
+# HARDCODED_ADDRESS = true           # Expected for oracle contracts
+# DIVIDE_BEFORE_MULTIPLY = true      # Project uses safe precision patterns
+
+
+# ============================================================================
+# Suppressions (Accepted Risks)
+# Mark specific findings as false positives or accepted design decisions
+# ============================================================================
+
+[[suppressions]]
+# Suppress by rule + file + line
+rule_id = "EXAMPLE_RULE"
+file = "contracts/Example.sol"
+line = 42
+reason = "This is a known safe pattern in this specific context"
+expires = "2025-12-31"  # Optional: suppression expires on date
+
+# [[suppressions]]
+# # Suppress by rule + file (all occurrences in file)
+# rule_id = "HARDCODED_ADDRESS"
+# file = "contracts/Oracle.sol"
+# reason = "Oracle address is intentionally hardcoded per deployment"
+
+# [[suppressions]]
+# # Suppress by rule globally
+# rule_id = "EMERGENCY_WITHDRAW_PUBLIC"
+# reason = "All emergency functions have onlyOwner, heuristic is false positive"
+
+
+# ============================================================================
+# Static Analyzer Configuration
+# ============================================================================
+
+[static_analysis]
+# Slither configuration
+[static_analysis.slither]
+enabled = true
+# Detectors to exclude (comma-separated)
+exclude_detectors = ""
+# Filter: only show issues with these impacts (High,Medium,Low,Informational)
+include_impact = "High,Medium"
+
+# Aderyn configuration
+[static_analysis.aderyn]
+enabled = false  # Opt-in only
+# Scope: limit analysis to specific paths
+scope = ""
+
+
+# ============================================================================
+# Fuzzing Configuration
+# ============================================================================
+
+[fuzzing]
+# Foundry fuzzing
+[fuzzing.foundry]
+enabled = false
+runs = 10000
+max_test_rejects = 100000
+
+# Medusa fuzzing
+[fuzzing.medusa]
+enabled = false
+test_limit = 100000
+timeout = 300  # seconds
+workers = 10
+
+
+# ============================================================================
+# Chain-Specific Settings
+# ============================================================================
+
+[chains]
+# Solana/Anchor static analysis
+[chains.solana]
+enabled = false
+# Path to Solana project root (relative to config)
+project_root = "./programs"
+
+# EVM-specific rules
+[chains.evm]
+# Expected compiler version range
+solc_version = ">=0.8.0"
+# Known safe external contracts (won't flag as risky external calls)
+trusted_contracts = [
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",  # USDC
+    "0xdAC17F958D2ee523a2206206994597C13D831ec7",  # USDT
+]
+
+
+# ============================================================================
+# Upgrade Safety Configuration
+# ============================================================================
+
+[upgrade_diff]
+# Automatically run upgrade diff if these files exist
+old_implementation_path = ""
+new_implementation_path = ""
+
+# Patterns to ignore in upgrade diff
+[upgrade_diff.ignore_patterns]
+# Ignore new view functions (read-only, low risk)
+ignore_new_view_functions = true
+# Ignore natspec/comment changes
+ignore_comment_changes = true
+
+
+# ============================================================================
+# Reporting Configuration
+# ============================================================================
+
+[reporting]
+# Output format (markdown, json, sarif, html)
+format = "markdown"
+
+# Include sections in report
+[reporting.sections]
+executive_summary = true
+supply_chain = true
+static_analysis = true
+heuristic_scan = true
+fuzzing = false  # Opt-in for reports
+threat_intel = false  # Opt-in for reports
+access_matrix = true
+
+# Report verbosity (minimal, standard, verbose)
+verbosity = "standard"
+
+# Group findings by severity or by file
+group_by = "severity"  # Options: severity, file, rule
+
+
+# ============================================================================
+# CI/CD Integration
+# ============================================================================
+
+[ci]
+# Fail pipeline if critical/high issues found
+fail_on_findings = true
+
+# Post results as PR comment (GitHub Actions)
+post_pr_comment = true
+
+# Upload SARIF to GitHub Security tab
+upload_sarif = false
+
+# Paths to exclude from scanning (glob patterns)
+exclude_paths = [
+    "test/**",
+    "script/**",
+    "node_modules/**",
+    ".git/**",
+]
+
+
+# ============================================================================
+# EXAMPLES: Common Configuration Scenarios
+# ============================================================================
+
+# --- Scenario 1: DeFi Project with Oracle Integration ---
+# [heuristics.disabled_rules]
+# HARDCODED_ADDRESS = true  # Oracle addresses are expected
+# BLOCK_TIMESTAMP_RANDOMNESS = true  # Used for timelock/vesting, not randomness
+#
+# [chains.evm]
+# trusted_contracts = [
+#     "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",  # Chainlink ETH/USD
+# ]
+
+# --- Scenario 2: Upgradeable Proxy with Known Patterns ---
+# [[suppressions]]
+# rule_id = "DELEGATECALL_IN_LOOP"
+# file = "contracts/Proxy.sol"
+# reason = "Proxy pattern requires delegatecall, safe via access control"
+#
+# [upgrade_diff]
+# old_implementation_path = "contracts/old/Implementation.sol"
+# new_implementation_path = "contracts/Implementation.sol"
+
+# --- Scenario 3: Audit-Ready Strict Mode ---
+# [engine]
+# fail_on_severity = "MEDIUM"  # Fail on any medium+ issues
+#
+# [heuristics]
+# # Enable all rules, no suppressions
+# [heuristics.disabled_rules]
+# # (empty - all rules active)
+#
+# [reporting]
+# verbosity = "verbose"
+# [reporting.sections]
+# fuzzing = true
+# threat_intel = true

@@ -1,0 +1,172 @@
+# ============================================================================
+# SENTINEL ENGINE - AUDIT MODE CONFIGURATION
+# ============================================================================
+# Profile: Maximum thoroughness for comprehensive client audits
+# Speed: Slow (deep analysis, full coverage)
+# Use Case: Pre-deployment security audits, tokenomics reviews, DAO governance
+# ============================================================================
+
+[engine]
+name = "Sentinel Security Engine"
+version = "2.2"
+profile = "audit"
+
+# Fail build on MEDIUM or higher (strict for audits)
+fail_on_severity = "MEDIUM"
+
+# No limit on findings (report everything)
+max_findings = 0
+
+# ============================================================================
+# HEURISTIC SCANNER
+# ============================================================================
+[heuristics]
+enabled = true
+
+# Audit mode: Enable ALL heuristic rules (no suppressions by default)
+[heuristics.disabled_rules]
+# None disabled in audit mode
+
+[heuristics.severity_overrides]
+# Upgrade all DeFi-critical patterns to CRITICAL
+UNCHECKED_EXTERNAL_CALL = "CRITICAL"
+ORACLE_STALENESS_CHECK = "CRITICAL"
+FLASH_LOAN_REENTRANCY = "CRITICAL"
+MISSING_SLIPPAGE_PROTECTION = "CRITICAL"
+STORAGE_COLLISION_RISK = "CRITICAL"
+
+# ============================================================================
+# STATIC ANALYSIS
+# ============================================================================
+[static_analysis]
+slither_enabled = true
+aderyn_enabled = true
+mythril_enabled = false  # Too slow for default (enable manually if needed)
+
+# Slither: All detectors, max depth
+[static_analysis.slither]
+detectors = "all"
+filter_paths = []  # Don't exclude anything
+exclude_informational = false
+exclude_low = false
+exclude_optimization = false
+
+# Aderyn: Full Rust/Anchor analysis
+[static_analysis.aderyn]
+output_format = "json"
+skip_update_check = false
+
+# ============================================================================
+# FUZZING
+# ============================================================================
+[fuzzing]
+foundry_enabled = true
+medusa_enabled = true
+
+# Foundry: Deep invariant testing
+[fuzzing.foundry]
+runs = 50000  # High coverage
+depth = 500   # Deep call chains
+timeout = 3600  # 1 hour max
+
+# Medusa: Maximum test limit
+[fuzzing.medusa]
+test_limit = 250000
+timeout = 7200  # 2 hours
+workers = 4
+coverage_enabled = true
+
+# ============================================================================
+# CHAIN-SPECIFIC ANALYSIS
+# ============================================================================
+[chain]
+# Solana/Anchor full static analysis
+solana_enabled = true
+
+# Trusted programs (won't flag as dependencies)
+[chain.solana]
+trusted_programs = [
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",  # SPL Token
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",  # Associated Token
+]
+
+# EVM: Trusted contracts (oracles, protocols)
+[chain.evm]
+trusted_contracts = [
+    "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",  # Chainlink ETH/USD
+]
+
+# ============================================================================
+# UPGRADE SAFETY
+# ============================================================================
+[upgrade_diff]
+enabled = true
+strict_mode = true  # Fail on ANY storage changes
+
+# Patterns to ignore (carefully curated)
+ignore_patterns = [
+    # Allow adding storage gaps at the end
+    "uint256[*] private __gap",
+]
+
+# ============================================================================
+# REPORTING
+# ============================================================================
+[reporting]
+format = "markdown"  # Primary format
+html_enabled = true  # Also generate HTML for clients
+json_enabled = true  # JSON for CI/CD integration
+
+# Verbose output (include all findings, recommendations, references)
+verbosity = "verbose"
+
+# Group findings by file for easier review
+group_by = "file"
+
+# Include extra context
+include_code_snippets = true
+include_remediation = true
+include_references = true
+
+# Sections to include
+[reporting.sections]
+heuristics = true
+static_analysis = true
+fuzzing = true
+supply_chain = true
+threat_intel = true
+upgrade_safety = true
+solana_analysis = true
+liar_detector = true
+access_matrix = true
+
+# ============================================================================
+# CI/CD INTEGRATION
+# ============================================================================
+[ci]
+enabled = true
+
+# Audit mode: Strict enforcement
+fail_on_critical = true
+fail_on_high = true
+fail_on_medium = true  # Even MEDIUM findings block in audit mode
+fail_on_low = false
+
+# GitHub Actions
+[ci.github_actions]
+sarif_upload = true
+pr_comments = true
+annotations = true
+
+# ============================================================================
+# SUPPRESSIONS
+# ============================================================================
+# In audit mode, suppressions should be minimal and well-documented
+# Add project-specific suppressions below after initial scan
+
+# Example: Timelock uses block.timestamp for delays (safe)
+# [[suppressions]]
+# rule_id = "BLOCK_TIMESTAMP_RANDOMNESS"
+# file = "contracts/Timelock.sol"
+# reason = "Timestamp used for delay calculation, not randomness"
+# expires = "2025-12-31"

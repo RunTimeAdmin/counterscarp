@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (exclude from image to keep it small)
+README.md
+*.md
+upgrade.txt
+
+# Docker itself
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Build artifacts
+build/
+dist/
+*.log
+
+# Test output
+ACTION_PLAN_*.md
+test/

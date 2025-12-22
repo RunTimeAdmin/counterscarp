@@ -1,0 +1,279 @@
+name: Sentinel Security Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Manual trigger
+
+permissions:
+  contents: read
+  pull-requests: write  # To post comments
+  security-events: write  # For SARIF upload
+
+jobs:
+  # ========================================
+  # BLOCKER CHECKS (Fail PR on issues)
+  # ========================================
+  blocker-checks:
+    runs-on: ubuntu-latest
+    name: Critical & High Severity Blockers
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full history for upgrade diffs
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install slither-analyzer requests packaging tomli
+          pip install solc-select
+          solc-select install 0.8.19
+          solc-select use 0.8.19
+      
+      - name: Run Sentinel (Blocker Mode)
+        id: blocker_scan
+        run: |
+          python orchestrator.py --target ./contracts --config sentinel-pr.toml --report > scan_output.txt 2>&1 || true
+          cat scan_output.txt
+      
+      - name: Check for Blockers
+        id: check_blockers
+        run: |
+          # Count CRITICAL and HIGH findings
+          CRITICAL=$(grep -c '\[CRITICAL\]' scan_output.txt || echo 0)
+          HIGH=$(grep -c '\[HIGH\]' scan_output.txt || echo 0)
+          TOTAL_BLOCKERS=$((CRITICAL + HIGH))
+          
+          echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high_count=$HIGH" >> $GITHUB_OUTPUT
+          echo "total_blockers=$TOTAL_BLOCKERS" >> $GITHUB_OUTPUT
+          
+          # Extract blocker findings
+          grep -E '\[(CRITICAL|HIGH)\]' scan_output.txt > blockers.txt || echo "No blockers found" > blockers.txt
+      
+      - name: Run Liar Detector (Blockers Only)
+        id: liar_blockers
+        run: |
+          find ./contracts -name "*.sol" -exec python intent_check.py {} \; > liar_output.txt 2>&1 || true
+          LIAR_MISMATCHES=$(grep -c 'MISMATCH' liar_output.txt || echo 0)
+          echo "liar_mismatches=$LIAR_MISMATCHES" >> $GITHUB_OUTPUT
+          
+          if [ $LIAR_MISMATCHES -gt 0 ]; then
+            grep 'MISMATCH' liar_output.txt >> blockers.txt
+          fi
+      
+      - name: Run Upgrade Diff (If Applicable)
+        id: upgrade_blockers
+        run: |
+          CHANGED_SOL=$(git diff --name-only origin/main...HEAD | grep '\.sol$' || true)
+          UPGRADE_ISSUES=0
+          
+          if [ -n "$CHANGED_SOL" ]; then
+            for file in $CHANGED_SOL; do
+              if git show origin/main:$file > old_version.sol 2>/dev/null; then
+                python upgrade_diff.py old_version.sol $file >> upgrade_output.txt 2>&1 || true
+              fi
+            done
+            
+            # Check for storage collisions or auth removal
+            STORAGE_COLLISION=$(grep -c 'STORAGE_COLLISION' upgrade_output.txt || echo 0)
+            AUTH_REMOVED=$(grep -c 'AUTH_REMOVED' upgrade_output.txt || echo 0)
+            UPGRADE_ISSUES=$((STORAGE_COLLISION + AUTH_REMOVED))
+            
+            if [ $UPGRADE_ISSUES -gt 0 ]; then
+              grep -E '(STORAGE_COLLISION|AUTH_REMOVED)' upgrade_output.txt >> blockers.txt
+            fi
+          fi
+          
+          echo "upgrade_issues=$UPGRADE_ISSUES" >> $GITHUB_OUTPUT
+      
+      - name: Fail if Blockers Found
+        if: steps.check_blockers.outputs.total_blockers > 0 || steps.liar_blockers.outputs.liar_mismatches > 0 || steps.upgrade_blockers.outputs.upgrade_issues > 0
+        run: |
+          echo "❌ BLOCKER ISSUES FOUND:"
+          echo "   CRITICAL: ${{ steps.check_blockers.outputs.critical_count }}"
+          echo "   HIGH: ${{ steps.check_blockers.outputs.high_count }}"
+          echo "   Liar Detector Mismatches: ${{ steps.liar_blockers.outputs.liar_mismatches }}"
+          echo "   Upgrade Safety Issues: ${{ steps.upgrade_blockers.outputs.upgrade_issues }}"
+          echo ""
+          echo "Details:"
+          cat blockers.txt
+          exit 1
+      
+      - name: Upload Blocker Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: blocker-report
+          path: |
+            blockers.txt
+            scan_output.txt
+            liar_output.txt
+            upgrade_output.txt
+  
+  # ========================================
+  # ADVISORY CHECKS (Comment only, no fail)
+  # ========================================
+  advisory-checks:
+    runs-on: ubuntu-latest
+    name: Advisory Findings (Non-Blocking)
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install slither-analyzer requests packaging tomli
+      
+      - name: Run Heuristics (Advisory Mode)
+        continue-on-error: true
+        run: |
+          python heuristic_scanner.py ./contracts --config sentinel-pr.toml > advisory_output.txt 2>&1 || true
+      
+      - name: Extract Advisory Findings
+        id: advisories
+        run: |
+          # Extract MEDIUM and LOW findings
+          grep -E '\[(MEDIUM|LOW|INFO)\]' advisory_output.txt > advisories.txt || echo "No advisory findings" > advisories.txt
+          
+          MEDIUM=$(grep -c '\[MEDIUM\]' advisory_output.txt || echo 0)
+          LOW=$(grep -c '\[LOW\]' advisory_output.txt || echo 0)
+          
+          echo "medium_count=$MEDIUM" >> $GITHUB_OUTPUT
+          echo "low_count=$LOW" >> $GITHUB_OUTPUT
+      
+      - name: Run Access Matrix (Advisory)
+        continue-on-error: true
+        run: |
+          find ./contracts -name "*.sol" -exec python access_matrix.py {} \; > access_output.txt 2>&1 || true
+          grep 'MEDIUM' access_output.txt >> advisories.txt || true
+      
+      - name: Post Advisory Comment
+        if: steps.advisories.outputs.medium_count > 0 || steps.advisories.outputs.low_count > 0
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            
+            const medium = ${{ steps.advisories.outputs.medium_count }};
+            const low = ${{ steps.advisories.outputs.low_count }};
+            
+            let comment = '## 🔍 Advisory Security Findings (Non-Blocking)\n\n';
+            comment += `Found **${medium}** MEDIUM and **${low}** LOW severity issues that do not block this PR.\n\n`;
+            comment += '### Summary\n';
+            comment += `- 🟡 **MEDIUM**: ${medium}\n`;
+            comment += `- 🔵 **LOW**: ${low}\n\n`;
+            
+            try {
+              const advisories = fs.readFileSync('advisories.txt', 'utf8');
+              const lines = advisories.split('\n').filter(l => l.trim()).slice(0, 10);
+              
+              if (lines.length > 0) {
+                comment += '### Sample Findings\n```\n';
+                comment += lines.join('\n');
+                comment += '\n```\n\n';
+              }
+            } catch (e) {
+              comment += '*(Could not read detailed findings)*\n\n';
+            }
+            
+            comment += '---\n';
+            comment += '*These are advisory findings that **do not block** the PR. Consider addressing them in a follow-up.*\n';
+            comment += '*Powered by [Sentinel Security Engine](https://github.com/CyberShieldAustin/sentinel-engine)*';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: comment
+            });
+      
+      - name: Upload Advisory Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: advisory-report
+          path: |
+            advisory_output.txt
+            advisories.txt
+            access_output.txt
+
+  # ========================================
+  # SOLANA ANALYSIS (If Solana/Rust files detected)
+  # ========================================
+  solana-analysis:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, 'solana') || contains(github.event.pull_request.title, 'solana')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Run Solana Analyzer
+        run: |
+          python solana_analyzer.py ./programs > solana-report.txt
+      
+      - name: Upload Solana Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: solana-security-report
+          path: solana-report.txt
+
+  upgrade-check:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.title, 'upgrade') || contains(github.event.pull_request.title, 'proxy')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Detect Changed Contracts
+        id: changes
+        run: |
+          # Find modified .sol files
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD | grep '\.sol$' || true)
+          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+      
+      - name: Run Upgrade Diff Analyzer
+        if: steps.changes.outputs.changed_files != ''
+        run: |
+          for file in ${{ steps.changes.outputs.changed_files }}; do
+            # Compare with main branch version
+            git show origin/main:$file > old_version.sol
+            python upgrade_diff.py old_version.sol $file || echo "Upgrade issues detected!"
+          done

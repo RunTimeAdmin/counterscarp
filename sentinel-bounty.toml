@@ -1,0 +1,207 @@
+# ============================================================================
+# SENTINEL ENGINE - BOUNTY HUNTER MODE CONFIGURATION
+# ============================================================================
+# Profile: Maximum coverage for bug bounty hunting and exploit discovery
+# Speed: Slow (deep fuzzing, AI exploit generation)
+# Use Case: Code4rena, Immunefi, Sherlock competitions
+# ============================================================================
+
+[engine]
+name = "Sentinel Security Engine"
+version = "2.2"
+profile = "bounty_hunter"
+
+# Never fail (report everything, let human decide)
+fail_on_severity = "INFO"
+
+# No limit (want ALL potential bugs)
+max_findings = 0
+
+# ============================================================================
+# HEURISTIC SCANNER
+# ============================================================================
+[heuristics]
+enabled = true
+
+# Bounty mode: Enable EVERYTHING (even low-confidence patterns)
+[heuristics.disabled_rules]
+# None disabled
+
+# Upgrade all DeFi/security patterns to CRITICAL
+[heuristics.severity_overrides]
+UNCHECKED_EXTERNAL_CALL = "CRITICAL"
+ORACLE_STALENESS_CHECK = "CRITICAL"
+FLASH_LOAN_REENTRANCY = "CRITICAL"
+MISSING_SLIPPAGE_PROTECTION = "CRITICAL"
+STORAGE_COLLISION_RISK = "CRITICAL"
+UNSAFE_DELEGATECALL = "CRITICAL"
+MISSING_ZERO_ADDRESS_CHECK = "HIGH"
+UNPROTECTED_INIT = "CRITICAL"
+TX_ORIGIN_USAGE = "HIGH"
+SELFDESTRUCT_USAGE = "HIGH"
+FRONT_RUNNING_RISK = "HIGH"
+OVERFLOW_UNDERFLOW = "HIGH"
+WEAK_RANDOMNESS = "HIGH"
+
+# Even timestamp and hardcoded addresses might be exploitable
+BLOCK_TIMESTAMP_RANDOMNESS = "MEDIUM"
+HARDCODED_ADDRESS = "MEDIUM"
+
+# ============================================================================
+# STATIC ANALYSIS
+# ============================================================================
+[static_analysis]
+slither_enabled = true
+aderyn_enabled = true
+mythril_enabled = true  # Enable symbolic execution (slow but thorough)
+
+# Slither: Everything
+[static_analysis.slither]
+detectors = "all"
+filter_paths = []
+exclude_informational = false  # Report everything
+exclude_low = false
+exclude_optimization = false
+
+# Aderyn: Full analysis
+[static_analysis.aderyn]
+output_format = "json"
+skip_update_check = false
+
+# Mythril: Deep symbolic execution
+[static_analysis.mythril]
+max_depth = 128
+execution_timeout = 3600
+solver_timeout = 300
+
+# ============================================================================
+# FUZZING
+# ============================================================================
+[fuzzing]
+foundry_enabled = true
+medusa_enabled = true
+
+# Foundry: Maximum coverage
+[fuzzing.foundry]
+runs = 100000  # Very high
+depth = 1000   # Deep exploration
+timeout = 7200  # 2 hours
+
+# Medusa: Extreme test limit
+[fuzzing.medusa]
+test_limit = 500000  # Maximum
+timeout = 14400  # 4 hours
+workers = 8  # Use all cores
+coverage_enabled = true
+
+# ============================================================================
+# CHAIN-SPECIFIC ANALYSIS
+# ============================================================================
+[chain]
+solana_enabled = true
+
+# Minimal trust (flag more dependencies)
+[chain.solana]
+trusted_programs = [
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+]
+
+[chain.evm]
+trusted_contracts = []  # Don't trust anything in bounty mode
+
+# ============================================================================
+# UPGRADE SAFETY
+# ============================================================================
+[upgrade_diff]
+enabled = true
+strict_mode = true
+
+ignore_patterns = []  # Don't ignore anything
+
+# ============================================================================
+# REPORTING
+# ============================================================================
+[reporting]
+format = "markdown"
+html_enabled = true
+json_enabled = true
+
+# Maximum detail
+verbosity = "verbose"
+
+# Group by severity (show highest-paying bugs first)
+group_by = "severity"
+
+include_code_snippets = true
+include_remediation = true
+include_references = true
+
+# Additional bounty-specific options
+include_exploit_pocs = true  # Generate PoC templates
+include_impact_analysis = true  # Estimate potential loss
+include_attack_scenarios = true  # Describe exploitation paths
+
+[reporting.sections]
+heuristics = true
+static_analysis = true
+fuzzing = true
+supply_chain = true
+threat_intel = true  # Show historical similar bugs
+upgrade_safety = true
+solana_analysis = true
+liar_detector = true
+access_matrix = true
+ai_exploit_generation = true  # Use GPT-4 to generate exploits
+
+# ============================================================================
+# THREAT INTELLIGENCE
+# ============================================================================
+[threat_intel]
+enabled = true
+
+# Fetch recent bounty reports for context
+sources = [
+    "code4rena",
+    "immunefi",
+    "sherlock",
+    "solodit"
+]
+
+# Show similar bugs from past contests
+show_similar_findings = true
+similarity_threshold = 0.7
+
+# ============================================================================
+# AI EXPLOIT GENERATION
+# ============================================================================
+[ai]
+enabled = true
+provider = "openai"  # or "anthropic", "local"
+
+# GPT-4 for exploit generation
+[ai.openai]
+model = "gpt-4"
+temperature = 0.7
+max_tokens = 2000
+
+# Generate Foundry test exploits
+[ai.exploit_generation]
+enabled = true
+output_dir = "exploits/"
+template = "foundry"
+
+# Prompt settings
+include_context = true  # Include related code
+include_threat_intel = true  # Include similar historical bugs
+
+# ============================================================================
+# CI/CD INTEGRATION
+# ============================================================================
+[ci]
+enabled = false  # Bounty mode is manual, not for CI
+
+# ============================================================================
+# SUPPRESSIONS
+# ============================================================================
+# No suppressions in bounty mode (want everything)
+# Even "safe" patterns might have edge cases worth reporting

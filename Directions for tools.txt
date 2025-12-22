@@ -1,0 +1,750 @@
+1. The "Breaker": Fuzzing & Property Testing
+What it is: A tool that throws millions of random inputs at your contract to see if it crashes or breaks a rule (invariant). Best Engine to Wrap: Foundry (Forge) or Echidna.
+
+Why Foundry? It's the industry standard for developers. It’s fast (Rust-based) and handles "stateful fuzzing" (remembering previous transactions to build complex attack sequences).
+
+Why Echidna? It's built purely for security by Trail of Bits. It’s often better at breaking complex "financial invariants" but harder to set up.
+
+The "Wrapper" You Need: Build a script that parses the forge test output. Foundry outputs messy logs; your tool needs to extract the "Counterexample" (the exact sequence of steps that broke the code) and present it as a "Replay Attack" script.
+
+2. The "Deep Diver": Symbolic Execution
+What it is: Instead of guessing inputs (fuzzing), this converts your code into a mathematical formula and solves for "X" where "X = Theft." Best Engine to Wrap: Mythril (by Consensys) or Halmos.
+
+Why Mythril? It is slow but extremely precise. It can prove mathematically that a path exists to drain funds.
+
+The "Wrapper" You Need: A timeout manager. Symbolic execution can run forever. Your wrapper needs to run Mythril on specific functions with a strict 10-minute timeout. If it finds nothing, kill it and move on.
+
+3. The "Supply Chain" Inspector
+What it is: Smart contracts rarely live alone; they import libraries (OpenZeppelin, Solady). Most hacks happen because a project used an old, vulnerable version of a library. Best Engine to Wrap: Surya (for mapping) + A custom version checker.
+
+The "Wrapper" You Need: A script that scans package.json or remappings.txt, extracts the version numbers, and compares them against a "Vulnerable Versions" database.
+
+The Data: Databases You Can Actually Use
+You cannot just "Google" vulnerabilities effectively. You need structured data sources to feed your engine.
+
+A. The "Definitions" Database: SWC Registry
+What it is: Smart Contract Weakness Classification. It’s the "Dewey Decimal System" for crypto bugs.
+
+How to use it: Use this to tag your reports. Don't tell a client "You have a reentrancy bug." Tell them "You have SWC-107 (Reentrancy)." This connects your finding to the global standard.
+
+Source: SWC Registry GitHub
+
+B. The "Regression" Database: DeFiHackLabs
+What it is: This is the most valuable repo in the industry right now. It is a collection of hundreds of Reproducible PoCs (Proof of Concepts) of real-world hacks.
+
+How to use it: Regression Testing. When you write a new DeFi protocol (e.g., a lending pool), your tool should grab the "Euler Finance Hack" PoC from this database and try to run it against your new code. If the attack succeeds, you are vulnerable to the same exploit.
+
+Source: DeFiHackLabs GitHub
+
+C. The "Supply Chain" Database: OpenZeppelin Advisories
+What it is: The official list of bugs found in the OpenZeppelin standard libraries.
+
+How to use it: Your "Supply Chain" tool should curl this JSON daily. If your code imports ReentrancyGuard.sol v4.9.0, and the database says v4.9.0 has a vulnerability, your tool screams "CRITICAL."
+
+Source: OpenZeppelin/NIST NVD
+
+The Architecture: How they fit together
+Linter (Slither/Aderyn): Catches the "Syntax Errors" (seconds).
+
+Supply Chain Check: Catches the "Bad Libraries" (seconds).
+
+Fuzzer (Foundry): Catches the "Logic Errors" (minutes).
+
+Symbolic (Mythril): Catches the "Deep Math Errors" (hours).
+
+Next Step
+Would you like me to write the "Supply Chain Inspector" script? It will scan a project's dependencies and cross-reference them against a hardcoded "Known Bad" list of OpenZeppelin versions (since getting the live API requires an API key, we can start with a local "Red List").
+
+
+
+
+
+This is the heavy lifting. Fuzzing is the only automated way to find "unknown unknowns"—bugs you didn't even know to look for.
+
+Most developers run a fuzzer, see a "FAIL" message, and dig through logs for hours.
+Your tool needs to automate that analysis. It should run the attack simulation and extract the **"Kill Shot"**—the exact sequence of inputs that broke the contract.
+
+We will wrap **Foundry (Forge)** because it allows for **Stateful Fuzzing** (Invariant Testing). This means it doesn't just test one function; it tests a *sequence* (e.g., "Deposit -> Transfer -> Withdraw") to find complex state corruption.
+
+### The Strategy: "The Replay"
+
+We aren't just checking if tests pass. We are parsing the logs to find the **Counterexample**.
+
+* **Input:** A specific Invariant Test file.
+* **Action:** Run `forge test` with a high run count (e.g., 5,000 runs).
+* **Extraction:** If it fails, we scrape the arguments used in the failure.
+* **Output:** A "Replay Attack" recipe.
+
+### The `fuzz_wrapper.py`
+
+This script runs Foundry, listens for the specific "Invariant violated" signal, and captures the data you need to replicate the hack.
+
+```python
+import subprocess
+import re
+import argparse
+import sys
+from typing import List, Dict
+
+# CONFIGURATION
+# How many random scenarios to generate?
+# 500 is quick checks. 10,000+ is for deep audits.
+FUZZ_RUNS = 1000 
+
+def run_foundry_fuzz(target_contract: str, match_test: str = None):
+    """
+    Runs 'forge test' specifically targeting invariant tests.
+    """
+    print(f"[*] Initializing Fuzz Engine (Foundry)...")
+    print(f"[*] Target: {target_contract}")
+    print(f"[*] Runs: {FUZZ_RUNS} attempts per invariant")
+
+    cmd = [
+        "forge", "test",
+        "--match-contract", target_contract,
+        "--fuzz-runs", str(FUZZ_RUNS),
+        "-vvv"  # Verbosity 3 is required to see Counterexamples in stdout
+    ]
+    
+    if match_test:
+        cmd.extend(["--match-test", match_test])
+
+    try:
+        # We assume the user is in the root of a Foundry project
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True
+        )
+        return result.stdout
+    except FileNotFoundError:
+        print("[!] ERROR: 'forge' not found. Is Foundry installed?")
+        print("    Install it: https://book.getfoundry.sh/getting-started/installation")
+        sys.exit(1)
+
+def parse_counterexamples(log_output: str) -> List[Dict]:
+    """
+    Scrapes the 'Counterexample' block from Foundry output.
+    This is the specific sequence of calls that broke the contract.
+    """
+    exploits = []
+    
+    # Regex to find the test name and the failure block
+    # Looks for: "[FAIL. Reason: ... ] testName()"
+    fail_pattern = re.compile(r"\[FAIL\. Reason: (.*?)\]\s+(\w+)\(.*\)")
+    
+    # Split output into lines for easier processing
+    lines = log_output.split('\n')
+    
+    current_exploit = None
+    capture_mode = False
+    
+    for line in lines:
+        clean_line = line.strip()
+        
+        # 1. Detect a Failure
+        fail_match = fail_pattern.search(clean_line)
+        if fail_match:
+            if current_exploit: # Save previous if exists
+                exploits.append(current_exploit)
+            
+            current_exploit = {
+                "test_name": fail_match.group(2),
+                "reason": fail_match.group(1),
+                "steps": []
+            }
+            continue
+
+        # 2. Detect start of Counterexample trace
+        if "Counterexample:" in clean_line:
+            capture_mode = True
+            continue
+
+        # 3. Capture the Steps (The "Kill Shot")
+        # Foundry invariant traces look like:
+        # sender=0x... addr=[src] calldata=deposit(uint256) args=[18]
+        if capture_mode and current_exploit:
+            # Stop capturing if we hit another test or empty line breaks significantly
+            if clean_line.startswith("Ran") or clean_line.startswith("Suite"):
+                capture_mode = False
+                exploits.append(current_exploit)
+                current_exploit = None
+                continue
+            
+            # Extract the function call and args
+            # This is a loose match to catch various Foundry output formats
+            if "calldata=" in clean_line or "args=" in clean_line:
+                current_exploit["steps"].append(clean_line)
+            # Simple unit test fuzzing counterexample (function_name(args))
+            elif "(" in clean_line and ")" in clean_line and capture_mode:
+                 current_exploit["steps"].append(clean_line)
+
+    # Catch the last one if loop finished
+    if current_exploit:
+        exploits.append(current_exploit)
+        
+    return exploits
+
+def print_attack_report(exploits: List[Dict]):
+    print("\n" + "="*60)
+    print(f" FUZZING REPORT - {len(exploits)} INVARIANTS BROKEN")
+    print("="*60 + "\n")
+    
+    if not exploits:
+        print("[+] STATUS: ROBUST. No invariants broken in this run.")
+        return
+
+    for ex in exploits:
+        print(f"\033[91m[VULNERABLE] {ex['test_name']} \033[0m")
+        print(f"  Reason: {ex['reason']}")
+        print(f"  Attack Vector (The 'Kill Shot'):")
+        for step in ex['steps']:
+            # Highlight the args for visibility
+            step_fmt = step.replace("args=[", "\033[93margs=[").replace("]", "]\033[0m")
+            print(f"    -> {step_fmt}")
+        print("-" * 60)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Wrapper for Foundry to automate invariant checking.")
+    parser.add_argument("contract", help="The name of the Test contract (e.g., InvariantTest)")
+    parser.add_argument("--test", help="Specific test function to run", default=None)
+    args = parser.parse_args()
+
+    raw_logs = run_foundry_fuzz(args.contract, args.test)
+    
+    # Debug: verify raw output if needed
+    # print(raw_logs) 
+    
+    attacks = parse_counterexamples(raw_logs)
+    print_attack_report(attacks)
+
+```
+
+### How to use this (The Workflow)
+
+You can't just run this on *any* contract. You need an **Invariant Test Suite**. This is the one requirement for the developer: they must define the "Rules of the Game."
+
+**1. The Setup (What the dev writes):**
+Create a test file `test/Invariant.t.sol` in your Foundry project:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+import "forge-std/Test.sol";
+import "../src/MyVault.sol";
+
+contract InvariantTest is Test {
+    MyVault vault;
+
+    function setUp() public {
+        vault = new MyVault();
+    }
+
+    // THE RULE: "The vault should never have 0 tokens if I deposited 10."
+    // The fuzzer will try random junk to make this FALSE.
+    function invariant_solvency() public {
+        assertGt(vault.totalAssets(), 0); 
+    }
+}
+
+```
+
+**2. The Scan (What you run):**
+
+```bash
+python3 fuzz_wrapper.py InvariantTest
+
+```
+
+**3. The Output (What you see):**
+Instead of 500 lines of logs, you get:
+
+```text
+============================================================
+ FUZZING REPORT - 1 INVARIANTS BROKEN
+============================================================
+
+[VULNERABLE] invariant_solvency 
+  Reason: Assertion failed
+  Attack Vector (The 'Kill Shot'):
+    -> sender=0x123... calldata=deposit(uint256) args=[100]
+    -> sender=0x456... calldata=emergencyWithdraw() args=[]
+    -> sender=0x123... calldata=checkBalance() args=[]
+------------------------------------------------------------
+
+```
+
+### Why this is "Grown Up"
+
+* **Abstraction:** It hides the complexity of configuring the fuzzer.
+* **Actionable:** It extracts the `args=[]`. This is the exact data the developer needs to copy-paste into a new unit test to fix the bug.
+* **Integration:** This script can be triggered by a GitHub Action. If `exploits` list is not empty -> Fail the PR.
+
+### The Missing Piece
+
+We have **Static Analysis**, **Supply Chain**, and **Fuzzing**.
+The final piece of a true "Red Team" engine is the **Orchestrator**—a simple CLI that runs all three of these scripts in sequence and generates a single HTML or Markdown summary.
+
+**Would you like the "Master CLI" code to tie these three scripts (Slither, Supply Chain, Fuzzing) together into one command?**
+
+
+
+This is the "Orchestrator." It’s the glue that turns three separate scripts into a cohesive security pipeline.
+
+It works by importing the logic from the previous three scripts (assuming you saved them in the same folder) and running them sequentially. It aggregates the findings into a single Markdown Audit Report that you can hand to a client or a lead developer.
+
+The Setup
+Ensure your folder looks like this:
+
+Plaintext
+/security-engine
+    ├── red_team_scan.py       (The Slither Wrapper)
+    ├── supply_chain_check.py  (The Dependency Checker)
+    ├── fuzz_wrapper.py        (The Foundry Wrapper)
+    └── audit_engine.py        <-- THIS SCRIPT
+The Code: audit_engine.py
+Python
+import argparse
+import sys
+import os
+import datetime
+
+# IMPORT THE MODULES WE BUILT
+# We wrap these in try-except to handle missing files gracefully
+try:
+    import supply_chain_check
+    import red_team_scan
+    import fuzz_wrapper
+except ImportError as e:
+    print(f"[!] CRITICAL ERROR: Missing module. {e}")
+    print("    Ensure red_team_scan.py, supply_chain_check.py, and fuzz_wrapper.py are in this folder.")
+    sys.exit(1)
+
+def generate_markdown_report(project_name, supply_chain_data, static_data, fuzz_data):
+    """Generates a professional Markdown audit report."""
+    
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    report_filename = f"AUDIT_REPORT_{project_name}_{datetime.date.today()}.md"
+    
+    with open(report_filename, "w") as f:
+        # HEADER
+        f.write(f"# Security Assessment: {project_name}\n")
+        f.write(f"**Date:** {timestamp}\n")
+        f.write(f"**Scanner:** Custom Red Team Engine\n\n")
+        f.write("---\n\n")
+
+        # SECTION 1: SUPPLY CHAIN
+        f.write("## 1. Supply Chain & Dependencies\n")
+        if not supply_chain_data:
+            f.write("✅ **PASSED:** No known vulnerable dependencies found.\n\n")
+        else:
+            f.write(f"🛑 **FAILED:** {len(supply_chain_data)} Vulnerabilities Detected\n")
+            for item in supply_chain_data:
+                f.write(f"- **Library:** `{item['library']}` (Installed: {item['installed']})\n")
+                f.write(f"  - **Advisory:** {item['issue']} ({item['advisory']})\n")
+                f.write(f"  - **Fix:** Upgrade to {item['fixed_in']}\n")
+            f.write("\n")
+
+        # SECTION 2: STATIC ANALYSIS
+        f.write("## 2. Static Analysis (Slither Filtered)\n")
+        if not static_data:
+            f.write("✅ **PASSED:** No Critical/High issues detected in static scan.\n\n")
+        else:
+            f.write(f"⚠️ **WARNING:** {len(static_data)} Issues Detected\n")
+            for item in static_data:
+                f.write(f"### [{item['impact']}] {item['title']}\n")
+                f.write(f"- **Location:** `{item['location']}`\n")
+                f.write(f"- **Context:** {item['description']}\n\n")
+
+        # SECTION 3: DYNAMIC ANALYSIS (FUZZING)
+        f.write("## 3. Dynamic Analysis (Fuzzing)\n")
+        if not fuzz_data:
+            f.write("✅ **PASSED:** No invariants broken (based on provided test target).\n\n")
+        else:
+            f.write(f"🔥 **CRITICAL:** {len(fuzz_data)} Invariants Broken\n")
+            for item in fuzz_data:
+                f.write(f"### Test Failed: `{item['test_name']}`\n")
+                f.write(f"**Reason:** {item['reason']}\n")
+                f.write("**Replay Attack (The Kill Shot):**\n")
+                f.write("```bash\n")
+                for step in item['steps']:
+                    f.write(f"{step}\n")
+                f.write("```\n\n")
+
+        # FOOTER
+        f.write("---\n")
+        f.write("*Generated automatically by the Pragmatic Security Engine.*")
+
+    return report_filename
+
+def main():
+    parser = argparse.ArgumentParser(description="Run the full Red Team security pipeline.")
+    parser.add_argument("project_path", help="Path to the project root")
+    parser.add_argument("--fuzz-contract", help="Name of the Invariant Test contract (e.g. InvariantTest)", default=None)
+    args = parser.parse_args()
+
+    print("\n" + "="*50)
+    print(f" STARTING AUDIT PIPELINE: {args.project_path}")
+    print("="*50 + "\n")
+
+    # --- STEP 1: SUPPLY CHAIN ---
+    print(f"[*] [1/3] Running Supply Chain Inspector...")
+    pkg_json_path = os.path.join(args.project_path, "package.json")
+    if os.path.exists(pkg_json_path):
+        sc_results = supply_chain_check.scan_package_json(pkg_json_path)
+    else:
+        print("    [!] package.json not found, skipping supply chain check.")
+        sc_results = []
+    
+    # --- STEP 2: STATIC ANALYSIS ---
+    print(f"[*] [2/3] Running Static Analysis (Slither)...")
+    # Note: red_team_scan logic expects a path.
+    raw_slither = red_team_scan.run_slither(args.project_path)
+    sa_results = red_team_scan.filter_vulnerabilities(raw_slither)
+
+    # --- STEP 3: FUZZING ---
+    print(f"[*] [3/3] Running Fuzzing Engine (Foundry)...")
+    fuzz_results = []
+    if args.fuzz_contract:
+        # We need to change directory to the project for Forge to work correctly
+        current_dir = os.getcwd()
+        try:
+            os.chdir(args.project_path)
+            raw_fuzz = fuzz_wrapper.run_foundry_fuzz(args.fuzz_contract)
+            fuzz_results = fuzz_wrapper.parse_counterexamples(raw_fuzz)
+        except Exception as e:
+            print(f"    [!] Fuzzing failed: {e}")
+        finally:
+            os.chdir(current_dir) # Go back to engine dir
+    else:
+        print("    [-] No fuzz target provided (use --fuzz-contract). Skipping dynamic analysis.")
+
+    # --- REPORTING ---
+    print(f"\n[*] Pipeline Complete. Generating Report...")
+    project_name = os.path.basename(os.path.abspath(args.project_path))
+    report_file = generate_markdown_report(project_name, sc_results, sa_results, fuzz_results)
+    
+    print(f"\n[+] DONE. Report saved to: \033[92m{report_file}\033[0m")
+    
+    # Quick Summary to Terminal
+    if sc_results or sa_results or fuzz_results:
+        print(f"\n[!] SUMMARY: Issues Found!")
+        print(f"    - Supply Chain: {len(sc_results)}")
+        print(f"    - Static Bugs:  {len(sa_results)}")
+        print(f"    - Fuzz Breaks:  {len(fuzz_results)}")
+    else:
+        print(f"\n[+] Clean Run. No obvious issues found.")
+
+if __name__ == "__main__":
+    main()
+How to Run The "Master Command"
+You are now acting as the lead security engineer. You have downloaded a repo to check it before deployment.
+
+Command:
+
+Bash
+python3 audit_engine.py ./target-project --fuzz-contract InvariantTest
+Output (Terminal):
+
+Plaintext
+==================================================
+ STARTING AUDIT PIPELINE: ./target-project
+==================================================
+
+[*] [1/3] Running Supply Chain Inspector...
+[*] [2/3] Running Static Analysis (Slither)...
+    [*] Spawning Slither process...
+[*] [3/3] Running Fuzzing Engine (Foundry)...
+    [*] Initializing Fuzz Engine...
+
+[*] Pipeline Complete. Generating Report...
+
+[+] DONE. Report saved to: AUDIT_REPORT_target-project_2025-10-27.md
+
+[!] SUMMARY: Issues Found!
+    - Supply Chain: 1
+    - Static Bugs:  2
+    - Fuzz Breaks:  0
+Output (The Markdown File): You open the generated .md file, and you have a clean, formatted document listing exactly what libraries to upgrade and which lines of code need to be patched.
+
+Final Check: The "Grown-Up" Perspective
+This pipeline is not a replacement for a human brain. It is a force multiplier.
+
+It handles the repetitive "checklist" work (dependencies, syntax).
+
+It automates the brute-force work (fuzzing).
+
+It leaves you free to do the high-level logic review: "Does this tokenomics model actually make sense, or is it a Ponzi scheme?" (No script can tell you that... yet).
+
+Would you like a "logic checker" prompt template to use with an LLM (like me) to handle that final "Tokenomics/Logic" review step?
+
+Choice B
+This is the "Captain" of your security stack.
+
+It doesn't perform the checks itself; it delegates them to the specialists (the three scripts we just built), aggregates the intelligence, and writes a single, clean Executive Summary.
+
+
+
+
+For a smart contract security tool, relying solely on the traditional NIST National Vulnerability Database (NVD) is a mistake. It is too slow and cluttered with non-crypto issues (like Windows printer drivers).
+
+You need **crypto-specific intelligence**. Here are the high-signal databases you can pull data from via API or JSON to replace the hardcoded list.
+
+### 1. The "Gold Standard": Google OSV (Open Source Vulnerabilities)
+
+This is the database you should actually use for your tool. It aggregates GitHub Security Advisories, PyPI, npm, and others into a unified JSON format. It is faster than NIST and machine-readable.
+
+* **What it tracks:** Vulnerabilities in libraries like OpenZeppelin, Hardhat, and generic Solidity packages.
+* **The API:** It’s free and doesn't require an API key for basic use.
+* **How to query:**
+```bash
+curl -d '{"package": {"name": "@openzeppelin/contracts", "ecosystem": "npm"}}' \
+"https://api.osv.dev/v1/query"
+
+```
+
+
+* **Website:** [osv.dev](https://osv.dev)
+
+### 2. The "Supply Chain" Source: GitHub Security Advisories (GHSA)
+
+Most smart contract libraries (OpenZeppelin, Solady) live on GitHub. When a vulnerability is found, it is published here *first*, often weeks before it gets a formal CVE ID.
+
+* **What it tracks:** Specific repo vulnerabilities.
+* **The Alpha:** This is where you find out about a "Critical" bug in a specific version of a library.
+* **Access:** Use the GitHub GraphQL API to fetch advisories.
+* **Database URL:** [github.com/advisories](https://github.com/advisories?query=ecosystem%3Anpm) (Filter by `npm` for JS/TS crypto tools).
+
+### 3. The "Logic Hack" Source: Rekt Database
+
+CVEs track *software bugs*. They do not track *economic exploits* (e.g., flash loan attacks or oracle manipulation). The Rekt Database tracks these failures. It is less structured but vital for your "Red Team" library.
+
+* **What it tracks:** Post-mortems of actual hacks.
+* **Use Case:** Use this to update your "Invariant Tests." If a protocol got hacked via a "read-only reentrancy," you look up the post-mortem here to understand how to write a fuzz test for it.
+* **Access:** [Rekt News API](https://rekt.news/) (Often requires scraping or using their DeFiLlama integration).
+
+### 4. The "Checklist" Source: SWC Registry
+
+This is not a live "vulnerability feed" but a dictionary of weakness types. It defines *what* a bug is (e.g., SWC-107 is Reentrancy).
+
+* **What it tracks:** Taxonomy of Solidity weaknesses.
+* **Use Case:** Mapping your tool's output to industry standards so your reports look professional.
+* **Source:** [SWC Registry](https://swcregistry.io/)
+
+### How to integrate OSV into your script
+
+Here is a single Python function to replace the manual `VULNERABILITY_DB` in your previous script. It fetches the live data from Google OSV.
+
+```python
+import requests
+
+def check_live_vulnerabilities(package_name, version):
+    """
+    Queries Google OSV for live vulnerabilities in a specific package version.
+    """
+    url = "https://api.osv.dev/v1/query"
+    payload = {
+        "package": {
+            "name": package_name,
+            "ecosystem": "npm"  # Most crypto libs are distributed via npm
+        },
+        "version": version
+    }
+    
+    try:
+        response = requests.post(url, json=payload)
+        data = response.json()
+        
+        if "vulns" in data:
+            return data["vulns"] # Returns a list of vulnerability objects
+        return []
+        
+    except Exception as e:
+        print(f"[!] API Fetch failed: {e}")
+        return []
+
+# Usage Example:
+# vulns = check_live_vulnerabilities("@openzeppelin/contracts", "4.7.0")
+# if vulns:
+#     print(f"Found {len(vulns)} known CVEs/Advisories!")
+
+```
+
+**Would you like me to update the `supply_chain_check.py` script to use this live OSV API instead of the hardcoded list?**
+
+Prerequisites
+Ensure you have the previous three scripts saved in the same folder with these exact filenames:
+
+red_team_scan.py (Static Analysis)
+
+supply_chain_check.py (Dependency Check)
+
+fuzz_wrapper.py (Dynamic Fuzzing)
+
+The Master CLI: orchestrator.py
+Python
+import sys
+import os
+import argparse
+import datetime
+from typing import List, Dict
+
+# Import your specialists
+try:
+    import red_team_scan
+    import supply_chain_check
+    import fuzz_wrapper
+except ImportError as e:
+    print(f"[!] CRITICAL: Missing a module. {e}")
+    print("    Ensure red_team_scan.py, supply_chain_check.py, and fuzz_wrapper.py are in this folder.")
+    sys.exit(1)
+
+# --- REPORTING ENGINE ---
+def generate_markdown_report(project_name: str, 
+                             static_results: List[Dict], 
+                             supply_results: List[Dict], 
+                             fuzz_results: List[Dict]):
+    """Generates a professional, readable audit artifact."""
+    
+    filename = f"AUDIT_REPORT_{datetime.date.today()}.md"
+    
+    # Calculate Risk Score (Simple Heuristic)
+    critical_count = len(fuzz_results) + len([x for x in static_results if x['impact'] == 'High'])
+    score_color = "🔴 FAILURE" if critical_count > 0 else "🟢 PASS"
+
+    with open(filename, "w") as f:
+        # Header
+        f.write(f"# Smart Contract Security Assessment\n")
+        f.write(f"**Target:** `{project_name}`\n")
+        f.write(f"**Date:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+        f.write(f"**Status:** {score_color}\n")
+        f.write(f"**Critical Issues:** {critical_count}\n\n")
+        
+        f.write("---\n\n")
+
+        # Section 1: Supply Chain
+        f.write("## 1. Supply Chain Intelligence\n")
+        if not supply_results:
+            f.write("✅ **Secure.** No known vulnerable libraries detected in `package.json`.\n\n")
+        else:
+            for item in supply_results:
+                f.write(f"### ⚠️ {item['library']} (v{item['installed']})\n")
+                f.write(f"- **Risk:** {item['issue']}\n")
+                f.write(f"- **Fix:** Upgrade to {item['fixed_in']}\n")
+                f.write(f"- **Advisory:** [{item['advisory']}](https://github.com/advisories)\n\n")
+
+        f.write("---\n\n")
+
+        # Section 2: Static Analysis (Code Patterns)
+        f.write("## 2. Static Analysis (Code Patterns)\n")
+        if not static_results:
+            f.write("✅ **Clean.** No high-severity patterns detected by Slither.\n\n")
+        else:
+            for item in static_results:
+                icon = "🛑" if item['impact'] == "High" else "Rx"
+                f.write(f"### {icon} [{item['impact']}] {item['title']}\n")
+                f.write(f"- **Location:** `{item['location']}`\n")
+                f.write(f"- **Context:** {item['description']}\n\n")
+
+        f.write("---\n\n")
+
+        # Section 3: Dynamic Analysis (Fuzzing)
+        f.write("## 3. Dynamic Stress Test (Fuzzing)\n")
+        if not fuzz_results:
+            f.write("✅ **Robust.** 1000+ random attack sequences failed to break invariants.\n\n")
+        else:
+            for item in fuzz_results:
+                f.write(f"### ☠️ INVARIANT BROKEN: `{item['test_name']}`\n")
+                f.write(f"**Reason:** {item['reason']}\n")
+                f.write("#### The Kill Shot (Replay Attack):\n")
+                f.write("```solidity\n")
+                for step in item['steps']:
+                    f.write(f"{step}\n")
+                f.write("```\n\n")
+
+    return filename
+
+# --- MAIN ORCHESTRATOR ---
+def main():
+    parser = argparse.ArgumentParser(description="Autonomous Security Engine for Smart Contracts")
+    parser.add_argument("--target", required=True, help="Path to project root or .sol file")
+    parser.add_argument("--fuzz-contract", help="Name of the Invariant Test contract (e.g., InvariantTest)")
+    args = parser.parse_args()
+
+    print("\n" + "="*50)
+    print(" 🛡️  INITIATING AUTONOMOUS SECURITY SCAN")
+    print("="*50 + "\n")
+
+    # 1. Supply Chain Scan
+    print(">>> [PHASE 1] Scanning Supply Chain...")
+    supply_issues = []
+    # If target is a folder, check for package.json
+    if os.path.isdir(args.target):
+        pkg_json = os.path.join(args.target, "package.json")
+        if os.path.exists(pkg_json):
+            supply_issues = supply_chain_check.scan_package_json(pkg_json)
+        else:
+            print("    [!] No package.json found. Skipping.")
+    else:
+        print("    [!] Target is a file, skipping dependency check.")
+    print(f"    Found {len(supply_issues)} issues.")
+
+    # 2. Static Analysis (Slither)
+    print("\n>>> [PHASE 2] Running Static Analysis (Slither)...")
+    try:
+        raw_slither = red_team_scan.run_slither(args.target)
+        static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
+        print(f"    Found {len(static_issues)} critical patterns.")
+    except Exception as e:
+        print(f"    [!] Slither failed: {e}")
+        static_issues = []
+
+    # 3. Dynamic Fuzzing (Optional)
+    fuzz_issues = []
+    if args.fuzz_contract:
+        print("\n>>> [PHASE 3] Running Fuzzing Engine (Foundry)...")
+        print("    (This may take a minute...)")
+        raw_fuzz = fuzz_wrapper.run_foundry_fuzz(args.fuzz_contract)
+        fuzz_issues = fuzz_wrapper.parse_counterexamples(raw_fuzz)
+        print(f"    Broken Invariants: {len(fuzz_issues)}")
+    else:
+        print("\n>>> [PHASE 3] Fuzzing skipped (No test contract provided).")
+
+    # 4. Reporting
+    print("\n>>> [PHASE 4] Generating Intelligence Report...")
+    report_file = generate_markdown_report("Target Protocol", static_issues, supply_issues, fuzz_issues)
+    
+    print("\n" + "="*50)
+    print(f" ✅ SCAN COMPLETE.")
+    print(f" 📄 Report generated: {os.path.abspath(report_file)}")
+    print("="*50 + "\n")
+
+if __name__ == "__main__":
+    main()
+How to Run the "Full Engine"
+Structure your folder:
+
+Plaintext
+/my-audit-tool/
+├── orchestrator.py
+├── red_team_scan.py
+├── supply_chain_check.py
+└── fuzz_wrapper.py
+Execute:
+
+Simple Scan (Just Code):
+
+Bash
+python3 orchestrator.py --target ./MyProject/src/Token.sol
+Full Suite (Code + Dependencies + Fuzzing):
+
+Bash
+python3 orchestrator.py --target ./MyProject --fuzz-contract InvariantTest
+The Result: You get a file named AUDIT_REPORT_2025-12-21.md in your directory.
+
+You can convert this Markdown to PDF (using VS Code or Pandoc) and hand it directly to a client or developer as a "Preliminary Security Assessment."
+
+Next Step
+You now have the Engine. To make this a true "SaaS" or usable product, you would wrap orchestrator.py in a Docker container so users don't have to install Slither/Foundry manually.
+
+Would you like the Dockerfile to containerize this entire stack so it runs anywhere with one command?

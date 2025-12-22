@@ -1,0 +1,97 @@
+{
+  "name": "sentinel-security",
+  "displayName": "Sentinel Security - Smart Contract Auditor",
+  "description": "Real-time security analysis for Solidity contracts powered by The Sentinel Engine",
+  "version": "1.0.0",
+  "publisher": "CyberShieldAustin",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/sentinel-engine"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "solidity",
+    "ethereum",
+    "security",
+    "audit",
+    "smart contracts",
+    "blockchain"
+  ],
+  "activationEvents": [
+    "onLanguage:solidity",
+    "onCommand:sentinel.analyze"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sentinel.analyze",
+        "title": "Sentinel: Analyze Contract"
+      },
+      {
+        "command": "sentinel.liarDetector",
+        "title": "Sentinel: Run Liar Detector"
+      },
+      {
+        "command": "sentinel.accessMatrix",
+        "title": "Sentinel: Show Access Matrix"
+      }
+    ],
+    "configuration": {
+      "title": "Sentinel Security",
+      "properties": {
+        "sentinel.pythonPath": {
+          "type": "string",
+          "default": "python3",
+          "description": "Path to Python interpreter"
+        },
+        "sentinel.enginePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to Sentinel Engine installation"
+        },
+        "sentinel.enableRealtime": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable real-time analysis on file save"
+        },
+        "sentinel.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key for AI exploit generation (optional)"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "solidity",
+        "aliases": ["Solidity", "solidity"],
+        "extensions": [".sol"],
+        "configuration": "./language-configuration.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^4.9.0"
+  },
+  "dependencies": {
+    "child_process": "^1.0.2"
+  }
+}

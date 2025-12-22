@@ -1,0 +1,161 @@
+This is the upgrade. We are ripping out the hardcoded dictionary and wiring the tool directly to the **Google OSV API**.
+
+This makes your tool "Live." It will now catch vulnerabilities discovered *yesterday*, not just the ones I knew about when I wrote the code.
+
+### The Live Supply Chain Inspector (`supply_chain_check.py`)
+
+**Note:** You must install the `requests` library first if you haven't already:
+`pip3 install requests`
+
+```python
+import json
+import os
+import argparse
+import sys
+import re
+import requests
+from typing import Dict, List, Any
+
+# CONFIGURATION
+# We explicitly check the 'npm' ecosystem because that's how 99% of 
+# Solidity libraries (OpenZeppelin, Hardhat, etc.) are distributed.
+ECOSYSTEM = "npm"
+
+def clean_version(version_str: str) -> str:
+    """Removes npm artifacts like ^, ~, or >= to get the raw version number."""
+    # We strip non-numeric chars except dots, but keep it simple.
+    # Logic: if it's "^4.9.0", we assume you are running "4.9.0" for the check.
+    # In a real CI env, you'd check package-lock.json for the EXACT installed version.
+    clean = re.sub(r'[^\d\.]', '', version_str)
+    return clean
+
+def check_osv_api(package_name: str, version: str) -> List[Dict]:
+    """
+    Queries Google OSV (Open Source Vulnerabilities) for a specific package version.
+    """
+    url = "https://api.osv.dev/v1/query"
+    payload = {
+        "package": {
+            "name": package_name,
+            "ecosystem": ECOSYSTEM 
+        },
+        "version": version
+    }
+    
+    try:
+        # standard timeout to prevent hanging if API is down
+        response = requests.post(url, json=payload, timeout=5)
+        
+        if response.status_code != 200:
+            # Silently fail on 404/500 to keep the report clean, 
+            # or print debug info if you prefer.
+            return []
+            
+        data = response.json()
+        return data.get("vulns", [])
+        
+    except requests.exceptions.RequestException:
+        print(f"[!] Warning: Network error checking {package_name}. Skipping.")
+        return []
+
+def scan_package_json(file_path: str):
+    """Parses a package.json file and queries the OSV API for each dependency."""
+    print(f"[*] Parsing manifest: {file_path}")
+    print(f"[*] querying OSV.dev database (Live)...")
+    
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+    except json.JSONDecodeError:
+        print(f"[!] ERROR: Could not parse {file_path}. Invalid JSON.")
+        return []
+
+    # Combine dependencies and devDependencies
+    deps = data.get("dependencies", {})
+    dev_deps = data.get("devDependencies", {})
+    all_deps = {**deps, **dev_deps}
+
+    found_vulns = []
+
+    # Iterate through all dependencies
+    total = len(all_deps)
+    for i, (lib, version_str) in enumerate(all_deps.items(), 1):
+        # clean the version string (e.g. "^4.3.0" -> "4.3.0")
+        current_version = clean_version(version_str)
+        
+        # Optional: Skip non-semantic versions (like git urls or "latest")
+        if not current_version or len(current_version) < 3:
+            continue
+
+        # Progress indicator (simple dots)
+        print(f"\r    Checking {i}/{total}: {lib} v{current_version}...", end="", flush=True)
+
+        vulns = check_osv_api(lib, current_version)
+        
+        if vulns:
+            for v in vulns:
+                found_vulns.append({
+                    "library": lib,
+                    "installed": current_version,
+                    "id": v.get("id", "Unknown ID"),
+                    "summary": v.get("summary", "No summary provided"),
+                    "details": v.get("details", "")[:150] + "...", # Truncate long descriptions
+                    "database_specific": v.get("database_specific", {})
+                })
+
+    print(f"\n[*] Scan complete. Found {len(found_vulns)} vulnerabilities.")
+    return found_vulns
+
+def print_report(vulnerabilities: List[Dict]):
+    print("\n" + "="*60)
+    print(f" SUPPLY CHAIN REPORT - {len(vulnerabilities)} ISSUES FOUND")
+    print("="*60 + "\n")
+
+    if not vulnerabilities:
+        print("[+] STATUS: GREEN. No known vulnerabilities in current dependencies.")
+        return
+
+    for v in vulnerabilities:
+        # Try to find a severity rating if available
+        severity = "UNKNOWN"
+        if v.get("database_specific"):
+            severity = v["database_specific"].get("severity", "UNKNOWN")
+
+        print(f"\033[91m[VULNERABLE] {v['library']} (v{v['installed']})\033[0m")
+        print(f"    ID:       {v['id']}")
+        print(f"    Summary:  {v['summary']}")
+        print(f"    Severity: {severity}")
+        print(f"    Details:  {v['details']}")
+        # Create a clickable link for the ID
+        print(f"    Link:     https://osv.dev/vulnerability/{v['id']}")
+        print("-" * 60)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Live Supply Chain Scanner using OSV.dev")
+    parser.add_argument("path", help="Path to project root or package.json file", default=".")
+    args = parser.parse_args()
+
+    target_path = args.path
+    if os.path.isdir(target_path):
+        target_path = os.path.join(target_path, "package.json")
+
+    if not os.path.exists(target_path):
+        print(f"[!] Error: {target_path} not found.")
+        sys.exit(1)
+
+    results = scan_package_json(target_path)
+    print_report(results)
+
+```
+
+### What changed?
+
+1. **Live Intelligence:** It no longer cares what I hardcoded. If a new vulnerability for `ethers.js` drops today, this script will catch it tomorrow.
+2. **OSV Integration:** It parses the specific JSON format from Google, which includes the `GHSA` (GitHub Security Advisory) ID and a direct link to the fix.
+3. **Real-Time Feedback:** Added a small progress indicator (`Checking 1/15...`) because network requests take a few milliseconds each.
+
+### How to use it in the Master CLI
+
+The `orchestrator.py` we wrote earlier will work with this update automatically, provided you keep the function name `scan_package_json` the same (which I did).
+
+Just replace the old `supply_chain_check.py` file with this new code, and your Master CLI is now powered by the Google OSV database.
