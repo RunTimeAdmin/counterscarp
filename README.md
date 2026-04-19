@@ -17,17 +17,21 @@
 # 1. Clone or download
 cd /path/to/sentinel-engine  # Or on Windows: C:\path\to\sentinel-engine
 
-# 2. Install core dependencies
-pip install requests packaging tomli
+# 2. Install using pyproject.toml (recommended)
+pip install -e .
+
+# Or install core dependencies manually
+pip install requests packaging tomli solc-select
 
 # 3. Install Slither (static analysis)
 pip install slither-analyzer
-pip install solc-select
 solc-select install 0.8.19
 solc-select use 0.8.19
 
 # 4. Verify installation
 python orchestrator.py --help
+# Or use CLI entry point (after pip install):
+sentinel-engine --help
 ```
 
 **Optional (for full functionality):**
@@ -52,13 +56,16 @@ python gui.py
 **Option 2: CLI (Professional)**
 ```powershell
 # Fast PR check (blockers only)
-python orchestrator.py --target ./contracts --config sentinel-pr.toml
+sentinel-engine --target ./contracts --config sentinel-pr.toml
 
 # Full audit with HTML report
-python orchestrator.py --target ./contracts --config sentinel-audit.toml --report --project-name "MyDeFi"
+sentinel-engine --target ./contracts --config sentinel-audit.toml --report --project-name "MyDeFi"
 
 # Bug bounty mode (max coverage)
-python orchestrator.py --target ./contracts --config sentinel-bounty.toml --medusa
+sentinel-engine --target ./contracts --config sentinel-bounty.toml --medusa
+
+# Alternative: Use python directly
+python orchestrator.py --target ./contracts --config sentinel-pr.toml
 ```
 
 **Output:**
@@ -77,7 +84,7 @@ python orchestrator.py --target ./contracts --config sentinel-bounty.toml --medu
 4. **Liar Detector** - NatSpec comment vs implementation mismatch detection
 5. **Access Matrix** - Function permission analysis
 6. **Upgrade Diff** - UUPS/proxy storage collision detection
-7. **Solana Analyzer** - Rust/Anchor pattern detection
+7. **Solana Analyzer** - 35 Rust/Anchor security patterns
 8. **Medusa** - Coverage-guided fuzzing
 9. **Foundry** - Invariant testing
 10. **Mythril** - Symbolic execution
@@ -127,7 +134,7 @@ python orchestrator.py --target ./contracts --config sentinel-bounty.toml --medu
 ### **Client Audit Workflow**
 ```powershell
 # 1. Full automated scan
-python orchestrator.py --target ./client-project --config sentinel-audit.toml --report --project-name "Client DeFi Protocol"
+sentinel-engine --target ./client-project --config sentinel-audit.toml --report --project-name "Client DeFi Protocol"
 
 # 2. Review HTML report
 # → audit_report_2025-12-21.html
@@ -154,15 +161,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Install Sentinel Engine
+        run: pip install -e .
       - name: Sentinel PR Check
         run: |
-          python orchestrator.py --target ./contracts --config sentinel-pr.toml
+          sentinel-engine --target ./contracts --config sentinel-pr.toml
 ```
 
 ### **Bug Bounty Hunting**
 ```powershell
 # Max coverage mode
-python orchestrator.py --target ./target-protocol --config sentinel-bounty.toml --medusa --aderyn --report
+sentinel-engine --target ./target-protocol --config sentinel-bounty.toml --medusa --aderyn --report
 
 # Generate exploit PoCs (requires OpenAI API key)
 export OPENAI_API_KEY="sk-..."
@@ -201,57 +210,159 @@ python access_matrix.py ./contracts/Vault.sol
 
 ## 🔧 **Configuration System**
 
-### **Basic Config** (`sentinel.toml`)
+### **Complete Configuration Reference**
 
-```toml
-[engine]
-fail_on_severity = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
-max_findings = 50
+Sentinel Engine uses TOML configuration files. Below are all available sections:
 
-[heuristics]
-enabled = true
+#### `[engine]` - Core Engine Settings
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `name` | string | "Sentinel Security Engine" | Engine name |
+| `version` | string | "2.3.0" | Engine version |
+| `fail_on_severity` | string | "HIGH" | Minimum severity to fail CI (CRITICAL, HIGH, MEDIUM, LOW, INFO) |
+| `max_findings` | int | 0 | Maximum findings before stopping (0 = unlimited) |
 
-# Disable noisy rules
-[heuristics.disabled_rules]
-CONSOLE_LOG = true
-FLOATING_PRAGMA = true
+#### `[heuristics]` - Heuristic Scanner
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | true | Enable heuristic scanning |
+| `severity_overrides` | table | {} | Override rule severities (RULE_ID = "SEVERITY") |
+| `disabled_rules` | table | {} | Disable specific rules (RULE_ID = true) |
 
-# Override severities
-[heuristics.severity_overrides]
-UNCHECKED_EXTERNAL_CALL = "CRITICAL"
-BLOCK_TIMESTAMP_RANDOMNESS = "LOW"  # Safe for timelocks
+#### `[[suppressions]]` - False Positive Management
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `rule_id` | string | Yes | Rule to suppress |
+| `file` | string | No | Specific file to suppress |
+| `line` | int | No | Specific line to suppress |
+| `reason` | string | Yes | Explanation for suppression |
+| `expires` | string | No | Expiration date (YYYY-MM-DD) |
 
-# Suppress false positives
-[[suppressions]]
-rule_id = "HARDCODED_ADDRESS"
-file = "contracts/Oracle.sol"
-line = 42
-reason = "Chainlink oracle address (expected)"
-expires = "2025-12-31"
+#### `[static_analysis]` - Static Analyzers
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `slither.enabled` | bool | true | Enable Slither analysis |
+| `slither.exclude_detectors` | string | "" | Comma-separated detectors to exclude |
+| `slither.include_impact` | string | "High,Medium" | Impact levels to include |
+| `aderyn.enabled` | bool | false | Enable Aderyn analysis (opt-in) |
+| `aderyn.scope` | string | "" | Limit analysis to specific paths |
 
-[static_analysis]
-slither_enabled = true
-aderyn_enabled = true
+#### `[fuzzing]` - Fuzzing Configuration
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `foundry.enabled` | bool | false | Enable Foundry fuzzing |
+| `foundry.runs` | int | 10000 | Number of fuzz runs |
+| `medusa.enabled` | bool | false | Enable Medusa fuzzing |
+| `medusa.test_limit` | int | 100000 | Test limit for Medusa |
+| `medusa.timeout` | int | 300 | Timeout in seconds |
+| `medusa.workers` | int | 10 | Number of workers |
 
-[fuzzing]
-medusa_enabled = true
-medusa_test_limit = 50000
+#### `[red_team]` - Red Team Scan Settings
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `severity_allowlist` | list | ["High", "Medium"] | Severities to include |
+| `ignore_checks` | list | [...] | Check IDs to ignore (noise filtering) |
 
-[reporting]
-format = "markdown"
-html_enabled = true
-verbosity = "verbose"
-```
+#### `[external_tools]` - Tool Timeouts
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `aderyn_timeout` | int | 120 | Aderyn timeout (seconds) |
+| `mythril_timeout` | int | 600 | Mythril timeout (seconds) |
+| `foundry_fuzz_runs` | int | 1000 | Foundry default fuzz runs |
+
+#### `[supply_chain]` - Supply Chain Security
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ecosystem` | string | "npm" | Package ecosystem (npm, pypi) |
+| `osv_timeout` | int | 10 | OSV API timeout (seconds) |
+| `osv_max_retries` | int | 3 | OSV API max retries |
+| `osv_rate_limit` | int | 10 | OSV API rate limit (requests/sec) |
+
+#### `[threat_intel]` - Threat Intelligence
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `c4_timeout` | int | 10 | Code4rena API timeout (seconds) |
+| `immunefi_timeout` | int | 10 | Immunefi RSS timeout (seconds) |
+| `solana_github_timeout` | int | 10 | Solana GitHub timeout (seconds) |
+| `api_rate_limit` | int | 5 | Default API rate limit (requests/sec) |
+
+#### `[http]` - HTTP Client Settings
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `default_timeout` | int | 30 | Default HTTP timeout (seconds) |
+| `max_retries` | int | 3 | Max retries for failed requests |
+| `base_delay` | float | 1.0 | Base delay for exponential backoff (seconds) |
+| `max_delay` | float | 30.0 | Maximum delay cap (seconds) |
+| `backoff_factor` | float | 2.0 | Backoff multiplier |
+
+#### `[chains]` - Chain-Specific Settings
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `solana.enabled` | bool | false | Enable Solana analysis |
+| `solana.project_root` | string | "./programs" | Path to Solana project |
+| `evm.solc_version` | string | ">=0.8.0" | Expected Solidity version |
+| `evm.trusted_contracts` | list | [] | Known safe external contracts |
+
+#### `[upgrade_diff]` - Upgrade Safety
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `old_implementation_path` | string | "" | Path to old implementation |
+| `new_implementation_path` | string | "" | Path to new implementation |
+| `ignore_patterns.ignore_new_view_functions` | bool | true | Ignore new view functions |
+| `ignore_patterns.ignore_comment_changes` | bool | true | Ignore comment changes |
+
+#### `[reporting]` - Report Generation
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `format` | string | "markdown" | Output format (markdown, json, sarif, html) |
+| `sections.executive_summary` | bool | true | Include executive summary |
+| `sections.supply_chain` | bool | true | Include supply chain section |
+| `sections.static_analysis` | bool | true | Include static analysis |
+| `sections.heuristic_scan` | bool | true | Include heuristic scan |
+| `sections.fuzzing` | bool | false | Include fuzzing results |
+| `sections.threat_intel` | bool | false | Include threat intel |
+| `sections.access_matrix` | bool | true | Include access matrix |
+| `verbosity` | string | "standard" | Report verbosity (minimal, standard, verbose) |
+| `group_by` | string | "severity" | Group findings by (severity, file, rule) |
+
+#### `[ci]` - CI/CD Integration
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `fail_on_findings` | bool | true | Fail pipeline if issues found |
+| `post_pr_comment` | bool | true | Post results as PR comment |
+| `upload_sarif` | bool | false | Upload SARIF to GitHub Security |
+| `exclude_paths` | list | [...] | Paths to exclude from scanning |
+
+---
+
+### **Execution Profiles Comparison**
+
+| Feature | PR Mode | Audit Mode | Bounty Mode |
+|---------|---------|------------|-------------|
+| **Config File** | `sentinel-pr.toml` | `sentinel-audit.toml` | `sentinel-bounty.toml` |
+| **Time** | < 2 min | 10-30 min | 1-2 hours |
+| **Fail Threshold** | HIGH+ | MEDIUM+ | Never fails |
+| **Heuristic Scanner** | ✅ Fast | ✅ Full | ✅ Full |
+| **Slither** | ✅ | ✅ | ✅ |
+| **Aderyn** | ❌ | ✅ | ✅ |
+| **Medusa Fuzzing** | ❌ | ✅ (250K) | ✅ (500K) |
+| **Mythril** | ❌ | ✅ | ✅ |
+| **Supply Chain** | ✅ | ✅ | ✅ |
+| **Threat Intel** | ❌ | ✅ | ✅ |
+| **Liar Detector** | ✅ | ✅ | ✅ |
+| **Report Formats** | Markdown | HTML + MD | HTML + MD + SARIF |
+| **Suppressions** | Pre-configured | Project-specific | None (all rules) |
+| **AI Exploit Gen** | ❌ | ❌ | ✅ |
 
 ### **Profile Selection**
 ```powershell
 # Use pre-built profiles
-python orchestrator.py --target ./contracts --config sentinel-audit.toml    # Full audit
-python orchestrator.py --target ./contracts --config sentinel-pr.toml       # Fast PR check
-python orchestrator.py --target ./contracts --config sentinel-bounty.toml   # Bug bounty
+sentinel-engine --target ./contracts --config sentinel-audit.toml    # Full audit
+sentinel-engine --target ./contracts --config sentinel-pr.toml       # Fast PR check
+sentinel-engine --target ./contracts --config sentinel-bounty.toml   # Bug bounty
 
 # Or create custom config
-python orchestrator.py --target ./contracts --config my-custom.toml
+sentinel-engine --target ./contracts --config my-custom.toml
 ```
 
 ---
@@ -267,9 +378,18 @@ Finds mismatches between developer intent (NatSpec comments) and actual implemen
 - Extracts trust keywords and access control claims
 - Compares documented behavior against actual function modifiers and visibility
 
+**Supported NatSpec Tags:**
+- `@notice` - High-level description of function purpose
+- `@dev` - Developer notes and implementation details
+- `@param` - Parameter documentation
+- `@return` - Return value documentation
+
 ```solidity
 /// @notice Only owner can withdraw funds  ← Says "owner"
-function withdraw() public {                 ← Code says "public" (NO MODIFIER!)
+/// @dev Transfers entire balance to owner
+/// @param token The token address to withdraw
+/// @return success Whether the withdrawal succeeded
+function withdraw(address token) public returns (bool success) {  ← Code says "public" (NO MODIFIER!)
     // ❌ CRITICAL: Intent mismatch detected!
 }
 ```
@@ -438,6 +558,35 @@ python medusa_wrapper.py ./foundry-project --test-limit 50000 --timeout 300
 | `STORAGE_COLLISION_RISK` | HIGH | $30K-$200K |
 | `UNSAFE_CAST` | HIGH | $10K-$50K |
 | `MISSING_SLIPPAGE_PROTECTION` | HIGH | $5K-$30K |
+
+### **Solana/Anchor Patterns (35 rules)**
+
+**Account Validation (8):**
+- MISSING_SIGNER_CHECK, MISSING_OWNER_CHECK, MISSING_HAS_ONE_CONSTRAINT
+- MISSING_DISCRIMINATOR_CHECK, UNVALIDATED_PDA_SEEDS, MISSING_IS_SIGNER_RAW
+- MISSING_ACCOUNT_DATA_VALIDATION, UNVALIDATED_ACCOUNT_INFO
+
+**CPI Security (4):**
+- ARBITRARY_CPI, MISSING_CPI_AUTHORITY, UNVERIFIED_PROGRAM_ACCOUNT, UNSAFE_INVOKE_SIGNED
+
+**Arithmetic & Logic (5):**
+- UNCHECKED_ARITHMETIC, INTEGER_OVERFLOW_RISK, UNSAFE_CASTING
+- DIVISION_BY_ZERO_RISK, PRECISION_LOSS
+
+**State Management (6):**
+- MISSING_RENT_EXEMPTION, UNINITIALIZED_ACCOUNT_USAGE, ACCOUNT_REINITIALIZATION
+- MISSING_CLOSE_ACCOUNT, STALE_ACCOUNT_DATA, UNCLOSED_ACCOUNT
+
+**Access Control (4):**
+- MISSING_ACCESS_CONTROL, HARDCODED_AUTHORITY, MISSING_MULTISIG, WEAK_AUTHORITY_CHECK
+
+**Token Security (4):**
+- MISSING_TOKEN_ACCOUNT_VALIDATION, UNCHECKED_TOKEN_BALANCE
+- MISSING_FREEZE_AUTHORITY_CHECK, UNVALIDATED_TOKEN_PROGRAM
+
+**General Validation (4):**
+- UNVALIDATED_ACCOUNT_DATA, UNCONSTRAINED_SYSTEM_PROGRAM
+- MISSING_CLOCK_VALIDATION, DUPLICATE_MUTABLE_ACCOUNTS
 
 ### **DeFi-Specific**
 - ERC4626 inflation attacks
@@ -670,13 +819,16 @@ sarif_upload = true  # Enable GitHub SARIF upload
 Upload SARIF results to GitHub Advanced Security:
 
 ```yaml
+- name: Install Sentinel Engine
+  run: pip install -e .
+
 - name: Run Sentinel Scan
   run: |
-    python orchestrator.py --target ./contracts --report
+    sentinel-engine --target ./contracts --report
     python report_generator.py --format sarif --output sentinel-results
 
 - name: Upload SARIF to GitHub
-  uses: github/codeql-action/upload-sarif@v2
+  uses: github/codeql-action/upload-sarif@v3
   with:
     sarif_file: sentinel-results.sarif
 ```
@@ -840,12 +992,29 @@ See LICENSE for details.
 
 Sentinel Engine supports the following environment variables for configuration:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SENTINEL_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO |
-| `SENTINEL_LOG_FORMAT` | Output format ("text" or "json") | text |
-| `SENTINEL_LOG_FILE` | Optional file path for log output | (none) |
-| `OPENAI_API_KEY` | Required for GPT-4 exploit generation | (none) |
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `SENTINEL_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO | No |
+| `SENTINEL_LOG_FORMAT` | Output format ("text" or "json") | text | No |
+| `SENTINEL_LOG_FILE` | Optional file path for log output | (none) | No |
+| `OPENAI_API_KEY` | OpenAI API key for GPT-4 exploit generation | (none) | For AI features |
+
+### Usage Examples
+
+```bash
+# Debug logging to file
+export SENTINEL_LOG_LEVEL=DEBUG
+export SENTINEL_LOG_FILE=/var/log/sentinel.log
+sentinel-engine --target ./contracts
+
+# JSON format for structured logging
+export SENTINEL_LOG_FORMAT=json
+sentinel-engine --target ./contracts 2>&1 | jq
+
+# OpenAI for exploit generation
+export OPENAI_API_KEY="sk-..."
+python exploit_generator.py --finding-json findings.json
+```
 
 ---
 
@@ -861,45 +1030,14 @@ Sentinel Engine supports the following environment variables for configuration:
 
 ---
 
-**Version:** 2.2.0  
-**Last Updated:** December 21, 2025  
+**Version:** 2.3.0  
+**Last Updated:** April 18, 2026  
 **License:** MIT  
 **Chains:** EVM, Solana  
 **Analyzers:** 14  
-**Patterns:** 31  
+**Patterns:** 31 EVM + 35 Solana  
 **Profiles:** 3  
 
 ---
 
 **⭐ If this helped you find bugs, please star the repo!**
-- Neodyme, OtterSec, Sec3 (Solana)
-
-**Powered by:**
-- Slither (Trail of Bits)
-- Mythril (ConsenSys)
-- Foundry (Paradigm)
-- OSV.dev (Google)
-
----
-
-## 📞 **Support**
-
-For professional security audits:
-- **CyberShield Austin**: [Contact via TokenAudit]
-- **YouTube**: TokenAudit channel
-- **Scam detection**: scamhoundcrypto.com
-
----
-
-**Version:** 2.2 (Multi-Chain + AI + Dual Static Analysis Release)  
-**Last Updated:** December 21, 2025  
-**Chains Supported:** EVM, Solana  
-**Vulnerability Patterns:** 31  
-**Threat Intel Sources:** 7  
-**Analysis Modules:** 14  
-**Static Analyzers:** 2 (Slither + Aderyn)  
-**🆕 Semantic Analysis:** Liar Detector (Intent Mismatch Detection)  
-**🤖 AI-Powered:** GPT-4 Exploit Generation  
-**🔍 Upgrade Safety:** Proxy Diff Analyzer  
-**📡 Runtime Monitoring:** Forta Watchtower Templates  
-**⏰ Fork Testing:** Mainnet Simulation Guidance

@@ -43,11 +43,12 @@ venv\Scripts\activate
 # On macOS/Linux:
 source venv/bin/activate
 
-# 3. Install dependencies
-pip install -r requirements.txt
+# 3. Install dependencies (using pyproject.toml)
+pip install -e ".[dev]"
 
 # 4. Verify installation
-python orchestrator.py --help
+sentinel-engine --help
+# Or: python orchestrator.py --help
 ```
 
 ### Running Tests
@@ -302,11 +303,18 @@ Your wrapper should return a dictionary with this structure:
 sentinel-engine/
 ├── tests/
 │   ├── __init__.py
-│   ├── conftest.py          # Shared fixtures
+│   ├── conftest.py              # Shared fixtures
+│   ├── test_access_matrix.py
+│   ├── test_config_loader.py
+│   ├── test_exceptions.py
 │   ├── test_heuristic_scanner.py
 │   ├── test_intent_check.py
-│   └── test_report_generator.py
-└── test_fixtures/
+│   ├── test_orchestrator.py
+│   ├── test_red_team_scan.py
+│   ├── test_report_generator.py
+│   ├── test_supply_chain_check.py
+│   └── test_upgrade_diff.py
+└── test_fixtures/               # Optional: test contract files
     ├── vulnerable_contract.sol
     └── safe_contract.sol
 ```
@@ -434,6 +442,34 @@ SentinelError (base)
 | `SentinelToolNotFoundError` | External tool not installed | Slither not in PATH |
 | `SentinelValidationError` | User input is invalid | Invalid contract address format |
 | `SentinelTimeoutError` | Operation exceeds time limit | Mythril analysis > 5 minutes |
+
+### API Integration with `http_utils.py`
+
+When adding new API integrations (threat intelligence, external services), use the resilient HTTP utilities:
+
+```python
+from http_utils import resilient_get, resilient_post
+
+# Automatic retry with exponential backoff
+response = resilient_get(
+    "https://api.example.com/data",
+    timeout=30,
+    max_retries=3
+)
+
+# Rate-limited POST requests
+response = resilient_post(
+    "https://api.example.com/submit",
+    json={"key": "value"},
+    rate_limit=5  # requests per second
+)
+```
+
+Features:
+- **Exponential backoff** with jitter for failed requests
+- **Rate limiting** to prevent API quota exhaustion
+- **Automatic retry** on 5xx errors and timeouts
+- **Respects `Retry-After` headers** for rate limiting
 
 ### Logging Conventions
 
