@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sentinel Engine{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <a href="/" class="logo-link">
+                <img src="/static/logo.png" alt="Sentinel Engine" class="logo">
+                <span class="brand-name">Sentinel Engine</span>
+            </a>
+            <nav>
+                <a href="https://sentinel-engine.io">Home</a>
+                <a href="https://github.com/RunTimeAdmin/sentinel-engine">GitHub</a>
+            </nav>
+        </div>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <p>Sentinel Security Engine &bull; <a href="https://sentinel-engine.io">sentinel-engine.io</a></p>
+    </footer>
+</body>
+</html>

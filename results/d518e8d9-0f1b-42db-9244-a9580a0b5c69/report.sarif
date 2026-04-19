@@ -1,0 +1,1262 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Sentinel Engine",
+          "version": "2.2.0",
+          "semanticVersion": "2.2.0",
+          "informationUri": "https://sentinel-engine.io",
+          "rules": [
+            {
+              "id": "DIVIDE_BEFORE_MULTIPLY",
+              "name": "Divide Before Multiply",
+              "shortDescription": {
+                "text": "Divide Before Multiply"
+              },
+              "fullDescription": {
+                "text": "Potential precision loss: division before multiplication"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "ORACLE_STALENESS_CHECK",
+              "name": "Oracle Staleness Check",
+              "shortDescription": {
+                "text": "Oracle Staleness Check"
+              },
+              "fullDescription": {
+                "text": "Chainlink oracle without staleness/validity check (price manipulation risk)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "TRADING_TOGGLE_BOOL",
+              "name": "Trading Toggle Bool",
+              "shortDescription": {
+                "text": "Trading Toggle Bool"
+              },
+              "fullDescription": {
+                "text": "Presence of trading enable/disable boolean (possible honeypot)"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "STORAGE_COLLISION_RISK",
+              "name": "Storage Collision Risk",
+              "shortDescription": {
+                "text": "Storage Collision Risk"
+              },
+              "fullDescription": {
+                "text": "Upgradeable proxy pattern detected - verify storage layout"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "HARDCODED_ADDRESS",
+              "name": "Hardcoded Address",
+              "shortDescription": {
+                "text": "Hardcoded Address"
+              },
+              "fullDescription": {
+                "text": "Hardcoded address literal in code"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              }
+            },
+            {
+              "id": "BLOCK_TIMESTAMP_RANDOMNESS",
+              "name": "Block Timestamp Randomness",
+              "shortDescription": {
+                "text": "Block Timestamp Randomness"
+              },
+              "fullDescription": {
+                "text": "Use of block.timestamp / now (weak randomness)"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "UNCHECKED_EXTERNAL_CALL",
+              "name": "Unchecked External Call",
+              "shortDescription": {
+                "text": "Unchecked External Call"
+              },
+              "fullDescription": {
+                "text": "Low-level call/transfer without return value check (funds may be lost)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "EMERGENCY_WITHDRAW_PUBLIC",
+              "name": "Emergency Withdraw Public",
+              "shortDescription": {
+                "text": "Emergency Withdraw Public"
+              },
+              "fullDescription": {
+                "text": "Function name suggests emergency withdraw / rescue funds"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "UPGRADE_FUNCTION",
+              "name": "Upgrade Function",
+              "shortDescription": {
+                "text": "Upgrade Function"
+              },
+              "fullDescription": {
+                "text": "Function name suggests upgrade or ownership change"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "TX_ORIGIN_USAGE",
+              "name": "Tx Origin Usage",
+              "shortDescription": {
+                "text": "Tx Origin Usage"
+              },
+              "fullDescription": {
+                "text": "Use of tx.origin (dangerous for auth checks)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "DELEGATECALL_USAGE",
+              "name": "Delegatecall Usage",
+              "shortDescription": {
+                "text": "Delegatecall Usage"
+              },
+              "fullDescription": {
+                "text": "Use of delegatecall (upgradeable/proxy risk)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "LOWLEVEL_CALL_USAGE",
+              "name": "Lowlevel Call Usage",
+              "shortDescription": {
+                "text": "Lowlevel Call Usage"
+              },
+              "fullDescription": {
+                "text": "Use of low-level call (call(), staticcall(), callcode())"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "SET_FEE_FUNCTION",
+              "name": "Set Fee Function",
+              "shortDescription": {
+                "text": "Set Fee Function"
+              },
+              "fullDescription": {
+                "text": "Configurable fee setter without obvious cap (possible fee rug)"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "STRICT_BALANCE_EQUALITY",
+              "name": "Strict Balance Equality",
+              "shortDescription": {
+                "text": "Strict Balance Equality"
+              },
+              "fullDescription": {
+                "text": "Strict equality on address(this).balance (fragile invariant)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "HIDDEN_MINT",
+              "name": "Hidden Mint",
+              "shortDescription": {
+                "text": "Hidden Mint"
+              },
+              "fullDescription": {
+                "text": "_mint() call (possible hidden mint path)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "FAKE_RENOUNCE_OWNER_ZERO",
+              "name": "Fake Renounce Owner Zero",
+              "shortDescription": {
+                "text": "Fake Renounce Owner Zero"
+              },
+              "fullDescription": {
+                "text": "owner set to address(0) (possible fake renounce)"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "UNSAFE_CAST",
+              "name": "Unsafe Cast",
+              "shortDescription": {
+                "text": "Unsafe Cast"
+              },
+              "fullDescription": {
+                "text": "Unsafe type casting (uint256 -> uint128/uint64) without bounds check"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "MSG_VALUE_LOOP",
+              "name": "Msg Value Loop",
+              "shortDescription": {
+                "text": "Msg Value Loop"
+              },
+              "fullDescription": {
+                "text": "msg.value used inside a loop (possible double-credit per iteration)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "MISSING_SLIPPAGE_PROTECTION",
+              "name": "Missing Slippage Protection",
+              "shortDescription": {
+                "text": "Missing Slippage Protection"
+              },
+              "fullDescription": {
+                "text": "DEX swap without minimum output amount (MEV/sandwich attack)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "SIGNATURE_REPLAY",
+              "name": "Signature Replay",
+              "shortDescription": {
+                "text": "Signature Replay"
+              },
+              "fullDescription": {
+                "text": "Signature verification without nonce/deadline protection (replay attack)"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "FLASH_LOAN_REENTRANCY",
+              "name": "Flash Loan Reentrancy",
+              "shortDescription": {
+                "text": "Flash Loan Reentrancy"
+              },
+              "fullDescription": {
+                "text": "Flash loan callback without reentrancy protection"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "CENTRALIZATION_RISK",
+              "name": "Centralization Risk",
+              "shortDescription": {
+                "text": "Centralization Risk"
+              },
+              "fullDescription": {
+                "text": "Single owner can upgrade/pause/withdraw without timelock"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "BOOLEAN_TRANSFER_CHECK",
+              "name": "Boolean Transfer Check",
+              "shortDescription": {
+                "text": "Boolean Transfer Check"
+              },
+              "fullDescription": {
+                "text": "Checking boolean return on ERC20.transfer (may be wrong with some libs)"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              }
+            },
+            {
+              "id": "ARBITRARY_EXTERNAL_CALL",
+              "name": "Arbitrary External Call",
+              "shortDescription": {
+                "text": "Arbitrary External Call"
+              },
+              "fullDescription": {
+                "text": "Unprotected arbitrary external call: user controls target and calldata."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "DIVIDE_BEFORE_MULTIPLY",
+          "level": "warning",
+          "message": {
+            "text": "Potential precision loss: division before multiplication"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 6,
+                  "snippet": {
+                    "text": "/**"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "ORACLE_STALENESS_CHECK",
+          "level": "error",
+          "message": {
+            "text": "Chainlink oracle without staleness/validity check (price manipulation risk)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 22,
+                  "snippet": {
+                    "text": "    function latestAnswer() external view returns (int256);"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "ORACLE_STALENESS_CHECK",
+          "level": "error",
+          "message": {
+            "text": "Chainlink oracle without staleness/validity check (price manipulation risk)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 23,
+                  "snippet": {
+                    "text": "    function latestRoundData() external view returns ("
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "TRADING_TOGGLE_BOOL",
+          "level": "warning",
+          "message": {
+            "text": "Presence of trading enable/disable boolean (possible honeypot)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 43,
+                  "snippet": {
+                    "text": "    bool tradingEnabled;                    // TRADING_TOGGLE_BOOL: bool tradingEnabled"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "STORAGE_COLLISION_RISK",
+          "level": "error",
+          "message": {
+            "text": "Upgradeable proxy pattern detected - verify storage layout"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 49,
+                  "snippet": {
+                    "text": "    uint256[49] private __gap;"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "HARDCODED_ADDRESS",
+          "level": "note",
+          "message": {
+            "text": "Hardcoded address literal in code"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 53,
+                  "snippet": {
+                    "text": "        0x00000000219ab540356cBB839Cbe05303d7705Fa;"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "BLOCK_TIMESTAMP_RANDOMNESS",
+          "level": "warning",
+          "message": {
+            "text": "Use of block.timestamp / now (weak randomness)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 67,
+                  "snippet": {
+                    "text": "        depositTime[msg.sender] = block.timestamp; // BLOCK_TIMESTAMP_RANDOMNESS"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UNCHECKED_EXTERNAL_CALL",
+          "level": "error",
+          "message": {
+            "text": "Low-level call/transfer without return value check (funds may be lost)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 76,
+                  "snippet": {
+                    "text": "        (bool sent, ) = msg.sender.call{value: amount}(\"\");"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "EMERGENCY_WITHDRAW_PUBLIC",
+          "level": "error",
+          "message": {
+            "text": "Function name suggests emergency withdraw / rescue funds"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 85,
+                  "snippet": {
+                    "text": "    function emergencyWithdraw() external {"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UNCHECKED_EXTERNAL_CALL",
+          "level": "error",
+          "message": {
+            "text": "Low-level call/transfer without return value check (funds may be lost)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 88,
+                  "snippet": {
+                    "text": "        msg.sender.call{value: bal}(\"\");"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "EMERGENCY_WITHDRAW_PUBLIC",
+          "level": "error",
+          "message": {
+            "text": "Function name suggests emergency withdraw / rescue funds"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 94,
+                  "snippet": {
+                    "text": "    function drain() external {"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UPGRADE_FUNCTION",
+          "level": "error",
+          "message": {
+            "text": "Function name suggests upgrade or ownership change"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 102,
+                  "snippet": {
+                    "text": "    function transferOwnership(address newOwner) external {"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "TX_ORIGIN_USAGE",
+          "level": "error",
+          "message": {
+            "text": "Use of tx.origin (dangerous for auth checks)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 103,
+                  "snippet": {
+                    "text": "        require(tx.origin == owner, \"Not owner\"); // TX_ORIGIN_USAGE"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "DELEGATECALL_USAGE",
+          "level": "error",
+          "message": {
+            "text": "Use of delegatecall (upgradeable/proxy risk)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 110,
+                  "snippet": {
+                    "text": "        target.delegatecall(data); // DELEGATECALL_USAGE"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UNCHECKED_EXTERNAL_CALL",
+          "level": "error",
+          "message": {
+            "text": "Low-level call/transfer without return value check (funds may be lost)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 116,
+                  "snippet": {
+                    "text": "        target.call{value: 0}(data); // ARBITRARY_EXTERNAL_CALL"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "LOWLEVEL_CALL_USAGE",
+          "level": "warning",
+          "message": {
+            "text": "Use of low-level call (call(), staticcall(), callcode())"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 121,
+                  "snippet": {
+                    "text": "        target.call(\"\"); // LOWLEVEL_CALL_USAGE: .call("
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "BLOCK_TIMESTAMP_RANDOMNESS",
+          "level": "warning",
+          "message": {
+            "text": "Use of block.timestamp / now (weak randomness)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 126,
+                  "snippet": {
+                    "text": "        return (block.timestamp % 100) < 50 && balances[user] > 0;"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "SET_FEE_FUNCTION",
+          "level": "warning",
+          "message": {
+            "text": "Configurable fee setter without obvious cap (possible fee rug)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 136,
+                  "snippet": {
+                    "text": "    function setFee(uint256 newFee) external {"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "STRICT_BALANCE_EQUALITY",
+          "level": "error",
+          "message": {
+            "text": "Strict equality on address(this).balance (fragile invariant)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 151,
+                  "snippet": {
+                    "text": "        return address(this).balance == totalDeposits; // STRICT_BALANCE_EQUALITY"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "HIDDEN_MINT",
+          "level": "error",
+          "message": {
+            "text": "_mint() call (possible hidden mint path)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 156,
+                  "snippet": {
+                    "text": "        _mint(to, amount); // HIDDEN_MINT: _mint() call"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "HIDDEN_MINT",
+          "level": "error",
+          "message": {
+            "text": "_mint() call (possible hidden mint path)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 159,
+                  "snippet": {
+                    "text": "    function _mint(address to, uint256 amount) internal {"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "FAKE_RENOUNCE_OWNER_ZERO",
+          "level": "warning",
+          "message": {
+            "text": "owner set to address(0) (possible fake renounce)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 166,
+                  "snippet": {
+                    "text": "        owner = address(0); // FAKE_RENOUNCE_OWNER_ZERO"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "DIVIDE_BEFORE_MULTIPLY",
+          "level": "warning",
+          "message": {
+            "text": "Potential precision loss: division before multiplication"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 171,
+                  "snippet": {
+                    "text": "        return balances[user] / 100 * feeRate; // DIVIDE_BEFORE_MULTIPLY"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UNSAFE_CAST",
+          "level": "error",
+          "message": {
+            "text": "Unsafe type casting (uint256 -> uint128/uint64) without bounds check"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 177,
+                  "snippet": {
+                    "text": "        return uint64(len); // UNSAFE_CAST: no bounds check"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "MSG_VALUE_LOOP",
+          "level": "error",
+          "message": {
+            "text": "msg.value used inside a loop (possible double-credit per iteration)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 191,
+                  "snippet": {
+                    "text": "        for (uint256 i = 0; i < msg.value / 1e18; i++) { // MSG_VALUE_LOOP"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "BLOCK_TIMESTAMP_RANDOMNESS",
+          "level": "warning",
+          "message": {
+            "text": "Use of block.timestamp / now (weak randomness)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 202,
+                  "snippet": {
+                    "text": "                depositTime[depositor] = block.timestamp; // BLOCK_TIMESTAMP_RANDOMNESS"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "MISSING_SLIPPAGE_PROTECTION",
+          "level": "error",
+          "message": {
+            "text": "DEX swap without minimum output amount (MEV/sandwich attack)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 209,
+                  "snippet": {
+                    "text": "        token.swap(tokenAmount, 0, address(this)); // MISSING_SLIPPAGE_PROTECTION: , 0,"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "ORACLE_STALENESS_CHECK",
+          "level": "error",
+          "message": {
+            "text": "Chainlink oracle without staleness/validity check (price manipulation risk)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 214,
+                  "snippet": {
+                    "text": "        int256 answer = IChainlink(TREASURY).latestAnswer(); // ORACLE_STALENESS_CHECK"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "ORACLE_STALENESS_CHECK",
+          "level": "error",
+          "message": {
+            "text": "Chainlink oracle without staleness/validity check (price manipulation risk)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 219,
+                  "snippet": {
+                    "text": "        (, int256 price, , , ) = IChainlink(TREASURY).latestRoundData(); // ORACLE_STALENESS_CHECK"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "SIGNATURE_REPLAY",
+          "level": "error",
+          "message": {
+            "text": "Signature verification without nonce/deadline protection (replay attack)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 234,
+                  "snippet": {
+                    "text": "        address signer = ecrecover(ethSignedHash, v, r, s); // SIGNATURE_REPLAY"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "FLASH_LOAN_REENTRANCY",
+          "level": "error",
+          "message": {
+            "text": "Flash loan callback without reentrancy protection"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 240,
+                  "snippet": {
+                    "text": "    function flashLoan(uint256 amount) external { // FLASH_LOAN_REENTRANCY"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UNCHECKED_EXTERNAL_CALL",
+          "level": "error",
+          "message": {
+            "text": "Low-level call/transfer without return value check (funds may be lost)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 243,
+                  "snippet": {
+                    "text": "        msg.sender.call{value: amount}(\"\");"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "DIVIDE_BEFORE_MULTIPLY",
+          "level": "warning",
+          "message": {
+            "text": "Potential precision loss: division before multiplication"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 245,
+                  "snippet": {
+                    "text": "        require(address(this).balance >= balanceBefore + amount / 100 * feeRate);"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UPGRADE_FUNCTION",
+          "level": "error",
+          "message": {
+            "text": "Function name suggests upgrade or ownership change"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 249,
+                  "snippet": {
+                    "text": "    function upgradeTo(address newImpl) external { // UPGRADE_FUNCTION"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CENTRALIZATION_RISK",
+          "level": "warning",
+          "message": {
+            "text": "Single owner can upgrade/pause/withdraw without timelock"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 255,
+                  "snippet": {
+                    "text": "    function pause() external onlyOwner { // CENTRALIZATION_RISK"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CENTRALIZATION_RISK",
+          "level": "warning",
+          "message": {
+            "text": "Single owner can upgrade/pause/withdraw without timelock"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 259,
+                  "snippet": {
+                    "text": "    function unpause() external onlyOwner { // CENTRALIZATION_RISK"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UPGRADE_FUNCTION",
+          "level": "error",
+          "message": {
+            "text": "Function name suggests upgrade or ownership change"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 264,
+                  "snippet": {
+                    "text": "    function setOwner(address newOwner) external { // UPGRADE_FUNCTION"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "BOOLEAN_TRANSFER_CHECK",
+          "level": "note",
+          "message": {
+            "text": "Checking boolean return on ERC20.transfer (may be wrong with some libs)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 282,
+                  "snippet": {
+                    "text": "        if (!t.transfer(msg.sender, amount)) { // BOOLEAN_TRANSFER_CHECK"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UNCHECKED_EXTERNAL_CALL",
+          "level": "error",
+          "message": {
+            "text": "Low-level call/transfer without return value check (funds may be lost)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 282,
+                  "snippet": {
+                    "text": "        if (!t.transfer(msg.sender, amount)) { // BOOLEAN_TRANSFER_CHECK"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "UNCHECKED_EXTERNAL_CALL",
+          "level": "error",
+          "message": {
+            "text": "Low-level call/transfer without return value check (funds may be lost)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                },
+                "region": {
+                  "startLine": 290,
+                  "snippet": {
+                    "text": "        t.transferFrom(msg.sender, address(this), amount); // UNCHECKED_EXTERNAL_CALL"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "ARBITRARY_EXTERNAL_CALL",
+          "level": "error",
+          "message": {
+            "text": "Unprotected arbitrary external call: user controls target and calldata."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\VulnerableVault.sol"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "DIVIDE_BEFORE_MULTIPLY",
+          "level": "warning",
+          "message": {
+            "text": "Potential precision loss: division before multiplication"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Z:\\Sentinal Engine\\sentinel-engine\\uploads\\d518e8d9-0f1b-42db-9244-a9580a0b5c69\\TokenHelper.sol"
+                },
+                "region": {
+                  "startLine": 4,
+                  "snippet": {
+                    "text": "/**"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "startTimeUtc": "2026-04-19 15:18:16"
+        }
+      ],
+      "automationDetails": {
+        "id": "Multi-File Audit Test",
+        "description": {
+          "text": "Security audit for Multi-File Audit Test"
+        }
+      }
+    }
+  ]
+}

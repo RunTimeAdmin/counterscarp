@@ -1,0 +1,18 @@
+[Unit]
+Description=Sentinel Engine Web Application
+After=network.target
+
+[Service]
+Type=exec
+User=sentinel
+Group=sentinel
+WorkingDirectory=/opt/sentinel-engine
+ExecStart=/opt/sentinel-engine/venv/bin/uvicorn webapp.main:app --host 127.0.0.1 --port 8001 --workers 4
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=SENTINEL_UPLOAD_DIR=/opt/sentinel-engine/uploads
+Environment=SENTINEL_RESULTS_DIR=/opt/sentinel-engine/results
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Results - Sentinel Engine{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="results-header">
+        <h1>Audit Results</h1>
+        <div class="risk-badge risk-{{ 'critical' if risk_score >= 60 else 'high' if risk_score >= 30 else 'medium' if risk_score >= 10 else 'low' }}">
+            Risk Score: {{ risk_score }}/100
+        </div>
+    </div>
+
+    <div class="severity-summary">
+        <div class="severity-card critical">
+            <div class="severity-count">{{ severity_counts.CRITICAL }}</div>
+            <div class="severity-label">Critical</div>
+        </div>
+        <div class="severity-card high">
+            <div class="severity-count">{{ severity_counts.HIGH }}</div>
+            <div class="severity-label">High</div>
+        </div>
+        <div class="severity-card medium">
+            <div class="severity-count">{{ severity_counts.MEDIUM }}</div>
+            <div class="severity-label">Medium</div>
+        </div>
+        <div class="severity-card low">
+            <div class="severity-count">{{ severity_counts.LOW }}</div>
+            <div class="severity-label">Low</div>
+        </div>
+        <div class="severity-card info">
+            <div class="severity-count">{{ severity_counts.INFO }}</div>
+            <div class="severity-label">Info</div>
+        </div>
+    </div>
+
+    <div class="download-section">
+        <h3>Download Reports</h3>
+        <div class="download-buttons">
+            <a href="/results/{{ audit_id }}/report/html" class="btn-download">
+                <span class="icon">&#128196;</span> HTML Report
+            </a>
+            <a href="/results/{{ audit_id }}/report/md" class="btn-download">
+                <span class="icon">&#128220;</span> Markdown
+            </a>
+            <a href="/results/{{ audit_id }}/report/sarif" class="btn-download">
+                <span class="icon">&#128190;</span> SARIF
+            </a>
+            <a href="/results/{{ audit_id }}/report/json" class="btn-download">
+                <span class="icon">&#128203;</span> JSON
+            </a>
+            {% if attack_graph_exists %}
+            <a href="/results/{{ audit_id }}/attack-graph" class="btn-download btn-attack-graph" target="_blank">
+                <span class="icon">&#128200;</span> Attack Graph
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="findings-section">
+        <h3>Findings ({{ total_findings }})</h3>
+        {% if findings %}
+            <div class="findings-list">
+                {% for finding in findings %}
+                <div class="finding-card" data-severity="{{ finding.severity }}">
+                    <div class="finding-header" onclick="toggleFinding(this)">
+                        <div class="finding-title-section">
+                            <span class="severity-badge severity-{{ finding.severity.lower() }}">
+                                {{ finding.severity }}
+                            </span>
+                            <span class="finding-title">{{ finding.title }}</span>
+                        </div>
+                        <div class="finding-meta">
+                            <span class="finding-location">{{ finding.file.split('/')[-1] }}:{{ finding.line_no }}</span>
+                            <span class="finding-toggle">&#9662;</span>
+                        </div>
+                    </div>
+                    <div class="finding-content">
+                        <div class="finding-description">
+                            <p>{{ finding.description }}</p>
+                        </div>
+                        {% if finding.code_snippet %}
+                        <div class="code-block">
+                            <pre><code>{{ finding.code_snippet }}</code></pre>
+                        </div>
+                        {% endif %}
+                        {% if finding.remediation %}
+                        <div class="remediation-box">
+                            <h4>Remediation</h4>
+                            <p>{{ finding.remediation }}</p>
+                        </div>
+                        {% endif %}
+                        <div class="finding-details">
+                            <span class="detail-item"><strong>Rule:</strong> {{ finding.rule_id }}</span>
+                            <span class="detail-item"><strong>Category:</strong> {{ finding.category }}</span>
+                            {% if finding.cwe %}
+                            <span class="detail-item"><strong>CWE:</strong> {{ finding.cwe }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="no-findings">
+                <p>No findings detected. This does not guarantee complete security.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    function toggleFinding(header) {
+        const card = header.parentElement;
+        const content = card.querySelector('.finding-content');
+        const toggle = header.querySelector('.finding-toggle');
+
+        if (content.style.display === 'none' || content.style.display === '') {
+            content.style.display = 'block';
+            toggle.innerHTML = '&#9652;';
+            card.classList.add('expanded');
+        } else {
+            content.style.display = 'none';
+            toggle.innerHTML = '&#9662;';
+            card.classList.remove('expanded');
+        }
+    }
+
+    // Initialize all findings as collapsed
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.finding-content').forEach(content => {
+            content.style.display = 'none';
+        });
+    });
+</script>
+{% endblock %}

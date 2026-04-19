@@ -36,6 +36,9 @@ htmlcov/
 benchmark.json
 test_contracts/
 
+# Sample reports (generated)
+sample_reports/
+
 # Runtime data
 .sentinel/
 vulnerability_timeline.json

@@ -1,0 +1,607 @@
+/* Sentinel Engine Web Application - Dark Theme Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+header {
+    background: #16213e;
+    border-bottom: 1px solid #667eea;
+    padding: 1rem 0;
+}
+
+.header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: #e0e0e0;
+}
+
+.logo {
+    height: 40px;
+    margin-right: 12px;
+}
+
+.brand-name {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #667eea;
+}
+
+nav a {
+    color: #a0a0a0;
+    text-decoration: none;
+    margin-left: 2rem;
+    transition: color 0.2s;
+}
+
+nav a:hover {
+    color: #667eea;
+}
+
+/* Main Content */
+main {
+    flex: 1;
+    padding: 2rem 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+/* Cards */
+.card {
+    background: #16213e;
+    border-radius: 12px;
+    border: 1px solid #2a2a4e;
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+/* Upload Card */
+.upload-card {
+    max-width: 600px;
+    margin: 2rem auto;
+    text-align: center;
+}
+
+.upload-card h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+    color: #fff;
+}
+
+.subtitle {
+    color: #888;
+    margin-bottom: 2rem;
+}
+
+/* Form Elements */
+.form-group {
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #a0a0a0;
+    font-weight: 500;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: #0f1629;
+    border: 1px solid #2a2a4e;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* Upload Zone */
+.upload-zone {
+    border: 2px dashed #667eea;
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+    border-color: #764ba2;
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.upload-zone input[type="file"] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.upload-text {
+    font-size: 1.1rem;
+    color: #e0e0e0;
+    margin-bottom: 0.5rem;
+}
+
+.upload-hint {
+    color: #888;
+    margin-bottom: 0.5rem;
+}
+
+.upload-formats {
+    color: #667eea;
+    font-size: 0.875rem;
+}
+
+/* File List */
+.file-list {
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    background: #0f1629;
+    border: 1px solid #2a2a4e;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.file-name {
+    flex: 1;
+    color: #e0e0e0;
+}
+
+.file-size {
+    color: #888;
+    font-size: 0.875rem;
+    margin-right: 1rem;
+}
+
+.file-remove {
+    background: none;
+    border: none;
+    color: #ff4444;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0 0.5rem;
+}
+
+.file-remove:hover {
+    color: #ff6666;
+}
+
+/* Buttons */
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    width: 100%;
+}
+
+.btn-primary:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Results Page */
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.results-header h1 {
+    font-size: 2rem;
+    color: #fff;
+}
+
+/* Risk Badge */
+.risk-badge {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.risk-low {
+    background: rgba(40, 167, 69, 0.2);
+    color: #28a745;
+    border: 1px solid #28a745;
+}
+
+.risk-medium {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+    border: 1px solid #ffc107;
+}
+
+.risk-high {
+    background: rgba(253, 126, 20, 0.2);
+    color: #fd7e14;
+    border: 1px solid #fd7e14;
+}
+
+.risk-critical {
+    background: rgba(220, 53, 69, 0.2);
+    color: #dc3545;
+    border: 1px solid #dc3545;
+}
+
+/* Severity Summary */
+.severity-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.severity-card {
+    background: #16213e;
+    border: 1px solid #2a2a4e;
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.severity-card.critical {
+    border-left: 4px solid #ff4444;
+}
+
+.severity-card.high {
+    border-left: 4px solid #ff8c00;
+}
+
+.severity-card.medium {
+    border-left: 4px solid #ffd700;
+}
+
+.severity-card.low {
+    border-left: 4px solid #4488ff;
+}
+
+.severity-card.info {
+    border-left: 4px solid #888;
+}
+
+.severity-count {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.severity-label {
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    color: #888;
+    margin-top: 0.5rem;
+}
+
+/* Download Section */
+.download-section {
+    background: #16213e;
+    border: 1px solid #2a2a4e;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.download-section h3 {
+    margin-bottom: 1rem;
+    color: #fff;
+}
+
+.download-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.btn-download {
+    display: inline-flex;
+    align-items: center;
+    background: #0f1629;
+    border: 1px solid #2a2a4e;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: #e0e0e0;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.btn-download:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.btn-download .icon {
+    margin-right: 0.5rem;
+}
+
+.btn-attack-graph {
+    border-color: #764ba2;
+    color: #c084fc;
+}
+
+.btn-attack-graph:hover {
+    background: rgba(118, 75, 162, 0.1);
+}
+
+/* Findings Section */
+.findings-section {
+    background: #16213e;
+    border: 1px solid #2a2a4e;
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.findings-section h3 {
+    margin-bottom: 1.5rem;
+    color: #fff;
+}
+
+.findings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.finding-card {
+    background: #0f1629;
+    border: 1px solid #2a2a4e;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.finding-card.expanded {
+    border-color: #667eea;
+}
+
+.finding-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.finding-header:hover {
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.finding-title-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.severity-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.severity-critical {
+    background: #ff4444;
+    color: white;
+}
+
+.severity-high {
+    background: #ff8c00;
+    color: white;
+}
+
+.severity-medium {
+    background: #ffd700;
+    color: #1a1a2e;
+}
+
+.severity-low {
+    background: #4488ff;
+    color: white;
+}
+
+.severity-info {
+    background: #888;
+    color: white;
+}
+
+.finding-title {
+    font-weight: 500;
+    color: #e0e0e0;
+}
+
+.finding-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.finding-location {
+    color: #888;
+    font-size: 0.875rem;
+}
+
+.finding-toggle {
+    color: #888;
+    font-size: 0.75rem;
+}
+
+.finding-content {
+    padding: 0 1rem 1rem;
+    border-top: 1px solid #2a2a4e;
+}
+
+.finding-description {
+    padding: 1rem 0;
+    color: #c0c0c0;
+}
+
+.code-block {
+    background: #0d1117;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+}
+
+.code-block pre {
+    margin: 0;
+}
+
+.code-block code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.875rem;
+    color: #e0e0e0;
+}
+
+.remediation-box {
+    background: rgba(40, 167, 69, 0.1);
+    border: 1px solid #28a745;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.remediation-box h4 {
+    color: #28a745;
+    margin-bottom: 0.5rem;
+}
+
+.remediation-box p {
+    color: #c0c0c0;
+}
+
+.finding-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #2a2a4e;
+}
+
+.detail-item {
+    color: #888;
+    font-size: 0.875rem;
+}
+
+.no-findings {
+    text-align: center;
+    padding: 3rem;
+    color: #888;
+}
+
+/* Footer */
+footer {
+    background: #16213e;
+    border-top: 1px solid #2a2a4e;
+    padding: 1.5rem 0;
+    text-align: center;
+    color: #888;
+}
+
+footer a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    nav a {
+        margin: 0 1rem;
+    }
+
+    .results-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+
+    .severity-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .download-buttons {
+        justify-content: center;
+    }
+
+    .finding-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .finding-meta {
+        width: 100%;
+        justify-content: space-between;
+    }
+}

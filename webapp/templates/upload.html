@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Contract Security Audit - Sentinel Engine{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="card upload-card">
+        <h1>Smart Contract Security Audit</h1>
+        <p class="subtitle">Upload your Solidity or Rust smart contracts for automated security analysis</p>
+
+        <form id="auditForm" action="/audit" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="project_name">Project Name</label>
+                <input type="text" id="project_name" name="project_name" required
+                       placeholder="Enter your project name">
+            </div>
+
+            <div class="form-group">
+                <label>Upload Files</label>
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">&#128194;</div>
+                    <p class="upload-text">Drag and drop your files here</p>
+                    <p class="upload-hint">or click to browse</p>
+                    <p class="upload-formats">Supports: .sol, .rs files</p>
+                    <input type="file" id="files" name="files" multiple accept=".sol,.rs" required>
+                </div>
+            </div>
+
+            <div class="file-list" id="fileList"></div>
+
+            <button type="submit" class="btn-primary" id="submitBtn" disabled>
+                Run Audit
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('files');
+    const fileList = document.getElementById('fileList');
+    const submitBtn = document.getElementById('submitBtn');
+    const auditForm = document.getElementById('auditForm');
+
+    let selectedFiles = [];
+
+    // Drag and drop handlers
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+
+        const files = Array.from(e.dataTransfer.files).filter(file => {
+            const ext = file.name.split('.').pop().toLowerCase();
+            return ext === 'sol' || ext === 'rs';
+        });
+
+        if (files.length > 0) {
+            addFiles(files);
+        }
+    });
+
+    // Click to browse
+    uploadZone.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', () => {
+        addFiles(Array.from(fileInput.files));
+    });
+
+    function addFiles(files) {
+        selectedFiles = [...selectedFiles, ...files];
+        updateFileList();
+    }
+
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        updateFileList();
+    }
+
+    function updateFileList() {
+        fileList.innerHTML = '';
+
+        if (selectedFiles.length === 0) {
+            submitBtn.disabled = true;
+            return;
+        }
+
+        selectedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <span class="file-name">${file.name}</span>
+                <span class="file-size">${formatFileSize(file.size)}</span>
+                <button type="button" class="file-remove" onclick="removeFile(${index})">&times;</button>
+            `;
+            fileList.appendChild(fileItem);
+        });
+
+        // Update file input with current files
+        const dataTransfer = new DataTransfer();
+        selectedFiles.forEach(file => dataTransfer.items.add(file));
+        fileInput.files = dataTransfer.files;
+
+        submitBtn.disabled = false;
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Form submission loading state
+    auditForm.addEventListener('submit', () => {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Running Audit...';
+    });
+</script>
+{% endblock %}

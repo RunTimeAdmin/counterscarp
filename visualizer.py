@@ -235,7 +235,8 @@ def _generate_d3_js(graph_data: Dict[str, Any]) -> str:
 def _generate_html_template(
     title: str,
     d3_js: str,
-    graph_data: Dict[str, Any]
+    graph_data: Dict[str, Any],
+    logo_html: str = ""
 ) -> str:
     """Generate the complete HTML template.
 
@@ -524,7 +525,10 @@ def _generate_html_template(
 </head>
 <body>
     <div class="header">
-        <h1>🔍 {title}</h1>
+        <div style="display: flex; align-items: center;">
+            {logo_html}
+            <h1>🔍 {title}</h1>
+        </div>
         <div style="color: #888; font-size: 0.9em;">
             Sentinel Engine Attack Path Visualizer
         </div>
@@ -802,7 +806,8 @@ def _generate_html_template(
 def generate_attack_graph_html(
     graph_json: Dict[str, Any],
     output_path: str,
-    title: str = "Attack Path Analysis"
+    title: str = "Attack Path Analysis",
+    logo_path: Optional[str] = None
 ) -> str:
     """Generate an interactive HTML file with D3.js attack graph visualization.
 
@@ -814,6 +819,7 @@ def generate_attack_graph_html(
         graph_json: Graph data dictionary with 'nodes' and 'links' keys.
         output_path: Path where the HTML file will be saved.
         title: Title for the visualization page.
+        logo_path: Optional path to a logo image file to embed in the visualization.
 
     Returns:
         Path to the generated HTML file.
@@ -833,11 +839,23 @@ def generate_attack_graph_html(
     try:
         logger.info(f"Generating attack graph HTML: {output_path}")
         
+        # Process logo if provided
+        logo_html = ""
+        if logo_path and os.path.exists(logo_path):
+            import base64
+            from pathlib import Path
+            with open(logo_path, 'rb') as f:
+                logo_data = f.read()
+            logo_b64 = base64.b64encode(logo_data).decode('utf-8')
+            ext = Path(logo_path).suffix.lower().lstrip('.')
+            mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'svg': 'image/svg+xml'}.get(ext, 'image/png')
+            logo_html = f'<img src="data:{mime};base64,{logo_b64}" alt="Sentinel Engine" style="height: 40px; margin-right: 12px; vertical-align: middle;">'
+        
         # Generate D3.js code
         d3_js = _generate_d3_js(graph_json)
         
         # Generate complete HTML
-        html = _generate_html_template(title, d3_js, graph_json)
+        html = _generate_html_template(title, d3_js, graph_json, logo_html)
         
         # Write to file
         with open(output_path, 'w', encoding='utf-8') as f:
