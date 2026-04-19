@@ -18,6 +18,18 @@ from exceptions import SentinelReportError
 
 logger = get_logger(__name__)
 
+# Optional attack graph imports (graceful fallback)
+try:
+    from attack_graph import build_graph, export_graph_json, trace_attack_paths
+    from visualizer import generate_attack_graph_html
+    ATTACK_GRAPH_AVAILABLE = True
+except ImportError:
+    ATTACK_GRAPH_AVAILABLE = False
+    build_graph = None
+    export_graph_json = None
+    trace_attack_paths = None
+    generate_attack_graph_html = None
+
 
 @dataclass
 class Finding:
@@ -870,7 +882,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate professional audit report")
     parser.add_argument("--project", default="Test Project", help="Project name")
     parser.add_argument("--target", default="./contracts", help="Target path")
-    parser.add_argument("--format", choices=["html", "markdown", "sarif", "all"], default="all")
+    parser.add_argument("--format", choices=["html", "markdown", "sarif", "attack-graph", "all"], default="all")
     parser.add_argument("--output", default="audit_report", help="Output filename (without extension)")
     args = parser.parse_args()
     
@@ -915,3 +927,31 @@ if __name__ == "__main__":
         }
         sarif_path = save_sarif_report(demo_findings, f"{args.output}.sarif", metadata)
         print(f"[+] SARIF report: {sarif_path}")
+    
+    if args.format in ["attack-graph", "all"]:
+        if ATTACK_GRAPH_AVAILABLE:
+            try:
+                # Convert Finding objects to dicts for attack graph
+                finding_dicts = []
+                for f in demo_findings:
+                    finding_dicts.append({
+                        "rule_id": f.rule_id,
+                        "severity": f.severity,
+                        "file": f.file,
+                        "line_no": f.line_no,
+                        "message": f.description
+                    })
+                
+                graph = build_graph(finding_dicts)
+                graph_json = export_graph_json(graph)
+                graph_path = generate_attack_graph_html(
+                    graph_json,
+                    f"{args.output}_attack_graph.html",
+                    f"Attack Path Analysis - {args.project}"
+                )
+                print(f"[+] Attack graph: {graph_path}")
+            except Exception as e:
+                logger.error(f"Failed to generate attack graph: {e}")
+                print(f"[!] Failed to generate attack graph: {e}")
+        else:
+            print("[!] Attack graph generation not available (attack_graph module not found)")

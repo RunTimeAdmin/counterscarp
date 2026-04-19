@@ -12,9 +12,19 @@ import re
 import os
 import sys
 import argparse
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from dataclasses import dataclass
+
+# Import IDL validator
+try:
+    from idl_validator import (
+        validate_idl,
+        find_idl_files
+    )
+    IDL_VALIDATOR_AVAILABLE = True
+except ImportError:
+    IDL_VALIDATOR_AVAILABLE = False
 
 
 @dataclass
@@ -477,25 +487,34 @@ def detect_anchor_accounts(file_path: str) -> List[Dict[str, Any]]:
     return accounts
 
 
-def analyze_solana_program(project_root: str) -> Dict[str, Any]:
+def analyze_solana_program(
+    project_root: str,
+    idl_path: Optional[str] = None,
+    validate_idl_constraints: bool = True,
+    trace_cpi: bool = True
+) -> Dict[str, Any]:
     """Full static analysis of Solana/Anchor program.
 
     Args:
         project_root: Path to the Solana/Anchor project root.
+        idl_path: Optional explicit path to IDL file/directory.
+        validate_idl_constraints: Whether to validate IDL constraints.
+        trace_cpi: Whether to trace CPI calls in IDL.
 
     Returns:
         Dict with dependency vulnerabilities, pattern findings,
-        account analysis, and severity summary.
+        account analysis, IDL findings, and severity summary.
     """
     print("\n" + "="*60)
     print(" SOLANA STATIC ANALYZER")
     print("="*60)
     print(f"\n[*] Analyzing Solana program: {project_root}")
-    
+
     results = {
         "dependency_vulns": [],
         "pattern_findings": [],
         "account_analysis": [],
+        "idl_findings": [],
         "summary": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
     }
     
@@ -533,16 +552,75 @@ def analyze_solana_program(project_root: str) -> Dict[str, Any]:
         accounts = detect_anchor_accounts(rs_file)
         results["account_analysis"].extend(accounts)
     
-    # 3. Summarize by severity
+    # 3. IDL validation
+    print("\n[*] Checking for Anchor IDL files...")
+    idl_findings = []
+
+    if IDL_VALIDATOR_AVAILABLE:
+        if idl_path:
+            # Use explicit IDL path
+            if os.path.isfile(idl_path):
+                print(f"    Validating IDL: {idl_path}")
+                idl_findings.extend(
+                    validate_idl(
+                        idl_path,
+                        program_source_dir=project_root,
+                        validate_constraints=validate_idl_constraints,
+                        trace_cpi=trace_cpi
+                    )
+                )
+            elif os.path.isdir(idl_path):
+                print(f"    Searching IDL directory: {idl_path}")
+                for root, dirs, files in os.walk(idl_path):
+                    for file in files:
+                        if file.endswith('.json'):
+                            idl_file = os.path.join(root, file)
+                            idl_findings.extend(
+                                validate_idl(
+                                    idl_file,
+                                    program_source_dir=project_root,
+                                    validate_constraints=(
+                                        validate_idl_constraints
+                                    ),
+                                    trace_cpi=trace_cpi
+                                )
+                            )
+        else:
+            # Auto-discover IDL files
+            idl_files = find_idl_files(project_root)
+            if idl_files:
+                print(f"    Found {len(idl_files)} IDL file(s)")
+                for idl_file in idl_files:
+                    print(f"    Validating: {os.path.basename(idl_file)}")
+                    idl_findings.extend(
+                        validate_idl(
+                            idl_file,
+                            program_source_dir=project_root,
+                            validate_constraints=validate_idl_constraints,
+                            trace_cpi=trace_cpi
+                        )
+                    )
+            else:
+                print("    No IDL files found")
+    else:
+        print("    [!] IDL validator not available")
+
+    results["idl_findings"] = idl_findings
+
+    # 4. Summarize by severity
     for finding in results["pattern_findings"]:
         results["summary"][finding.severity] += 1
-    
-    print("\n[*] Pattern analysis complete:")
+
+    for finding in idl_findings:
+        sev = finding.get("severity", "INFO")
+        results["summary"][sev] = results["summary"].get(sev, 0) + 1
+
+    print("\n[*] Analysis complete:")
     print(f"    CRITICAL: {results['summary']['CRITICAL']}")
     print(f"    HIGH:     {results['summary']['HIGH']}")
     print(f"    MEDIUM:   {results['summary']['MEDIUM']}")
     print(f"    LOW:      {results['summary']['LOW']}")
-    
+
     return results
 
 
@@ -555,10 +633,10 @@ def print_report(results: Dict[str, Any]) -> None:
     print("\n" + "="*60)
     print(" SOLANA SECURITY ANALYSIS REPORT")
     print("="*60)
-    
+
     summary = results["summary"]
     total = sum(summary.values())
-    
+
     print(f"\n[*] Total findings: {total}")
     print(f"    CRITICAL: {summary['CRITICAL']}")
     print(f"    HIGH:     {summary['HIGH']}")
@@ -614,12 +692,12 @@ def print_report(results: Dict[str, Any]) -> None:
         risky_accounts = [
             a for a in accounts if not a["has_signer"] or not a["has_owner"]
         ]
-        
+
         if risky_accounts:
             print("\n" + "-"*60)
             print("RISKY ACCOUNT CONFIGURATIONS:")
             print("-"*60)
-            
+
             for acc in risky_accounts[:5]:
                 print(f"\n  Struct: {acc['name']}")
                 if not acc["has_signer"]:
@@ -627,6 +705,40 @@ def print_report(results: Dict[str, Any]) -> None:
                 if not acc["has_owner"]:
                     print("    ⚠️  Missing owner validation")
                 print(f"    Constraints: {acc['constraints']}")
+
+    # IDL findings
+    idl_findings = results.get("idl_findings", [])
+    if idl_findings:
+        print("\n" + "-"*60)
+        print("IDL VALIDATION FINDINGS:")
+        print("-"*60)
+
+        # Group by severity
+        for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]:
+            sev_findings = [
+                f for f in idl_findings if f.get("severity") == severity
+            ]
+
+            if sev_findings:
+                print(f"\n[{severity}]")
+
+                for i, finding in enumerate(sev_findings[:10], 1):
+                    rule_id = finding.get("rule_id", "UNKNOWN")
+                    instr = finding.get("instruction", "")
+                    acc = finding.get("account", "")
+                    desc = finding.get("description", "")
+
+                    print(f"\n  {i}. [{rule_id}]")
+                    if instr:
+                        loc = f"Instruction: {instr}"
+                        if acc:
+                            loc += f", Account: {acc}"
+                        print(f"     {loc}")
+                    print(f"     {desc}")
+
+                if len(sev_findings) > 10:
+                    more = len(sev_findings) - 10
+                    print(f"\n  ... ({more} more {severity} findings)")
 
 
 def main() -> None:
@@ -643,16 +755,35 @@ def main() -> None:
         action="store_true",
         help="Output JSON format"
     )
-    
+    parser.add_argument(
+        "--idl-path",
+        help="Path to IDL file or directory (auto-detected if not specified)"
+    )
+    parser.add_argument(
+        "--no-idl-constraints",
+        action="store_true",
+        help="Disable IDL constraint validation"
+    )
+    parser.add_argument(
+        "--no-cpi-trace",
+        action="store_true",
+        help="Disable CPI tracing"
+    )
+
     args = parser.parse_args()
-    
+
     # Validate project root
     if not os.path.exists(os.path.join(args.project_root, "Cargo.toml")):
         print(f"[!] Not a valid Rust project: {args.project_root}")
         print("    Missing Cargo.toml")
         sys.exit(1)
-    
-    results = analyze_solana_program(args.project_root)
+
+    results = analyze_solana_program(
+        args.project_root,
+        idl_path=args.idl_path,
+        validate_idl_constraints=not args.no_idl_constraints,
+        trace_cpi=not args.no_cpi_trace
+    )
     
     if args.json:
         import json
@@ -671,6 +802,7 @@ def main() -> None:
         ]
         print(json.dumps({
             "pattern_findings": json_findings,
+            "idl_findings": results["idl_findings"],
             "dependency_vulns": results["dependency_vulns"],
             "summary": results["summary"]
         }, indent=2))

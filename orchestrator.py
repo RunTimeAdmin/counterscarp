@@ -23,6 +23,16 @@ except ImportError as e:
     print(f"[!] CRITICAL: Missing a core module. {e}")
     sys.exit(1)
 
+# Optional fingerprint scanner
+try:
+    import fingerprint_scanner
+    from protocol_db import get_default_fingerprints, load_fingerprint_db
+    FINGERPRINT_AVAILABLE = True
+    logger.debug("Fingerprint scanner imported successfully")
+except ImportError as e:
+    logger.info(f"Fingerprint scanner not available: {e}")
+    FINGERPRINT_AVAILABLE = False
+
 # Optional advanced analyzers (best-effort imports)
 try:
     import aderyn_wrapper
@@ -53,6 +63,13 @@ except ImportError as e:
     upgrade_diff = None
 
 try:
+    import history_scanner
+    logger.debug("History scanner imported successfully")
+except ImportError as e:
+    logger.info(f"History scanner not available: {e}")
+    history_scanner = None
+
+try:
     from config_loader import load_config, SentinelConfig
     CONFIG_AVAILABLE = True
     logger.debug("Config loader imported successfully")
@@ -73,6 +90,16 @@ try:
 except ImportError as e:
     logger.info(f"Report generator not available: {e}")
     REPORT_GENERATOR_AVAILABLE = False
+
+# Optional RAG engine
+try:
+    from rag_engine import AuditCopilot
+    RAG_AVAILABLE = True
+    logger.debug("RAG engine imported successfully")
+except ImportError as e:
+    logger.info(f"RAG engine not available: {e}")
+    RAG_AVAILABLE = False
+    AuditCopilot = None
 
 # --- KNOWLEDGE BASE: HOW TO FIX THINGS ---
 # Maps specific vulnerability types to concrete code actions.
@@ -128,6 +155,7 @@ def generate_markdown_report(
     medusa_results: Optional[Dict[str, Any]] = None,
     solana_results: Optional[Dict[str, Any]] = None,
     upgrade_results: Optional[Dict[str, Any]] = None,
+    fingerprint_results: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """Generates a report focused on REMEDIATION (Fixing the bugs).
 
@@ -142,6 +170,7 @@ def generate_markdown_report(
         medusa_results: Optional results from Medusa fuzzing.
         solana_results: Optional results from Solana analysis.
         upgrade_results: Optional results from upgrade diff analysis.
+        fingerprint_results: Optional results from protocol fingerprint scan.
 
     Returns:
         Path to the generated markdown report file.
@@ -367,6 +396,46 @@ def generate_markdown_report(
             else:
                 f.write("⚠️ UNSAFE TO UPGRADE – address critical/high issues before deploying.\n\n")
 
+        # ---------------------------------------------------------
+        # SECTION 10: PROTOCOL FINGERPRINT ANALYSIS (OPTIONAL)
+        # ---------------------------------------------------------
+        f.write("---\n\n")
+        f.write("## 10. Protocol Fingerprint Analysis (Optional)\n")
+        if not fingerprint_results:
+            f.write("ℹ️ No protocol fingerprint analysis run for this report.\n\n")
+        else:
+            total_matches = sum(len(r.get("matches", [])) for r in fingerprint_results)
+            f.write(f"[*] Found {len(fingerprint_results)} contract(s) with {total_matches} protocol match(es)\n\n")
+
+            for result in fingerprint_results:
+                file_path = result.get("file", "unknown")
+                matches = result.get("matches", [])
+                risk = result.get("risk_assessment", {})
+
+                f.write(f"### {os.path.basename(file_path)}\n")
+                f.write(f"- **Path:** `{file_path}`\n")
+                f.write(f"- **Risk Level:** {risk.get('risk_level', 'N/A')}\n")
+                f.write(f"- **Risk Score:** {risk.get('risk_score', 0)}/100\n")
+                f.write(f"- **Inherited Vulnerabilities:** {risk.get('total_vulnerabilities', 0)}\n\n")
+
+                if matches:
+                    f.write("**Protocol Matches:**\n")
+                    for match in matches[:3]:  # Show top 3
+                        f.write(f"- **{match.get('protocol', 'Unknown')}** ({match.get('category', 'Unknown')}) - {match.get('confidence', 0) * 100:.1f}% confidence\n")
+                        if match.get('known_vulnerabilities'):
+                            high_crit = sum(1 for v in match.get('known_vulnerabilities', []) if v.get('severity') in ['CRITICAL', 'HIGH'])
+                            if high_crit > 0:
+                                f.write(f"  ⚠️ {high_crit} high/critical vulnerabilities inherited\n")
+                    if len(matches) > 3:
+                        f.write(f"- ... and {len(matches) - 3} more match(es)\n")
+                    f.write("\n")
+
+                if risk.get('recommendations'):
+                    f.write("**Recommendations:**\n")
+                    for rec in risk.get('recommendations', [])[:3]:
+                        f.write(f"- {rec}\n")
+                    f.write("\n")
+
     return filename
 
 
@@ -424,6 +493,49 @@ def main() -> None:
         help="Project name for report (default: extracted from target path)",
         default=None,
     )
+    # History scanning options
+    parser.add_argument(
+        "--history",
+        action="store_true",
+        help="Run time-travel historical vulnerability scan",
+    )
+    parser.add_argument(
+        "--time-travel",
+        action="store_true",
+        dest="history",
+        help="Alias for --history",
+    )
+    parser.add_argument(
+        "--commits",
+        type=int,
+        default=50,
+        help="Maximum commits to scan in history mode (default: 50)",
+    )
+    parser.add_argument(
+        "--since",
+        help="Only scan commits since this date (ISO format, e.g., 2024-01-01)",
+    )
+    parser.add_argument(
+        "--branch",
+        default="main",
+        help="Branch to scan in history mode (default: main)",
+    )
+    parser.add_argument(
+        "--fingerprint",
+        action="store_true",
+        help="Run protocol fingerprint similarity scan",
+    )
+    # RAG options
+    parser.add_argument(
+        "--rag",
+        action="store_true",
+        help="Enable RAG enrichment for findings",
+    )
+    parser.add_argument(
+        "--build-rag-index",
+        action="store_true",
+        help="Rebuild the RAG knowledge base index",
+    )
     args = parser.parse_args()
 
     # Load config
@@ -441,6 +553,92 @@ def main() -> None:
         except Exception as e:
             print(f"[!] Error loading config: {e}")
             print("[*] Continuing with default settings...\n")
+
+    # Handle RAG index build
+    if args.build_rag_index:
+        if not RAG_AVAILABLE:
+            print("[!] RAG engine not available. Install dependencies: pip install sentence-transformers numpy")
+            sys.exit(1)
+        
+        print("\n" + "=" * 60)
+        print(" 📚 BUILDING RAG KNOWLEDGE BASE INDEX")
+        print("=" * 60 + "\n")
+        
+        try:
+            # Get RAG config from config file
+            rag_config = {}
+            if config and hasattr(config, 'ai'):
+                rag_config = {
+                    "embedding_backend": config.ai.embedding_backend,
+                    "rag_index_path": config.ai.rag_index_path,
+                    "top_k": config.ai.top_k
+                }
+            
+            copilot = AuditCopilot(rag_config)
+            
+            # Build from remediation DB
+            sources = {"remediation_db": REMEDIATION_DB}
+            counts = copilot.rebuild_index(sources)
+            
+            print(f"\n[+] Index built successfully:")
+            for source, count in counts.items():
+                print(f"    {source}: {count} entries")
+            print(f"\n[+] Index saved to: {copilot.index_path}")
+            print("=" * 60 + "\n")
+            
+            return
+            
+        except Exception as e:
+            print(f"[!] Failed to build RAG index: {e}")
+            logger.exception("RAG index build failed")
+            sys.exit(1)
+
+    # Handle history scan mode
+    if args.history:
+        if history_scanner is None:
+            print("[!] History scanner not available")
+            sys.exit(1)
+        
+        print("\n" + "=" * 60)
+        print(" ⏰  TIME-TRAVEL HISTORICAL VULNERABILITY SCAN")
+        print("=" * 60 + "\n")
+        
+        try:
+            # Get output directory from config or use default
+            output_dir = "."
+            if config and hasattr(config, 'history') and config.history:
+                output_dir = config.history.output_dir
+            
+            results = history_scanner.scan_history(
+                repo_path=args.target,
+                max_commits=args.commits,
+                since=args.since,
+                branch=args.branch,
+                output_dir=output_dir,
+                config=config
+            )
+            
+            print("\n" + "=" * 60)
+            print(" Historical Scan Complete")
+            print("=" * 60)
+            print(f"Duration: {results['duration_seconds']}s")
+            print(f"Commits scanned: {results['commits_scanned']}")
+            print(f"Vulnerabilities found: {results['total_vulnerabilities']}")
+            print(f"  - Active: {results['active_vulnerabilities']}")
+            print(f"  - Fixed: {results['fixed_vulnerabilities']}")
+            print(f"Fix rate: {results['fix_rate_percent']}%")
+            print(f"Avg fix time: {results['average_fix_time_days']} days")
+            print("\nReports:")
+            print(f"  JSON: {results['reports']['json']}")
+            print(f"  Markdown: {results['reports']['markdown']}")
+            print("=" * 60 + "\n")
+            
+            return
+            
+        except Exception as e:
+            print(f"[!] History scan failed: {e}")
+            logger.exception("History scan failed")
+            sys.exit(1)
 
     print("\n" + "=" * 60)
     print(" 🛡️  GENERATING REMEDIATION PLAN")
@@ -553,6 +751,52 @@ def main() -> None:
         # Fail silently for now; in production, log this.
         heuristic_results = []
 
+    # [PHASE 4B] Protocol Fingerprint Scan (optional)
+    fingerprint_results: List[Dict] = []
+    if args.fingerprint:
+        print("\n>>> Running Protocol Fingerprint Scan...")
+        if FINGERPRINT_AVAILABLE:
+            try:
+                # Get config values
+                min_similarity = 0.7
+                database_path = None
+                if config and hasattr(config, 'fingerprint'):
+                    min_similarity = config.fingerprint.min_similarity
+                    database_path = config.fingerprint.database_path
+
+                # Load fingerprints
+                if database_path and os.path.exists(database_path):
+                    fingerprints = load_fingerprint_db(database_path)
+                else:
+                    fingerprints = get_default_fingerprints()
+
+                # Run scan
+                scan_config = {
+                    'fingerprints': fingerprints,
+                    'min_similarity': min_similarity,
+                }
+                fingerprint_results = fingerprint_scanner.scan_project(
+                    args.target,
+                    scan_config
+                )
+
+                if fingerprint_results:
+                    print(f"    Found {len(fingerprint_results)} contract(s) with protocol matches")
+                    for result in fingerprint_results:
+                        matches = result.get('matches', [])
+                        risk = result.get('risk_assessment', {})
+                        print(f"    - {result['file']}: {len(matches)} match(es)")
+                        if risk:
+                            print(f"      Risk Level: {risk.get('risk_level', 'N/A')}")
+                else:
+                    print("    No protocol matches found")
+
+            except Exception as e:
+                logger.warning(f"Fingerprint scan failed: {e}")
+                print(f"[!] Fingerprint scan failed: {e}")
+        else:
+            print("[!] Fingerprint scanner not available")
+
     # [PHASE 5] Symbolic Analysis (optional)
     if args.symbolic and os.path.isfile(args.target):
         print("\n>>> Running Symbolic Analysis (Mythril)...")
@@ -589,6 +833,48 @@ def main() -> None:
                 print("[!] Upgrade diff analysis failed; continuing without upgrade results.")
                 upgrade_results = {"error": "Upgrade diff analysis failed"}
 
+    # [PHASE 7.5] RAG Enrichment (optional)
+    if args.rag and RAG_AVAILABLE:
+        print("\n>>> Enriching Findings with RAG Context...")
+        try:
+            # Get RAG config
+            rag_config = {}
+            if config and hasattr(config, 'ai'):
+                rag_config = {
+                    "embedding_backend": config.ai.embedding_backend,
+                    "rag_index_path": config.ai.rag_index_path,
+                    "top_k": config.ai.top_k
+                }
+            
+            copilot = AuditCopilot(rag_config)
+            
+            # Check if index exists
+            if copilot.vector_store.entries:
+                # Enrich heuristic results
+                if heuristic_results:
+                    heuristic_results = copilot.enrich_findings_batch(
+                        heuristic_results
+                    )
+                    print(f"    Enriched {len(heuristic_results)} heuristic findings")
+                
+                # Enrich static issues
+                if static_issues:
+                    static_issues = copilot.enrich_findings_batch(
+                        static_issues
+                    )
+                    print(f"    Enriched {len(static_issues)} static analysis findings")
+                
+                print("    [+] RAG enrichment complete")
+            else:
+                print("    [!] No RAG index found. Build with: --build-rag-index")
+                
+        except Exception as e:
+            logger.warning(f"RAG enrichment failed: {e}")
+            print(f"    [!] RAG enrichment failed: {e}")
+    elif args.rag and not RAG_AVAILABLE:
+        print("\n>>> RAG Enrichment Requested...")
+        print("    [!] RAG engine not available. Install: pip install sentence-transformers numpy")
+
     # [PHASE 8] Action Report
     print("\n>>> Writing Action Plan...")
     report_file = generate_markdown_report(
@@ -602,6 +888,7 @@ def main() -> None:
         medusa_results,
         solana_results,
         upgrade_results,
+        fingerprint_results if args.fingerprint else None,
     )
 
     print("\n" + "=" * 60)

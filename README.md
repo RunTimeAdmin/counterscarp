@@ -1,6 +1,6 @@
 # Sentinel Security Engine
 
-**Production-ready smart contract security platform with 14 integrated analyzers, configurable rules, and professional audit reports.**
+**Production-ready smart contract security platform with 21 integrated analyzers, configurable rules, and professional audit reports.**
 
 > One command. Zero false positives. Client-ready deliverables.
 
@@ -77,7 +77,7 @@ python orchestrator.py --target ./contracts --config sentinel-pr.toml
 
 ## 🎯 **What You Get**
 
-### **14 Integrated Analyzers**
+### **21 Integrated Analyzers**
 1. **Heuristic Scanner** - 31 vulnerability patterns (reentrancy, oracle issues, access control)
 2. **Slither** - Trail of Bits static analyzer
 3. **Aderyn** - Cyfrin Rust-based analyzer (complementary to Slither)
@@ -92,6 +92,13 @@ python orchestrator.py --target ./contracts --config sentinel-pr.toml
 12. **Threat Intel** - Code4rena, Immunefi, Solodit historical exploit database
 13. **Knowledge Fetcher** - EVM-specific vulnerability research
 14. **Inflation Scaffold** - ERC4626 attack test generator
+15. **AI Audit Copilot** - RAG-based knowledge retrieval with LLM integration
+16. **Attack Path Visualizer** - Interactive D3.js cross-contract attack graphs
+17. **Time-Travel Scanner** - Git-based historical vulnerability tracking
+18. **Anchor IDL Validator** - Solana IDL constraint and CPI flow analysis
+19. **CI/CD Pipeline Generator** - Multi-platform security pipeline generation
+20. **Enhanced Exploit Generator** - Pattern-to-template exploit PoC generation
+21. **Protocol Fingerprint Scanner** - Protocol similarity and inherited vulnerability detection
 
 ### **Professional Reports**
 - **Risk Scoring** (0-100) based on severity distribution
@@ -542,6 +549,272 @@ python threat_intel.py programs/staking/lib.rs
 ```powershell
 python medusa_wrapper.py ./foundry-project --test-limit 50000 --timeout 300
 # Coverage-guided fuzzing (10-100x faster than Echidna)
+```
+
+---
+
+## 🚀 **Innovative Features**
+
+Sentinel Engine includes 7 cutting-edge features that differentiate it from traditional security scanners:
+
+### **1. AI Audit Copilot** 🤖
+
+RAG-based knowledge retrieval system that provides intelligent vulnerability explanations and remediation guidance using local embeddings with optional OpenAI/Anthropic integration.
+
+**Features:**
+- Local vector database for audit report embeddings
+- Context-aware vulnerability explanations
+- Pattern-based fix suggestions
+- Multi-LLM support (OpenAI GPT-4, Anthropic Claude)
+
+**CLI Usage:**
+```powershell
+# Enable RAG enrichment during audit
+sentinel-engine --target ./contracts --rag
+
+# Build/update RAG index from historical reports
+sentinel-engine --build-rag-index ./past-audits
+
+# Use specific LLM provider
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+sentinel-engine --target ./contracts --rag --llm-provider anthropic
+```
+
+**Configuration:**
+```toml
+[ai]
+enabled = false
+llm_provider = "openai"  # "openai" or "anthropic"
+embedding_model = "text-embedding-3-small"
+context_window = 4000
+rag_top_k = 5
+local_embeddings = true
+embedding_cache_dir = "./.sentinel/embeddings"
+```
+
+---
+
+### **2. Attack Path Visualizer** 🕸️
+
+Interactive D3.js force-directed graph showing cross-contract attack paths and vulnerability chains. Reveals multi-step exploits that individual checks miss.
+
+**Features:**
+- Cross-contract interaction tracing
+- Multi-step attack chain visualization
+- Standalone HTML output with interactive controls
+- Export to Mermaid/PlantUML
+
+**CLI Usage:**
+```powershell
+# Generate attack graph as HTML
+sentinel-engine --target ./contracts --format attack-graph
+
+# Output to specific file
+sentinel-engine --target ./contracts --format attack-graph --output attack_paths.html
+```
+
+**Configuration:**
+```toml
+[visualization]
+enabled = true
+attack_graph = true
+output_format = "html"  # "html", "mermaid", "dot"
+max_nodes = 100
+cluster_by_severity = true
+include_safe_paths = false
+```
+
+---
+
+### **3. Time-Travel Scanner** ⏰
+
+Git-based historical vulnerability tracking that scans commit history to find when vulnerabilities were introduced and fixed.
+
+**Features:**
+- Scan entire git history for vulnerability introduction
+- Track security debt accumulation over time
+- Identify high-risk commits and contributors
+- Generate vulnerability lineage reports
+
+**CLI Usage:**
+```powershell
+# Scan last 50 commits
+sentinel-engine --target ./contracts --history --commits 50
+
+# Scan since specific date
+sentinel-engine --target ./contracts --history --since "2025-01-01"
+
+# Full history scan with blame attribution
+sentinel-engine --target ./contracts --history --blame
+```
+
+**Configuration:**
+```toml
+[history]
+enabled = false
+max_commits = 100
+since_date = ""
+blame_attribution = true
+ignore_merge_commits = true
+incremental_scan = true
+storage_path = "./.sentinel/history"
+```
+
+---
+
+### **4. Anchor IDL Validator** ⚓
+
+Dedicated Anchor IDL JSON parser for Solana programs. Validates constraints, traces CPI flows, and generates account permission matrices.
+
+**Features:**
+- IDL constraint validation
+- Cross-program invocation (CPI) flow tracing
+- Account permission matrix generation
+- Anchor-specific security patterns (35+ rules)
+
+**CLI Usage:**
+```powershell
+# Validate IDL file
+python idl_validator.py ./target/idl/my_program.json
+
+# Full Solana analysis with IDL validation
+sentinel-engine --target ./programs --solana --idl-path ./target/idl
+```
+
+**Configuration:**
+```toml
+[chains.solana]
+enabled = false
+project_root = "./programs"
+idl_path = "./target/idl"
+
+[chains.solana.idl]
+validate_constraints = true
+trace_cpi_flows = true
+generate_permission_matrix = true
+check_account_initialization = true
+strict_signer_validation = true
+```
+
+---
+
+### **5. CI/CD Pipeline Generator** 🔄
+
+Dynamic pipeline generation for GitHub Actions, GitLab CI, Azure DevOps, and Jenkins. Generates production-ready security pipelines with PR comments and gate conditions.
+
+**Features:**
+- Multi-platform pipeline templates
+- PR comment integration
+- SARIF upload configuration
+- Slack/Discord notifications
+- Customizable gate conditions
+
+**CLI Usage:**
+```powershell
+# Generate GitHub Actions workflow
+sentinel-generate-pipeline --platform github --output .github/workflows/
+
+# Generate GitLab CI config
+sentinel-generate-pipeline --platform gitlab --output .gitlab-ci.yml
+
+# Generate Azure DevOps pipeline
+sentinel-generate-pipeline --platform azure --output azure-pipelines.yml
+
+# Generate Jenkinsfile
+sentinel-generate-pipeline --platform jenkins --output Jenkinsfile
+```
+
+**Configuration:**
+```toml
+[ci.generator]
+enabled = true
+platform = "github"  # "github", "gitlab", "azure", "jenkins"
+pr_comments = true
+sarif_upload = true
+slack_webhook = ""
+discord_webhook = ""
+fail_threshold = "HIGH"
+```
+
+---
+
+### **6. Enhanced Exploit Generator** 💥
+
+Pattern-to-template mapping system that generates working Foundry exploit test cases with contract state inference and assertion oracles.
+
+**Features:**
+- Pattern-to-template vulnerability mapping
+- Contract state inference
+- Assertion oracle generation
+- Batch exploit generation
+- Output validation
+- Multi-LLM support
+- 6 Foundry exploit templates included
+
+**CLI Usage:**
+```powershell
+# Generate exploit from finding
+python exploit_generator.py --finding-json findings.json --output exploits/
+
+# Batch generate for all HIGH/CRITICAL findings
+python exploit_generator.py --finding-json findings.json --severity HIGH,CRITICAL --batch
+
+# Use specific template
+python exploit_generator.py --rule-id REENTRANCY --template reentrancy.sol --output test/
+```
+
+**Configuration:**
+```toml
+[exploit_generation]
+enabled = false
+llm_provider = "openai"
+templates_dir = "./exploit_templates"
+output_dir = "./test/exploits"
+validate_output = true
+max_attempts = 3
+include_setup = true
+batch_mode = false
+```
+
+**Included Templates:**
+- `reentrancy.sol` - Reentrancy attack PoC
+- `flash_loan.sol` - Flash loan manipulation
+- `oracle_manipulation.sol` - Price oracle attacks
+- `access_control.sol` - Privilege escalation
+- `integer_overflow.sol` - Arithmetic exploits
+- `front_running.sol` - MEV/sandwich attacks
+
+---
+
+### **7. Protocol Fingerprint Scanner** 🔍
+
+Identifies which known protocol a contract resembles (Uniswap, Compound, Aave, etc.) and reports inherited vulnerabilities from upstream code.
+
+**Features:**
+- Protocol fingerprint database (Uniswap V2/V3, Compound, Aave, OpenZeppelin)
+- AST-level similarity comparison
+- Inherited vulnerability detection
+- Fork genealogy analysis
+
+**CLI Usage:**
+```powershell
+# Fingerprint contracts against known protocols
+sentinel-engine --target ./contracts --fingerprint
+
+# Detailed similarity report
+sentinel-engine --target ./contracts --fingerprint --verbose
+```
+
+**Configuration:**
+```toml
+[fingerprint]
+enabled = false
+database_path = "./data/protocol_fingerprints.json"
+similarity_threshold = 0.75
+include_forks = true
+check_known_vulnerabilities = true
+report_inherited_risks = true
 ```
 
 ---
@@ -998,6 +1271,7 @@ Sentinel Engine supports the following environment variables for configuration:
 | `SENTINEL_LOG_FORMAT` | Output format ("text" or "json") | text | No |
 | `SENTINEL_LOG_FILE` | Optional file path for log output | (none) | No |
 | `OPENAI_API_KEY` | OpenAI API key for GPT-4 exploit generation | (none) | For AI features |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude exploit generation | (none) | For AI features |
 
 ### Usage Examples
 
@@ -1031,12 +1305,13 @@ python exploit_generator.py --finding-json findings.json
 ---
 
 **Version:** 2.3.0  
-**Last Updated:** April 18, 2026  
+**Last Updated:** April 19, 2026  
 **License:** MIT  
 **Chains:** EVM, Solana  
-**Analyzers:** 14  
+**Analyzers:** 21  
 **Patterns:** 31 EVM + 35 Solana  
 **Profiles:** 3  
+**Innovative Features:** 7  
 
 ---
 

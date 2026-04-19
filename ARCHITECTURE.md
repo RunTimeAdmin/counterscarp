@@ -11,6 +11,7 @@ A comprehensive visual documentation of the Sentinel Security Engine's architect
 5. [Configuration System](#5-configuration-system)
 6. [Execution Profiles Comparison](#6-execution-profiles-comparison)
 7. [Data Flow: Finding Lifecycle](#7-data-flow-finding-lifecycle)
+8. [Innovative Features Architecture](#8-innovative-features-architecture)
 
 ---
 
@@ -65,6 +66,19 @@ flowchart TD
         OSV["OSV.dev API"]
     end
 
+    subgraph Innovative["Innovative Features"]
+        direction TB
+        RAG["RAG Engine<br/>(rag_engine.py)"]
+        EMB["Embeddings<br/>(embeddings.py)"]
+        AG["Attack Graph<br/>(attack_graph.py)"]
+        VIS["Visualizer<br/>(visualizer.py)"]
+        HIST["History Scanner<br/>(history_scanner.py)"]
+        IDL["IDL Validator<br/>(idl_validator.py)"]
+        PIPE["Pipeline Gen<br/>(pipeline_generator.py)"]
+        FP["Fingerprint<br/>(fingerprint_scanner.py)"]
+        PDB["Protocol DB<br/>(protocol_db.py)"]
+    end
+
     subgraph Infrastructure["Core Infrastructure"]
         LOGGER["logger.py"]
         EXCEPTIONS["exceptions.py"]
@@ -85,6 +99,8 @@ flowchart TD
         EXT_MEDUSA["medusa"]
         EXT_MYTH["myth"]
         EXT_FORGE["forge"]
+        EXT_OPENAI["OpenAI API"]
+        EXT_ANTHROPIC["Anthropic API"]
     end
 
     CLI --> ORCH
@@ -92,6 +108,7 @@ flowchart TD
     ORCH --> SecurityAnalyzers
     ORCH --> SupplyChain
     ORCH --> ThreatIntel
+    ORCH --> Innovative
     ORCH --> Reporting
 
     STATIC --> SLITHER
@@ -111,6 +128,12 @@ flowchart TD
 
     SCC --> OSV
 
+    RAG --> EMB
+    RAG --> EXT_OPENAI
+    RAG --> EXT_ANTHROPIC
+    AG --> VIS
+    FP --> PDB
+
     SLITHER --> EXT_SLITHER
     ADERYN --> EXT_ADERYN
     MEDUSA --> EXT_MEDUSA
@@ -122,6 +145,9 @@ flowchart TD
     SecurityAnalyzers -.-> CONFIG
     ThreatIntel -.-> HTTP
     SupplyChain -.-> HTTP
+    Innovative -.-> HTTP
+    Innovative -.-> LOGGER
+    Innovative -.-> CONFIG
     HTTP -.-> LOGGER
     HTTP -.-> CONFIG
 
@@ -134,17 +160,23 @@ flowchart TD
     style EXCEPTIONS fill:#fff3e0
     style CONFIG fill:#fff3e0
     style REPORT fill:#e8f5e9
+    style Innovative fill:#f3e5f5
 ```
 
 ---
 
 ## 2. Analysis Pipeline Flow
 
-The orchestrator executes a 9-phase sequential pipeline. Each phase can be enabled/disabled via configuration or command-line flags. Optional phases are marked with decision nodes.
+The orchestrator executes a 13-phase sequential pipeline. Each phase can be enabled/disabled via configuration or command-line flags. Optional phases are marked with decision nodes.
 
 ```mermaid
 flowchart TD
-    START(["Start Analysis"]) --> PHASE1
+    START(["Start Analysis"]) --> DEC0
+
+    DEC0{"RAG enabled?"} -->|Yes| PHASE0
+    DEC0 -->|No| PHASE1
+
+    PHASE0["Phase 0: RAG Knowledge Enrichment<br/>AI Copilot context loading"] --> PHASE1
 
     PHASE1["Phase 1: Supply Chain Analysis<br/>OSV.dev vulnerability check"] --> PHASE2
     PHASE1 -.->|"No package.json"| PHASE2
@@ -162,26 +194,46 @@ flowchart TD
     PHASE3["Phase 3: Fuzzing - Foundry<br/>Invariant testing"] --> DEC4
 
     DEC4{"Medusa enabled?"} -->|Yes| PHASE3B
-    DEC4 -->|No| PHASE4
+    DEC4 -->|No| DEC4A
 
-    PHASE3B["Phase 3B: Fuzzing - Medusa<br/>Coverage-guided fuzzing"] --> PHASE4
+    PHASE3B["Phase 3B: Fuzzing - Medusa<br/>Coverage-guided fuzzing"] --> DEC4A
+
+    DEC4A{"Fingerprint scan enabled?"} -->|Yes| PHASE3C
+    DEC4A -->|No| PHASE4
+
+    PHASE3C["Phase 3C: Protocol Fingerprinting<br/>Similarity analysis"] --> PHASE4
 
     PHASE4["Phase 4: Heuristic Scan<br/>31 EVM security rules"] --> DEC5
 
     DEC5{"Symbolic analysis enabled?"} -->|Yes| PHASE5
-    DEC5 -->|No| DEC6
+    DEC5 -->|No| DEC5A
 
-    PHASE5["Phase 5: Symbolic Execution - Mythril<br/>Path exploration"] --> DEC6
+    PHASE5["Phase 5: Symbolic Execution - Mythril<br/>Path exploration"] --> DEC5A
+
+    DEC5A{"History scan enabled?"} -->|Yes| PHASE5B
+    DEC5A -->|No| DEC6
+
+    PHASE5B["Phase 5B: Time-Travel Scan<br/>Git history analysis"] --> DEC6
 
     DEC6{"Solana root provided?"} -->|Yes| PHASE6
-    DEC6 -->|No| DEC7
+    DEC6 -->|No| DEC6A
 
-    PHASE6["Phase 6: Solana Analysis<br/>35 Anchor/Rust patterns"] --> DEC7
+    PHASE6["Phase 6: Solana Analysis<br/>35 Anchor/Rust patterns"] --> DEC6A
+
+    DEC6A{"IDL validation enabled?"} -->|Yes| PHASE6B
+    DEC6A -->|No| DEC7
+
+    PHASE6B["Phase 6B: Anchor IDL Validation<br/>Constraint & CPI analysis"] --> DEC7
 
     DEC7{"Upgrade paths provided?"} -->|Yes| PHASE7
-    DEC7 -->|No| PHASE8
+    DEC7 -->|No| DEC7A
 
-    PHASE7["Phase 7: Upgrade Diff Analysis<br/>Implementation comparison"] --> PHASE8
+    PHASE7["Phase 7: Upgrade Diff Analysis<br/>Implementation comparison"] --> DEC7A
+
+    DEC7A{"Attack graph enabled?"} -->|Yes| PHASE7B
+    DEC7A -->|No| PHASE8
+
+    PHASE7B["Phase 7B: Attack Path Visualization<br/>Cross-contract graph"] --> PHASE8
 
     PHASE8["Phase 8: Report Generation<br/>Markdown action plan"] --> DEC9
 
@@ -193,23 +245,33 @@ flowchart TD
     END1(["Action Plan Generated"])
     END2(["Full Audit Reports Generated"])
 
+    style PHASE0 fill:#f3e5f5
     style PHASE1 fill:#ffebee
     style PHASE2 fill:#ffebee
     style PHASE2B fill:#fff3e0
     style PHASE3 fill:#fff3e0
     style PHASE3B fill:#fff3e0
+    style PHASE3C fill:#f3e5f5
     style PHASE4 fill:#ffebee
     style PHASE5 fill:#fff3e0
+    style PHASE5B fill:#f3e5f5
     style PHASE6 fill:#fff3e0
+    style PHASE6B fill:#f3e5f5
     style PHASE7 fill:#fff3e0
+    style PHASE7B fill:#f3e5f5
     style PHASE8 fill:#e8f5e9
     style PHASE9 fill:#e8f5e9
+    style DEC0 fill:#e3f2fd
     style DEC2 fill:#e3f2fd
     style DEC3 fill:#e3f2fd
     style DEC4 fill:#e3f2fd
+    style DEC4A fill:#e3f2fd
     style DEC5 fill:#e3f2fd
+    style DEC5A fill:#e3f2fd
     style DEC6 fill:#e3f2fd
+    style DEC6A fill:#e3f2fd
     style DEC7 fill:#e3f2fd
+    style DEC7A fill:#e3f2fd
     style DEC9 fill:#e3f2fd
 ```
 
@@ -249,6 +311,19 @@ flowchart LR
         SI["solana_intel.py"]
         SCC["supply_chain_check.py"]
         TI["threat_intel.py"]
+    end
+
+    subgraph Innovative["Innovative Features"]
+        direction TB
+        RAG["rag_engine.py"]
+        EMB["embeddings.py"]
+        AG["attack_graph.py"]
+        VIS["visualizer.py"]
+        HIST["history_scanner.py"]
+        IDL["idl_validator.py"]
+        PIPE["pipeline_generator.py"]
+        FP["fingerprint_scanner.py"]
+        PDB["protocol_db.py"]
     end
 
     subgraph Interfaces["Interfaces"]
@@ -305,6 +380,23 @@ flowchart LR
     SCC -.-> HTTP
     TI -.-> HTTP
 
+    %% Innovative features dependencies
+    RAG -.-> EMB
+    RAG -.-> HTTP
+    RAG -.-> LOG
+    AG -.-> VIS
+    AG -.-> LOG
+    HIST -.-> LOG
+    HIST -.-> CFG
+    IDL -.-> LOG
+    IDL -.-> SA
+    PIPE -.-> LOG
+    PIPE -.-> CFG
+    FP -.-> PDB
+    FP -.-> HTTP
+    FP -.-> LOG
+    PDB -.-> LOG
+
     %% Reporting depends on core
     RG -.-> LOG
     RG -.-> EXC
@@ -321,6 +413,12 @@ flowchart LR
     ORCH --> UD
     ORCH --> CFG
     ORCH --> RG
+    ORCH --> RAG
+    ORCH --> AG
+    ORCH --> HIST
+    ORCH --> IDL
+    ORCH --> PIPE
+    ORCH --> FP
 
     %% GUI imports most modules
     GUI -.-> ORCH
@@ -331,6 +429,7 @@ flowchart LR
     style CoreInfra fill:#fff3e0
     style Analyzers fill:#ffebee
     style APIModules fill:#e3f2fd
+    style Innovative fill:#f3e5f5
     style Interfaces fill:#e8f5e9
     style Reporting fill:#f3e5f5
     style Exploit fill:#fce4ec
@@ -425,7 +524,7 @@ flowchart LR
     subgraph DataClasses["Typed Dataclasses"]
         ROOT["SentinelConfig<br/>Root Configuration"]
 
-        subgraph Sections["14 Configuration Sections"]
+        subgraph Sections["21 Configuration Sections"]
             ENGINE["EngineConfig"]
             HEUR["HeuristicConfig"]
             SUPP["Suppression list"]
@@ -440,6 +539,13 @@ flowchart LR
             UPGRADE["UpgradeDiffConfig"]
             REP["ReportingConfig"]
             CI["CIConfig"]
+            AI["AIConfig"]
+            VIZ["VisualizationConfig"]
+            HIST["HistoryConfig"]
+            IDL["IDLConfig"]
+            CIGEN["CIGeneratorConfig"]
+            EXP["ExploitGenerationConfig"]
+            FP["FingerprintConfig"]
         end
     end
 
@@ -497,6 +603,13 @@ flowchart LR
 | `upgrade_diff` | `UpgradeDiffConfig` | Upgrade comparison settings |
 | `reporting` | `ReportingConfig` | Output format, sections, verbosity |
 | `ci` | `CIConfig` | CI/CD integration settings |
+| `ai` | `AIConfig` | RAG, LLM provider, embedding settings |
+| `visualization` | `VisualizationConfig` | Attack graph, output format settings |
+| `history` | `HistoryConfig` | Git history scan, blame attribution |
+| `chains.solana.idl` | `IDLConfig` | Anchor IDL validation settings |
+| `ci.generator` | `CIGeneratorConfig` | Pipeline generation settings |
+| `exploit_generation` | `ExploitGenerationConfig` | Exploit template, LLM settings |
+| `fingerprint` | `FingerprintConfig` | Protocol similarity, database settings |
 
 ---
 
@@ -603,6 +716,301 @@ class Finding:
 
 ---
 
+## 8. Innovative Features Architecture
+
+This section details how the 7 innovative features integrate with the core Sentinel Engine architecture.
+
+### 8.1 AI Audit Copilot (RAG System)
+
+The RAG-based knowledge system enriches findings with contextual explanations from historical audit data.
+
+```mermaid
+flowchart LR
+    subgraph Input["Finding Input"]
+        FINDING["Security Finding<br/>rule_id, code_snippet"]
+    end
+
+    subgraph RAGPipeline["RAG Pipeline"]
+        EMB["Embedding Generator<br/>(embeddings.py)"]
+        VDB["Vector Database<br/>Local/Remote"]
+        RETRIEVE["Context Retrieval<br/>top_k similar findings"]
+        PROMPT["Prompt Builder<br/>System + Context + Finding"]
+    end
+
+    subgraph LLM["LLM Providers"]
+        OPENAI["OpenAI API<br/>GPT-4"]
+        ANTHROPIC["Anthropic API<br/>Claude"]
+    end
+
+    subgraph Output["Enriched Output"]
+        EXPLANATION["Vulnerability Explanation"]
+        FIX["Suggested Fix"]
+        REFS["References & CWE"]
+    end
+
+    FINDING --> EMB
+    EMB --> VDB
+    VDB --> RETRIEVE
+    RETRIEVE --> PROMPT
+    PROMPT --> OPENAI
+    PROMPT --> ANTHROPIC
+    OPENAI --> EXPLANATION
+    ANTHROPIC --> EXPLANATION
+    EXPLANATION --> FIX
+    EXPLANATION --> REFS
+```
+
+**Key Components:**
+- `rag_engine.py` - Main RAG orchestrator
+- `embeddings.py` - Text embedding generation (local + API)
+- Vector store for historical audit embeddings
+- Prompt templates for vulnerability explanation
+
+---
+
+### 8.2 Attack Path Visualizer
+
+Generates interactive force-directed graphs showing cross-contract vulnerability chains.
+
+```mermaid
+flowchart TD
+    subgraph DataCollection["Data Collection"]
+        FINDINGS["Security Findings"]
+        CALLGRAPH["Call Graph<br/>Cross-contract calls"]
+        STATE["State Dependencies<br/>Storage variables"]
+    end
+
+    subgraph GraphBuilder["Attack Graph Builder<br/>(attack_graph.py)"]
+        NODES["Node Extraction<br/>Contracts, Functions"]
+        EDGES["Edge Creation<br/>Calls, Dependencies"]
+        RISK["Risk Scoring<br/>Severity propagation"]
+    end
+
+    subgraph Visualization["Visualization<br/>(visualizer.py)"]
+        D3["D3.js Force Graph"]
+        INTERACTIVE["Interactive Controls<br/>Zoom, Filter, Highlight"]
+        EXPORT["Export Formats<br/>HTML, Mermaid, DOT"]
+    end
+
+    FINDINGS --> NODES
+    CALLGRAPH --> EDGES
+    STATE --> EDGES
+    NODES --> RISK
+    EDGES --> RISK
+    RISK --> D3
+    D3 --> INTERACTIVE
+    INTERACTIVE --> EXPORT
+```
+
+---
+
+### 8.3 Time-Travel Scanner
+
+Git-based historical analysis for tracking when vulnerabilities were introduced.
+
+```mermaid
+flowchart LR
+    subgraph Git["Git Repository"]
+        LOG["Git Log<br/>Commit history"]
+        DIFF["Git Diff<br/>File changes"]
+        BLAME["Git Blame<br/>Line attribution"]
+    end
+
+    subgraph Scanner["History Scanner<br/>(history_scanner.py)"]
+        COMMITS["Commit Iterator<br/>--commits N"]
+        CHECKOUT["Checkout & Scan<br/>Incremental analysis"]
+        TRACK["Vulnerability Tracker<br/>Introduction/Fix dates"]
+    end
+
+    subgraph Output["Output"]
+        TIMELINE["Security Timeline"]
+        DEBT["Technical Debt Report"]
+        ATTRIB["Contributor Attribution"]
+    end
+
+    LOG --> COMMITS
+    DIFF --> CHECKOUT
+    BLAME --> TRACK
+    COMMITS --> CHECKOUT
+    CHECKOUT --> TRACK
+    TRACK --> TIMELINE
+    TRACK --> DEBT
+    TRACK --> ATTRIB
+```
+
+---
+
+### 8.4 Anchor IDL Validator
+
+Solana-specific IDL validation for Anchor programs.
+
+```mermaid
+flowchart TD
+    subgraph Input["Anchor Project"]
+        IDL["IDL JSON<br/>Interface Definition"]
+        RS["Rust Source<br/>Program code"]
+    end
+
+    subgraph Validation["IDL Validator<br/>(idl_validator.py)"]
+        PARSE["IDL Parser<br/>Accounts, Instructions"]
+        CONSTRAINT["Constraint Checker<br/>signer, mut, has_one"]
+        CPI["CPI Flow Tracer<br/>Cross-program calls"]
+        MATRIX["Permission Matrix<br/>Account access rights"]
+    end
+
+    subgraph Output["Validation Output"]
+        ERRORS["Constraint Violations"]
+        FLOWS["CPI Flow Diagrams"]
+        PERMS["Account Permission Map"]
+    end
+
+    IDL --> PARSE
+    RS --> CONSTRAINT
+    PARSE --> CONSTRAINT
+    CONSTRAINT --> CPI
+    CPI --> MATRIX
+    CONSTRAINT --> ERRORS
+    CPI --> FLOWS
+    MATRIX --> PERMS
+```
+
+---
+
+### 8.5 CI/CD Pipeline Generator
+
+Multi-platform pipeline generation for security automation.
+
+```mermaid
+flowchart LR
+    subgraph Config["Configuration"]
+        TOML["sentinel.toml<br/>User config"]
+        PROFILES["Execution Profiles<br/>PR/Audit/Bounty"]
+    end
+
+    subgraph Generator["Pipeline Generator<br/>(pipeline_generator.py)"]
+        TEMPLATES["Template Engine<br/>Jinja2"]
+        GITHUB["GitHub Actions<br/>.github/workflows/"]
+        GITLAB["GitLab CI<br/>.gitlab-ci.yml"]
+        AZURE["Azure DevOps<br/>azure-pipelines.yml"]
+        JENKINS["Jenkins<br/>Jenkinsfile"]
+    end
+
+    subgraph Features["Pipeline Features"]
+        PR["PR Comments<br/>Findings summary"]
+        SARIF["SARIF Upload<br/>GitHub Security"]
+        NOTIFY["Notifications<br/>Slack/Discord"]
+    end
+
+    TOML --> TEMPLATES
+    PROFILES --> TEMPLATES
+    TEMPLATES --> GITHUB
+    TEMPLATES --> GITLAB
+    TEMPLATES --> AZURE
+    TEMPLATES --> JENKINS
+    GITHUB --> PR
+    GITHUB --> SARIF
+    GITLAB --> NOTIFY
+```
+
+---
+
+### 8.6 Enhanced Exploit Generator
+
+Pattern-to-template exploit generation with multi-LLM support.
+
+```mermaid
+flowchart TD
+    subgraph Input["Vulnerability Input"]
+        RULE["Rule ID<br/>REENTRANCY, etc."]
+        CODE["Vulnerable Code<br/>Snippet"]
+        CONTEXT["Contract Context<br/>State variables"]
+    end
+
+    subgraph Generator["Exploit Generator<br/>(exploit_generator.py)]
+        MAPPER["Pattern Mapper<br/>Rule → Template"]
+        TEMPLATES["Template Library<br/>6 Foundry templates"]
+        INFERENCE["State Inference<br/>Setup generation"]
+        ORACLE["Assertion Oracle<br/>Exploit validation"]
+    end
+
+    subgraph LLM["LLM Integration"]
+        OPENAI["OpenAI<br/>GPT-4"]
+        ANTHROPIC["Anthropic<br/>Claude"]
+    end
+
+    subgraph Output["Generated Exploit"]
+        TEST["Foundry Test<br/>*.t.sol"]
+        SETUP["Deployment Script"]
+        PROOF["Proof of Concept"]
+    end
+
+    RULE --> MAPPER
+    CODE --> INFERENCE
+    CONTEXT --> INFERENCE
+    MAPPER --> TEMPLATES
+    TEMPLATES --> OPENAI
+    TEMPLATES --> ANTHROPIC
+    INFERENCE --> OPENAI
+    INFERENCE --> ANTHROPIC
+    ORACLE --> OPENAI
+    OPENAI --> TEST
+    ANTHROPIC --> TEST
+    TEST --> SETUP
+    TEST --> PROOF
+```
+
+---
+
+### 8.7 Protocol Fingerprint Scanner
+
+Protocol similarity detection and inherited vulnerability analysis.
+
+```mermaid
+flowchart LR
+    subgraph Database["Protocol Database<br/>(protocol_db.py)"]
+        UNI["Uniswap V2/V3"]
+        COMP["Compound"]
+        AAVE["Aave"]
+        OZ["OpenZeppelin"]
+        CUSTOM["Custom Fingerprints"]
+    end
+
+    subgraph Scanner["Fingerprint Scanner<br/>(fingerprint_scanner.py)"]
+        AST["AST Analysis<br/>Structure extraction"]
+        SIMILARITY["Similarity Engine<br/>Cosine/Jaccard"]
+        MATCHING["Protocol Matching<br/>Threshold > 0.75"]
+    end
+
+    subgraph Analysis["Vulnerability Analysis"]
+        INHERIT["Inherited Vulns<br/>From parent protocol"]
+        HISTORY["Exploit History<br/>Known issues"]
+        RISK["Risk Scoring<br/>Genetic risk"]
+    end
+
+    subgraph Output["Fingerprint Report"]
+        MATCH["Protocol Match<br/>% similarity"]
+        WARNINGS["Inherited Warnings"]
+        RECS["Recommendations"]
+    end
+
+    UNI --> AST
+    COMP --> AST
+    AAVE --> AST
+    OZ --> AST
+    CUSTOM --> AST
+    AST --> SIMILARITY
+    SIMILARITY --> MATCHING
+    MATCHING --> INHERIT
+    MATCHING --> HISTORY
+    INHERIT --> RISK
+    HISTORY --> RISK
+    MATCHING --> MATCH
+    RISK --> WARNINGS
+    RISK --> RECS
+```
+
+---
+
 ## Appendix: Module Reference
 
 | Module | Purpose | Key Classes/Functions |
@@ -630,3 +1038,12 @@ class Finding:
 | `exploit_generator.py` | AI PoC generation | Exploit templates |
 | `inflation_scaffold.py` | Tokenomics analysis | Inflation detection |
 | `threat_intel.py` | Core threat intel | Intelligence aggregation |
+| `rag_engine.py` | RAG knowledge retrieval | `query_knowledge_base()`, `enrich_finding()` |
+| `embeddings.py` | Text embeddings | `generate_embedding()`, `EmbeddingCache` |
+| `attack_graph.py` | Attack path construction | `build_attack_graph()`, `find_attack_paths()` |
+| `visualizer.py` | Interactive visualization | `generate_d3_graph()`, `export_mermaid()` |
+| `history_scanner.py` | Git history analysis | `scan_history()`, `blame_vulnerability()` |
+| `idl_validator.py` | Anchor IDL validation | `validate_idl()`, `trace_cpi_flows()` |
+| `pipeline_generator.py` | CI/CD pipeline gen | `generate_github_actions()`, `generate_gitlab_ci()` |
+| `fingerprint_scanner.py` | Protocol similarity | `fingerprint_contract()`, `find_inherited_vulns()` |
+| `protocol_db.py` | Protocol fingerprint DB | `ProtocolFingerprint`, `SimilarityEngine` |

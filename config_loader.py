@@ -244,17 +244,33 @@ class FuzzingConfig:
 
 
 @dataclass
+class SolanaIDLConfig:
+    """Solana IDL validation settings.
+
+    Attributes:
+        idl_path: Path to IDL files.
+        validate_constraints: Whether to validate IDL constraints.
+        trace_cpi: Whether to trace CPI calls in IDL.
+    """
+    idl_path: str = "target/idl"
+    validate_constraints: bool = True
+    trace_cpi: bool = True
+
+
+@dataclass
 class ChainConfig:
     """Chain-specific settings.
 
     Attributes:
         solana_enabled: Whether Solana analysis is enabled.
         solana_project_root: Path to Solana program root directory.
+        solana_idl: IDL validation configuration.
         evm_solc_version: Required Solidity compiler version.
         evm_trusted_contracts: List of trusted contract addresses.
     """
     solana_enabled: bool = False
     solana_project_root: str = "./programs"
+    solana_idl: SolanaIDLConfig = field(default_factory=SolanaIDLConfig)
     evm_solc_version: str = ">=0.8.0"
     evm_trusted_contracts: List[str] = field(default_factory=list)
 
@@ -304,6 +320,24 @@ class ReportingConfig:
 
 
 @dataclass
+class CIGeneratorConfig:
+    """CI/CD pipeline generator settings.
+
+    Attributes:
+        platform: Target platform for pipeline generation.
+        triggers: List of pipeline triggers.
+        notifications: List of notification channels.
+        custom_steps: List of custom steps to add.
+    """
+    platform: str = "github"
+    triggers: List[str] = field(
+        default_factory=lambda: ["push", "pull_request"]
+    )
+    notifications: List[str] = field(default_factory=list)
+    custom_steps: List[str] = field(default_factory=list)
+
+
+@dataclass
 class CIConfig:
     """CI/CD integration settings.
 
@@ -312,6 +346,7 @@ class CIConfig:
         post_pr_comment: Whether to post findings as PR comments.
         upload_sarif: Whether to upload SARIF results.
         exclude_paths: List of path patterns to exclude from analysis.
+        generator: Pipeline generator settings.
     """
     fail_on_findings: bool = True
     post_pr_comment: bool = True
@@ -319,6 +354,7 @@ class CIConfig:
     exclude_paths: List[str] = field(default_factory=lambda: [
         "test/**", "script/**", "node_modules/**", ".git/**"
     ])
+    generator: Optional[CIGeneratorConfig] = None
 
 
 @dataclass
@@ -403,6 +439,98 @@ class HttpConfig:
 
 
 @dataclass
+class ExploitGenerationConfig:
+    """Exploit PoC auto-generation configuration.
+
+    Attributes:
+        auto_generate: Whether to automatically generate exploit PoCs.
+        min_severity: Minimum severity level to generate exploits for.
+        validate_compilation: Whether to validate generated exploits compile.
+        output_dir: Directory to save generated exploit files.
+        llm_backend: LLM backend to use ("none", "openai", "anthropic").
+        template_dir: Directory containing exploit templates.
+    """
+    auto_generate: bool = False
+    min_severity: str = "HIGH"
+    validate_compilation: bool = True
+    output_dir: str = "exploits/"
+    llm_backend: str = "none"
+    template_dir: str = "exploit_templates/"
+
+
+@dataclass
+class FingerprintConfig:
+    """Protocol fingerprint scanner configuration.
+
+    Attributes:
+        enabled: Whether fingerprint scanning is enabled.
+        min_similarity: Minimum similarity threshold (0.0-1.0).
+        database_path: Path to custom fingerprint database JSON.
+        include_risk_assessment: Whether to include risk assessment in results.
+    """
+    enabled: bool = False
+    min_similarity: float = 0.7
+    database_path: str = "data/protocol_fingerprints.json"
+    include_risk_assessment: bool = True
+
+
+@dataclass
+class VisualizationConfig:
+    """Attack graph visualization configuration.
+
+    Attributes:
+        enabled: Whether to generate attack graph visualizations.
+        include_source_analysis: Whether to parse source files for
+            contract structure.
+        trace_attack_paths: Whether to trace attack paths through
+            external calls.
+        output_format: Output format ("html", "json", or "both").
+        max_path_depth: Maximum depth for attack path tracing.
+    """
+    enabled: bool = False
+    include_source_analysis: bool = True
+    trace_attack_paths: bool = True
+    output_format: str = "html"
+    max_path_depth: int = 10
+
+
+@dataclass
+class HistoryConfig:
+    """History scanning configuration.
+
+    Attributes:
+        max_commits: Maximum number of commits to scan.
+        scan_branches: List of branches to scan.
+        include_fixed: Whether to include fixed vulnerabilities in reports.
+        output_dir: Directory to save history scan reports.
+    """
+    max_commits: int = 50
+    scan_branches: List[str] = field(default_factory=lambda: ["main"])
+    include_fixed: bool = True
+    output_dir: str = "."
+
+
+@dataclass
+class AIConfig:
+    """AI and RAG configuration.
+
+    Attributes:
+        embedding_backend: Backend for embeddings (local, openai, anthropic).
+        llm_backend: LLM backend for generation (none, openai, anthropic).
+        openai_model: OpenAI model for LLM features.
+        rag_index_path: Path to the RAG vector index.
+        top_k: Number of similar findings to retrieve.
+        auto_enrich: Whether to auto-enrich findings with RAG.
+    """
+    embedding_backend: str = "local"
+    llm_backend: str = "none"
+    openai_model: str = "gpt-4-turbo-preview"
+    rag_index_path: str = ".sentinel/rag_index.pkl"
+    top_k: int = 5
+    auto_enrich: bool = False
+
+
+@dataclass
 class SentinelConfig:
     """Root configuration object.
 
@@ -421,6 +549,10 @@ class SentinelConfig:
         supply_chain: Supply chain security configuration.
         threat_intel: Threat intelligence configuration.
         http: HTTP client configuration.
+        exploit_generation: Exploit PoC auto-generation settings.
+        history: History scanning configuration.
+        fingerprint: Protocol fingerprint scanner settings.
+        ai: AI and RAG configuration.
     """
     engine: EngineConfig = field(default_factory=EngineConfig)
     heuristics: HeuristicConfig = field(default_factory=HeuristicConfig)
@@ -436,8 +568,19 @@ class SentinelConfig:
     supply_chain: SupplyChainConfig = field(default_factory=SupplyChainConfig)
     threat_intel: ThreatIntelConfig = field(default_factory=ThreatIntelConfig)
     http: HttpConfig = field(default_factory=HttpConfig)
+    exploit_generation: ExploitGenerationConfig = field(
+        default_factory=ExploitGenerationConfig
+    )
+    history: HistoryConfig = field(default_factory=HistoryConfig)
+    visualization: VisualizationConfig = field(
+        default_factory=VisualizationConfig
+    )
+    fingerprint: FingerprintConfig = field(default_factory=FingerprintConfig)
+    ai: AIConfig = field(default_factory=AIConfig)
 
-    def is_finding_suppressed(self, rule_id: str, file_path: str, line_no: int) -> Optional[Suppression]:
+    def is_finding_suppressed(
+        self, rule_id: str, file_path: str, line_no: int
+    ) -> Optional[Suppression]:
         """Check if a finding should be suppressed.
 
         Args:
@@ -459,7 +602,8 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
     Load configuration from sentinel.toml.
 
     Args:
-        config_path: Path to config file. If None, searches current dir and parent dirs.
+        config_path: Path to config file. If None, searches current dir and
+            parent directories.
 
     Returns:
         SentinelConfig object with loaded settings.
@@ -544,8 +688,12 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         aderyn = sa.get('aderyn', {})
         config.static_analysis = StaticAnalysisConfig(
             slither_enabled=slither.get('enabled', True),
-            slither_exclude_detectors=slither.get('exclude_detectors', ''),
-            slither_include_impact=slither.get('include_impact', 'High,Medium'),
+            slither_exclude_detectors=slither.get(
+                'exclude_detectors', ''
+            ),
+            slither_include_impact=slither.get(
+                'include_impact', 'High,Medium'
+            ),
             aderyn_enabled=aderyn.get('enabled', False),
             aderyn_scope=aderyn.get('scope', '')
         )
@@ -570,9 +718,21 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         chains = data['chains']
         solana = chains.get('solana', {})
         evm = chains.get('evm', {})
+
+        # Parse IDL config
+        idl_config = SolanaIDLConfig()
+        if 'idl' in solana:
+            idl = solana['idl']
+            idl_config = SolanaIDLConfig(
+                idl_path=idl.get('idl_path', 'target/idl'),
+                validate_constraints=idl.get('validate_constraints', True),
+                trace_cpi=idl.get('trace_cpi', True)
+            )
+
         config.chains = ChainConfig(
             solana_enabled=solana.get('enabled', False),
             solana_project_root=solana.get('project_root', './programs'),
+            solana_idl=idl_config,
             evm_solc_version=evm.get('solc_version', '>=0.8.0'),
             evm_trusted_contracts=evm.get('trusted_contracts', [])
         )
@@ -582,10 +742,18 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         upg = data['upgrade_diff']
         ignore_patterns = upg.get('ignore_patterns', {})
         config.upgrade_diff = UpgradeDiffConfig(
-            old_implementation_path=upg.get('old_implementation_path', ''),
-            new_implementation_path=upg.get('new_implementation_path', ''),
-            ignore_new_view_functions=ignore_patterns.get('ignore_new_view_functions', True),
-            ignore_comment_changes=ignore_patterns.get('ignore_comment_changes', True)
+            old_implementation_path=upg.get(
+                'old_implementation_path', ''
+            ),
+            new_implementation_path=upg.get(
+                'new_implementation_path', ''
+            ),
+            ignore_new_view_functions=ignore_patterns.get(
+                'ignore_new_view_functions', True
+            ),
+            ignore_comment_changes=ignore_patterns.get(
+                'ignore_comment_changes', True
+            )
         )
 
     # Parse reporting config
@@ -608,20 +776,35 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
     # Parse CI config
     if 'ci' in data:
         ci = data['ci']
+        
+        # Parse generator config if present
+        generator_config = None
+        if 'generator' in ci:
+            gen = ci['generator']
+            generator_config = CIGeneratorConfig(
+                platform=gen.get('platform', 'github'),
+                triggers=gen.get('triggers', ['push', 'pull_request']),
+                notifications=gen.get('notifications', []),
+                custom_steps=gen.get('custom_steps', [])
+            )
+        
         config.ci = CIConfig(
             fail_on_findings=ci.get('fail_on_findings', True),
             post_pr_comment=ci.get('post_pr_comment', True),
             upload_sarif=ci.get('upload_sarif', False),
             exclude_paths=ci.get('exclude_paths', [
                 "test/**", "script/**", "node_modules/**", ".git/**"
-            ])
+            ]),
+            generator=generator_config
         )
 
     # Parse red team config
     if 'red_team' in data:
         rt = data['red_team']
         config.red_team = RedTeamConfig(
-            severity_allowlist=rt.get('severity_allowlist', ["High", "Medium"]),
+            severity_allowlist=rt.get(
+                'severity_allowlist', ["High", "Medium"]
+            ),
             ignore_checks=rt.get('ignore_checks', [
                 "solc-version",
                 "naming-convention",
@@ -670,9 +853,69 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
             backoff_factor=http.get('backoff_factor', 2.0)
         )
 
+    # Parse exploit generation config
+    if 'exploit_generation' in data:
+        eg = data['exploit_generation']
+        config.exploit_generation = ExploitGenerationConfig(
+            auto_generate=eg.get('auto_generate', False),
+            min_severity=eg.get('min_severity', 'HIGH'),
+            validate_compilation=eg.get('validate_compilation', True),
+            output_dir=eg.get('output_dir', 'exploits/'),
+            llm_backend=eg.get('llm_backend', 'none'),
+            template_dir=eg.get('template_dir', 'exploit_templates/')
+        )
+
+    # Parse history config
+    if 'history' in data:
+        hist = data['history']
+        config.history = HistoryConfig(
+            max_commits=hist.get('max_commits', 50),
+            scan_branches=hist.get('scan_branches', ["main"]),
+            include_fixed=hist.get('include_fixed', True),
+            output_dir=hist.get('output_dir', '.')
+        )
+
+    # Parse visualization config
+    if 'visualization' in data:
+        vis = data['visualization']
+        config.visualization = VisualizationConfig(
+            enabled=vis.get('enabled', False),
+            include_source_analysis=vis.get('include_source_analysis', True),
+            trace_attack_paths=vis.get('trace_attack_paths', True),
+            output_format=vis.get('output_format', 'html'),
+            max_path_depth=vis.get('max_path_depth', 10)
+        )
+
+    # Parse fingerprint config
+    if 'fingerprint' in data:
+        fp = data['fingerprint']
+        config.fingerprint = FingerprintConfig(
+            enabled=fp.get('enabled', False),
+            min_similarity=fp.get('min_similarity', 0.7),
+            database_path=fp.get(
+                'database_path', 'data/protocol_fingerprints.json'
+            ),
+            include_risk_assessment=fp.get(
+                'include_risk_assessment', True
+            )
+        )
+
+    # Parse AI config
+    if 'ai' in data:
+        ai = data['ai']
+        config.ai = AIConfig(
+            embedding_backend=ai.get('embedding_backend', 'local'),
+            llm_backend=ai.get('llm_backend', 'none'),
+            openai_model=ai.get('openai_model', 'gpt-4-turbo-preview'),
+            rag_index_path=ai.get('rag_index_path', '.sentinel/rag_index.pkl'),
+            top_k=ai.get('top_k', 5),
+            auto_enrich=ai.get('auto_enrich', False)
+        )
+
     logger.info("Configuration loaded successfully")
+    heur_status = 'enabled' if config.heuristics.enabled else 'disabled'
     logger.info(
-        f"Heuristics: {'enabled' if config.heuristics.enabled else 'disabled'}, "
+        f"Heuristics: {heur_status}, "
         f"Disabled rules: {len(config.heuristics.disabled_rules)}, "
         f"Suppressions: {len(config.suppressions)}, "
         f"Fail on: {config.engine.fail_on_severity}+"
@@ -700,8 +943,7 @@ def find_config_file() -> Optional[str]:
 
 
 def validate_config(config: dict) -> list[str]:
-    """
-    Validate TOML configuration schema and return a list of validation warnings.
+    """Validate TOML configuration schema and return warnings.
 
     Checks:
     - Required keys exist
@@ -754,17 +996,20 @@ def validate_config(config: dict) -> list[str]:
             enabled = heur.get('enabled')
             if enabled is not None and not isinstance(enabled, bool):
                 warnings.append(
-                    f"heuristics.enabled must be a boolean, got {type(enabled)}"
+                    f"heuristics.enabled must be a boolean, "
+                    f"got {type(enabled)}"
                 )
 
             # Validate severity_overrides is a dict
             overrides = heur.get('severity_overrides')
             if overrides is not None and not isinstance(overrides, dict):
                 warnings.append(
-                    f"heuristics.severity_overrides must be a dictionary"
+                    "heuristics.severity_overrides must be a dictionary"
                 )
             elif isinstance(overrides, dict):
-                valid_severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
+                valid_severities = [
+                    'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'
+                ]
                 for rule_id, sev in overrides.items():
                     if sev not in valid_severities:
                         warnings.append(
@@ -776,7 +1021,7 @@ def validate_config(config: dict) -> list[str]:
             disabled = heur.get('disabled_rules')
             if disabled is not None and not isinstance(disabled, dict):
                 warnings.append(
-                    f"heuristics.disabled_rules must be a dictionary"
+                    "heuristics.disabled_rules must be a dictionary"
                 )
 
     # Validate suppressions section
@@ -792,7 +1037,9 @@ def validate_config(config: dict) -> list[str]:
 
                 # Check required field
                 if 'rule_id' not in supp:
-                    warnings.append(f"suppressions[{i}] missing required 'rule_id'")
+                    warnings.append(
+                        f"suppressions[{i}] missing required 'rule_id'"
+                    )
 
                 # Validate line is an integer if present
                 line = supp.get('line')
@@ -826,7 +1073,7 @@ def validate_config(config: dict) -> list[str]:
             if runs is not None:
                 if not isinstance(runs, int) or runs < 1:
                     warnings.append(
-                        f"fuzzing.foundry.runs must be a positive integer"
+                        "fuzzing.foundry.runs must be a positive integer"
                     )
 
             # Validate medusa settings
@@ -835,21 +1082,21 @@ def validate_config(config: dict) -> list[str]:
             if test_limit is not None:
                 if not isinstance(test_limit, int) or test_limit < 1:
                     warnings.append(
-                        f"fuzzing.medusa.test_limit must be a positive integer"
+                        "fuzzing.medusa.test_limit must be a positive integer"
                     )
 
             timeout = medusa.get('timeout')
             if timeout is not None:
                 if not isinstance(timeout, int) or timeout < 1:
                     warnings.append(
-                        f"fuzzing.medusa.timeout must be a positive integer"
+                        "fuzzing.medusa.timeout must be a positive integer"
                     )
 
             workers = medusa.get('workers')
             if workers is not None:
                 if not isinstance(workers, int) or workers < 1:
                     warnings.append(
-                        f"fuzzing.medusa.workers must be a positive integer"
+                        "fuzzing.medusa.workers must be a positive integer"
                     )
 
     # Validate reporting section
@@ -894,23 +1141,29 @@ def print_config_summary(config: SentinelConfig) -> None:
 
     print("\n[Engine]")
     print(f"  Fail on severity: {config.engine.fail_on_severity}+")
-    print(f"  Max findings: {config.engine.max_findings if config.engine.max_findings > 0 else 'unlimited'}")
+    max_f = config.engine.max_findings
+    print(f"  Max findings: {max_f if max_f > 0 else 'unlimited'}")
 
     print("\n[Heuristics]")
-    print(f"  Status: {'✓ enabled' if config.heuristics.enabled else '✗ disabled'}")
+    status = '✓ enabled' if config.heuristics.enabled else '✗ disabled'
+    print(f"  Status: {status}")
     print(f"  Disabled rules: {len(config.heuristics.disabled_rules)}")
     if config.heuristics.disabled_rules:
         for rule_id in list(config.heuristics.disabled_rules.keys())[:5]:
             print(f"    - {rule_id}")
-        if len(config.heuristics.disabled_rules) > 5:
-            print(f"    ... and {len(config.heuristics.disabled_rules) - 5} more")
+        dr_count = len(config.heuristics.disabled_rules)
+        if dr_count > 5:
+            print(f"    ... and {dr_count - 5} more")
 
     print(f"  Severity overrides: {len(config.heuristics.severity_overrides)}")
 
-    print(f"\n[Suppressions]")
+    print("\n[Suppressions]")
     print(f"  Total: {len(config.suppressions)}")
     for supp in config.suppressions[:3]:
-        location = f"{supp.file}:{supp.line}" if supp.file and supp.line else (supp.file or "global")
+        if supp.file and supp.line:
+            location = f"{supp.file}:{supp.line}"
+        else:
+            location = supp.file or "global"
         print(f"    - {supp.rule_id} @ {location}")
     if len(config.suppressions) > 3:
         print(f"    ... and {len(config.suppressions) - 3} more")
@@ -922,7 +1175,9 @@ def print_config_summary(config: SentinelConfig) -> None:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Test Sentinel configuration loader")
+    parser = argparse.ArgumentParser(
+        description="Test Sentinel configuration loader"
+    )
     parser.add_argument("--config", help="Path to sentinel.toml")
     args = parser.parse_args()
 
@@ -940,4 +1195,4 @@ if __name__ == "__main__":
         if matched:
             print(f"  ✓ Suppression matched: {matched.reason}")
         else:
-            print(f"  ✗ No suppression matched")
+            print("  ✗ No suppression matched")

@@ -203,6 +203,15 @@ enabled = false
 # Path to Solana project root (relative to config)
 project_root = "./programs"
 
+# Anchor IDL validation settings
+[chains.solana.idl]
+# Path to IDL files (relative to project_root)
+idl_path = "target/idl"
+# Validate account constraints in IDL
+validate_constraints = true
+# Trace Cross-Program Invocations in IDL
+trace_cpi = true
+
 # EVM-specific rules
 [chains.evm]
 # Expected compiler version range
@@ -277,6 +286,134 @@ exclude_paths = [
     "node_modules/**",
     ".git/**",
 ]
+
+
+# ============================================================================
+# Exploit PoC Auto-Generation
+# ============================================================================
+
+[exploit_generation]
+# Automatically generate Foundry test exploits for findings
+auto_generate = false
+
+# Minimum severity to generate exploits for (CRITICAL, HIGH, MEDIUM, LOW)
+min_severity = "HIGH"
+
+# Validate generated exploits compile with forge build
+validate_compilation = true
+
+# Output directory for generated exploit files
+output_dir = "exploits/"
+
+# LLM backend for enhancement ("none", "openai", "anthropic")
+# "none" = use local templates only, no API calls
+llm_backend = "none"
+
+# Directory containing exploit templates
+template_dir = "exploit_templates/"
+
+# ============================================================================
+# CI/CD Pipeline Generator
+# ============================================================================
+
+[ci.generator]
+# Target platform for pipeline generation
+# Options: "github", "gitlab", "azure", "jenkins"
+platform = "github"
+
+# Triggers for the pipeline
+# Options: "push", "pull_request", "schedule", "workflow_dispatch"
+triggers = ["push", "pull_request"]
+
+# Notification channels
+# Options: "slack", "discord"
+notifications = []
+
+# Custom steps to add to the pipeline (advanced)
+custom_steps = []
+
+
+# ============================================================================
+# History Scanning Configuration
+# ============================================================================
+
+[history]
+# Maximum commits to scan in history mode
+max_commits = 50
+
+# Branches to scan (list of branch names)
+scan_branches = ["main"]
+
+# Include fixed vulnerabilities in reports
+include_fixed = true
+
+# Output directory for history scan reports
+output_dir = "."
+
+
+# ============================================================================
+# Attack Graph Visualization Configuration
+# ============================================================================
+
+[visualization]
+# Enable attack graph visualization generation
+enabled = false
+
+# Include source code analysis in graph (parses contracts for structure)
+include_source_analysis = true
+
+# Enable attack path tracing through external calls
+trace_attack_paths = true
+
+# Output format for visualization ("html", "json", or "both")
+output_format = "html"
+
+# Maximum depth for attack path tracing (0 = unlimited)
+max_path_depth = 10
+
+
+# ============================================================================
+# Protocol Fingerprint Scanner Configuration
+# ============================================================================
+
+[fingerprint]
+# Enable protocol fingerprint similarity scanning
+enabled = false
+
+# Minimum similarity threshold (0.0-1.0) for protocol matching
+min_similarity = 0.7
+
+# Path to fingerprint database JSON file
+database_path = "data/protocol_fingerprints.json"
+
+# Include risk assessment in scan results
+include_risk_assessment = true
+
+
+# ============================================================================
+# AI and RAG Configuration
+# ============================================================================
+
+[ai]
+# Embedding backend for RAG (local, openai, anthropic)
+# "local" uses sentence-transformers (default, no API needed)
+embedding_backend = "local"
+
+# LLM backend for AI features (none, openai, anthropic)
+# "none" disables LLM features (default)
+llm_backend = "none"
+
+# OpenAI model for LLM features
+openai_model = "gpt-4-turbo-preview"
+
+# Path to the RAG vector index
+rag_index_path = ".sentinel/rag_index.pkl"
+
+# Number of similar findings to retrieve for enrichment
+top_k = 5
+
+# Automatically enrich findings with RAG context
+auto_enrich = false
 
 
 # ============================================================================
