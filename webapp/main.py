@@ -82,7 +82,7 @@ async def startup_event():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Render the upload page."""
-    return templates.TemplateResponse("upload.html", {"request": request})
+    return templates.TemplateResponse(request, "upload.html")
 
 
 @app.get("/health")
@@ -262,9 +262,9 @@ async def results(request: Request, audit_id: str):
     attack_graph_exists = (results_dir / "attack_graph.html").exists()
 
     return templates.TemplateResponse(
+        request,
         "results.html",
-        {
-            "request": request,
+        context={
             "audit_id": audit_id,
             "findings": findings_data,
             "severity_counts": severity_counts,
