@@ -4,11 +4,31 @@ Configuration Loader for Sentinel Engine
 Parses sentinel.toml and provides typed config access
 """
 
+from __future__ import annotations
+
 import os
 import sys
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Import logger and exceptions
+try:
+    from logger import get_logger
+    from exceptions import SentinelValidationError, SentinelConfigError
+    LOGGER_AVAILABLE = True
+except ImportError:
+    LOGGER_AVAILABLE = False
+    get_logger = None
+    SentinelValidationError = None
+    SentinelConfigError = None
+
+# Initialize logger
+if LOGGER_AVAILABLE and get_logger:
+    logger = get_logger(__name__)
+else:
+    import logging
+    logger = logging.getLogger(__name__)
 
 # Try to import toml parser
 try:
@@ -20,13 +40,22 @@ except ImportError:
         try:
             import toml  # Fallback to older toml package
         except ImportError:
-            print("[!] TOML parser not available. Install: pip install tomli")
+            logger.error(
+                "TOML parser not available. Install: pip install tomli"
+            )
             toml = None
 
 
 @dataclass
 class EngineConfig:
-    """Engine-wide settings."""
+    """Engine-wide settings.
+
+    Attributes:
+        name: Name of the security engine.
+        version: Version string of the engine.
+        fail_on_severity: Minimum severity level to fail on.
+        max_findings: Maximum number of findings to report (0 = unlimited).
+    """
     name: str = "Sentinel Security Engine"
     version: str = "2.2"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
@@ -35,23 +64,52 @@ class EngineConfig:
 
 @dataclass
 class HeuristicConfig:
-    """Heuristic scanning configuration."""
+    """Heuristic scanning configuration.
+
+    Attributes:
+        enabled: Whether heuristic scanning is enabled.
+        severity_overrides: Dict mapping rule IDs to custom severity levels.
+        disabled_rules: Dict mapping rule IDs to disabled status.
+    """
     enabled: bool = True
     severity_overrides: Dict[str, str] = field(default_factory=dict)
     disabled_rules: Dict[str, bool] = field(default_factory=dict)
 
     def is_rule_enabled(self, rule_id: str) -> bool:
-        """Check if a rule is enabled."""
+        """Check if a rule is enabled.
+
+        Args:
+            rule_id: The ID of the rule to check.
+
+        Returns:
+            True if the rule is enabled, False otherwise.
+        """
         return not self.disabled_rules.get(rule_id, False)
 
     def get_rule_severity(self, rule_id: str, default_severity: str) -> str:
-        """Get effective severity for a rule (considering overrides)."""
+        """Get effective severity for a rule (considering overrides).
+
+        Args:
+            rule_id: The ID of the rule.
+            default_severity: Default severity if no override exists.
+
+        Returns:
+            The effective severity level.
+        """
         return self.severity_overrides.get(rule_id, default_severity)
 
 
 @dataclass
 class Suppression:
-    """Represents a single suppression rule."""
+    """Represents a single suppression rule.
+
+    Attributes:
+        rule_id: The ID of the rule to suppress.
+        file: Optional file path to limit suppression scope.
+        line: Optional line number to limit suppression scope.
+        reason: Explanation for the suppression.
+        expires: Optional ISO date string for expiration.
+    """
     rule_id: str
     file: Optional[str] = None
     line: Optional[int] = None
@@ -59,17 +117,25 @@ class Suppression:
     expires: Optional[str] = None  # ISO date string
 
     def matches(self, rule_id: str, file_path: str, line_no: int) -> bool:
-        """Check if this suppression applies to a finding."""
+        """Check if this suppression applies to a finding.
+
+        Args:
+            rule_id: The ID of the rule that triggered the finding.
+            file_path: Path to the file where the finding occurred.
+            line_no: Line number where the finding occurred.
+
+        Returns:
+            True if this suppression applies to the finding.
+        """
         # Rule ID must match
         if self.rule_id != rule_id:
             return False
 
         # If suppression specifies a file, it must match
         if self.file:
-            # Normalize paths for comparison
-            file_normalized = Path(file_path).as_posix()
-            suppression_file = Path(self.file).as_posix()
-            if suppression_file not in file_normalized:
+            # Use proper path normalization to avoid false positives
+            # e.g., Oracle.sol should NOT match MyOracle.sol
+            if not self._file_matches(self.file, file_path):
                 return False
 
         # If suppression specifies a line, it must match
@@ -83,15 +149,71 @@ class Suppression:
                 expiry_date = datetime.fromisoformat(self.expires)
                 if datetime.now() > expiry_date:
                     return False
-            except ValueError:
-                pass  # Invalid date format, ignore expiry check
+            except ValueError as e:
+                logger.warning(
+                    f"Invalid expiry date format in suppression: {self.expires}. "
+                    f"Error: {e}. Ignoring expiry check."
+                )
 
         return True
+
+    def _file_matches(self, suppression_file: str, target_file: str) -> bool:
+        """Check if suppression_file matches target_file using proper path normalization.
+
+        Uses exact basename matching or full path matching to avoid
+        false positives (e.g., Oracle.sol matching MyOracle.sol).
+
+        Args:
+            suppression_file: The file pattern from the suppression rule.
+            target_file: The actual file path being checked.
+
+        Returns:
+            True if the files match according to suppression rules.
+        """
+        # Normalize both paths
+        norm_target = os.path.normpath(target_file)
+        norm_suppression = os.path.normpath(suppression_file)
+
+        # On Windows, make comparison case-insensitive
+        if os.name == 'nt':
+            norm_target = norm_target.lower()
+            norm_suppression = norm_suppression.lower()
+
+        # Get basenames for comparison
+        target_basename = os.path.basename(norm_target)
+        suppression_basename = os.path.basename(norm_suppression)
+
+        # Exact basename match
+        if target_basename == suppression_basename:
+            return True
+
+        # Full path match (for relative paths in config)
+        if norm_target.endswith(norm_suppression):
+            return True
+        if norm_suppression in norm_target:
+            # Additional check: ensure the match is at a path boundary
+            # to avoid partial matches like 'Oracle' in 'MyOracle'
+            idx = norm_target.find(norm_suppression)
+            if idx != -1:
+                # Check character before match is a path separator
+                # or we're at the start
+                if idx == 0 or norm_target[idx - 1] in ('/', '\\'):
+                    return True
+
+        return False
 
 
 @dataclass
 class StaticAnalysisConfig:
-    """Static analyzer settings."""
+    """Static analyzer settings.
+
+    Attributes:
+        slither_enabled: Whether Slither analysis is enabled.
+        slither_exclude_detectors: Comma-separated list of detectors to exclude.
+        slither_include_impact: Severity levels to include in results.
+        aderyn_enabled: Whether Aderyn analysis is enabled.
+        aderyn_scope: Optional scope for Aderyn analysis.
+    """
     slither_enabled: bool = True
     slither_exclude_detectors: str = ""
     slither_include_impact: str = "High,Medium"
@@ -101,7 +223,17 @@ class StaticAnalysisConfig:
 
 @dataclass
 class FuzzingConfig:
-    """Fuzzing configuration."""
+    """Fuzzing configuration.
+
+    Attributes:
+        foundry_enabled: Whether Foundry fuzzing is enabled.
+        foundry_runs: Number of fuzz runs to execute.
+        foundry_max_test_rejects: Maximum rejected tests before stopping.
+        medusa_enabled: Whether Medusa fuzzing is enabled.
+        medusa_test_limit: Maximum number of test sequences.
+        medusa_timeout: Timeout in seconds for Medusa fuzzing.
+        medusa_workers: Number of parallel workers for Medusa.
+    """
     foundry_enabled: bool = False
     foundry_runs: int = 10000
     foundry_max_test_rejects: int = 100000
@@ -113,7 +245,14 @@ class FuzzingConfig:
 
 @dataclass
 class ChainConfig:
-    """Chain-specific settings."""
+    """Chain-specific settings.
+
+    Attributes:
+        solana_enabled: Whether Solana analysis is enabled.
+        solana_project_root: Path to Solana program root directory.
+        evm_solc_version: Required Solidity compiler version.
+        evm_trusted_contracts: List of trusted contract addresses.
+    """
     solana_enabled: bool = False
     solana_project_root: str = "./programs"
     evm_solc_version: str = ">=0.8.0"
@@ -122,7 +261,14 @@ class ChainConfig:
 
 @dataclass
 class UpgradeDiffConfig:
-    """Upgrade safety settings."""
+    """Upgrade safety settings.
+
+    Attributes:
+        old_implementation_path: Path to old contract implementation.
+        new_implementation_path: Path to new contract implementation.
+        ignore_new_view_functions: Whether to ignore new view functions.
+        ignore_comment_changes: Whether to ignore comment-only changes.
+    """
     old_implementation_path: str = ""
     new_implementation_path: str = ""
     ignore_new_view_functions: bool = True
@@ -131,7 +277,20 @@ class UpgradeDiffConfig:
 
 @dataclass
 class ReportingConfig:
-    """Reporting settings."""
+    """Reporting settings.
+
+    Attributes:
+        format: Output format (markdown, json, html, sarif).
+        executive_summary: Whether to include executive summary.
+        supply_chain: Whether to include supply chain analysis.
+        static_analysis: Whether to include static analysis results.
+        heuristic_scan: Whether to include heuristic scan results.
+        fuzzing: Whether to include fuzzing results.
+        threat_intel: Whether to include threat intelligence.
+        access_matrix: Whether to include access control matrix.
+        verbosity: Report verbosity level (minimal, standard, verbose).
+        group_by: How to group findings (severity, category, file).
+    """
     format: str = "markdown"
     executive_summary: bool = True
     supply_chain: bool = True
@@ -146,7 +305,14 @@ class ReportingConfig:
 
 @dataclass
 class CIConfig:
-    """CI/CD integration settings."""
+    """CI/CD integration settings.
+
+    Attributes:
+        fail_on_findings: Whether to fail CI on findings.
+        post_pr_comment: Whether to post findings as PR comments.
+        upload_sarif: Whether to upload SARIF results.
+        exclude_paths: List of path patterns to exclude from analysis.
+    """
     fail_on_findings: bool = True
     post_pr_comment: bool = True
     upload_sarif: bool = False
@@ -157,7 +323,19 @@ class CIConfig:
 
 @dataclass
 class SentinelConfig:
-    """Root configuration object."""
+    """Root configuration object.
+
+    Attributes:
+        engine: Engine-wide settings.
+        heuristics: Heuristic scanning configuration.
+        suppressions: List of active suppression rules.
+        static_analysis: Static analyzer settings.
+        fuzzing: Fuzzing configuration.
+        chains: Chain-specific settings.
+        upgrade_diff: Upgrade safety settings.
+        reporting: Reporting settings.
+        ci: CI/CD integration settings.
+    """
     engine: EngineConfig = field(default_factory=EngineConfig)
     heuristics: HeuristicConfig = field(default_factory=HeuristicConfig)
     suppressions: List[Suppression] = field(default_factory=list)
@@ -169,9 +347,15 @@ class SentinelConfig:
     ci: CIConfig = field(default_factory=CIConfig)
 
     def is_finding_suppressed(self, rule_id: str, file_path: str, line_no: int) -> Optional[Suppression]:
-        """
-        Check if a finding should be suppressed.
-        Returns the matching Suppression object if suppressed, None otherwise.
+        """Check if a finding should be suppressed.
+
+        Args:
+            rule_id: The ID of the rule that triggered the finding.
+            file_path: Path to the file where the finding occurred.
+            line_no: Line number where the finding occurred.
+
+        Returns:
+            The matching Suppression object if suppressed, None otherwise.
         """
         for suppression in self.suppressions:
             if suppression.matches(rule_id, file_path, line_no):
@@ -190,7 +374,7 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         SentinelConfig object with loaded settings.
     """
     if toml is None:
-        print("[!] TOML parser not available, using default config")
+        logger.error("TOML parser not available, using default config")
         return SentinelConfig()
 
     # Find config file
@@ -198,17 +382,37 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         config_path = find_config_file()
 
     if not config_path or not os.path.exists(config_path):
-        print(f"[*] No sentinel.toml found, using default configuration")
+        logger.info("No sentinel.toml found, using default configuration")
         return SentinelConfig()
 
-    print(f"[*] Loading configuration from: {config_path}")
+    logger.info(f"Loading configuration from: {config_path}")
 
     try:
         with open(config_path, 'rb') as f:
             data = toml.load(f)
-    except Exception as e:
-        print(f"[!] Error loading config: {e}")
+    except (IOError, OSError) as e:
+        logger.error(f"Could not read config file: {e}")
+        if SentinelConfigError:
+            raise SentinelConfigError(
+                "Failed to read configuration file",
+                details={"path": config_path, "error": str(e)}
+            ) from e
         return SentinelConfig()
+    except Exception as e:
+        logger.error(f"Error parsing config file: {e}")
+        if SentinelConfigError:
+            raise SentinelConfigError(
+                "Failed to parse configuration file",
+                details={"path": config_path, "error": str(e)}
+            ) from e
+        return SentinelConfig()
+
+    # Validate config schema and log warnings
+    validation_warnings = validate_config(data)
+    if validation_warnings:
+        logger.warning("Configuration validation warnings:")
+        for warning in validation_warnings:
+            logger.warning(f"  - {warning}")
 
     config = SentinelConfig()
 
@@ -322,11 +526,13 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
             ])
         )
 
-    print(f"[+] Configuration loaded successfully")
-    print(f"    - Heuristics: {'enabled' if config.heuristics.enabled else 'disabled'}")
-    print(f"    - Disabled rules: {len(config.heuristics.disabled_rules)}")
-    print(f"    - Suppressions: {len(config.suppressions)}")
-    print(f"    - Fail on: {config.engine.fail_on_severity}+")
+    logger.info("Configuration loaded successfully")
+    logger.info(
+        f"Heuristics: {'enabled' if config.heuristics.enabled else 'disabled'}, "
+        f"Disabled rules: {len(config.heuristics.disabled_rules)}, "
+        f"Suppressions: {len(config.suppressions)}, "
+        f"Fail on: {config.engine.fail_on_severity}+"
+    )
 
     return config
 
@@ -349,8 +555,195 @@ def find_config_file() -> Optional[str]:
     return None
 
 
+def validate_config(config: dict) -> list[str]:
+    """
+    Validate TOML configuration schema and return a list of validation warnings.
+
+    Checks:
+    - Required keys exist
+    - Types are correct
+    - Values are within expected ranges
+
+    Args:
+        config: The loaded TOML configuration dictionary.
+
+    Returns:
+        List of validation warning strings.
+    """
+    warnings: list[str] = []
+
+    if not isinstance(config, dict):
+        warnings.append("Config must be a dictionary")
+        return warnings
+
+    # Validate engine section
+    if 'engine' in config:
+        eng = config['engine']
+        if not isinstance(eng, dict):
+            warnings.append("'engine' must be a dictionary")
+        else:
+            # Validate fail_on_severity
+            valid_severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
+            fail_on = eng.get('fail_on_severity')
+            if fail_on and fail_on not in valid_severities:
+                warnings.append(
+                    f"engine.fail_on_severity must be one of "
+                    f"{valid_severities}, got '{fail_on}'"
+                )
+
+            # Validate max_findings
+            max_findings = eng.get('max_findings')
+            if max_findings is not None:
+                if not isinstance(max_findings, int) or max_findings < 0:
+                    warnings.append(
+                        f"engine.max_findings must be a non-negative integer, "
+                        f"got {max_findings}"
+                    )
+
+    # Validate heuristics section
+    if 'heuristics' in config:
+        heur = config['heuristics']
+        if not isinstance(heur, dict):
+            warnings.append("'heuristics' must be a dictionary")
+        else:
+            # Validate enabled is boolean
+            enabled = heur.get('enabled')
+            if enabled is not None and not isinstance(enabled, bool):
+                warnings.append(
+                    f"heuristics.enabled must be a boolean, got {type(enabled)}"
+                )
+
+            # Validate severity_overrides is a dict
+            overrides = heur.get('severity_overrides')
+            if overrides is not None and not isinstance(overrides, dict):
+                warnings.append(
+                    f"heuristics.severity_overrides must be a dictionary"
+                )
+            elif isinstance(overrides, dict):
+                valid_severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
+                for rule_id, sev in overrides.items():
+                    if sev not in valid_severities:
+                        warnings.append(
+                            f"heuristics.severity_overrides['{rule_id}'] "
+                            f"must be one of {valid_severities}, got '{sev}'"
+                        )
+
+            # Validate disabled_rules is a dict
+            disabled = heur.get('disabled_rules')
+            if disabled is not None and not isinstance(disabled, dict):
+                warnings.append(
+                    f"heuristics.disabled_rules must be a dictionary"
+                )
+
+    # Validate suppressions section
+    if 'suppressions' in config:
+        suppressions = config['suppressions']
+        if not isinstance(suppressions, list):
+            warnings.append("'suppressions' must be a list")
+        else:
+            for i, supp in enumerate(suppressions):
+                if not isinstance(supp, dict):
+                    warnings.append(f"suppressions[{i}] must be a dictionary")
+                    continue
+
+                # Check required field
+                if 'rule_id' not in supp:
+                    warnings.append(f"suppressions[{i}] missing required 'rule_id'")
+
+                # Validate line is an integer if present
+                line = supp.get('line')
+                if line is not None and not isinstance(line, int):
+                    warnings.append(
+                        f"suppressions[{i}].line must be an integer, "
+                        f"got {type(line)}"
+                    )
+
+                # Validate expires is a valid date string if present
+                expires = supp.get('expires')
+                if expires:
+                    from datetime import datetime
+                    try:
+                        datetime.fromisoformat(expires)
+                    except ValueError:
+                        warnings.append(
+                            f"suppressions[{i}].expires must be a valid "
+                            f"ISO date string, got '{expires}'"
+                        )
+
+    # Validate fuzzing section
+    if 'fuzzing' in config:
+        fuzz = config['fuzzing']
+        if not isinstance(fuzz, dict):
+            warnings.append("'fuzzing' must be a dictionary")
+        else:
+            # Validate foundry runs
+            foundry = fuzz.get('foundry', {})
+            runs = foundry.get('runs')
+            if runs is not None:
+                if not isinstance(runs, int) or runs < 1:
+                    warnings.append(
+                        f"fuzzing.foundry.runs must be a positive integer"
+                    )
+
+            # Validate medusa settings
+            medusa = fuzz.get('medusa', {})
+            test_limit = medusa.get('test_limit')
+            if test_limit is not None:
+                if not isinstance(test_limit, int) or test_limit < 1:
+                    warnings.append(
+                        f"fuzzing.medusa.test_limit must be a positive integer"
+                    )
+
+            timeout = medusa.get('timeout')
+            if timeout is not None:
+                if not isinstance(timeout, int) or timeout < 1:
+                    warnings.append(
+                        f"fuzzing.medusa.timeout must be a positive integer"
+                    )
+
+            workers = medusa.get('workers')
+            if workers is not None:
+                if not isinstance(workers, int) or workers < 1:
+                    warnings.append(
+                        f"fuzzing.medusa.workers must be a positive integer"
+                    )
+
+    # Validate reporting section
+    if 'reporting' in config:
+        rep = config['reporting']
+        if not isinstance(rep, dict):
+            warnings.append("'reporting' must be a dictionary")
+        else:
+            valid_formats = ['markdown', 'json', 'html', 'sarif']
+            fmt = rep.get('format')
+            if fmt and fmt not in valid_formats:
+                warnings.append(
+                    f"reporting.format must be one of {valid_formats}, "
+                    f"got '{fmt}'"
+                )
+
+            valid_verbosity = ['minimal', 'standard', 'verbose']
+            verbosity = rep.get('verbosity')
+            if verbosity and verbosity not in valid_verbosity:
+                warnings.append(
+                    f"reporting.verbosity must be one of {valid_verbosity}, "
+                    f"got '{verbosity}'"
+                )
+
+            valid_group_by = ['severity', 'category', 'file']
+            group_by = rep.get('group_by')
+            if group_by and group_by not in valid_group_by:
+                warnings.append(
+                    f"reporting.group_by must be one of {valid_group_by}, "
+                    f"got '{group_by}'"
+                )
+
+    return warnings
+
+
 def print_config_summary(config: SentinelConfig) -> None:
     """Pretty-print configuration summary."""
+    logger.debug("Printing configuration summary")
     print("\n" + "="*60)
     print(f" {config.engine.name} v{config.engine.version}")
     print("="*60)

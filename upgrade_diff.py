@@ -5,6 +5,8 @@ Detects dangerous changes between old and new contract versions
 Critical for UUPS/Transparent proxy upgrades
 """
 
+from __future__ import annotations
+
 import re
 import argparse
 import sys
@@ -12,10 +14,34 @@ from typing import Dict, List, Any, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
+# Import logger and exceptions
+try:
+    from logger import get_logger
+    from exceptions import SentinelValidationError
+    LOGGER_AVAILABLE = True
+except ImportError:
+    LOGGER_AVAILABLE = False
+    get_logger = None
+    SentinelValidationError = None
+
+# Initialize logger
+if LOGGER_AVAILABLE and get_logger:
+    logger = get_logger(__name__)
+else:
+    import logging
+    logger = logging.getLogger(__name__)
+
 
 @dataclass
 class StorageVariable:
-    """Represents a storage variable in a contract."""
+    """Represents a storage variable in a contract.
+
+    Attributes:
+        name: Variable name.
+        type: Solidity type of the variable.
+        slot: Storage slot index.
+        line_no: Line number where declared.
+    """
     name: str
     type: str
     slot: int
@@ -24,7 +50,17 @@ class StorageVariable:
 
 @dataclass
 class Function:
-    """Represents a function in a contract."""
+    """Represents a function in a contract.
+
+    Attributes:
+        name: Function name.
+        visibility: Function visibility (public, external, etc.).
+        mutability: State mutability (pure, view, payable).
+        modifiers: List of function modifiers.
+        is_payable: Whether the function is payable.
+        line_no: Line number where declared.
+        signature: Full function signature.
+    """
     name: str
     visibility: str
     mutability: str
@@ -36,7 +72,17 @@ class Function:
 
 @dataclass
 class UpgradeIssue:
-    """Represents a safety issue found during upgrade analysis."""
+    """Represents a safety issue found during upgrade analysis.
+
+    Attributes:
+        severity: Issue severity (CRITICAL, HIGH, MEDIUM, LOW).
+        category: Issue category (e.g., STORAGE_COLLISION).
+        title: Short issue title.
+        description: Detailed issue description.
+        old_value: Value in the old contract.
+        new_value: Value in the new contract.
+        line_no: Optional line number where issue occurs.
+    """
     severity: str  # CRITICAL, HIGH, MEDIUM, LOW
     category: str
     title: str
@@ -47,13 +93,18 @@ class UpgradeIssue:
 
 
 def parse_storage_layout(contract_path: str) -> List[StorageVariable]:
-    """
-    Parse storage variables from Solidity contract.
-    
+    """Parse storage variables from Solidity contract.
+
     Storage layout rules:
     - Variables declared at contract level
     - Order matters (determines slot)
     - Mappings/dynamic arrays take full slot
+
+    Args:
+        contract_path: Path to the Solidity contract.
+
+    Returns:
+        List of storage variable definitions.
     """
     storage_vars = []
     current_slot = 0
@@ -109,9 +160,104 @@ def parse_storage_layout(contract_path: str) -> List[StorageVariable]:
     return storage_vars
 
 
-def parse_functions(contract_path: str) -> List[Function]:
+def validate_storage_layout(layout: List[StorageVariable]) -> List[str]:
+    """Validate parsed storage layout for schema compliance and edge cases.
+
+    Checks:
+    - Each variable has required fields (name, type, slot number)
+    - No empty layouts (warning)
+    - No duplicate slot assignments
+    - Valid type names
+
+    Args:
+        layout: List of StorageVariable objects to validate.
+
+    Returns:
+        List of validation error/warning strings.
     """
-    Extract all functions with their visibility and modifiers.
+    errors: List[str] = []
+
+    # Check for empty layout
+    if not layout:
+        errors.append(
+            "Storage layout is empty - contract may have no state variables"
+        )
+        return errors
+
+    # Track seen slots and names for duplicates
+    seen_slots: Dict[int, str] = {}
+    seen_names: Dict[str, int] = {}
+
+    # Valid Solidity type patterns
+    valid_type_patterns = [
+        r'^(uint|int)(\d+)?$',  # uint256, int8, etc.
+        r'^address$',  # address
+        r'^bool$',  # bool
+        r'^bytes(\d+)?$',  # bytes32, bytes, etc.
+        r'^string$',  # string
+        r'^mapping\(.+\)$',  # mapping(key => value)
+        r'^.+\[\]$',  # dynamic array
+        r'^.+\[\d+\]$',  # fixed-size array
+    ]
+
+    for i, var in enumerate(layout):
+        # Check required fields
+        if not var.name:
+            errors.append(f"Storage variable at index {i} has no name")
+            continue
+
+        if not var.type:
+            errors.append(f"Storage variable '{var.name}' has no type")
+            continue
+
+        if var.slot is None:
+            errors.append(f"Storage variable '{var.name}' has no slot number")
+            continue
+
+        # Check for duplicate slot assignments
+        if var.slot in seen_slots:
+            errors.append(
+                f"Duplicate slot assignment: slot {var.slot} assigned to "
+                f"'{var.name}' and '{seen_slots[var.slot]}'"
+            )
+        else:
+            seen_slots[var.slot] = var.name
+
+        # Check for duplicate variable names
+        if var.name in seen_names:
+            errors.append(
+                f"Duplicate variable name: '{var.name}' at slots "
+                f"{seen_names[var.name]} and {var.slot}"
+            )
+        else:
+            seen_names[var.name] = var.slot
+
+        # Validate type name
+        type_valid = any(
+            re.match(pattern, var.type) for pattern in valid_type_patterns
+        )
+        if not type_valid:
+            errors.append(
+                f"Invalid type name for '{var.name}': '{var.type}'"
+            )
+
+        # Check for negative slot (shouldn't happen but be safe)
+        if var.slot < 0:
+            errors.append(
+                f"Negative slot number for '{var.name}': {var.slot}"
+            )
+
+    return errors
+
+
+def parse_functions(contract_path: str) -> List[Function]:
+    """Extract all functions with their visibility and modifiers.
+
+    Args:
+        contract_path: Path to the Solidity contract.
+
+    Returns:
+        List of function definitions.
     """
     functions = []
     
@@ -155,13 +301,19 @@ def compare_storage_layouts(
     old_vars: List[StorageVariable],
     new_vars: List[StorageVariable]
 ) -> List[UpgradeIssue]:
-    """
-    Detect storage layout collisions between old and new contracts.
-    
+    """Detect storage layout collisions between old and new contracts.
+
     CRITICAL issues:
     - Reordered variables (slot mismatch)
     - Removed variables (data loss)
     - Type changes in same slot (corruption)
+
+    Args:
+        old_vars: Storage variables from the old contract.
+        new_vars: Storage variables from the new contract.
+
+    Returns:
+        List of upgrade issues found.
     """
     issues = []
     
@@ -238,13 +390,19 @@ def compare_access_control(
     old_funcs: List[Function],
     new_funcs: List[Function]
 ) -> List[UpgradeIssue]:
-    """
-    Detect removed or weakened access controls.
-    
+    """Detect removed or weakened access controls.
+
     CRITICAL issues:
     - onlyOwner removed (privilege escalation)
-    - external → public (unintended exposure)
+    - external -> public (unintended exposure)
     - Removed nonReentrant (reentrancy risk)
+
+    Args:
+        old_funcs: Functions from the old contract.
+        new_funcs: Functions from the new contract.
+
+    Returns:
+        List of upgrade issues found.
     """
     issues = []
     
@@ -305,8 +463,14 @@ def compare_access_control(
 
 
 def detect_new_external_calls(old_path: str, new_path: str) -> List[UpgradeIssue]:
-    """
-    Detect new external calls in upgraded contract (increased attack surface).
+    """Detect new external calls in upgraded contract (increased attack surface).
+
+    Args:
+        old_path: Path to the old contract.
+        new_path: Path to the new contract.
+
+    Returns:
+        List of upgrade issues for new external calls.
     """
     issues = []
     
@@ -339,14 +503,14 @@ def detect_new_external_calls(old_path: str, new_path: str) -> List[UpgradeIssue
 
 
 def analyze_upgrade(old_contract: str, new_contract: str) -> Dict[str, Any]:
-    """
-    Main upgrade analysis function.
-    
+    """Main upgrade analysis function.
+
+    Args:
+        old_contract: Path to the old contract version.
+        new_contract: Path to the new contract version.
+
     Returns:
-        Dict with:
-        - issues: List of UpgradeIssue objects
-        - summary: Dict with counts by severity
-        - safe: Boolean (True if no CRITICAL/HIGH issues)
+        Dict with issues, summary counts, and safety status.
     """
     print("\n" + "="*60)
     print(" UPGRADE DIFF ANALYZER")
@@ -398,7 +562,11 @@ def analyze_upgrade(old_contract: str, new_contract: str) -> Dict[str, Any]:
 
 
 def print_report(results: Dict[str, Any]) -> None:
-    """Pretty-print upgrade safety report."""
+    """Pretty-print upgrade safety report.
+
+    Args:
+        results: Results dictionary from analyze_upgrade().
+    """
     issues = results["issues"]
     summary = results["summary"]
     
@@ -444,7 +612,8 @@ def print_report(results: Dict[str, Any]) -> None:
                     print(f"     Line: {issue.line_no}")
 
 
-def main():
+def main() -> None:
+    """Main entry point for the upgrade diff analyzer CLI."""
     parser = argparse.ArgumentParser(
         description="🔍 Upgrade Diff Analyzer - Detect dangerous changes in contract upgrades"
     )

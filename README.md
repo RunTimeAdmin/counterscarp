@@ -15,7 +15,7 @@
 
 ```powershell
 # 1. Clone or download
-cd "C:\Users\David\Desktop\Pragmatic Security Engine"
+cd /path/to/sentinel-engine  # Or on Windows: C:\path\to\sentinel-engine
 
 # 2. Install core dependencies
 pip install requests packaging tomli
@@ -258,8 +258,14 @@ python orchestrator.py --target ./contracts --config my-custom.toml
 
 ## 🚨 **Key Features**
 
-### **1. Liar Detector (Semantic Analysis)**
-Finds mismatches between developer intent (comments) and implementation:
+### **1. Liar Detector (Semantic Analysis with NatSpec Parsing)**
+Finds mismatches between developer intent (NatSpec comments) and actual implementation:
+
+**NatSpec Parsing Capabilities:**
+- Parses `@notice`, `@dev`, `@param`, and `@return` tags
+- Supports both `///` single-line and `/** */` multi-line formats
+- Extracts trust keywords and access control claims
+- Compares documented behavior against actual function modifiers and visibility
 
 ```solidity
 /// @notice Only owner can withdraw funds  ← Says "owner"
@@ -451,7 +457,7 @@ python medusa_wrapper.py ./foundry-project --test-limit 50000 --timeout 300
 ## 🗂️ **Project Structure**
 
 ```
-Pragmatic Security Engine/
+sentinel-engine/
 │
 ├── gui.py                      # Interactive Tkinter interface
 ├── orchestrator.py             # CLI master pipeline + Markdown reports
@@ -497,7 +503,7 @@ Edit scripts if using custom Python installation:
 python orchestrator.py
 
 # Custom path (Windows):
-& "C:\Users\David\AppData\Local\Programs\Python\Python310\python.exe" orchestrator.py
+& "C:\Python310\python.exe" orchestrator.py
 ```
 
 ### **Slither Configuration**
@@ -531,13 +537,13 @@ AUTH_MODIFIERS = ["onlyOwner", "onlyRole", "auth", "nonReentrant", "whenNotPause
 ### **CyberShield Austin - Client Audits**
 ```powershell
 # Phase 0: Research historical exploits
-python threat_intel.py Z:\client\contracts\Vault.sol
+python threat_intel.py /path/to/client/contracts/Vault.sol
 
 # Phase 1: Quick heuristic scan
-python heuristic_scanner.py Z:\client\contracts
+python heuristic_scanner.py /path/to/client/contracts
 
 # Phase 2: Full audit with report
-python orchestrator.py --target Z:\client\contracts --heuristic
+python orchestrator.py --target /path/to/client/contracts --heuristic
 # → Deliverable: ACTION_PLAN_*.md
 ```
 
@@ -611,6 +617,177 @@ Read [Pragmatic Security Engine.txt](./Pragmatic%20Security%20Engine.txt) for th
 
 ---
 
+## 📝 **Logging Configuration**
+
+Sentinel Engine uses a centralized logging system via `logger.py`:
+
+### **Log Levels**
+Set via `SENTINEL_LOG_LEVEL` environment variable:
+- `DEBUG` - Detailed debugging information
+- `INFO` - General operational information
+- `WARNING` - Warning messages for potential issues
+- `ERROR` - Error messages
+- `CRITICAL` - Critical errors that may prevent operation
+
+### **Log Formats**
+Set via `SENTINEL_LOG_FORMAT` environment variable:
+- `text` - Human-readable colored output (default)
+- `json` - Structured JSON lines for machine parsing
+
+### **File Logging**
+Set `SENTINEL_LOG_FILE` to enable logging to a file:
+```bash
+export SENTINEL_LOG_FILE=/var/log/sentinel.log
+python orchestrator.py --target ./contracts
+```
+
+---
+
+## 📊 **SARIF Report Support**
+
+Sentinel Engine supports SARIF 2.1.0 (Static Analysis Results Interchange Format) for integration with GitHub Advanced Security and other tools.
+
+### **Generating SARIF Reports**
+
+**Via CLI:**
+```bash
+# Generate SARIF report using report generator
+python report_generator.py --format sarif --output report
+
+# Aderyn also supports SARIF output
+python aderyn_wrapper.py ./project --format sarif
+```
+
+**Via Configuration:**
+```toml
+[reporting]
+format = "sarif"
+sarif_upload = true  # Enable GitHub SARIF upload
+```
+
+### **GitHub Actions Integration**
+
+Upload SARIF results to GitHub Advanced Security:
+
+```yaml
+- name: Run Sentinel Scan
+  run: |
+    python orchestrator.py --target ./contracts --report
+    python report_generator.py --format sarif --output sentinel-results
+
+- name: Upload SARIF to GitHub
+  uses: github/codeql-action/upload-sarif@v2
+  with:
+    sarif_file: sentinel-results.sarif
+```
+
+---
+
+## 🌐 **API Resilience Features**
+
+The `http_utils.py` module provides resilient HTTP communication for threat intelligence APIs:
+
+### **Retry Logic**
+- Exponential backoff with jitter for failed requests
+- Configurable max retries (default: 3)
+- Automatic retry on 5xx errors and timeouts
+- Respects `Retry-After` headers for rate limiting
+
+### **Rate Limiting**
+- Token bucket rate limiter to control request rates
+- Configurable requests per second/minute
+- Prevents API quota exhaustion
+
+### **Error Classification**
+- Automatic classification of HTTP status codes
+- Different retry strategies for different error types
+- Structured error reporting via `SentinelAPIError`
+
+---
+
+## 🐛 **Troubleshooting**
+
+### **Missing External Tools**
+
+**Slither not found:**
+```bash
+# Install Slither
+pip install slither-analyzer
+
+# Verify installation
+slither --version
+```
+
+**Aderyn not found:**
+```bash
+# Install Aderyn (requires Rust)
+cargo install aderyn
+
+# Or via Foundry
+foundryup
+```
+
+**Medusa not found:**
+```bash
+# Install Medusa (requires Go)
+go install github.com/crytic/medusa/cmd/medusa@latest
+```
+
+### **OpenAI API Key Not Set**
+
+If you see errors when using exploit generation:
+```bash
+# Set your OpenAI API key
+export OPENAI_API_KEY="sk-..."
+
+# Or on Windows
+set OPENAI_API_KEY=sk-...
+```
+
+### **Solc Version Not Installed**
+
+If Slither fails with "solc version not installed":
+```bash
+# Install solc-select
+pip install solc-select
+
+# Install and use specific Solidity version
+solc-select install 0.8.19
+solc-select use 0.8.19
+```
+
+### **Network Timeouts for Threat Intel APIs**
+
+If threat intelligence lookups timeout:
+```bash
+# Increase timeout via environment
+export SENTINEL_LOG_LEVEL=DEBUG  # See detailed retry attempts
+
+# Check network connectivity
+python -c "from http_utils import resilient_get; resilient_get('https://osv.dev')"
+
+# The system automatically retries with exponential backoff
+# You can also check your firewall/proxy settings
+```
+
+### **Common Issues**
+
+**"Cannot find contract file"**
+- Ensure the target path exists and is accessible
+- Use absolute paths or verify relative paths from your current directory
+- Check file permissions
+
+**"Docker build fails"**
+- Ensure Docker daemon is running
+- Check available disk space (~600MB required)
+- Try building with `--no-cache` flag
+
+**"Permission denied"**
+- On Linux/Mac: `chmod +x` scripts if needed
+- Check write permissions for output directories
+
+---
+
 ## 🤝 **Contributing**
 
 ### **Adding New Heuristic Rules**
@@ -659,12 +836,25 @@ See LICENSE for details.
 
 ---
 
+## 🔧 **Environment Variables**
+
+Sentinel Engine supports the following environment variables for configuration:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SENTINEL_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO |
+| `SENTINEL_LOG_FORMAT` | Output format ("text" or "json") | text |
+| `SENTINEL_LOG_FILE` | Optional file path for log output | (none) |
+| `OPENAI_API_KEY` | Required for GPT-4 exploit generation | (none) |
+
+---
+
 ## 📧 **Support**
 
 **Professional Audits:**
 - CyberShield Austin
 - Twitter: [@defiauditccie](https://twitter.com/defiauditccie)
-- Website: [scamhoundcrypto.com](https://scamhoundcrypto.com)
+- Website: [sentinel-engine.io](https://sentinel-engine.io)
 
 **GitHub:**
 - Issues: [github.com/RunTimeAdmin/sentinel-engine/issues](https://github.com/RunTimeAdmin/sentinel-engine/issues)

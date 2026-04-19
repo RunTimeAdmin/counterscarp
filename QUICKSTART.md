@@ -1,4 +1,8 @@
-# 🚀 The Sentinel Engine - Quick Start Guide
+# 🚀 Sentinel Engine - Quick Start Guide
+
+> Get started with security scanning in 5 minutes
+> 
+> Website: [sentinel-engine.io](https://sentinel-engine.io)
 
 ## Zero-to-Audit in 3 Commands
 
@@ -170,9 +174,10 @@ RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
    - Convert your invariant tests to runtime monitors
 
 4. **Contribute:**
+   - See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines
    - Add new heuristic patterns
    - Improve threat intelligence sources
-   - Submit PRs to CyberShield Austin / TokenAudit
+   - Submit PRs to [sentinel-engine.io](https://sentinel-engine.io)
 
 ---
 

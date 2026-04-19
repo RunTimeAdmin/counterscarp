@@ -1,28 +1,58 @@
+from __future__ import annotations
+
 import json
 import os
 import argparse
 import sys
 import re
-import requests
 from typing import Dict, List, Any
+
+from logger import get_logger
+from exceptions import SentinelAPIError, SentinelValidationError
+from http_utils import resilient_post, RateLimiter
+
+logger = get_logger(__name__)
 
 # CONFIGURATION
 # We explicitly check the 'npm' ecosystem because that's how most
 # Solidity-related libraries (OpenZeppelin, Hardhat, etc.) are distributed.
 ECOSYSTEM = "npm"
+OSV_API_TIMEOUT = 10  # seconds
+OSV_MAX_RETRIES = 3
+
+# Shared rate limiter for OSV API calls
+# OSV.dev is generally tolerant but we'll be polite
+_osv_rate_limiter = RateLimiter(requests_per_second=10)
 
 
 def clean_version(version_str: str) -> str:
-    """Removes npm artifacts like ^, ~, or >= to get the raw version number."""
-    # We strip non-numeric chars except dots.
-    # Example: "^4.9.0" -> "4.9.0".
-    # In a real CI env, you'd check package-lock.json for the exact installed version.
+    """Removes npm artifacts like ^, ~, or >= to get the raw version number.
+
+    We strip non-numeric chars except dots.
+    Example: "^4.9.0" -> "4.9.0".
+    In a real CI env, you'd check package-lock.json for the exact installed version.
+
+    Args:
+        version_str: The version string from package.json.
+
+    Returns:
+        Cleaned version string with only numeric characters and dots.
+    """
     clean = re.sub(r"[^\d\.]", "", version_str)
     return clean
 
 
-def check_osv_api(package_name: str, version: str) -> List[Dict]:
-    """Queries Google OSV (Open Source Vulnerabilities) for a specific package version."""
+def check_osv_api(package_name: str, version: str) -> List[Dict[str, Any]]:
+    """Queries Google OSV (Open Source Vulnerabilities) for a specific
+    package version.
+
+    Args:
+        package_name: Name of the npm package.
+        version: Version of the package to check.
+
+    Returns:
+        List of vulnerability dictionaries from OSV.
+    """
     url = "https://api.osv.dev/v1/query"
     payload = {
         "package": {
@@ -33,32 +63,73 @@ def check_osv_api(package_name: str, version: str) -> List[Dict]:
     }
 
     try:
-        # Standard timeout to prevent hanging if API is down
-        response = requests.post(url, json=payload, timeout=5)
-
-        if response.status_code != 200:
-            # Silently fail on non-200 to keep the report clean
-            return []
-
+        # Use resilient POST with retry logic and rate limiting
+        response = resilient_post(
+            url,
+            json=payload,
+            timeout=OSV_API_TIMEOUT,
+            max_retries=OSV_MAX_RETRIES,
+            rate_limiter=_osv_rate_limiter
+        )
         data = response.json()
         return data.get("vulns", [])
 
-    except requests.exceptions.RequestException:
-        print(f"[!] Warning: Network error checking {package_name}. Skipping.")
+    except SentinelAPIError as e:
+        # Log the failure but don't abort the entire scan
+        logger.warning(
+            f"OSV API error checking {package_name}@{version}: {e}",
+            exc_info=True
+        )
+        return []
+    except Exception as e:
+        # Catch any other unexpected errors for partial failure recovery
+        logger.warning(
+            f"Unexpected error checking {package_name}@{version}: {e}",
+            exc_info=True
+        )
         return []
 
 
 def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
-    """Parses a package.json file and queries the OSV API for each dependency."""
+    """Parses a package.json file and queries the OSV API for each dependency.
+
+    Args:
+        file_path: Path to the package.json file.
+
+    Returns:
+        List of vulnerability findings for dependencies.
+
+    Raises:
+        SentinelValidationError: If the file cannot be read.
+    """
     print(f"[*] Parsing manifest: {file_path}")
     print(f"[*] Querying OSV.dev database (Live)...")
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except json.JSONDecodeError:
-        print(f"[!] ERROR: Could not parse {file_path}. Invalid JSON.")
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in {file_path}: {e}")
+        # Partial recovery: try to extract dependency names even if JSON is malformed
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Try to extract package names using regex as fallback
+            deps_pattern = r'"([^"]+)"\s*:\s*"[^"]+"'
+            found_deps = re.findall(deps_pattern, content)
+            if found_deps:
+                logger.info(f"Partial recovery: extracted {len(found_deps)} "
+                           f"potential dependencies from malformed JSON")
+            print(f"[!] ERROR: Could not parse {file_path}. Invalid JSON.")
+        except Exception as recovery_e:
+            logger.error(f"Partial recovery failed: {recovery_e}")
         return []
+    except (IOError, OSError) as e:
+        logger.error(f"Could not read package.json: {e}")
+        raise SentinelValidationError(
+            "Failed to read package.json",
+            details={"path": file_path, "error": str(e)}
+        ) from e
 
     # Combine dependencies and devDependencies
     deps = data.get("dependencies", {})
@@ -68,6 +139,8 @@ def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
     found_vulns: List[Dict[str, Any]] = []
 
     total = len(all_deps)
+    failed_packages = []
+
     for i, (lib, version_str) in enumerate(all_deps.items(), 1):
         # Clean the version string (e.g. "^4.3.0" -> "4.3.0")
         current_version = clean_version(version_str)
@@ -77,9 +150,19 @@ def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
             continue
 
         # Progress indicator
-        print(f"\r    Checking {i}/{total}: {lib} v{current_version}...", end="", flush=True)
+        print(
+            f"\r    Checking {i}/{total}: {lib} v{current_version}...",
+            end="",
+            flush=True
+        )
 
         vulns = check_osv_api(lib, current_version)
+
+        # Partial failure tracking: if check_osv_api returns empty list
+        # due to API error, we track it but continue with other packages
+        if vulns is None:
+            failed_packages.append(f"{lib}@{current_version}")
+            vulns = []
 
         if vulns:
             for v in vulns:
@@ -94,11 +177,29 @@ def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
                     }
                 )
 
+    # Report partial failures if any
+    if failed_packages:
+        logger.warning(
+            f"Failed to query OSV for {len(failed_packages)} package(s): "
+            f"{', '.join(failed_packages[:5])}"
+            f"{'...' if len(failed_packages) > 5 else ''}"
+        )
+        print(
+            f"\n[!] Warning: Could not check {len(failed_packages)} "
+            f"package(s) due to API errors"
+        )
+
     print(f"\n[*] Scan complete. Found {len(found_vulns)} vulnerabilities.")
     return found_vulns
 
 
 def print_report(vulnerabilities: List[Dict[str, Any]]) -> None:
+    """Print a formatted report of supply chain vulnerabilities.
+
+    Args:
+        vulnerabilities: List of vulnerability dictionaries to report.
+    """
+    logger.info(f"Supply chain scan complete: {len(vulnerabilities)} issues found")
     print("\n" + "=" * 60)
     print(f" SUPPLY CHAIN REPORT - {len(vulnerabilities)} ISSUES FOUND")
     print("=" * 60 + "\n")
@@ -137,8 +238,13 @@ if __name__ == "__main__":
         target_path = os.path.join(target_path, "package.json")
 
     if not os.path.exists(target_path):
+        logger.error(f"Target path not found: {target_path}")
         print(f"[!] Error: {target_path} not found.")
         sys.exit(1)
 
-    results = scan_package_json(target_path)
-    print_report(results)
+    try:
+        results = scan_package_json(target_path)
+        print_report(results)
+    except Exception as e:
+        logger.error(f"Supply chain scan failed: {e}")
+        raise

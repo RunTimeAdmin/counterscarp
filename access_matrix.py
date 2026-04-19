@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import re
 import argparse
 import sys
 import os
-from typing import List, Dict
+from typing import List, Dict, Any
 
 # --- CONFIGURATION ---
 # Regex to capture function headers:
@@ -19,7 +21,15 @@ READ_ONLY_MODIFIERS = ["view", "pure"]
 AUTH_MODIFIERS = ["onlyOwner", "onlyRole", "onlyMinter", "auth", "requiresAuth"]
 
 
-def parse_solidity_file(filepath: str) -> List[Dict]:
+def parse_solidity_file(filepath: str) -> List[Dict[str, Any]]:
+    """Parse a Solidity file and extract function information.
+
+    Args:
+        filepath: Path to the Solidity file to parse.
+
+    Returns:
+        List of dictionaries containing function information.
+    """
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
 
@@ -102,7 +112,12 @@ def parse_solidity_file(filepath: str) -> List[Dict]:
     return functions
 
 
-def generate_matrix_report(functions: List[Dict]) -> None:
+def generate_matrix_report(functions: List[Dict[str, Any]]) -> None:
+    """Generate and print an access control matrix report.
+
+    Args:
+        functions: List of function information dictionaries.
+    """
     print("\n" + "=" * 80)
     print(" 🔑 ACCESS CONTROL MATRIX")
     print("=" * 80)

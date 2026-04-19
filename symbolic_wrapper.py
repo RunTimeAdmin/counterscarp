@@ -1,15 +1,39 @@
+from __future__ import annotations
+
 import subprocess
 import json
 import argparse
 import sys
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+from logger import get_logger
+from exceptions import (
+    SentinelAnalysisError,
+    SentinelToolNotFoundError,
+    SentinelTimeoutError,
+)
+
+logger = get_logger(__name__)
 
 
-def run_mythril(target: str, function: str = None, timeout: int = 600) -> str:
+def run_mythril(target: str, function: Optional[str] = None, timeout: int = 600) -> str:
     """Run Mythril against a contract and return raw JSON output.
 
     Requires Mythril to be installed and available as the `myth` CLI:
         pip install mythril
+
+    Args:
+        target: Path to the Solidity file to analyze.
+        function: Optional specific function to focus analysis on.
+        timeout: Execution timeout in seconds.
+
+    Returns:
+        Raw JSON output from Mythril.
+
+    Raises:
+        SentinelToolNotFoundError: If Mythril is not installed.
+        SentinelTimeoutError: If analysis times out.
+        SentinelAnalysisError: If analysis fails.
     """
     cmd = [
         "myth",
@@ -31,25 +55,50 @@ def run_mythril(target: str, function: str = None, timeout: int = 600) -> str:
             text=True,
             timeout=timeout + 30,
         )
-    except FileNotFoundError:
-        print("[!] ERROR: 'myth' (Mythril) not found. Install it with: pip install mythril")
-        sys.exit(1)
-    except subprocess.TimeoutExpired:
-        print(f"[!] ERROR: Mythril analysis timed out after {timeout} seconds.")
-        return ""
+    except FileNotFoundError as e:
+        logger.error("Mythril (myth) not found")
+        raise SentinelToolNotFoundError(
+            "Mythril not found in PATH",
+            details={
+                "tool": "mythril",
+                "install_cmd": "pip install mythril"
+            }
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"Mythril analysis timed out after {timeout}s")
+        raise SentinelTimeoutError(
+            "Mythril analysis timed out",
+            details={"operation": "mythril_analysis", "timeout_seconds": timeout}
+        ) from e
+    except PermissionError as e:
+        logger.error(f"Permission denied running Mythril: {e}")
+        raise SentinelAnalysisError(
+            "Permission denied running Mythril",
+            details={"error": str(e)}
+        ) from e
 
     # Mythril may return non-zero when issues are found; we still care about stdout
     return result.stdout if result else ""
 
 
 def parse_issues(raw_output: str) -> List[Dict[str, Any]]:
-    """Parse Mythril JSON output into a normalized list of issues."""
+    """Parse Mythril JSON output into a normalized list of issues.
+
+    Args:
+        raw_output: Raw JSON string from Mythril.
+
+    Returns:
+        List of normalized issue dictionaries.
+    """
+    logger.debug("Parsing Mythril output")
     if not raw_output or not raw_output.strip():
+        logger.debug("Empty Mythril output, returning empty list")
         return []
 
     try:
         data = json.loads(raw_output)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse Mythril JSON output: {e}")
         return []
 
     if isinstance(data, dict):
@@ -82,7 +131,12 @@ def parse_issues(raw_output: str) -> List[Dict[str, Any]]:
 
 
 def print_report(issues: List[Dict[str, Any]]) -> None:
-    """Pretty-print a CLI report for symbolic analysis results."""
+    """Pretty-print a CLI report for symbolic analysis results.
+
+    Args:
+        issues: List of parsed issues to report.
+    """
+    logger.info(f"Symbolic analysis report: {len(issues)} issues found")
     print("\n" + "=" * 60)
     print(f" SYMBOLIC ANALYSIS REPORT - {len(issues)} ISSUES FOUND")
     print("=" * 60 + "\n")
@@ -111,6 +165,7 @@ def print_report(issues: List[Dict[str, Any]]) -> None:
 
 
 def main() -> None:
+    """Main entry point for the symbolic wrapper CLI."""
     parser = argparse.ArgumentParser(
         description="Symbolic execution wrapper for Mythril.",
     )
@@ -131,9 +186,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    raw = run_mythril(args.target, args.function, args.timeout)
-    issues = parse_issues(raw)
-    print_report(issues)
+    try:
+        raw = run_mythril(args.target, args.function, args.timeout)
+        issues = parse_issues(raw)
+        print_report(issues)
+    except Exception as e:
+        logger.error(f"Symbolic analysis failed: {e}")
+        raise
 
 
 if __name__ == "__main__":

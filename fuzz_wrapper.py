@@ -1,8 +1,19 @@
+from __future__ import annotations
+
 import subprocess
 import re
 import argparse
 import sys
-from typing import List, Dict
+from typing import List, Dict, Any, Optional
+
+from logger import get_logger
+from exceptions import (
+    SentinelAnalysisError,
+    SentinelToolNotFoundError,
+    SentinelTimeoutError,
+)
+
+logger = get_logger(__name__)
 
 # CONFIGURATION
 # How many random scenarios to generate?
@@ -10,8 +21,21 @@ from typing import List, Dict
 FUZZ_RUNS = 1000
 
 
-def run_foundry_fuzz(target_contract: str, match_test: str | None = None) -> str:
-    """Runs `forge test` specifically targeting invariant tests."""
+def run_foundry_fuzz(target_contract: str, match_test: Optional[str] = None) -> str:
+    """Runs `forge test` specifically targeting invariant tests.
+
+    Args:
+        target_contract: Name of the contract to fuzz.
+        match_test: Optional specific test function to run.
+
+    Returns:
+        Raw stdout from the fuzzing run.
+
+    Raises:
+        SentinelToolNotFoundError: If Foundry is not installed.
+        SentinelTimeoutError: If fuzzing times out.
+        SentinelAnalysisError: If fuzzing fails.
+    """
     print("[*] Initializing Fuzz Engine (Foundry)...")
     print(f"[*] Target: {target_contract}")
     print(f"[*] Runs: {FUZZ_RUNS} attempts per invariant")
@@ -37,16 +61,43 @@ def run_foundry_fuzz(target_contract: str, match_test: str | None = None) -> str
             text=True,
         )
         return result.stdout
-    except FileNotFoundError:
-        print("[!] ERROR: 'forge' not found. Is Foundry installed?")
-        print("    Install it: https://book.getfoundry.sh/getting-started/installation")
-        sys.exit(1)
+    except FileNotFoundError as e:
+        logger.error("Foundry (forge) not found")
+        raise SentinelToolNotFoundError(
+            "Foundry not found in PATH",
+            details={
+                "tool": "forge",
+                "install_cmd": "curl -L https://foundry.paradigm.xyz | bash"
+            }
+        ) from e
+    except PermissionError as e:
+        logger.error(f"Permission denied running Foundry: {e}")
+        raise SentinelAnalysisError(
+            "Permission denied running Foundry",
+            details={"error": str(e)}
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        logger.error("Foundry fuzzing timed out")
+        raise SentinelTimeoutError(
+            "Foundry fuzzing timed out",
+            details={"operation": "foundry_fuzzing"}
+        ) from e
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Foundry process failed: {e}")
+        # Don't raise - Foundry returns non-zero when tests fail
+        return e.stdout if hasattr(e, 'stdout') and e.stdout else ""
 
 
-def parse_counterexamples(log_output: str) -> List[Dict]:
+def parse_counterexamples(log_output: str) -> List[Dict[str, Any]]:
     """Scrapes the 'Counterexample' block from Foundry output.
 
     This is the specific sequence of calls that broke the contract.
+
+    Args:
+        log_output: Raw log output from Foundry.
+
+    Returns:
+        List of exploit dictionaries containing test_name, reason, and steps.
     """
     exploits: List[Dict] = []
 
@@ -108,7 +159,13 @@ def parse_counterexamples(log_output: str) -> List[Dict]:
     return exploits
 
 
-def print_attack_report(exploits: List[Dict]) -> None:
+def print_attack_report(exploits: List[Dict[str, Any]]) -> None:
+    """Print a formatted report of fuzzing exploits.
+
+    Args:
+        exploits: List of exploit dictionaries to report.
+    """
+    logger.info(f"Fuzzing report: {len(exploits)} invariants broken")
     print("\n" + "=" * 60)
     print(f" FUZZING REPORT - {len(exploits)} INVARIANTS BROKEN")
     print("=" * 60 + "\n")
@@ -143,10 +200,14 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    raw_logs = run_foundry_fuzz(args.contract, args.test)
+    try:
+        raw_logs = run_foundry_fuzz(args.contract, args.test)
 
-    # Debug: verify raw output if needed
-    # print(raw_logs)
+        # Debug: verify raw output if needed
+        # print(raw_logs)
 
-    attacks = parse_counterexamples(raw_logs)
-    print_attack_report(attacks)
+        attacks = parse_counterexamples(raw_logs)
+        print_attack_report(attacks)
+    except Exception as e:
+        logger.error(f"Fuzzing failed: {e}")
+        raise

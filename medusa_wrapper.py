@@ -5,6 +5,8 @@ Coverage-guided fuzzing for smart contracts (next-gen Echidna)
 Requires: Medusa binary installed (https://github.com/crytic/medusa)
 """
 
+from __future__ import annotations
+
 import subprocess
 import json
 import sys
@@ -12,9 +14,22 @@ import os
 import argparse
 from typing import Dict, Any, List, Optional
 
+from logger import get_logger
+from exceptions import (
+    SentinelAnalysisError,
+    SentinelToolNotFoundError,
+    SentinelTimeoutError,
+)
+
+logger = get_logger(__name__)
+
 
 def check_medusa_installed() -> bool:
-    """Check if Medusa is available on the system."""
+    """Check if Medusa is available on the system.
+
+    Returns:
+        True if Medusa is installed and accessible, False otherwise.
+    """
     try:
         result = subprocess.run(
             ["medusa", "version"],
@@ -23,7 +38,14 @@ def check_medusa_installed() -> bool:
             timeout=5
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError:
+        logger.debug("Medusa not found in PATH")
+        return False
+    except subprocess.TimeoutExpired:
+        logger.warning("Medusa version check timed out")
+        return False
+    except Exception as e:
+        logger.warning(f"Error checking Medusa installation: {e}")
         return False
 
 
@@ -33,22 +55,33 @@ def run_medusa_fuzz(
     test_limit: int = 100000,
     timeout: int = 300
 ) -> Dict[str, Any]:
-    """
-    Run Medusa fuzzer on a Foundry/Hardhat project.
-    
+    """Run Medusa fuzzer on a Foundry/Hardhat project.
+
     Args:
-        project_root: Path to project root (must contain foundry.toml or hardhat.config)
-        target_contract: Optional specific contract to fuzz
-        test_limit: Maximum number of sequences to run (default: 100k)
-        timeout: Max execution time in seconds (default: 5 minutes)
-    
+        project_root: Path to project root (must contain foundry.toml or hardhat.config).
+        target_contract: Optional specific contract to fuzz.
+        test_limit: Maximum number of sequences to run (default: 100k).
+        timeout: Max execution time in seconds (default: 5 minutes).
+
     Returns:
-        Dict with findings, coverage data, and statistics
+        Dict with findings, coverage data, and statistics.
+
+    Raises:
+        SentinelToolNotFoundError: If Medusa is not installed.
+        SentinelTimeoutError: If fuzzing times out.
+        SentinelAnalysisError: If fuzzing fails.
     """
     if not check_medusa_installed():
+        logger.error("Medusa not installed")
         print("[!] Medusa not installed. Install: https://github.com/crytic/medusa")
         print("    Quick install: go install github.com/crytic/medusa/cmd/medusa@latest")
-        sys.exit(1)
+        raise SentinelToolNotFoundError(
+            "Medusa not found in PATH",
+            details={
+                "tool": "medusa",
+                "install_cmd": "go install github.com/crytic/medusa/cmd/medusa@latest"
+            }
+        )
     
     # Build command
     cmd = [
@@ -65,6 +98,8 @@ def run_medusa_fuzz(
     if target_contract:
         cmd.extend(["--contract-name", target_contract])
     
+    logger.info(f"Running Medusa fuzzer on {project_root}")
+    logger.debug(f"Test limit: {test_limit}, Timeout: {timeout}s")
     print(f"[*] Running Medusa fuzzer on {project_root}")
     print(f"[*] Test limit: {test_limit} sequences, Timeout: {timeout}s")
     
@@ -79,18 +114,35 @@ def run_medusa_fuzz(
         
         return parse_medusa_output(result.stdout, result.stderr)
         
-    except subprocess.TimeoutExpired:
-        print(f"[!] Medusa timed out after {timeout}s")
-        return {"error": "timeout", "findings": []}
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"Medusa timed out after {timeout}s")
+        raise SentinelTimeoutError(
+            "Medusa fuzzing timed out",
+            details={"operation": "medusa_fuzzing", "timeout_seconds": timeout}
+        ) from e
+    except FileNotFoundError as e:
+        logger.error(f"Medusa not found during execution: {e}")
+        raise SentinelToolNotFoundError(
+            "Medusa not found in PATH",
+            details={"tool": "medusa"}
+        ) from e
+    except PermissionError as e:
+        logger.error(f"Permission denied running Medusa: {e}")
+        raise SentinelAnalysisError(
+            "Permission denied running Medusa",
+            details={"error": str(e)}
+        ) from e
     except Exception as e:
-        print(f"[!] Error running Medusa: {e}")
-        return {"error": str(e), "findings": []}
+        logger.error(f"Error running Medusa: {e}")
+        raise SentinelAnalysisError(
+            "Medusa fuzzing failed",
+            details={"error": str(e)}
+        ) from e
 
 
 def parse_medusa_output(stdout: str, stderr: str) -> Dict[str, Any]:
-    """
-    Parse Medusa JSON output and extract findings.
-    
+    """Parse Medusa JSON output and extract findings.
+
     Medusa output format:
     {
       "results": [
@@ -104,6 +156,13 @@ def parse_medusa_output(stdout: str, stderr: str) -> Dict[str, Any]:
       "coverage": {...},
       "statistics": {...}
     }
+
+    Args:
+        stdout: Standard output from Medusa.
+        stderr: Standard error from Medusa.
+
+    Returns:
+        Parsed results dictionary with findings, coverage, and statistics.
     """
     findings = []
     coverage_data = {}
@@ -153,9 +212,8 @@ def parse_medusa_output(stdout: str, stderr: str) -> Dict[str, Any]:
 
 
 def generate_medusa_config(project_root: str, target_contract: str) -> str:
-    """
-    Generate medusa.json configuration file.
-    
+    """Generate medusa.json configuration file.
+
     Example config:
     {
       "fuzzing": {
@@ -168,6 +226,13 @@ def generate_medusa_config(project_root: str, target_contract: str) -> str:
         "platform": "foundry"
       }
     }
+
+    Args:
+        project_root: Path to the project root directory.
+        target_contract: Name of the contract to target.
+
+    Returns:
+        Path to the generated configuration file.
     """
     config = {
         "fuzzing": {
@@ -195,7 +260,11 @@ def generate_medusa_config(project_root: str, target_contract: str) -> str:
 
 
 def print_results(results: Dict[str, Any]) -> None:
-    """Pretty-print Medusa fuzzing results."""
+    """Pretty-print Medusa fuzzing results.
+
+    Args:
+        results: Results dictionary from run_medusa_fuzz().
+    """
     print("\n" + "="*60)
     print(" MEDUSA FUZZING RESULTS")
     print("="*60)
@@ -236,7 +305,8 @@ def print_results(results: Dict[str, Any]) -> None:
         print("-" * 60)
 
 
-def main():
+def main() -> None:
+    """Main entry point for the Medusa wrapper CLI."""
     parser = argparse.ArgumentParser(
         description="Medusa fuzzer wrapper - Coverage-guided property testing for smart contracts"
     )

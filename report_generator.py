@@ -4,6 +4,8 @@ Professional Report Generator for Sentinel Engine
 Generates client-ready HTML/Markdown reports with risk ratings and remediation
 """
 
+from __future__ import annotations
+
 import os
 import json
 from typing import Dict, List, Any, Optional
@@ -11,10 +13,30 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from logger import get_logger
+from exceptions import SentinelReportError
+
+logger = get_logger(__name__)
+
 
 @dataclass
 class Finding:
-    """Unified finding format across all analyzers."""
+    """Unified finding format across all analyzers.
+
+    Attributes:
+        rule_id: Unique identifier for the rule that triggered.
+        severity: Severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO).
+        category: Category of the finding (e.g., "Heuristic", "Slither").
+        title: Short title describing the finding.
+        description: Detailed description of the issue.
+        file: Path to the file where the finding occurred.
+        line_no: Line number where the finding occurred.
+        code_snippet: Relevant code snippet.
+        remediation: Suggested remediation.
+        references: List of reference URLs.
+        cwe: Optional CWE identifier.
+        owasp: Optional OWASP category.
+    """
     rule_id: str
     severity: str  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     category: str  # e.g., "Heuristic", "Liar Detector", "Access Matrix", "Slither", "Aderyn"
@@ -31,7 +53,13 @@ class Finding:
 
 @dataclass
 class ReportSection:
-    """Represents a section in the final report."""
+    """Represents a section in the final report.
+
+    Attributes:
+        title: Section title.
+        findings: List of findings in this section.
+        summary: Optional section summary.
+    """
     title: str
     findings: List[Finding]
     summary: str = ""
@@ -39,7 +67,18 @@ class ReportSection:
 
 @dataclass
 class AuditReport:
-    """Complete audit report structure."""
+    """Complete audit report structure.
+
+    Attributes:
+        project_name: Name of the audited project.
+        target_path: Path to the analyzed target.
+        timestamp: Report generation timestamp.
+        engine_version: Version of Sentinel Engine used.
+        executive_summary: Dict with severity counts.
+        sections: List of report sections.
+        risk_score: Overall risk score (0-100).
+        pass_fail: Pass/fail status (PASS, FAIL, WARNING).
+    """
     project_name: str
     target_path: str
     timestamp: str
@@ -58,6 +97,20 @@ SEVERITY_WEIGHTS = {
     "LOW": 0.5,
     "INFO": 0.1
 }
+
+# SARIF severity mapping
+SARIF_LEVEL_MAP = {
+    "CRITICAL": "error",
+    "HIGH": "error",
+    "MEDIUM": "warning",
+    "LOW": "note",
+    "INFO": "note"
+}
+
+# Sentinel Engine version for SARIF reports
+SENTINEL_ENGINE_VERSION = "2.2.0"
+SENTINEL_ENGINE_SEMANTIC_VERSION = "2.2.0"
+SENTINEL_INFORMATION_URI = "https://sentinel-engine.io"
 
 # Remediation knowledge base
 REMEDIATION_KB = {
@@ -122,10 +175,15 @@ REMEDIATION_KB = {
 
 
 def calculate_risk_score(findings: List[Finding]) -> float:
-    """
-    Calculate overall risk score (0-100) based on finding severity distribution.
-    
+    """Calculate overall risk score (0-100) based on finding severity distribution.
+
     Formula: weighted_sum / (max_possible_weight_for_finding_count)
+
+    Args:
+        findings: List of findings to calculate score from.
+
+    Returns:
+        Risk score between 0 and 100.
     """
     if not findings:
         return 0.0
@@ -139,7 +197,14 @@ def calculate_risk_score(findings: List[Finding]) -> float:
 
 
 def get_pass_fail_status(findings: List[Finding]) -> str:
-    """Determine overall pass/fail status."""
+    """Determine overall pass/fail status.
+
+    Args:
+        findings: List of findings to evaluate.
+
+    Returns:
+        Status string: "PASS", "FAIL", or "WARNING".
+    """
     critical_count = sum(1 for f in findings if f.severity == "CRITICAL")
     high_count = sum(1 for f in findings if f.severity == "HIGH")
     
@@ -154,7 +219,14 @@ def get_pass_fail_status(findings: List[Finding]) -> str:
 
 
 def enrich_finding(finding: Finding) -> Finding:
-    """Add remediation advice and references from knowledge base."""
+    """Add remediation advice and references from knowledge base.
+
+    Args:
+        finding: Finding to enrich.
+
+    Returns:
+        Enriched finding with remediation and references.
+    """
     kb_entry = REMEDIATION_KB.get(finding.rule_id, {})
     
     if kb_entry:
@@ -173,7 +245,15 @@ def enrich_finding(finding: Finding) -> Finding:
 
 
 def generate_html_report(report: AuditReport, output_path: str) -> str:
-    """Generate professional HTML report."""
+    """Generate professional HTML report.
+
+    Args:
+        report: AuditReport object to generate report from.
+        output_path: Path to save the HTML file.
+
+    Returns:
+        Path to the generated HTML file.
+    """
     
     # Determine status badge color
     status_colors = {
@@ -346,8 +426,186 @@ def generate_html_report(report: AuditReport, output_path: str) -> str:
     return output_path
 
 
+def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Generate a SARIF 2.1.0 compliant report from findings.
+    
+    Args:
+        findings: List of Finding objects to include in the report.
+        metadata: Optional metadata dict with keys like 'project_name', 'target_path'.
+        
+    Returns:
+        A dictionary representing a valid SARIF 2.1.0 JSON document.
+        
+    Raises:
+        SentinelReportError: If report generation fails.
+        
+    Example:
+        >>> findings = [Finding(...), Finding(...)]
+        >>> sarif = generate_sarif_report(findings, {"project_name": "MyProject"})
+        >>> json.dump(sarif, open("report.sarif", "w"))
+    """
+    try:
+        metadata = metadata or {}
+        
+        # Build unique rules from findings
+        rules = []
+        rule_ids = set()
+        for finding in findings:
+            if finding.rule_id not in rule_ids:
+                rule_ids.add(finding.rule_id)
+                rule = {
+                    "id": finding.rule_id,
+                    "name": finding.rule_id.replace("_", " ").title(),
+                    "shortDescription": {
+                        "text": finding.title
+                    },
+                    "fullDescription": {
+                        "text": finding.description
+                    },
+                    "defaultConfiguration": {
+                        "level": SARIF_LEVEL_MAP.get(finding.severity, "warning")
+                    }
+                }
+                # Add CWE as a tag if available
+                if finding.cwe:
+                    rule["properties"] = {
+                        "tags": [finding.cwe]
+                    }
+                rules.append(rule)
+        
+        # Build results from findings
+        results = []
+        for finding in findings:
+            result = {
+                "ruleId": finding.rule_id,
+                "level": SARIF_LEVEL_MAP.get(finding.severity, "warning"),
+                "message": {
+                    "text": finding.description
+                },
+                "locations": []
+            }
+            
+            # Add location if file path is available
+            if finding.file:
+                location = {
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": finding.file
+                        }
+                    }
+                }
+                # Add region if line number is available and valid
+                if finding.line_no and finding.line_no > 0:
+                    location["physicalLocation"]["region"] = {
+                        "startLine": finding.line_no
+                    }
+                    # Add snippet if available
+                    if finding.code_snippet:
+                        location["physicalLocation"]["region"]["snippet"] = {
+                            "text": finding.code_snippet
+                        }
+                result["locations"].append(location)
+            
+            # Add remediation as a related location if available
+            if finding.remediation:
+                result["message"]["text"] += f"\n\nRemediation: {finding.remediation}"
+            
+            results.append(result)
+        
+        # Build the SARIF document
+        sarif_doc = {
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [
+                {
+                    "tool": {
+                        "driver": {
+                            "name": "Sentinel Engine",
+                            "version": SENTINEL_ENGINE_VERSION,
+                            "semanticVersion": SENTINEL_ENGINE_SEMANTIC_VERSION,
+                            "informationUri": SENTINEL_INFORMATION_URI,
+                            "rules": rules
+                        }
+                    },
+                    "results": results,
+                    "invocations": [
+                        {
+                            "executionSuccessful": True,
+                            "startTimeUtc": metadata.get("timestamp", datetime.now().isoformat())
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        # Add automation details if project name is available
+        if metadata.get("project_name"):
+            sarif_doc["runs"][0]["automationDetails"] = {
+                "id": metadata["project_name"],
+                "description": {
+                    "text": f"Security audit for {metadata['project_name']}"
+                }
+            }
+        
+        logger.info(f"Generated SARIF report with {len(results)} results and {len(rules)} rules")
+        return sarif_doc
+        
+    except Exception as e:
+        logger.error(f"Failed to generate SARIF report: {e}")
+        raise SentinelReportError(
+            "Failed to generate SARIF report",
+            details={"error": str(e), "finding_count": len(findings)}
+        ) from e
+
+
+def save_sarif_report(findings: List[Finding], output_path: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+    """Generate and save a SARIF 2.1.0 report to a file.
+    
+    Args:
+        findings: List of Finding objects to include in the report.
+        output_path: Path where the SARIF JSON file will be written.
+        metadata: Optional metadata dict with keys like 'project_name', 'target_path'.
+        
+    Returns:
+        The output file path.
+        
+    Raises:
+        SentinelReportError: If the file cannot be written.
+        
+    Example:
+        >>> findings = [Finding(...), Finding(...)]
+        >>> path = save_sarif_report(findings, "report.sarif")
+        >>> print(f"SARIF report saved to: {path}")
+    """
+    try:
+        sarif_doc = generate_sarif_report(findings, metadata)
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(sarif_doc, f, indent=2)
+        
+        logger.info(f"SARIF report saved to: {output_path}")
+        return output_path
+        
+    except SentinelReportError:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to save SARIF report to {output_path}: {e}")
+        raise SentinelReportError(
+            "Failed to save SARIF report",
+            details={"output_path": output_path, "error": str(e)}
+        ) from e
+
+
 def generate_markdown_report(report: AuditReport, output_path: str) -> str:
-    """Generate Markdown report (GitHub/GitLab friendly)."""
+    """Generate Markdown report (GitHub/GitLab friendly).
+
+    Args:
+        report: AuditReport object to generate report from.
+        output_path: Path to save the Markdown file.
+
+    Returns:
+        Path to the generated Markdown file.
+    """
     
     status_emoji = {"PASS": "✅", "WARNING": "⚠️", "FAIL": "❌"}
     
@@ -426,15 +684,28 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
 
 
 def aggregate_findings_from_orchestrator(
-    static_results: List[Dict],
-    heuristic_results: List[Dict],
-    liar_results: List[Dict],
-    access_matrix_results: List[Dict],
-    aderyn_results: Optional[Dict],
-    upgrade_diff_results: Optional[Dict],
-    solana_results: Optional[Dict]
+    static_results: List[Dict[str, Any]],
+    heuristic_results: List[Dict[str, Any]],
+    liar_results: List[Dict[str, Any]],
+    access_matrix_results: List[Dict[str, Any]],
+    aderyn_results: Optional[Dict[str, Any]],
+    upgrade_diff_results: Optional[Dict[str, Any]],
+    solana_results: Optional[Dict[str, Any]]
 ) -> List[Finding]:
-    """Convert orchestrator results into unified Finding objects."""
+    """Convert orchestrator results into unified Finding objects.
+
+    Args:
+        static_results: Results from static analysis.
+        heuristic_results: Results from heuristic scanning.
+        liar_results: Results from intent checking.
+        access_matrix_results: Results from access matrix analysis.
+        aderyn_results: Optional results from Aderyn.
+        upgrade_diff_results: Optional results from upgrade diff.
+        solana_results: Optional results from Solana analysis.
+
+    Returns:
+        List of unified Finding objects.
+    """
     findings = []
     
     # Static analysis (Slither)
@@ -540,7 +811,17 @@ def create_audit_report(
     findings: List[Finding],
     engine_version: str = "2.2"
 ) -> AuditReport:
-    """Build complete audit report from findings."""
+    """Build complete audit report from findings.
+
+    Args:
+        project_name: Name of the project being audited.
+        target_path: Path to the analyzed target.
+        findings: List of findings to include in the report.
+        engine_version: Version of the Sentinel Engine.
+
+    Returns:
+        Complete AuditReport object.
+    """
     
     # Group by category
     sections = {}
@@ -589,7 +870,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate professional audit report")
     parser.add_argument("--project", default="Test Project", help="Project name")
     parser.add_argument("--target", default="./contracts", help="Target path")
-    parser.add_argument("--format", choices=["html", "markdown", "both"], default="both")
+    parser.add_argument("--format", choices=["html", "markdown", "sarif", "all"], default="all")
     parser.add_argument("--output", default="audit_report", help="Output filename (without extension)")
     args = parser.parse_args()
     
@@ -618,10 +899,19 @@ if __name__ == "__main__":
     
     report = create_audit_report(args.project, args.target, demo_findings)
     
-    if args.format in ["html", "both"]:
+    if args.format in ["html", "all"]:
         html_path = generate_html_report(report, f"{args.output}.html")
         print(f"[+] HTML report: {html_path}")
     
-    if args.format in ["markdown", "both"]:
+    if args.format in ["markdown", "all"]:
         md_path = generate_markdown_report(report, f"{args.output}.md")
         print(f"[+] Markdown report: {md_path}")
+    
+    if args.format in ["sarif", "all"]:
+        metadata = {
+            "project_name": args.project,
+            "target_path": args.target,
+            "timestamp": report.timestamp
+        }
+        sarif_path = save_sarif_report(demo_findings, f"{args.output}.sarif", metadata)
+        print(f"[+] SARIF report: {sarif_path}")

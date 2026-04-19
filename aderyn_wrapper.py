@@ -5,6 +5,8 @@ Cyfrin's Rust-based Solidity analyzer with custom detector support
 Complements Slither with different analysis engine
 """
 
+from __future__ import annotations
+
 import subprocess
 import json
 import sys
@@ -13,9 +15,22 @@ import argparse
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
+from logger import get_logger
+from exceptions import (
+    SentinelAnalysisError,
+    SentinelToolNotFoundError,
+    SentinelTimeoutError,
+)
+
+logger = get_logger(__name__)
+
 
 def check_aderyn_installed() -> bool:
-    """Check if Aderyn is available on the system."""
+    """Check if Aderyn is available on the system.
+
+    Returns:
+        True if Aderyn is installed and accessible, False otherwise.
+    """
     try:
         result = subprocess.run(
             ["aderyn", "--version"],
@@ -24,7 +39,14 @@ def check_aderyn_installed() -> bool:
             timeout=5
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError:
+        logger.debug("Aderyn not found in PATH")
+        return False
+    except subprocess.TimeoutExpired:
+        logger.warning("Aderyn version check timed out")
+        return False
+    except Exception as e:
+        logger.warning(f"Error checking Aderyn installation: {e}")
         return False
 
 
@@ -33,23 +55,34 @@ def run_aderyn(
     output_format: str = "json",
     scope: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Run Aderyn static analyzer on a Solidity project.
-    
+    """Run Aderyn static analyzer on a Solidity project.
+
     Args:
-        project_root: Path to project root (must contain foundry.toml or hardhat.config)
-        output_format: Output format (json, markdown, sarif)
-        scope: Optional file/folder to limit analysis
-    
+        project_root: Path to project root (must contain foundry.toml or hardhat.config).
+        output_format: Output format (json, markdown, sarif).
+        scope: Optional file/folder to limit analysis.
+
     Returns:
-        Dict with findings categorized by severity
+        Dict with findings categorized by severity.
+
+    Raises:
+        SentinelToolNotFoundError: If Aderyn is not installed.
+        SentinelTimeoutError: If analysis times out.
+        SentinelAnalysisError: If analysis fails.
     """
     if not check_aderyn_installed():
+        logger.error("Aderyn not installed")
         print("[!] Aderyn not installed.")
         print("    Install: cargo install aderyn")
         print("    Or via Foundry: foundryup")
         print("    Docs: https://cyfrin.gitbook.io/cyfrin-docs/aderyn-cli")
-        sys.exit(1)
+        raise SentinelToolNotFoundError(
+            "Aderyn not found in PATH",
+            details={
+                "tool": "aderyn",
+                "install_cmd": "cargo install aderyn"
+            }
+        )
     
     # Build command
     cmd = ["aderyn", project_root]
@@ -66,6 +99,8 @@ def run_aderyn(
     if scope:
         cmd.extend(["--scope", scope])
     
+    logger.info(f"Running Aderyn on {project_root}")
+    logger.debug(f"Command: {' '.join(cmd)}")
     print(f"[*] Running Aderyn on {project_root}")
     print(f"[*] Command: {' '.join(cmd)}")
     
@@ -88,18 +123,35 @@ def run_aderyn(
             # Parse stdout if file not found
             return parse_aderyn_output(result.stdout, result.stderr)
         
-    except subprocess.TimeoutExpired:
-        print("[!] Aderyn timed out after 120s")
-        return {"error": "timeout", "findings": []}
+    except subprocess.TimeoutExpired as e:
+        logger.error("Aderyn timed out after 120s")
+        raise SentinelTimeoutError(
+            "Aderyn analysis timed out",
+            details={"operation": "aderyn_analysis", "timeout_seconds": 120}
+        ) from e
+    except FileNotFoundError as e:
+        logger.error(f"Aderyn not found during execution: {e}")
+        raise SentinelToolNotFoundError(
+            "Aderyn not found in PATH",
+            details={"tool": "aderyn"}
+        ) from e
+    except PermissionError as e:
+        logger.error(f"Permission denied running Aderyn: {e}")
+        raise SentinelAnalysisError(
+            "Permission denied running Aderyn",
+            details={"error": str(e)}
+        ) from e
     except Exception as e:
-        print(f"[!] Error running Aderyn: {e}")
-        return {"error": str(e), "findings": []}
+        logger.error(f"Error running Aderyn: {e}")
+        raise SentinelAnalysisError(
+            "Aderyn analysis failed",
+            details={"error": str(e)}
+        ) from e
 
 
 def parse_aderyn_output(stdout: str, stderr: str) -> Dict[str, Any]:
-    """
-    Parse Aderyn JSON output.
-    
+    """Parse Aderyn JSON output.
+
     Aderyn output format:
     {
       "files_summary": {...},
@@ -108,6 +160,13 @@ def parse_aderyn_output(stdout: str, stderr: str) -> Dict[str, Any]:
       "low_issues": [...],
       "nc_issues": [...]
     }
+
+    Args:
+        stdout: Standard output from Aderyn.
+        stderr: Standard error from Aderyn.
+
+    Returns:
+        Parsed findings dictionary.
     """
     findings = {
         "high": [],
@@ -146,7 +205,11 @@ def parse_aderyn_output(stdout: str, stderr: str) -> Dict[str, Any]:
 
 
 def print_results(results: Dict[str, Any]) -> None:
-    """Pretty-print Aderyn analysis results."""
+    """Pretty-print Aderyn analysis results.
+
+    Args:
+        results: Results dictionary from run_aderyn().
+    """
     print("\n" + "="*60)
     print(" ADERYN STATIC ANALYSIS RESULTS")
     print("="*60)
@@ -207,19 +270,18 @@ def print_results(results: Dict[str, Any]) -> None:
         print("\n✅ No issues detected by Aderyn!")
 
 
-def compare_with_slither(aderyn_results: Dict[str, Any], slither_results: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Compare Aderyn and Slither findings to identify unique issues.
-    
+def compare_with_slither(
+    aderyn_results: Dict[str, Any],
+    slither_results: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Compare Aderyn and Slither findings to identify unique issues.
+
     Args:
-        aderyn_results: Results from run_aderyn()
-        slither_results: Results from red_team_scan.run_slither()
-    
+        aderyn_results: Results from run_aderyn().
+        slither_results: Results from red_team_scan.run_slither().
+
     Returns:
-        Dict with:
-        - aderyn_only: Issues found only by Aderyn
-        - slither_only: Issues found only by Slither
-        - both: Issues found by both
+        Dict with comparison results including aderyn_only, slither_only, and both.
     """
     comparison = {
         "aderyn_only": [],
@@ -258,7 +320,8 @@ def compare_with_slither(aderyn_results: Dict[str, Any], slither_results: Dict[s
     return comparison
 
 
-def main():
+def main() -> None:
+    """Main entry point for the Aderyn wrapper CLI."""
     parser = argparse.ArgumentParser(
         description="Aderyn static analyzer wrapper - Cyfrin's Rust-based Solidity analyzer"
     )

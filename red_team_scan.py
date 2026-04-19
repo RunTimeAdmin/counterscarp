@@ -1,8 +1,31 @@
+from __future__ import annotations
+
 import sys
 import subprocess
 import json
 import argparse
 from typing import List, Dict, Any
+
+# Import logger and exceptions
+try:
+    from logger import get_logger
+    from exceptions import (
+        SentinelAnalysisError,
+        SentinelToolNotFoundError,
+    )
+    LOGGER_AVAILABLE = True
+except ImportError:
+    LOGGER_AVAILABLE = False
+    get_logger = None
+    SentinelAnalysisError = None
+    SentinelToolNotFoundError = None
+
+# Initialize logger
+if LOGGER_AVAILABLE and get_logger:
+    logger = get_logger(__name__)
+else:
+    import logging
+    logger = logging.getLogger(__name__)
 
 # CONFIGURATION: What defines "Noise" vs "Signal"
 # We ignore "Low" and "Informational" by default.
@@ -18,7 +41,18 @@ IGNORE_CHECKS = [
 ]
 
 def run_slither(target: str) -> Dict[str, Any]:
-    """Runs Slither via subprocess and captures JSON output."""
+    """Runs Slither via subprocess and captures JSON output.
+
+    Args:
+        target: Path to the Solidity file or directory to analyze.
+
+    Returns:
+        Parsed JSON output from Slither.
+
+    Raises:
+        SentinelToolNotFoundError: If Slither is not installed.
+        SentinelAnalysisError: If Slither analysis fails or output cannot be parsed.
+    """
     print(f"[*] Spawning Slither process for target: {target}...")
     
     cmd = ["slither", target, "--json", "-"]
@@ -47,25 +81,114 @@ def run_slither(target: str) -> Dict[str, Any]:
         json_data = output[json_start:]
         return json.loads(json_data)
 
-    except FileNotFoundError:
-        print("[!] ERROR: 'slither' command not found. Install it with: pip3 install slither-analyzer")
-        sys.exit(1)
-    except json.JSONDecodeError:
-        print("[!] ERROR: Could not parse Slither output. It might have crashed.")
-        print("Raw stderr:", result.stderr)
-        sys.exit(1)
+    except FileNotFoundError as e:
+        logger.error("Slither command not found")
+        raise SentinelToolNotFoundError(
+            "Slither not found in PATH",
+            details={
+                "tool": "slither",
+                "install_cmd": "pip3 install slither-analyzer"
+            }
+        ) from e
+    except json.JSONDecodeError as e:
+        logger.error(f"Could not parse Slither output: {e}")
+        # Add partial recovery: return raw output for debugging
+        error_data = {
+            "error": "json_parse_failed",
+            "message": str(e),
+            "raw_stderr": result.stderr if result else "No stderr available",
+            "raw_stdout_preview": (result.stdout[:500] + "...") if result and len(result.stdout) > 500 else (result.stdout if result else "")
+        }
+        raise SentinelAnalysisError(
+            "Could not parse Slither output - tool may have crashed",
+            details=error_data
+        ) from e
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Slither process failed: {e}")
+        raise SentinelAnalysisError(
+            "Slither analysis failed",
+            details={"returncode": e.returncode, "stderr": e.stderr}
+        ) from e
+    except PermissionError as e:
+        logger.error(f"Permission denied running Slither: {e}")
+        raise SentinelAnalysisError(
+            "Permission denied running Slither",
+            details={"error": str(e)}
+        ) from e
+
+
+def validate_slither_output(data: Dict[str, Any]) -> bool:
+    """Validate that Slither JSON output contains expected fields.
+
+    Checks for required keys in the Slither output schema:
+    - 'results' key must exist
+    - 'results.detectors' key should exist for findings
+
+    Args:
+        data: The parsed JSON data from Slither.
+
+    Returns:
+        True if the output appears valid, False otherwise.
+    """
+    if data is None:
+        logger.warning("Slither output is None")
+        return False
+
+    if not isinstance(data, dict):
+        logger.warning(f"Slither output is not a dict: {type(data)}")
+        return False
+
+    # Check for required top-level key
+    if 'results' not in data:
+        logger.warning("Slither output missing 'results' key")
+        return False
+
+    results = data['results']
+    if not isinstance(results, dict):
+        logger.warning(
+            f"Slither 'results' is not a dict: {type(results)}"
+        )
+        return False
+
+    # Check for detectors (may not exist if no findings)
+    if 'detectors' not in results:
+        logger.debug("Slither output has no 'detectors' key (may have no findings)")
+        # This is not an error, just means no findings
+
+    # Check for other expected fields and log warnings
+    if 'errors' in results and results['errors']:
+        logger.warning(f"Slither reported errors: {results['errors']}")
+
+    # Log successful validation
+    logger.debug("Slither output validation passed")
+    return True
+
 
 def filter_vulnerabilities(data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Filters the raw Slither data for things that actually matter."""
-    
+    """Filters the raw Slither data for things that actually matter.
+
+    Args:
+        data: Raw JSON output from Slither.
+
+    Returns:
+        List of filtered vulnerability findings.
+    """
+
+    # Validate Slither output before processing
+    if not validate_slither_output(data):
+        logger.warning(
+            "Slither output validation failed, returning empty findings"
+        )
+        return []
+
     # Handle case when Slither fails or returns None
     if data is None:
         return []
-    
+
     # Handle case when data is not a dict (e.g., string error message)
     if not isinstance(data, dict):
         return []
-    
+
     if not data.get("results") or not data["results"].get("detectors"):
         return []
 
@@ -94,8 +217,15 @@ def filter_vulnerabilities(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         
     return relevant_findings
 
-def parse_location(elements: List[Dict]) -> str:
-    """Extracts the first useful file/line number from the elements list."""
+def parse_location(elements: List[Dict[str, Any]]) -> str:
+    """Extracts the first useful file/line number from the elements list.
+
+    Args:
+        elements: List of element dictionaries from Slither output.
+
+    Returns:
+        Formatted location string (file:line).
+    """
     if not elements:
         return "Unknown location"
     
@@ -109,8 +239,13 @@ def parse_location(elements: List[Dict]) -> str:
         return f"{filename} (Lines: {lines})"
     return filename
 
-def print_report(findings: List[Dict[str, Any]]):
-    """Prints a Red Team style report."""
+def print_report(findings: List[Dict[str, Any]]) -> None:
+    """Prints a Red Team style report.
+
+    Args:
+        findings: List of vulnerability findings to report.
+    """
+    logger.info(f"Vulnerability report: {len(findings)} critical issues found")
     print("\n" + "="*60)
     print(f" VULNERABILITY REPORT - {len(findings)} CRITICAL ISSUES FOUND")
     print("="*60 + "\n")
@@ -130,10 +265,18 @@ def print_report(findings: List[Dict[str, Any]]):
         print("-" * 60)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Wrapper for Slither to find real bugs.")
+    parser = argparse.ArgumentParser(
+        description="Wrapper for Slither to find real bugs."
+    )
     parser.add_argument("target", help="The .sol file or directory to scan")
     args = parser.parse_args()
-    
-    raw_data = run_slither(args.target)
-    critical_intel = filter_vulnerabilities(raw_data)
-    print_report(critical_intel)
+
+    try:
+        raw_data = run_slither(args.target)
+        critical_intel = filter_vulnerabilities(raw_data)
+        print_report(critical_intel)
+    except SentinelAnalysisError:
+        raise
+    except Exception as e:
+        logger.error(f"Red team scan failed: {e}")
+        raise

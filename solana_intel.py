@@ -1,7 +1,16 @@
-import requests
+from __future__ import annotations
+
 import argparse
-import sys
 import json
+from typing import Any, Dict, List
+
+from logger import get_logger
+from http_utils import resilient_get, RateLimiter
+
+logger = get_logger(__name__)
+
+# Shared rate limiter for API calls in this module
+_rate_limiter = RateLimiter(requests_per_second=5)
 
 # --- CONFIGURATION ---
 # The "Big Three" Solana Audit Repos (Publicly indexed data)
@@ -12,6 +21,9 @@ SOURCES = {
     "Solodit_DeepLink": "https://solodit.xyz/search?q={KEYWORD}&ecosystem=SOLANA"
 }
 
+# Timeouts for different endpoints
+GITHUB_API_TIMEOUT = 10  # seconds
+
 # Key Context Indicators for Solana (Rust/Anchor)
 CONTEXT_KEYWORDS = {
     "anchor": ["anchor_lang", "#[program]", "Context<"],
@@ -21,9 +33,14 @@ CONTEXT_KEYWORDS = {
     "discriminator": ["account_discriminator", "unsafe"]
 }
 
-def detect_program_context(filepath):
-    """
-    Scans a Rust (.rs) file to guess the program type (Anchor, Native, SPL).
+def detect_program_context(filepath: str) -> List[str]:
+    """Scans a Rust (.rs) file to guess the program type (Anchor, Native, SPL).
+
+    Args:
+        filepath: Path to the Rust file to analyze.
+
+    Returns:
+        List of detected program context tags.
     """
     detected_tags = set()
     try:
@@ -39,31 +56,51 @@ def detect_program_context(filepath):
                 if any(p in content for p in patterns):
                     detected_tags.add(tag)
                     
+    except (IOError, OSError, UnicodeDecodeError) as e:
+        logger.warning(f"Could not read Solana program file: {e}")
     except Exception as e:
-        print(f"    [!] Error reading file: {e}")
-    
-    if not detected_tags: detected_tags.add("Solana Program")
+        logger.error(f"Unexpected error detecting program context: {e}")
+
+    if not detected_tags:
+        detected_tags.add("Solana Program")
     return list(detected_tags)
 
-def fetch_github_issues(api_url):
-    """
-    Generic fetcher for GitHub Search API.
+def fetch_github_issues(api_url: str) -> List[Dict[str, Any]]:
+    """Generic fetcher for GitHub Search API.
+
+    Args:
+        api_url: The GitHub API URL to query.
+
+    Returns:
+        List of issue dictionaries.
     """
     try:
         # User-Agent is often required by GitHub API to avoid blocking
         headers = {"User-Agent": "SolanaIntelFetcher/1.0"}
-        resp = requests.get(api_url, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            return resp.json().get("items", [])
+        resp = resilient_get(
+            api_url,
+            headers=headers,
+            timeout=GITHUB_API_TIMEOUT,
+            max_retries=3,
+            rate_limiter=_rate_limiter
+        )
+        return resp.json().get("items", [])
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.warning(f"Failed to parse GitHub API response: {e}")
     except Exception as e:
-        print(f"    [!] Connection Error: {e}")
+        logger.warning(f"GitHub API request failed: {e}")
     return []
 
-def generate_solana_report(filepath):
+def generate_solana_report(filepath: str) -> Dict[str, Any]:
+    """Main intelligence gathering function for Solana programs.
+
+    Args:
+        filepath: Path to the Rust file to analyze.
+
+    Returns:
+        Structured data with context, Neodyme, Solana core, and Solodit links.
     """
-    Main intelligence gathering function for Solana programs.
-    Returns structured data for programmatic use.
-    """
+    logger.info(f"Generating Solana intelligence report for: {filepath}")
     print("\n" + "="*70)
     print(f" 🦀 SOLANA INTELLIGENCE ENGINE (Sec3 / Neodyme / OtterSec)")
     print("="*70)
@@ -131,8 +168,14 @@ def generate_solana_report(filepath):
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Solana Security Intelligence Fetcher")
+    parser = argparse.ArgumentParser(
+        description="Solana Security Intelligence Fetcher"
+    )
     parser.add_argument("file", help="The .rs file to analyze")
     args = parser.parse_args()
-    
-    generate_solana_report(args.file)
+
+    try:
+        generate_solana_report(args.file)
+    except Exception as e:
+        logger.error(f"Solana report generation failed: {e}")
+        raise

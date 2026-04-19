@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import argparse
 from textwrap import dedent
@@ -70,6 +72,11 @@ contract {vault_contract}InflationTest is Test {{
 
 
 def main() -> None:
+    """Main entry point for the inflation scaffold CLI.
+
+    Generates a Foundry invariant test template for detecting
+    ERC4626-style inflation/donation attacks.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Scaffold a Foundry invariant test for ERC4626-style inflation/donation attacks."

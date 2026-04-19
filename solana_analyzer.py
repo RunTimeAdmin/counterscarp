@@ -5,6 +5,8 @@ Full static analysis for Rust-based Solana programs
 Complements solana_intel.py (which only does threat intel)
 """
 
+from __future__ import annotations
+
 import subprocess
 import re
 import os
@@ -17,7 +19,18 @@ from dataclasses import dataclass
 
 @dataclass
 class SolanaFinding:
-    """Represents a security finding in Solana/Anchor code."""
+    """Represents a security finding in Solana/Anchor code.
+
+    Attributes:
+        severity: Finding severity (CRITICAL, HIGH, MEDIUM, LOW).
+        category: Vulnerability category.
+        title: Short finding title.
+        description: Detailed finding description.
+        file: Path to the file where finding occurred.
+        line_no: Line number where finding occurred.
+        code_snippet: Relevant code snippet.
+        fix_suggestion: Suggested fix for the issue.
+    """
     severity: str
     category: str
     title: str
@@ -90,7 +103,11 @@ ANCHOR_PATTERNS = [
 
 
 def check_cargo_audit() -> bool:
-    """Check if cargo-audit is installed."""
+    """Check if cargo-audit is installed.
+
+    Returns:
+        True if cargo-audit is installed, False otherwise.
+    """
     try:
         result = subprocess.run(
             ["cargo", "audit", "--version"],
@@ -103,8 +120,13 @@ def check_cargo_audit() -> bool:
 
 
 def run_cargo_audit(project_root: str) -> Dict[str, Any]:
-    """
-    Run cargo-audit for dependency vulnerabilities.
+    """Run cargo-audit for dependency vulnerabilities.
+
+    Args:
+        project_root: Path to the Rust project root.
+
+    Returns:
+        Dictionary with audit results.
     """
     if not check_cargo_audit():
         print("[!] cargo-audit not installed")
@@ -133,8 +155,13 @@ def run_cargo_audit(project_root: str) -> Dict[str, Any]:
 
 
 def scan_anchor_patterns(file_path: str) -> List[SolanaFinding]:
-    """
-    Scan Rust/Anchor file for vulnerability patterns.
+    """Scan Rust/Anchor file for vulnerability patterns.
+
+    Args:
+        file_path: Path to the Rust file to scan.
+
+    Returns:
+        List of security findings.
     """
     findings = []
     
@@ -166,9 +193,14 @@ def scan_anchor_patterns(file_path: str) -> List[SolanaFinding]:
     return findings
 
 
-def detect_anchor_accounts(file_path: str) -> List[Dict[str, str]]:
-    """
-    Parse Anchor #[account] structs for security analysis.
+def detect_anchor_accounts(file_path: str) -> List[Dict[str, Any]]:
+    """Parse Anchor #[account] structs for security analysis.
+
+    Args:
+        file_path: Path to the Rust file to analyze.
+
+    Returns:
+        List of account configuration dictionaries.
     """
     accounts = []
     
@@ -202,15 +234,14 @@ def detect_anchor_accounts(file_path: str) -> List[Dict[str, str]]:
 
 
 def analyze_solana_program(project_root: str) -> Dict[str, Any]:
-    """
-    Full static analysis of Solana/Anchor program.
-    
+    """Full static analysis of Solana/Anchor program.
+
+    Args:
+        project_root: Path to the Solana/Anchor project root.
+
     Returns:
-        Dict with:
-        - dependency_vulns: From cargo-audit
-        - pattern_findings: From Anchor pattern matching
-        - account_analysis: Account constraint validation
-        - summary: Severity counts
+        Dict with dependency vulnerabilities, pattern findings,
+        account analysis, and severity summary.
     """
     print("\n" + "="*60)
     print(" SOLANA STATIC ANALYZER")
@@ -271,7 +302,11 @@ def analyze_solana_program(project_root: str) -> Dict[str, Any]:
 
 
 def print_report(results: Dict[str, Any]) -> None:
-    """Pretty-print Solana analysis report."""
+    """Pretty-print Solana analysis report.
+
+    Args:
+        results: Results dictionary from analyze_solana_program().
+    """
     print("\n" + "="*60)
     print(" SOLANA SECURITY ANALYSIS REPORT")
     print("="*60)
@@ -341,7 +376,8 @@ def print_report(results: Dict[str, Any]) -> None:
                 print(f"    Constraints: {acc['constraints']}")
 
 
-def main():
+def main() -> None:
+    """Main entry point for the Solana analyzer CLI."""
     parser = argparse.ArgumentParser(
         description="🔍 Solana/Anchor Static Analyzer - Security analysis for Rust programs"
     )

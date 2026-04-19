@@ -2,21 +2,48 @@
 # THE SENTINEL ENGINE - DOCKERFILE
 # Multi-Chain Smart Contract Security Auditing Toolkit
 # ------------------------------------------------------------------------------
-# Base Image: Python 3.10 (Slim version for speed)
+# Stage 1: Build stage for Rust/Go tools
+FROM python:3.10-slim-bullseye AS builder
+
+# Install build dependencies for Rust and Go
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    build-essential \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust (for Aderyn)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:$PATH"
+
+# Install Aderyn (Rust-based Solidity static analyzer by Cyfrin)
+RUN cargo install aderyn
+
+# Install Go (for Medusa)
+RUN curl -L https://go.dev/dl/go1.22.0.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+ENV PATH="/usr/local/go/bin:$PATH"
+
+# Install Medusa (Go-based coverage-guided fuzzer by Crytic)
+RUN go install github.com/crytic/medusa/cmd/medusa@latest
+
+# ------------------------------------------------------------------------------
+# Stage 2: Final runtime image
 FROM python:3.10-slim-bullseye
 
 # Metadata
 LABEL maintainer="CyberShield Austin / TokenAudit"
 LABEL description="Professional-grade smart contract security auditing toolkit (EVM + Solana)"
-LABEL version="2.0"
+LABEL version="2.1"
 
 # 1. ENVIRONMENT VARIABLES
 # Prevent Python from writing .pyc files
-ENV PYTHONDONTWRITEBYTECODE=1 
+ENV PYTHONDONTWRITEBYTECODE=1
 # Keep Python output unbuffered (so you see logs immediately)
 ENV PYTHONUNBUFFERED=1
-# Add local bin to path for Foundry/Solc
-ENV PATH="/root/.foundry/bin:/root/.local/bin:$PATH"
+# Add local bin to path for Foundry/Solc/Aderyn/Medusa
+ENV PATH="/root/.foundry/bin:/root/.local/bin:/root/.cargo/bin:/usr/local/go/bin:/root/go/bin:$PATH"
 
 # 2. SYSTEM DEPENDENCIES
 # We need git/curl for installing Foundry and build-essential for compiling deps
@@ -26,6 +53,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libssl-dev \
     libxml2 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. INSTALL PYTHON TOOLS
@@ -36,18 +64,36 @@ RUN pip install --no-cache-dir \
     requests \
     packaging
 
-# Initialize solc-select (install multiple stable versions)
+# Initialize solc-select (install commonly used versions)
+# Legacy versions
+RUN solc-select install 0.6.12 && \
+    solc-select install 0.7.6
+
+# Modern versions
 RUN solc-select install 0.8.19 && \
     solc-select install 0.8.20 && \
     solc-select install 0.8.23 && \
-    solc-select use 0.8.19
+    solc-select install 0.8.25 && \
+    solc-select install 0.8.26 && \
+    solc-select install 0.8.27 && \
+    solc-select install 0.8.28
+
+# Set default Solidity version
+RUN solc-select use 0.8.19
 
 # 4. INSTALL FOUNDRY (Fuzzing Engine)
 # We use the official install script (optional - graceful degradation if fails)
 RUN curl -L https://foundry.paradigm.xyz | bash || echo "Foundry install skipped" && \
     (if [ -f /root/.foundry/bin/foundryup ]; then /root/.foundry/bin/foundryup || true; fi)
 
-# 5. SETUP WORKSPACE
+# 5. COPY BINARIES FROM BUILDER STAGE
+# Copy Aderyn binary
+COPY --from=builder /root/.cargo/bin/aderyn /usr/local/bin/aderyn
+
+# Copy Medusa binary
+COPY --from=builder /root/go/bin/medusa /usr/local/bin/medusa
+
+# 6. SETUP WORKSPACE
 WORKDIR /app
 
 # Copy all Sentinel Engine scripts
@@ -82,13 +128,15 @@ COPY gui.py .
 # COPY God\ Mode\ Matrix.txt ./docs/
 # COPY Directions\ for\ tools.txt ./docs/
 
-# 6. HEALTHCHECK
+# 7. HEALTHCHECK
 # Verify Python and core dependencies are installed
 RUN python3 --version && \
     pip list | grep slither-analyzer && \
+    aderyn --version && \
+    medusa --version && \
     echo "✓ Sentinel Engine core dependencies installed"
 
-# 7. ENTRYPOINT
+# 8. ENTRYPOINT
 # Default: Show orchestrator help
 ENTRYPOINT ["python3", "orchestrator.py"]
 CMD ["--help"]

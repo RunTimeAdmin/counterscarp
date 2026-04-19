@@ -1,8 +1,25 @@
+from __future__ import annotations
+
 import os
 import re
 import argparse
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
+
+# Import logger
+try:
+    from logger import get_logger
+    LOGGER_AVAILABLE = True
+except ImportError:
+    LOGGER_AVAILABLE = False
+    get_logger = None
+
+# Initialize logger
+if LOGGER_AVAILABLE and get_logger:
+    logger = get_logger(__name__)
+else:
+    import logging
+    logger = logging.getLogger(__name__)
 
 # Optional config loader (graceful fallback if not available)
 try:
@@ -15,6 +32,18 @@ except ImportError:
 
 @dataclass
 class HeuristicFinding:
+    """Represents a heuristic scan finding.
+
+    Attributes:
+        rule_id: The ID of the rule that triggered this finding.
+        severity: Severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO).
+        message: Human-readable description of the finding.
+        file: Path to the file where the finding occurred.
+        line_no: Line number where the finding occurred.
+        line_text: The actual code line that triggered the finding.
+        suppressed: Whether this finding is suppressed by config.
+        suppression_reason: Reason for suppression if applicable.
+    """
     rule_id: str
     severity: str
     message: str
@@ -27,10 +56,19 @@ class HeuristicFinding:
 
 @dataclass
 class HeuristicRule:
+    """Represents a heuristic detection rule.
+
+    Attributes:
+        id: Unique identifier for this rule.
+        description: Human-readable description of what this rule detects.
+        severity: Default severity level for findings from this rule.
+        pattern: Compiled regex pattern to match against code.
+        hint: Remediation hint for developers.
+    """
     id: str
     description: str
     severity: str
-    pattern: re.Pattern
+    pattern: re.Pattern[str]
     hint: str
 
 
@@ -212,8 +250,117 @@ RULES: List[HeuristicRule] = [
 ]
 
 
+def is_in_code_context(line: str, match_start: int) -> bool:
+    """Check if a regex match is in actual code vs. a comment or string literal.
+
+    Args:
+        line: The line of code being analyzed.
+        match_start: The starting position of the match in the line.
+
+    Returns:
+        True if the match is in actual code (not comment/string), False otherwise.
+    """
+    # Check for single-line comments (//)
+    # If match is after //, it's in a comment
+    comment_pos = line.find('//')
+    if comment_pos != -1 and match_start > comment_pos:
+        return False
+
+    # Check for string literals
+    # We need to track whether match_start is inside "..." or '...'
+    in_double_quote = False
+    in_single_quote = False
+    escape_next = False
+
+    for i, char in enumerate(line):
+        if i >= match_start:
+            # We've reached the match position, check state
+            break
+
+        if escape_next:
+            escape_next = False
+            continue
+
+        if char == '\\':
+            escape_next = True
+            continue
+
+        if char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+        elif char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+
+    # If we're inside a string literal, the match is not in code context
+    if in_double_quote or in_single_quote:
+        return False
+
+    return True
+
+
+def is_in_multiline_comment(
+    lines: List[str], line_idx: int, match_start: int
+) -> bool:
+    """Check if a position is inside a multi-line comment (/* */).
+
+    Args:
+        lines: All lines of the file.
+        line_idx: Index of the current line (0-based).
+        match_start: Starting position in the current line.
+
+    Returns:
+        True if the position is inside a multi-line comment.
+    """
+    in_multiline_comment = False
+
+    for i in range(line_idx + 1):
+        line = lines[i]
+
+        if i < line_idx:
+            # For previous lines, just track comment state
+            pos = 0
+            while pos < len(line):
+                if not in_multiline_comment:
+                    comment_start = line.find('/*', pos)
+                    if comment_start == -1:
+                        break
+                    in_multiline_comment = True
+                    pos = comment_start + 2
+                else:
+                    comment_end = line.find('*/', pos)
+                    if comment_end == -1:
+                        break
+                    in_multiline_comment = False
+                    pos = comment_end + 2
+        else:
+            # For current line, check up to match_start
+            pos = 0
+            while pos < match_start:
+                if not in_multiline_comment:
+                    comment_start = line.find('/*', pos)
+                    if comment_start == -1 or comment_start >= match_start:
+                        break
+                    in_multiline_comment = True
+                    pos = comment_start + 2
+                else:
+                    comment_end = line.find('*/', pos)
+                    if comment_end == -1:
+                        break
+                    in_multiline_comment = False
+                    pos = comment_end + 2
+
+    return in_multiline_comment
+
+
 def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[HeuristicFinding]:
-    """Scan a single .sol file and return heuristic findings."""
+    """Scan a single .sol file and return heuristic findings.
+
+    Args:
+        path: Path to the Solidity file to scan.
+        config: Optional configuration object for rule enablement and suppressions.
+
+    Returns:
+        List of heuristic findings for the file.
+    """
     findings: List[HeuristicFinding] = []
 
     # Get heuristics config
@@ -248,7 +395,26 @@ def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[Heuris
             if config and config.heuristics:
                 effective_severity = config.heuristics.get_rule_severity(rule.id, rule.severity)
 
-            if rule.pattern.search(line):
+            # Find all matches for this rule
+            for match in rule.pattern.finditer(line):
+                match_start = match.start()
+
+                # Skip if match is in a single-line comment or string literal
+                if not is_in_code_context(line, match_start):
+                    logger.debug(
+                        f"Skipping match for {rule.id} in comment/string "
+                        f"at {path}:{i}:{match_start}"
+                    )
+                    continue
+
+                # Skip if match is inside a multi-line comment
+                if is_in_multiline_comment(lines, i - 1, match_start):
+                    logger.debug(
+                        f"Skipping match for {rule.id} in multi-line comment "
+                        f"at {path}:{i}:{match_start}"
+                    )
+                    continue
+
                 finding = HeuristicFinding(
                     rule_id=rule.id,
                     severity=effective_severity,
@@ -266,6 +432,8 @@ def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[Heuris
                         finding.suppression_reason = suppression.reason
 
                 findings.append(finding)
+                # Only report one finding per rule per line
+                break
 
     # H-05: Arbitrary External Call (approximate, function-level scan)
     # Quick split by 'function' to keep context (not a full parser).
@@ -321,7 +489,15 @@ def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[Heuris
 
 
 def scan_target(target: str, config: Optional[SentinelConfig] = None) -> List[HeuristicFinding]:
-    """Scan a .sol file or all .sol files under a directory."""
+    """Scan a .sol file or all .sol files under a directory.
+
+    Args:
+        target: Path to a .sol file or directory containing Solidity files.
+        config: Optional configuration object for rule enablement and suppressions.
+
+    Returns:
+        List of all heuristic findings.
+    """
     all_findings: List[HeuristicFinding] = []
 
     if os.path.isfile(target) and target.endswith(".sol"):
@@ -340,6 +516,12 @@ def scan_target(target: str, config: Optional[SentinelConfig] = None) -> List[He
 
 
 def print_report(findings: List[HeuristicFinding], show_suppressed: bool = False) -> None:
+    """Print a formatted report of heuristic findings.
+
+    Args:
+        findings: List of findings to report.
+        show_suppressed: Whether to include suppressed findings in the output.
+    """
     # Separate suppressed from active findings
     active_findings = [f for f in findings if not f.suppressed]
     suppressed_findings = [f for f in findings if f.suppressed]
@@ -379,6 +561,7 @@ def print_report(findings: List[HeuristicFinding], show_suppressed: bool = False
 
 
 def main() -> None:
+    """Main entry point for the heuristic scanner CLI."""
     parser = argparse.ArgumentParser(
         description="Heuristic scanner for Solidity contracts (pattern-based checks).",
     )

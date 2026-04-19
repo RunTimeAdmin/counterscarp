@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 import sys
 import os
 import argparse
 import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 # Import your specialists
 try:
@@ -11,35 +17,47 @@ try:
     import fuzz_wrapper
     import heuristic_scanner
     import symbolic_wrapper
+    logger.debug("Core modules imported successfully")
 except ImportError as e:
+    logger.critical(f"Missing a core module: {e}")
     print(f"[!] CRITICAL: Missing a core module. {e}")
     sys.exit(1)
 
 # Optional advanced analyzers (best-effort imports)
 try:
     import aderyn_wrapper
-except ImportError:
+    logger.debug("Aderyn wrapper imported successfully")
+except ImportError as e:
+    logger.info(f"Aderyn wrapper not available: {e}")
     aderyn_wrapper = None
 
 try:
     import medusa_wrapper
-except ImportError:
+    logger.debug("Medusa wrapper imported successfully")
+except ImportError as e:
+    logger.info(f"Medusa wrapper not available: {e}")
     medusa_wrapper = None
 
 try:
     import solana_analyzer
-except ImportError:
+    logger.debug("Solana analyzer imported successfully")
+except ImportError as e:
+    logger.info(f"Solana analyzer not available: {e}")
     solana_analyzer = None
 
 try:
     import upgrade_diff
-except ImportError:
+    logger.debug("Upgrade diff module imported successfully")
+except ImportError as e:
+    logger.info(f"Upgrade diff module not available: {e}")
     upgrade_diff = None
 
 try:
     from config_loader import load_config, SentinelConfig
     CONFIG_AVAILABLE = True
-except ImportError:
+    logger.debug("Config loader imported successfully")
+except ImportError as e:
+    logger.info(f"Config loader not available: {e}")
     CONFIG_AVAILABLE = False
     SentinelConfig = None
 
@@ -48,10 +66,12 @@ try:
         aggregate_findings_from_orchestrator,
         create_audit_report,
         generate_html_report,
-        generate_markdown_report
+        generate_markdown_report as generate_audit_markdown_report
     )
     REPORT_GENERATOR_AVAILABLE = True
-except ImportError:
+    logger.debug("Report generator imported successfully")
+except ImportError as e:
+    logger.info(f"Report generator not available: {e}")
     REPORT_GENERATOR_AVAILABLE = False
 
 # --- KNOWLEDGE BASE: HOW TO FIX THINGS ---
@@ -76,7 +96,15 @@ REMEDIATION_DB = {
 
 
 def get_remediation(issue_type: str, context: str) -> str:
-    """Look up the fix. If not found, generate a generic action."""
+    """Look up the fix. If not found, generate a generic action.
+
+    Args:
+        issue_type: The type of vulnerability/issue.
+        context: Additional context about the issue location.
+
+    Returns:
+        Remediation guidance string.
+    """
     # Try exact match
     if issue_type in REMEDIATION_DB:
         return REMEDIATION_DB[issue_type]
@@ -91,17 +119,33 @@ def get_remediation(issue_type: str, context: str) -> str:
 
 def generate_markdown_report(
     project_name: str,
-    static_results: List[Dict],
-    supply_results: List[Dict],
-    fuzz_results: List[Dict],
-    heuristic_results: List[Dict],
-    symbolic_results: List[Dict],
-    aderyn_results: Optional[Dict] = None,
-    medusa_results: Optional[Dict] = None,
-    solana_results: Optional[Dict] = None,
-    upgrade_results: Optional[Dict] = None,
+    static_results: List[Dict[str, Any]],
+    supply_results: List[Dict[str, Any]],
+    fuzz_results: List[Dict[str, Any]],
+    heuristic_results: List[Dict[str, Any]],
+    symbolic_results: List[Dict[str, Any]],
+    aderyn_results: Optional[Dict[str, Any]] = None,
+    medusa_results: Optional[Dict[str, Any]] = None,
+    solana_results: Optional[Dict[str, Any]] = None,
+    upgrade_results: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Generates a report focused on REMEDIATION (Fixing the bugs)."""
+    """Generates a report focused on REMEDIATION (Fixing the bugs).
+
+    Args:
+        project_name: Name of the project being audited.
+        static_results: Results from static analysis (Slither).
+        supply_results: Results from supply chain vulnerability scan.
+        fuzz_results: Results from fuzzing tests.
+        heuristic_results: Results from heuristic pattern matching.
+        symbolic_results: Results from symbolic execution (Mythril).
+        aderyn_results: Optional results from Aderyn static analysis.
+        medusa_results: Optional results from Medusa fuzzing.
+        solana_results: Optional results from Solana analysis.
+        upgrade_results: Optional results from upgrade diff analysis.
+
+    Returns:
+        Path to the generated markdown report file.
+    """
 
     filename = f"ACTION_PLAN_{datetime.date.today()}.md"
 
@@ -327,6 +371,11 @@ def generate_markdown_report(
 
 
 def main() -> None:
+    """Main entry point for the Sentinel orchestrator.
+
+    Parses command-line arguments, runs all configured security checks,
+    and generates comprehensive remediation reports.
+    """
     parser = argparse.ArgumentParser(description="Action-Oriented Security Engine")
     parser.add_argument("--target", required=True, help="Path to project root or .sol file")
     parser.add_argument(
@@ -413,7 +462,11 @@ def main() -> None:
     if os.path.isdir(args.target):
         pkg_json = os.path.join(args.target, "package.json")
         if os.path.exists(pkg_json):
-            supply_issues = supply_chain_check.scan_package_json(pkg_json)
+            try:
+                supply_issues = supply_chain_check.scan_package_json(pkg_json)
+            except Exception as e:
+                logger.warning(f"Supply chain check failed for {pkg_json}: {e}")
+                supply_issues = []
 
     # [PHASE 2] Static Analysis (Slither)
     print("\n>>> Analyzing Code Patterns...")
@@ -645,7 +698,7 @@ def main() -> None:
         md_file = f"audit_report_{datetime.date.today()}.md"
         
         html_path = generate_html_report(audit_report, html_file)
-        md_path = generate_markdown_report(audit_report, md_file)
+        md_path = generate_audit_markdown_report(audit_report, md_file)
         
         print(f"\n📊 Professional Reports Generated:")
         print(f"   HTML: {os.path.abspath(html_path)}")
