@@ -22,7 +22,7 @@
                     <p class="upload-text">Drag and drop your files here</p>
                     <p class="upload-hint">or click to browse</p>
                     <p class="upload-formats">Supports: .sol, .rs files</p>
-                    <input type="file" id="files" name="files" multiple accept=".sol,.rs" required>
+                    <input type="file" id="files" name="files" multiple accept=".sol,.rs">
                 </div>
             </div>
 
@@ -122,10 +122,49 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Form submission loading state
-    auditForm.addEventListener('submit', () => {
+    // Form submission — use FormData + fetch for reliable file upload
+    auditForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        if (selectedFiles.length === 0) {
+            alert('Please select at least one file.');
+            return;
+        }
+
+        const projectName = document.getElementById('project_name').value.trim();
+        if (!projectName) {
+            alert('Please enter a project name.');
+            return;
+        }
+
         submitBtn.disabled = true;
         submitBtn.textContent = 'Running Audit...';
+
+        const formData = new FormData();
+        formData.append('project_name', projectName);
+        selectedFiles.forEach(file => formData.append('files', file));
+
+        fetch('/audit', {
+            method: 'POST',
+            body: formData,
+            redirect: 'follow',
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else if (response.ok) {
+                return response.text().then(html => {
+                    document.body.innerHTML = html;
+                });
+            } else {
+                throw new Error('Audit failed: ' + response.statusText);
+            }
+        })
+        .catch(err => {
+            alert('Error: ' + err.message);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Run Audit';
+        });
     });
 </script>
 {% endblock %}
