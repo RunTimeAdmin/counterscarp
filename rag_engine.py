@@ -12,7 +12,7 @@ Example:
 
 from __future__ import annotations
 
-import pickle
+import json
 import argparse
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -60,7 +60,7 @@ else:
     np = None
 
 # Default configuration
-DEFAULT_INDEX_PATH = ".sentinel/rag_index.pkl"
+DEFAULT_INDEX_PATH = ".sentinel/rag_index.json"
 DEFAULT_TOP_K = 5
 
 
@@ -220,63 +220,107 @@ class VectorStore:
             raise RAGError(f"Query failed: {e}") from e
     
     def save(self, path: str) -> None:
-        """Serialize the index to a pickle file.
-        
+        """Serialize the index to a JSON file.
+
         Args:
             path: Path to save the index.
-            
+
         Raises:
             RAGError: If serialization fails.
         """
         try:
-            # Ensure directory exists
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-            
             data = {
-                "entries": self.entries,
+                "entries": [
+                    {
+                        "text": entry.text,
+                        # List[float] is JSON-native
+                        "embedding": entry.embedding,
+                        "metadata": entry.metadata,
+                    }
+                    for entry in self.entries
+                ],
                 "embedding_dim": self.embedding_dim,
                 "saved_at": datetime.now().isoformat(),
-                "version": "1.0"
+                "version": "2.0",
             }
-            
-            with open(path, 'wb') as f:
-                pickle.dump(data, f)
-            
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+
             logger.info(
                 f"VectorStore saved to {path} ({len(self.entries)} entries)"
             )
-            
+
         except Exception as e:
             raise RAGError(f"Failed to save index: {e}") from e
     
     def load(self, path: str) -> None:
-        """Deserialize the index from a pickle file.
-        
+        """Deserialize the index from a JSON file.
+
         Args:
             path: Path to load the index from.
-            
+
         Raises:
             RAGError: If deserialization fails.
         """
         try:
-            with open(path, 'rb') as f:
-                data = pickle.load(f)
-            
-            self.entries = data.get("entries", [])
+            # Backward-compatible migration from pickle
+            pkl_path = path.replace('.json', '.pkl')
+            if not Path(path).exists() and Path(pkl_path).exists():
+                logger.warning(
+                    "Found legacy pickle index at %s — "
+                    "migrating to JSON format. "
+                    "The .pkl file will be preserved but is no longer used.",
+                    pkl_path,
+                )
+                self._migrate_from_pickle(pkl_path, path)
+
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            self.entries = [
+                IndexEntry(
+                    text=e["text"],
+                    embedding=e["embedding"],
+                    metadata=e.get("metadata", {}),
+                )
+                for e in data["entries"]
+            ]
             self.embedding_dim = data.get("embedding_dim", self.embedding_dim)
             self._embeddings_cache = None
-            
+
             saved_at = data.get("saved_at", "unknown")
             logger.info(
                 f"VectorStore loaded from {path} "
                 f"({len(self.entries)} entries, saved: {saved_at})"
             )
-            
+
         except FileNotFoundError:
             logger.info(f"No existing index found at {path}")
             self.entries = []
         except Exception as e:
             raise RAGError(f"Failed to load index: {e}") from e
+
+    def _migrate_from_pickle(self, pkl_path: str, json_path: str) -> None:
+        """One-time migration from legacy pickle format to JSON."""
+        import pickle  # Only imported for migration
+        with open(pkl_path, 'rb') as f:
+            data = pickle.load(f)
+        # Convert dict entries to IndexEntry objects
+        raw_entries = data.get("entries", [])
+        self.entries = []
+        for entry in raw_entries:
+            if isinstance(entry, dict):
+                self.entries.append(IndexEntry(
+                    text=entry.get("text", ""),
+                    embedding=entry.get("embedding", []),
+                    metadata=entry.get("metadata", {})
+                ))
+            else:
+                # Already an IndexEntry
+                self.entries.append(entry)
+        self.embedding_dim = data.get("embedding_dim", self.embedding_dim)
+        self.save(json_path)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the store.

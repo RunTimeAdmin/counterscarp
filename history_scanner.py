@@ -419,6 +419,7 @@ def build_timeline(
                     "introduced_author": commit_author,
                     "fixed_commit": None,
                     "fixed_date": None,
+                    "lifespan_days": 0,
                     "status": "active"
                 }
         

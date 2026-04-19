@@ -525,9 +525,21 @@ class AIConfig:
     embedding_backend: str = "local"
     llm_backend: str = "none"
     openai_model: str = "gpt-4-turbo-preview"
-    rag_index_path: str = ".sentinel/rag_index.pkl"
+    rag_index_path: str = ".sentinel/rag_index.json"
     top_k: int = 5
     auto_enrich: bool = False
+
+
+@dataclass
+class PluginsConfig:
+    """Plugin system configuration.
+
+    Attributes:
+        enabled: Whether plugin system is enabled.
+        dirs: List of directories to scan for plugins.
+    """
+    enabled: bool = True
+    dirs: List[str] = field(default_factory=lambda: [".sentinel/plugins"])
 
 
 @dataclass
@@ -553,6 +565,7 @@ class SentinelConfig:
         history: History scanning configuration.
         fingerprint: Protocol fingerprint scanner settings.
         ai: AI and RAG configuration.
+        plugins: Plugin system configuration.
     """
     engine: EngineConfig = field(default_factory=EngineConfig)
     heuristics: HeuristicConfig = field(default_factory=HeuristicConfig)
@@ -577,6 +590,7 @@ class SentinelConfig:
     )
     fingerprint: FingerprintConfig = field(default_factory=FingerprintConfig)
     ai: AIConfig = field(default_factory=AIConfig)
+    plugins: PluginsConfig = field(default_factory=PluginsConfig)
 
     def is_finding_suppressed(
         self, rule_id: str, file_path: str, line_no: int
@@ -907,9 +921,19 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
             embedding_backend=ai.get('embedding_backend', 'local'),
             llm_backend=ai.get('llm_backend', 'none'),
             openai_model=ai.get('openai_model', 'gpt-4-turbo-preview'),
-            rag_index_path=ai.get('rag_index_path', '.sentinel/rag_index.pkl'),
+            rag_index_path=ai.get(
+                'rag_index_path', '.sentinel/rag_index.json'
+            ),
             top_k=ai.get('top_k', 5),
             auto_enrich=ai.get('auto_enrich', False)
+        )
+
+    # Parse plugins config
+    if 'plugins' in data:
+        plug = data['plugins']
+        config.plugins = PluginsConfig(
+            enabled=plug.get('enabled', True),
+            dirs=plug.get('dirs', ['.sentinel/plugins'])
         )
 
     logger.info("Configuration loaded successfully")

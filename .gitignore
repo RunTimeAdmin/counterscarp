@@ -33,3 +33,9 @@ Thumbs.db
 # Test artifacts
 .coverage
 htmlcov/
+benchmark.json
+
+# Runtime data
+.sentinel/
+vulnerability_timeline.json
+vulnerability_trends.md

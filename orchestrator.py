@@ -78,6 +78,16 @@ except ImportError as e:
     CONFIG_AVAILABLE = False
     SentinelConfig = None
 
+# Optional plugin manager
+try:
+    from plugin_manager import PluginManager
+    PLUGIN_MANAGER_AVAILABLE = True
+    logger.debug("Plugin manager imported successfully")
+except ImportError as e:
+    logger.info(f"Plugin manager not available: {e}")
+    PLUGIN_MANAGER_AVAILABLE = False
+    PluginManager = None
+
 try:
     from report_generator import (
         aggregate_findings_from_orchestrator,
@@ -554,6 +564,20 @@ def main() -> None:
             print(f"[!] Error loading config: {e}")
             print("[*] Continuing with default settings...\n")
 
+    # Initialize plugin manager
+    plugin_mgr = None
+    if PLUGIN_MANAGER_AVAILABLE and config and config.plugins.enabled:
+        try:
+            plugin_mgr = PluginManager()
+            plugin_count = plugin_mgr.discover_plugins(config.plugins.dirs)
+            if plugin_count > 0:
+                print(f"[*] Plugins loaded: {plugin_count} "
+                      f"({plugin_mgr.get_analyzer_count()} analyzers, "
+                      f"{plugin_mgr.get_rule_plugin_count()} rule sets)")
+        except Exception as e:
+            logger.warning(f"Plugin initialization failed: {e}")
+            plugin_mgr = None
+
     # Handle RAG index build
     if args.build_rag_index:
         if not RAG_AVAILABLE:
@@ -733,7 +757,9 @@ def main() -> None:
     # [PHASE 4] Heuristic Scan
     print("\n>>> Running Heuristic Scan...")
     try:
-        heuristic_findings = heuristic_scanner.scan_target(args.target, config)
+        heuristic_findings = heuristic_scanner.scan_target(
+            args.target, config, plugin_mgr
+        )
         for hf in heuristic_findings:
             # Only include non-suppressed findings in report
             if not hf.suppressed:
@@ -750,6 +776,29 @@ def main() -> None:
     except Exception:
         # Fail silently for now; in production, log this.
         heuristic_results = []
+
+    # [PHASE 4C] Plugin Analyzers (optional)
+    if plugin_mgr and plugin_mgr.get_analyzer_count() > 0:
+        print("\n>>> Running Plugin Analyzers...")
+        for plugin in plugin_mgr.get_analyzers():
+            try:
+                logger.info("Running plugin analyzer: %s", plugin.name)
+                config_dict = {
+                    "target": args.target,
+                    "project_name": args.project_name,
+                } if config else {}
+                plugin_findings = plugin.analyze(args.target, config_dict)
+                for pf in plugin_findings:
+                    heuristic_results.append({
+                        "rule_id": pf.get("rule_id", f"PLUGIN-{plugin.name}"),
+                        "severity": pf.get("severity", "Info"),
+                        "message": pf.get("description", ""),
+                        "file": pf.get("file", ""),
+                        "line_no": pf.get("line_no", 0),
+                        "line_text": pf.get("code_snippet", ""),
+                    })
+            except Exception as exc:
+                logger.warning("Plugin %s failed: %s", plugin.name, exc)
 
     # [PHASE 4B] Protocol Fingerprint Scan (optional)
     fingerprint_results: List[Dict] = []

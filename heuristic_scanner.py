@@ -29,6 +29,14 @@ except ImportError:
     CONFIG_AVAILABLE = False
     SentinelConfig = None
 
+# Optional plugin manager (graceful fallback if not available)
+try:
+    from plugin_manager import PluginManager
+    PLUGIN_MANAGER_AVAILABLE = True
+except ImportError:
+    PLUGIN_MANAGER_AVAILABLE = False
+    PluginManager = None
+
 
 @dataclass
 class HeuristicFinding:
@@ -250,6 +258,30 @@ RULES: List[HeuristicRule] = [
 ]
 
 
+def get_all_rules(plugin_mgr: Optional[PluginManager] = None) -> List[HeuristicRule]:
+    """Return built-in rules plus any plugin-contributed rules.
+
+    Args:
+        plugin_mgr: Optional PluginManager instance to load plugin rules from.
+
+    Returns:
+        List of all heuristic rules (built-in + plugin rules).
+    """
+    all_rules = list(RULES)
+    if plugin_mgr:
+        try:
+            plugin_rules = plugin_mgr.get_rules()
+            all_rules.extend(plugin_rules)
+            if plugin_rules:
+                logger.info(
+                    "Loaded %d built-in + %d plugin rules",
+                    len(RULES), len(plugin_rules)
+                )
+        except Exception as exc:
+            logger.warning("Failed to load plugin rules: %s", exc)
+    return all_rules
+
+
 def is_in_code_context(line: str, match_start: int) -> bool:
     """Check if a regex match is in actual code vs. a comment or string literal.
 
@@ -351,12 +383,17 @@ def is_in_multiline_comment(
     return in_multiline_comment
 
 
-def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[HeuristicFinding]:
+def scan_file(
+    path: str,
+    config: Optional[SentinelConfig] = None,
+    plugin_mgr: Optional[PluginManager] = None
+) -> List[HeuristicFinding]:
     """Scan a single .sol file and return heuristic findings.
 
     Args:
         path: Path to the Solidity file to scan.
         config: Optional configuration object for rule enablement and suppressions.
+        plugin_mgr: Optional PluginManager to load plugin rules from.
 
     Returns:
         List of heuristic findings for the file.
@@ -378,6 +415,9 @@ def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[Heuris
     except OSError:
         return findings
 
+    # Get all rules (built-in + plugin rules)
+    all_rules = get_all_rules(plugin_mgr)
+
     # Simple rule-based line scanning
     for i, line in enumerate(lines, start=1):
         # Skip obvious comments-only lines to reduce noise
@@ -385,7 +425,7 @@ def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[Heuris
         if stripped.startswith("//"):
             continue
 
-        for rule in RULES:
+        for rule in all_rules:
             # Check if rule is disabled in config
             if config and config.heuristics and not config.heuristics.is_rule_enabled(rule.id):
                 continue
@@ -488,12 +528,17 @@ def scan_file(path: str, config: Optional[SentinelConfig] = None) -> List[Heuris
     return findings
 
 
-def scan_target(target: str, config: Optional[SentinelConfig] = None) -> List[HeuristicFinding]:
+def scan_target(
+    target: str,
+    config: Optional[SentinelConfig] = None,
+    plugin_mgr: Optional[PluginManager] = None
+) -> List[HeuristicFinding]:
     """Scan a .sol file or all .sol files under a directory.
 
     Args:
         target: Path to a .sol file or directory containing Solidity files.
         config: Optional configuration object for rule enablement and suppressions.
+        plugin_mgr: Optional PluginManager to load plugin rules from.
 
     Returns:
         List of all heuristic findings.
@@ -501,13 +546,13 @@ def scan_target(target: str, config: Optional[SentinelConfig] = None) -> List[He
     all_findings: List[HeuristicFinding] = []
 
     if os.path.isfile(target) and target.endswith(".sol"):
-        all_findings.extend(scan_file(target, config))
+        all_findings.extend(scan_file(target, config, plugin_mgr))
     elif os.path.isdir(target):
         for root, _, files in os.walk(target):
             for name in files:
                 if name.endswith(".sol"):
                     path = os.path.join(root, name)
-                    all_findings.extend(scan_file(path, config))
+                    all_findings.extend(scan_file(path, config, plugin_mgr))
     else:
         # Not a file or directory; nothing to do
         return []

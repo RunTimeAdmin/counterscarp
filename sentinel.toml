@@ -407,13 +407,25 @@ llm_backend = "none"
 openai_model = "gpt-4-turbo-preview"
 
 # Path to the RAG vector index
-rag_index_path = ".sentinel/rag_index.pkl"
+rag_index_path = ".sentinel/rag_index.json"
 
 # Number of similar findings to retrieve for enrichment
 top_k = 5
 
 # Automatically enrich findings with RAG context
 auto_enrich = false
+
+
+# ============================================================================
+# Plugin Configuration
+# ============================================================================
+
+[plugins]
+# Enable plugin system for community-contributed analyzers
+enabled = true
+
+# Directories to scan for plugin modules (relative to project root)
+dirs = [".sentinel/plugins"]
 
 
 # ============================================================================

@@ -757,3 +757,220 @@ runs = 100000
 format = "sarif"
 verbosity = "verbose"
 """
+
+
+# =============================================================================
+# RAG Engine Fixtures
+# =============================================================================
+
+@pytest.fixture
+def sample_idl_json():
+    """A minimal valid Anchor IDL JSON dict."""
+    return {
+        "name": "test_program",
+        "version": "0.1.0",
+        "instructions": [
+            {
+                "name": "initialize",
+                "accounts": [
+                    {
+                        "name": "vault",
+                        "isMut": True,
+                        "isSigner": False,
+                        "pda": {
+                            "seeds": [
+                                {"kind": "const", "value": [118, 97, 117, 108, 116]},
+                                {"kind": "account", "path": "authority"}
+                            ]
+                        }
+                    },
+                    {
+                        "name": "authority",
+                        "isMut": True,
+                        "isSigner": True
+                    },
+                    {
+                        "name": "system_program",
+                        "isMut": False,
+                        "isSigner": False
+                    }
+                ],
+                "args": []
+            },
+            {
+                "name": "deposit",
+                "accounts": [
+                    {
+                        "name": "vault",
+                        "isMut": True,
+                        "isSigner": False
+                    },
+                    {
+                        "name": "authority",
+                        "isMut": False,
+                        "isSigner": True
+                    }
+                ],
+                "args": [
+                    {"name": "amount", "type": "u64"}
+                ]
+            }
+        ],
+        "accounts": [
+            {
+                "name": "Vault",
+                "type": {
+                    "kind": "struct",
+                    "fields": [
+                        {"name": "authority", "type": "publicKey"},
+                        {"name": "total_deposits", "type": "u64"}
+                    ]
+                }
+            }
+        ],
+        "types": [],
+        "events": [
+            {
+                "name": "DepositEvent",
+                "fields": [
+                    {"name": "amount", "type": "u64", "index": False}
+                ]
+            }
+        ],
+        "errors": [
+            {
+                "code": 6000,
+                "name": "InvalidAmount",
+                "msg": "Invalid amount"
+            }
+        ],
+        "metadata": {
+            "address": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+        }
+    }
+
+
+@pytest.fixture
+def sample_git_log():
+    """Mock git log output string."""
+    return """abc123def456789012345678901234567890abcd|John Doe|john@example.com|2024-01-15T10:30:00+00:00|Initial commit
+
+contracts/Vault.sol
+contracts/Token.sol
+<<COMMIT_SEP>>
+def789abc0123456789012345678901234567890ab|Jane Smith|jane@example.com|2024-01-16T14:45:00+00:00|Add deposit function
+
+contracts/Vault.sol
+<<COMMIT_SEP>>
+1234567890abcdef1234567890abcdef12345678|Bob Wilson|bob@example.com|2024-01-17T09:00:00+00:00|Fix reentrancy bug
+
+contracts/Vault.sol
+contracts/utils/Math.sol
+<<COMMIT_SEP>>"""
+
+
+@pytest.fixture
+def sample_attack_graph_data():
+    """Sample graph JSON for visualizer tests."""
+    return {
+        "nodes": [
+            {
+                "id": "Contract_Vault_1234",
+                "type": "Contract",
+                "name": "Vault",
+                "size": 15,
+                "file": "contracts/Vault.sol",
+                "line": 1
+            },
+            {
+                "id": "Function_withdraw_1234_L45",
+                "type": "Function",
+                "name": "withdraw",
+                "size": 12,
+                "file": "contracts/Vault.sol",
+                "line": 45,
+                "visibility": "public"
+            },
+            {
+                "id": "Vulnerability_REENTRANCY_1234_L50",
+                "type": "Vulnerability",
+                "name": "REENTRANCY",
+                "size": 20,
+                "severity": "CRITICAL",
+                "file": "contracts/Vault.sol",
+                "line": 50,
+                "rule_id": "REENTRANCY",
+                "description": "Reentrancy vulnerability detected"
+            },
+            {
+                "id": "ExternalCall_recipient_call_1234_L52",
+                "type": "ExternalCall",
+                "name": "recipient.call{value: amount}()",
+                "size": 10,
+                "file": "contracts/Vault.sol",
+                "line": 52
+            },
+            {
+                "id": "Function_deposit_1234_L30",
+                "type": "Function",
+                "name": "deposit",
+                "size": 12,
+                "file": "contracts/Vault.sol",
+                "line": 30,
+                "visibility": "external"
+            }
+        ],
+        "links": [
+            {
+                "source": "Contract_Vault_1234",
+                "target": "Function_withdraw_1234_L45",
+                "type": "contains"
+            },
+            {
+                "source": "Contract_Vault_1234",
+                "target": "Function_deposit_1234_L30",
+                "type": "contains"
+            },
+            {
+                "source": "Function_withdraw_1234_L45",
+                "target": "ExternalCall_recipient_call_1234_L52",
+                "type": "calls"
+            },
+            {
+                "source": "Function_withdraw_1234_L45",
+                "target": "Vulnerability_REENTRANCY_1234_L50",
+                "type": "triggers"
+            }
+        ],
+        "metadata": {
+            "node_count": 5,
+            "edge_count": 4,
+            "node_types": ["Contract", "Function", "Vulnerability", "ExternalCall"],
+            "edge_types": ["contains", "calls", "triggers"]
+        }
+    }
+
+
+@pytest.fixture
+def sample_embeddings():
+    """List of mock embedding vectors (simple float lists, dimension 384)."""
+    import math
+    
+    def create_mock_embedding(seed, dim=384):
+        """Create a deterministic mock embedding vector."""
+        # Use a simple pattern to create consistent vectors
+        vector = []
+        for i in range(dim):
+            # Create a pattern based on seed and position
+            val = math.sin((seed + i) * 0.1) * 0.5 + 0.5
+            vector.append(round(val, 6))
+        return vector
+    
+    return {
+        "reentrancy": create_mock_embedding(1),
+        "access_control": create_mock_embedding(2),
+        "overflow": create_mock_embedding(3),
+        "oracle": create_mock_embedding(4),
+        "flash_loan": create_mock_embedding(5),
+        "similar_to_reentrancy": create_mock_embedding(1.1),  # Very similar to reentrancy
+    }
