@@ -23,10 +23,6 @@ classifiers = [
     "Topic :: Software Development :: Quality Assurance",
 ]
 
-[project.urls]
-Homepage = "https://sentinel-engine.io"
-Repository = "https://github.com/RunTimeAdmin/sentinel-engine"
-
 dependencies = [
     # Core dependencies (required)
     "requests>=2.31.0",
@@ -34,6 +30,10 @@ dependencies = [
     "tomli>=2.0.0; python_version < '3.11'",
     "solc-select>=1.0.4",
 ]
+
+[project.urls]
+Homepage = "https://sentinel-engine.io"
+Repository = "https://github.com/RunTimeAdmin/sentinel-engine"
 
 [project.optional-dependencies]
 ai = [
@@ -74,14 +74,40 @@ markers = [
     "unit: marks tests as unit tests",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["*.py"]
-exclude = [
-    "tests*",
-    "__pycache__",
-    "*.pyc",
-    ".pytest_cache",
+[tool.setuptools]
+py-modules = [
+    "orchestrator",
+    "config_loader",
+    "logger",
+    "exceptions",
+    "http_utils",
+    "heuristic_scanner",
+    "red_team_scan",
+    "aderyn_wrapper",
+    "medusa_wrapper",
+    "symbolic_wrapper",
+    "fuzz_wrapper",
+    "supply_chain_check",
+    "access_matrix",
+    "intent_check",
+    "upgrade_diff",
+    "solana_analyzer",
+    "knowledge_fetcher",
+    "solana_intel",
+    "threat_intel",
+    "inflation_scaffold",
+    "report_generator",
+    "exploit_generator",
+    "gui",
+    "embeddings",
+    "rag_engine",
+    "attack_graph",
+    "visualizer",
+    "history_scanner",
+    "idl_validator",
+    "pipeline_generator",
+    "fingerprint_scanner",
+    "protocol_db",
 ]
 
 [tool.setuptools.package-data]
