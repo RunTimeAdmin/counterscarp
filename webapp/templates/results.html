@@ -59,12 +59,20 @@
                 <div class="analyzer-row" onclick="toggleAnalyzer(this)">
                     <span class="analyzer-status">
                         {% if analyzer.status == 'completed' %}&#10003;
+                        {% elif analyzer.status == 'not_installed' %}&#9888;
                         {% elif analyzer.status == 'skipped' %}&#9711;
+                        {% elif analyzer.status == 'timeout' %}&#9202;
                         {% else %}&#9711;{% endif %}
                     </span>
                     <span class="analyzer-name">{{ analyzer.name }}</span>
                     {% if analyzer.patterns_checked is defined %}
                     <span class="analyzer-patterns">{{ analyzer.patterns_checked }} patterns</span>
+                    {% elif analyzer.status == 'not_installed' %}
+                    <span class="analyzer-patterns not-installed">Not installed</span>
+                    {% elif analyzer.status == 'timeout' %}
+                    <span class="analyzer-patterns not-installed">Timed out</span>
+                    {% elif analyzer.status == 'error' %}
+                    <span class="analyzer-patterns not-installed">Error</span>
                     {% elif analyzer.status == 'completed' %}
                     <span class="analyzer-patterns">Generated</span>
                     {% elif analyzer.status == 'not_configured' %}
@@ -93,6 +101,17 @@
                 {% endif %}
             </div>
             {% endfor %}
+            {% if scan_meta.analyzers %}
+            {% for a in scan_meta.analyzers %}
+                {% if a.name == 'Slither Static Analysis' and a.status == 'not_installed' %}
+            <div class="analyzer-note">
+                Install Slither on the server for enhanced
+                static analysis results
+                (<a href="https://github.com/crytic/slither#installation" target="_blank">installation guide</a>)
+            </div>
+                {% endif %}
+            {% endfor %}
+            {% endif %}
         </div>
     </div>
 
@@ -214,6 +233,16 @@
             </div>
         {% endif %}
     </div>
+
+    <!-- F. AI Insights Section -->
+    {% if ai_summary %}
+    <div class="ai-insights card">
+        <h2>AI Audit Copilot Insights</h2>
+        <div class="ai-summary-card">
+            <p>{{ ai_summary }}</p>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <script>

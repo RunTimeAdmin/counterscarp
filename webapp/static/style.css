@@ -384,6 +384,18 @@ input[type="text"]:focus {
     color: #555;
 }
 
+.analyzer-item[data-status="not_installed"] .analyzer-status {
+    color: #ffc107;
+}
+
+.analyzer-item[data-status="timeout"] .analyzer-status {
+    color: #fd7e14;
+}
+
+.analyzer-item[data-status="error"] .analyzer-status {
+    color: #dc3545;
+}
+
 .analyzer-name {
     font-weight: 500;
     color: #e0e0e0;
@@ -393,6 +405,11 @@ input[type="text"]:focus {
 .analyzer-patterns {
     color: #888;
     font-size: 0.85rem;
+}
+
+.analyzer-patterns.not-installed {
+    color: #ffc107;
+    font-style: italic;
 }
 
 .analyzer-patterns.not-configured {
@@ -412,6 +429,22 @@ input[type="text"]:focus {
     color: #888;
     font-size: 0.7rem;
     transition: transform 0.2s;
+}
+
+.analyzer-note {
+    font-size: 0.8rem;
+    color: #666;
+    padding: 0.6rem 1rem 0.2rem;
+    line-height: 1.5;
+}
+
+.analyzer-note a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+.analyzer-note a:hover {
+    text-decoration: underline;
 }
 
 .category-list {
@@ -806,6 +839,32 @@ input[type="text"]:focus {
     font-size: 3rem;
     color: #28a745;
     margin-bottom: 1rem;
+}
+
+/* F. AI Insights Section */
+.ai-insights {
+    margin-top: 2rem;
+    border-left: 4px solid #667eea;
+}
+
+.ai-insights h2 {
+    color: #fff;
+    margin-bottom: 1rem;
+}
+
+.ai-summary-card {
+    background: #0f1629;
+    border: 1px solid #2a2a4e;
+    border-left: 4px solid #667eea;
+    border-radius: 12px;
+    padding: 1.5rem;
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+
+.ai-summary-card p {
+    color: #c0c0c0;
+    margin: 0;
 }
 
 /* Footer */
