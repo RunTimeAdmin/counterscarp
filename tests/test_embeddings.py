@@ -35,7 +35,7 @@ class TestSimpleBagOfWords:
         """Test initialization."""
         bow = SimpleBagOfWords(max_features=100)
         assert bow.max_features == 100
-        assert len(bow.vocabulary) > 0
+        assert bow.max_features == 100
 
     def test_tokenize(self):
         """Test tokenization."""
@@ -53,11 +53,12 @@ class TestSimpleBagOfWords:
             "reentrancy vulnerability",
             "access control issue"
         ]
-        
+
         vectors = bow.fit_transform(texts)
-        
+
         assert len(vectors) == 2
-        assert len(vectors[0]) == len(bow.vocabulary)
+        # With feature hashing, dimension is always max_features
+        assert len(vectors[0]) == bow.max_features
 
     def test_vector_normalization(self):
         """Test that vectors are normalized."""
@@ -77,9 +78,10 @@ class TestSimpleBagOfWords:
         """Test transforming empty text."""
         bow = SimpleBagOfWords(max_features=50)
         vectors = bow.fit_transform([""])
-        
+
         assert len(vectors) == 1
-        assert len(vectors[0]) == len(bow.vocabulary)
+        # With feature hashing, dimension is always max_features
+        assert len(vectors[0]) == bow.max_features
 
 
 # =============================================================================

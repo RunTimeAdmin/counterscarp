@@ -170,16 +170,23 @@ jobs:
         id: check_blockers
         run: |
           # Count CRITICAL and HIGH findings
-          CRITICAL=$(grep -c '\[CRITICAL\]' scan_output.txt || echo 0)
-          HIGH=$(grep -c '\[HIGH\]' scan_output.txt || echo 0)
+          CRITICAL=$(grep -c '\[CRITICAL\]' scan_output.txt 2>/dev/null || echo "0")
+          HIGH=$(grep -c '\[HIGH\]' scan_output.txt 2>/dev/null || echo "0")
+              
+          # Ensure values are integers
+          CRITICAL=$(echo "$CRITICAL" | tr -dc '0-9')
+          HIGH=$(echo "$HIGH" | tr -dc '0-9')
+          CRITICAL=${CRITICAL:-0}
+          HIGH=${HIGH:-0}
+              
           TOTAL_BLOCKERS=$((CRITICAL + HIGH))
-          
-          echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
-          echo "high_count=$HIGH" >> $GITHUB_OUTPUT
-          echo "total_blockers=$TOTAL_BLOCKERS" >> $GITHUB_OUTPUT
-          
+              
+          echo "critical_count=${CRITICAL}" >> $GITHUB_OUTPUT
+          echo "high_count=${HIGH}" >> $GITHUB_OUTPUT
+          echo "total_blockers=${TOTAL_BLOCKERS}" >> $GITHUB_OUTPUT
+              
           # Extract blocker findings
-          grep -E '\[(CRITICAL|HIGH)\]' scan_output.txt > blockers.txt || echo "No blockers found" > blockers.txt
+          grep -E '\[(CRITICAL|HIGH)\]' scan_output.txt > blockers.txt 2>/dev/null || echo "No blockers found" > blockers.txt
       
       - name: Run Liar Detector (Blockers Only)
         id: liar_blockers
@@ -189,8 +196,10 @@ jobs:
           else
             echo "No contracts directory found, skipping Liar Detector" > liar_output.txt
           fi
-          LIAR_MISMATCHES=$(grep -c 'MISMATCH' liar_output.txt || echo 0)
-          echo "liar_mismatches=$LIAR_MISMATCHES" >> $GITHUB_OUTPUT
+          LIAR_MISMATCHES=$(grep -c 'MISMATCH' liar_output.txt 2>/dev/null || echo "0")
+          LIAR_MISMATCHES=$(echo "$LIAR_MISMATCHES" | tr -dc '0-9')
+          LIAR_MISMATCHES=${LIAR_MISMATCHES:-0}
+          echo "liar_mismatches=${LIAR_MISMATCHES}" >> $GITHUB_OUTPUT
           
           if [ $LIAR_MISMATCHES -gt 0 ]; then
             grep 'MISMATCH' liar_output.txt >> blockers.txt
@@ -210,8 +219,12 @@ jobs:
             done
             
             # Check for storage collisions or auth removal
-            STORAGE_COLLISION=$(grep -c 'STORAGE_COLLISION' upgrade_output.txt || echo 0)
-            AUTH_REMOVED=$(grep -c 'AUTH_REMOVED' upgrade_output.txt || echo 0)
+            STORAGE_COLLISION=$(grep -c 'STORAGE_COLLISION' upgrade_output.txt 2>/dev/null || echo "0")
+            AUTH_REMOVED=$(grep -c 'AUTH_REMOVED' upgrade_output.txt 2>/dev/null || echo "0")
+            STORAGE_COLLISION=$(echo "$STORAGE_COLLISION" | tr -dc '0-9')
+            AUTH_REMOVED=$(echo "$AUTH_REMOVED" | tr -dc '0-9')
+            STORAGE_COLLISION=${STORAGE_COLLISION:-0}
+            AUTH_REMOVED=${AUTH_REMOVED:-0}
             UPGRADE_ISSUES=$((STORAGE_COLLISION + AUTH_REMOVED))
             
             if [ $UPGRADE_ISSUES -gt 0 ]; then
@@ -282,11 +295,15 @@ jobs:
           # Extract MEDIUM and LOW findings
           grep -E '\[(MEDIUM|LOW|INFO)\]' advisory_output.txt > advisories.txt || echo "No advisory findings" > advisories.txt
           
-          MEDIUM=$(grep -c '\[MEDIUM\]' advisory_output.txt || echo 0)
-          LOW=$(grep -c '\[LOW\]' advisory_output.txt || echo 0)
+          MEDIUM=$(grep -c '\[MEDIUM\]' advisory_output.txt 2>/dev/null || echo "0")
+          LOW=$(grep -c '\[LOW\]' advisory_output.txt 2>/dev/null || echo "0")
+          MEDIUM=$(echo "$MEDIUM" | tr -dc '0-9')
+          LOW=$(echo "$LOW" | tr -dc '0-9')
+          MEDIUM=${MEDIUM:-0}
+          LOW=${LOW:-0}
           
-          echo "medium_count=$MEDIUM" >> $GITHUB_OUTPUT
-          echo "low_count=$LOW" >> $GITHUB_OUTPUT
+          echo "medium_count=${MEDIUM}" >> $GITHUB_OUTPUT
+          echo "low_count=${LOW}" >> $GITHUB_OUTPUT
       
       - name: Run Access Matrix (Advisory)
         continue-on-error: true

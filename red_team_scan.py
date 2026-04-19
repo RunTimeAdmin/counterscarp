@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import subprocess
 import json
 import argparse
@@ -120,7 +119,10 @@ def run_slither(target: str) -> Dict[str, Any]:
         if json_start == -1:
             print("[!] CRITICAL: Slither failed to generate JSON. Raw output:")
             print(result.stderr)
-            sys.exit(1)
+            raise SentinelAnalysisError(
+                "Slither failed to produce JSON output",
+                details={"tool": "slither", "stderr": result.stderr}
+            )
             
         json_data = output[json_start:]
         return json.loads(json_data)
@@ -283,6 +285,7 @@ def parse_location(elements: List[Dict[str, Any]]) -> str:
         return f"{filename} (Lines: {lines})"
     return filename
 
+
 def print_report(findings: List[Dict[str, Any]]) -> None:
     """Prints a Red Team style report.
 
@@ -295,18 +298,21 @@ def print_report(findings: List[Dict[str, Any]]) -> None:
     print("="*60 + "\n")
     
     if not findings:
-        print("[+] CLEAN: No critical vulnerabilities found matching criteria.")
+        print("[+] CLEAN: No critical vulnerabilities found matching "
+              "criteria.")
         return
 
     for i, f in enumerate(findings, 1):
         # Color coding for terminal (simple ANSI)
-        color = "\033[91m" if f['impact'] == "High" else "\033[93m" # Red for High, Yellow for Medium
+        # Red for High, Yellow for Medium
+        color = "\033[91m" if f['impact'] == "High" else "\033[93m"
         reset = "\033[0m"
         
         print(f"{color}[{f['impact']}] {f['title']}{reset}")
         print(f"Location: {f['location']}")
         print(f"Context: {f['description']}")
         print("-" * 60)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

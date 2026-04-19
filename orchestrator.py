@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 # Import your specialists
 try:
     import red_team_scan
+    from exceptions import SentinelAnalysisError
     import supply_chain_check
     import fuzz_wrapper
     import heuristic_scanner
@@ -190,11 +191,11 @@ def generate_markdown_report(
 
     # Risk Calculation
     critical_count = len(fuzz_results) + len([x for x in static_results if x.get("impact") == "High"])
-    status_icon = "🔴 CRITICAL" if critical_count > 0 else "🟢 STABLE"
+    status_icon = "[CRITICAL]" if critical_count > 0 else "[STABLE]"
 
     with open(filename, "w", encoding="utf-8") as f:
         # Executive Summary
-        f.write("# 🛡️ Security Remediation Plan\n")
+        f.write("# Security Remediation Plan\n")
         f.write(f"**Target:** `{project_name}`\n")
         f.write(f"**Status:** {status_icon} ({critical_count} Critical Issues)\n")
         f.write(f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
@@ -208,14 +209,14 @@ def generate_markdown_report(
         # ---------------------------------------------------------
         f.write("## 1. Dependency Updates (Supply Chain)\n")
         if not supply_results:
-            f.write("✅ **No Action Required.** All dependencies are up to date.\n\n")
+            f.write("[OK] **No Action Required.** All dependencies are up to date.\n\n")
         else:
             f.write("| Severity | Library | Action Required |\n")
             f.write("| :--- | :--- | :--- |\n")
             for item in supply_results:
                 # Assuming Supply Chain script returns 'library', 'installed', 'id'
                 f.write(
-                    f"| ⚠️ | `{item['library']}` | **Run:** `npm update {item['library']}` <br> **Reason:** {item.get('summary', 'Known Vulnerability')} |\n"
+                    f"| [!] | `{item['library']}` | **Run:** `npm update {item['library']}` <br> **Reason:** {item.get('summary', 'Known Vulnerability')} |\n"
                 )
             f.write("\n")
 
@@ -226,17 +227,17 @@ def generate_markdown_report(
         # ---------------------------------------------------------
         f.write("## 2. Code Patches (Static Analysis)\n")
         if not static_results:
-            f.write("✅ **No Action Required.** No critical patterns found.\n\n")
+            f.write("[OK] **No Action Required.** No critical patterns found.\n\n")
         else:
             for i, item in enumerate(static_results, 1):
                 impact = item.get("impact", "Unknown")
-                priority = "🔥 IMMEDIATE" if impact == "High" else "⚠️ HIGH"
+                priority = "[IMMEDIATE]" if impact == "High" else "[HIGH]"
                 action = get_remediation(item.get("title", ""), item.get("description", ""))
 
                 f.write(f"### {i}. {item.get('title', 'Unknown Issue')} ({priority})\n")
                 f.write(f"- **Location:** `{item.get('location', 'Unknown location')}`\n")
                 f.write(f"- **The Issue:** {item.get('description', 'No description provided')}\n")
-                f.write(f"- **🛠️ ACTION:** {action}\n\n")
+                f.write(f"- **ACTION:** {action}\n\n")
 
         f.write("---\n\n")
 
@@ -245,15 +246,15 @@ def generate_markdown_report(
         # ---------------------------------------------------------
         f.write("## 3. Logic & Invariant Patches (Dynamic)\n")
         if not fuzz_results:
-            f.write("✅ **No Action Required.** Logic held up against stress testing.\n\n")
+            f.write("[OK] **No Action Required.** Logic held up against stress testing.\n\n")
         else:
             for item in fuzz_results:
                 test_name = item.get("test_name", "UnknownTest")
                 steps = item.get("steps", [])
 
-                f.write(f"### ☠️ Logic Failure: `{test_name}`\n")
+                f.write(f"### Logic Failure: `{test_name}`\n")
                 f.write("**Diagnosis:** The protocol entered an invalid state (Invariant broken).\n\n")
-                f.write("**🛠️ ACTION:**\n")
+                f.write("**ACTION:**\n")
                 f.write("1. Create a new test file `test/Exploit.t.sol`.\n")
                 f.write("2. Paste the 'Kill Shot' sequence below into it.\n")
                 f.write(f"3. Modify `{test_name}` to handle this edge case (usually by adding `require()` checks).\n\n")
@@ -271,7 +272,7 @@ def generate_markdown_report(
         # ---------------------------------------------------------
         f.write("## 4. Heuristic Findings (Pattern-Based)\n")
         if not heuristic_results:
-            f.write("✅ **No heuristic red flags detected.** (Note: this does *not* guarantee safety.)\n\n")
+            f.write("[OK] **No heuristic red flags detected.** (Note: this does *not* guarantee safety.)\n\n")
         else:
             for item in heuristic_results:
                 severity = item.get("severity", "INFO")
@@ -293,7 +294,7 @@ def generate_markdown_report(
         # ---------------------------------------------------------
         f.write("## 5. Symbolic Analysis (Mythril)\n")
         if not symbolic_results:
-            f.write("✅ **No issues reported by Mythril for this run.**\n\n")
+            f.write("[OK] **No issues reported by Mythril for this run.**\n\n")
         else:
             for i, issue in enumerate(symbolic_results, 1):
                 title = issue.get("title") or "Unnamed issue"
@@ -354,7 +355,7 @@ def generate_markdown_report(
             if not findings:
                 f.write("[+] No invariant violations found by Medusa.\n\n")
             else:
-                f.write(f"⚠️  Medusa found {len(findings)} invariant violations.\n\n")
+                f.write(f"[!] Medusa found {len(findings)} invariant violations.\n\n")
                 for finding in findings[:5]:
                     test_name = finding.get("test", "unknown")
                     status = finding.get("status", "")
@@ -402,9 +403,9 @@ def generate_markdown_report(
                 f"MEDIUM: {summary.get('MEDIUM', 0)}, LOW: {summary.get('LOW', 0)}\n\n"
             )
             if upgrade_results.get("safe"):
-                f.write("✅ SAFE TO UPGRADE (no critical/high issues detected).\n\n")
+                f.write("[OK] SAFE TO UPGRADE (no critical/high issues detected).\n\n")
             else:
-                f.write("⚠️ UNSAFE TO UPGRADE – address critical/high issues before deploying.\n\n")
+                f.write("[!] UNSAFE TO UPGRADE - address critical/high issues before deploying.\n\n")
 
         # ---------------------------------------------------------
         # SECTION 10: PROTOCOL FINGERPRINT ANALYSIS (OPTIONAL)
@@ -435,7 +436,7 @@ def generate_markdown_report(
                         if match.get('known_vulnerabilities'):
                             high_crit = sum(1 for v in match.get('known_vulnerabilities', []) if v.get('severity') in ['CRITICAL', 'HIGH'])
                             if high_crit > 0:
-                                f.write(f"  ⚠️ {high_crit} high/critical vulnerabilities inherited\n")
+                                f.write(f"  [!] {high_crit} high/critical vulnerabilities inherited\n")
                     if len(matches) > 3:
                         f.write(f"- ... and {len(matches) - 3} more match(es)\n")
                     f.write("\n")
@@ -585,7 +586,7 @@ def main() -> None:
             sys.exit(1)
         
         print("\n" + "=" * 60)
-        print(" 📚 BUILDING RAG KNOWLEDGE BASE INDEX")
+        print(" [*] BUILDING RAG KNOWLEDGE BASE INDEX")
         print("=" * 60 + "\n")
         
         try:
@@ -624,7 +625,7 @@ def main() -> None:
             sys.exit(1)
         
         print("\n" + "=" * 60)
-        print(" ⏰  TIME-TRAVEL HISTORICAL VULNERABILITY SCAN")
+        print(" [*] TIME-TRAVEL HISTORICAL VULNERABILITY SCAN")
         print("=" * 60 + "\n")
         
         try:
@@ -665,7 +666,7 @@ def main() -> None:
             sys.exit(1)
 
     print("\n" + "=" * 60)
-    print(" 🛡️  GENERATING REMEDIATION PLAN")
+    print(" [*] GENERATING REMEDIATION PLAN")
     print("=" * 60 + "\n")
 
     # Initialize containers
@@ -695,6 +696,11 @@ def main() -> None:
     try:
         raw_slither = red_team_scan.run_slither(args.target)
         static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
+    except SentinelAnalysisError as e:
+        logger.warning(f"Slither analysis failed: {e}")
+        print(f"    [!] Slither analysis failed: {e}")
+        static_issues = []
+        raw_slither = None
     except Exception:
         # Fail silently for now; in production, log this.
         static_issues = []
@@ -941,7 +947,7 @@ def main() -> None:
     )
 
     print("\n" + "=" * 60)
-    print(f" ✅ ACTION PLAN READY: {os.path.abspath(report_file)}")
+    print(f" [OK] ACTION PLAN READY: {os.path.abspath(report_file)}")
     print("=" * 60 + "\n")
 
     # [PHASE 9] Professional Report (Optional)
@@ -1036,7 +1042,7 @@ def main() -> None:
         html_path = generate_html_report(audit_report, html_file)
         md_path = generate_audit_markdown_report(audit_report, md_file)
         
-        print(f"\n📊 Professional Reports Generated:")
+        print(f"\n[*] Professional Reports Generated:")
         print(f"   HTML: {os.path.abspath(html_path)}")
         print(f"   Markdown: {os.path.abspath(md_path)}")
         print(f"\n   Risk Score: {audit_report.risk_score}/100")

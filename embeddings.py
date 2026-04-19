@@ -92,133 +92,83 @@ class SimpleBagOfWords:
     """Pure Python bag-of-words vectorizer as ultimate fallback.
 
     Creates simple frequency-based embeddings when no ML libraries available.
-    Uses a vocabulary of common security terms plus corpus-specific words.
+    Uses feature hashing to produce fixed-dimension embeddings regardless
+    of input text, ensuring consistent dimensions for indexing and querying.
     """
-    
-    # Common security-related vocabulary
-    BASE_VOCABULARY = {
-        # Vulnerability types
-        "reentrancy", "overflow", "underflow", "access", "control", "oracle",
-        "manipulation", "flash", "loan", "front", "running", "timestamp",
-        "randomness", "delegatecall", "selfdestruct", "integer", "division",
-        "rounding", "error", "precision", "replay", "signature", "validation",
-        # Security concepts
-        "vulnerability", "exploit", "attack", "secure", "unsafe", "dangerous",
-        "critical", "high", "medium", "low", "severity", "risk", "threat",
-        # Contract elements
-        "contract", "function", "modifier", "event", "struct", "mapping",
-        "storage", "memory", "calldata", "external", "internal", "public",
-        "private", "pure", "view", "payable", "constructor", "fallback",
-        # Token standards
-        "erc20", "erc721", "erc1155", "erc4626", "token", "transfer",
-        "approve", "allowance", "balance", "mint", "burn", "owner",
-        "ownership",
-        # DeFi terms
-        "defi", "dex", "amm", "liquidity", "pool", "swap", "yield", "farm",
-        "stake", "unstake", "reward", "fee", "protocol", "governance",
-        "vote",
-        # Access control
-        "onlyowner", "onlyrole", "admin", "authorized", "permission",
-        "restrict",
-        # Common functions
-        "transfer", "transferfrom", "approve", "allowance", "balanceof",
-        "mint", "burn", "withdraw", "deposit", "claim", "stake", "unstake",
-    }
-    
-    def __init__(self, max_features: int = 500):
+
+    def __init__(self, max_features: int = 384):
         """Initialize the bag-of-words vectorizer.
-        
+
         Args:
-            max_features: Maximum number of features in the vocabulary.
+            max_features: Fixed dimension of output vectors (default: 384).
         """
         self.max_features = max_features
-        self.vocabulary: dict[str, int] = {}
-        self._build_base_vocabulary()
-    
-    def _build_base_vocabulary(self) -> None:
-        """Build the base vocabulary from predefined terms."""
-        for i, word in enumerate(sorted(self.BASE_VOCABULARY)):
-            if i >= self.max_features:
-                break
-            self.vocabulary[word] = i
-    
+
     def _tokenize(self, text: str) -> List[str]:
         """Simple tokenization - lowercase and extract words.
-        
+
         Args:
             text: Input text to tokenize.
-            
+
         Returns:
             List of tokens.
         """
         # Lowercase and extract alphanumeric sequences
         return re.findall(r'\b[a-z0-9]+\b', text.lower())
-    
-    def _build_vocabulary(self, texts: List[str]) -> None:
-        """Build vocabulary from corpus if needed.
-        
+
+    def _hash_token(self, token: str) -> int:
+        """Hash a token to a fixed bucket index.
+
         Args:
-            texts: List of texts to build vocabulary from.
+            token: The token to hash.
+
+        Returns:
+            Bucket index in range [0, max_features).
         """
-        # Count all words in corpus
-        word_counts: Counter = Counter()
-        for text in texts:
-            word_counts.update(self._tokenize(text))
-        
-        # Add most common words not already in vocabulary
-        current_size = len(self.vocabulary)
-        remaining_slots = self.max_features - current_size
-        
-        if remaining_slots > 0:
-            # Get most common words not in vocabulary
-            for word, _ in word_counts.most_common():
-                if word not in self.vocabulary:
-                    self.vocabulary[word] = len(self.vocabulary)
-                    if len(self.vocabulary) >= self.max_features:
-                        break
-    
+        # Use Python's built-in hash with a fixed seed approach
+        # Combine with a simple string hash for consistency
+        hash_val = hash(token) % self.max_features
+        return hash_val
+
     def fit_transform(self, texts: List[str]) -> List[List[float]]:
-        """Fit vocabulary and transform texts to vectors.
-        
+        """Transform texts to fixed-dimension vectors.
+
         Args:
             texts: List of texts to vectorize.
-            
+
         Returns:
-            List of vector representations.
+            List of vector representations with fixed dimension.
         """
-        self._build_vocabulary(texts)
         return self.transform(texts)
-    
+
     def transform(self, texts: List[str]) -> List[List[float]]:
-        """Transform texts to vectors using fitted vocabulary.
-        
+        """Transform texts to fixed-dimension vectors using feature hashing.
+
         Args:
             texts: List of texts to vectorize.
-            
+
         Returns:
-            List of vector representations.
+            List of vector representations with fixed dimension.
         """
         vectors = []
-        vocab_size = len(self.vocabulary)
-        
+
         for text in texts:
             tokens = self._tokenize(text)
             token_counts = Counter(tokens)
-            
-            # Create frequency vector
-            vector = [0.0] * vocab_size
+
+            # Create frequency vector using feature hashing
+            vector = [0.0] * self.max_features
             for token, count in token_counts.items():
-                if token in self.vocabulary:
-                    idx = self.vocabulary[token]
-                    vector[idx] = float(count)
-            
+                idx = self._hash_token(token)
+                vector[idx] += float(count)
+
             # Normalize to unit length (L2 norm)
             norm = math.sqrt(sum(x * x for x in vector))
             if norm > 0:
                 vector = [x / norm for x in vector]
-            
+
             vectors.append(vector)
-        
+
         return vectors
 
 

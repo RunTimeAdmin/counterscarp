@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from exceptions import SentinelAnalysisError
 from red_team_scan import (
     run_slither,
     validate_slither_output,
@@ -246,9 +247,11 @@ class TestRunSlither:
             stderr='Compilation error',
             returncode=1
         )
-        
-        with pytest.raises(SystemExit):
+
+        with pytest.raises(SentinelAnalysisError) as exc_info:
             run_slither("test.sol")
+
+        assert "slither" in str(exc_info.value).lower()
 
     @patch('subprocess.run')
     def test_run_slither_not_found(self, mock_run):
