@@ -169,6 +169,7 @@ jobs:
       - name: Check for Blockers
         id: check_blockers
         run: |
+          touch blockers.txt
           # Count CRITICAL and HIGH findings
           CRITICAL=$(grep -c '\[CRITICAL\]' scan_output.txt 2>/dev/null || echo "0")
           HIGH=$(grep -c '\[HIGH\]' scan_output.txt 2>/dev/null || echo "0")
@@ -208,6 +209,7 @@ jobs:
       - name: Run Upgrade Diff (If Applicable)
         id: upgrade_blockers
         run: |
+          touch upgrade_output.txt
           CHANGED_SOL=$(git diff --name-only origin/main...HEAD | grep '\.sol$' || true)
           UPGRADE_ISSUES=0
           
@@ -235,9 +237,12 @@ jobs:
           echo "upgrade_issues=$UPGRADE_ISSUES" >> $GITHUB_OUTPUT
       
       - name: Fail if Blockers Found
-        if: steps.check_blockers.outputs.total_blockers != '0' || steps.liar_blockers.outputs.liar_mismatches != '0' || steps.upgrade_blockers.outputs.upgrade_issues != '0'
+        if: |
+          fromJson(steps.check_blockers.outputs.total_blockers || '0') > 0 ||
+          fromJson(steps.liar_blockers.outputs.liar_mismatches || '0') > 0 ||
+          fromJson(steps.upgrade_blockers.outputs.upgrade_issues || '0') > 0
         run: |
-          echo "❌ BLOCKER ISSUES FOUND:"
+          echo "BLOCKER ISSUES FOUND:"
           echo "   CRITICAL: ${{ steps.check_blockers.outputs.critical_count }}"
           echo "   HIGH: ${{ steps.check_blockers.outputs.high_count }}"
           echo "   Liar Detector Mismatches: ${{ steps.liar_blockers.outputs.liar_mismatches }}"
