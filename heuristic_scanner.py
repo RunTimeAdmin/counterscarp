@@ -38,6 +38,38 @@ except ImportError:
     PluginManager = None
 
 
+# Rule categories: groups rule IDs by security domain for coverage reporting.
+RULE_CATEGORIES: dict[str, list[str]] = {
+    "Access Control": [
+        "TX_ORIGIN_USAGE", "DELEGATECALL_USAGE", "EMERGENCY_WITHDRAW_PUBLIC",
+        "FAKE_RENOUNCE_OWNER_ZERO", "CENTRALIZATION_RISK",
+    ],
+    "Reentrancy & External Calls": [
+        "UNCHECKED_EXTERNAL_CALL", "LOWLEVEL_CALL_USAGE",
+        "FLASH_LOAN_REENTRANCY", "ARBITRARY_EXTERNAL_CALL",
+    ],
+    "DeFi & Oracle Security": [
+        "ORACLE_STALENESS_CHECK", "MISSING_SLIPPAGE_PROTECTION",
+        "STRICT_BALANCE_EQUALITY",
+    ],
+    "Math & Precision": [
+        "DIVIDE_BEFORE_MULTIPLY", "UNSAFE_CAST", "MSG_VALUE_LOOP",
+    ],
+    "Token Mechanics": [
+        "HIDDEN_MINT", "TRADING_TOGGLE_BOOL", "SET_FEE_FUNCTION",
+    ],
+    "Upgrade & Proxy Patterns": [
+        "STORAGE_COLLISION_RISK", "UPGRADE_FUNCTION",
+    ],
+    "Cryptographic & Signature": [
+        "SIGNATURE_REPLAY", "BLOCK_TIMESTAMP_RANDOMNESS",
+    ],
+    "Other": [
+        "HARDCODED_ADDRESS", "BOOLEAN_TRANSFER_CHECK",
+    ],
+}
+
+
 @dataclass
 class HeuristicFinding:
     """Represents a heuristic scan finding.
@@ -256,6 +288,22 @@ RULES: List[HeuristicRule] = [
         hint="MEDIUM: Centralization risk. Use multi-sig + timelock for critical admin functions. Common Code4rena Medium finding.",
     ),
 ]
+
+# Alias used by webapp and coverage helpers
+HEURISTIC_RULES: List[HeuristicRule] = RULES
+
+
+def get_scan_coverage() -> dict:
+    """Return scan coverage metadata for the heuristic scanner."""
+    return {
+        "analyzer": "Heuristic Pattern Scanner",
+        "version": "2.3.0",
+        "total_patterns": len(RULES),
+        "categories": {
+            cat: len(rules)
+            for cat, rules in RULE_CATEGORIES.items()
+        },
+    }
 
 
 def get_all_rules(plugin_mgr: Optional[PluginManager] = None) -> List[HeuristicRule]:

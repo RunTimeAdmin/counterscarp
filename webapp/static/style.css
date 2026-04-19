@@ -240,107 +240,325 @@ input[type="text"]:focus {
     cursor: not-allowed;
 }
 
-/* Results Page */
-.results-header {
+/* ============================================
+   RESULTS PAGE
+   ============================================ */
+
+/* A. Project Header Bar */
+.project-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
-}
-
-.results-header h1 {
-    font-size: 2rem;
-    color: #fff;
-}
-
-/* Risk Badge */
-.risk-badge {
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 1.1rem;
-}
-
-.risk-low {
-    background: rgba(40, 167, 69, 0.2);
-    color: #28a745;
-    border: 1px solid #28a745;
-}
-
-.risk-medium {
-    background: rgba(255, 193, 7, 0.2);
-    color: #ffc107;
-    border: 1px solid #ffc107;
-}
-
-.risk-high {
-    background: rgba(253, 126, 20, 0.2);
-    color: #fd7e14;
-    border: 1px solid #fd7e14;
-}
-
-.risk-critical {
-    background: rgba(220, 53, 69, 0.2);
-    color: #dc3545;
-    border: 1px solid #dc3545;
-}
-
-/* Severity Summary */
-.severity-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
-}
-
-.severity-card {
+    padding: 1.25rem 1.5rem;
     background: #16213e;
     border: 1px solid #2a2a4e;
     border-radius: 12px;
-    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.project-header h1 {
+    font-size: 1.75rem;
+    color: #fff;
+    margin: 0;
+}
+
+.project-timestamp {
+    color: #888;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+.verdict-badge {
+    padding: 0.6rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.verdict-pass {
+    background: rgba(40, 167, 69, 0.15);
+    color: #28a745;
+    border: 2px solid #28a745;
+}
+
+.verdict-warning {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border: 2px solid #ffc107;
+}
+
+.verdict-fail {
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+    border: 2px solid #dc3545;
+}
+
+/* B. Scan Coverage Card */
+.scan-coverage {
+    border-left: 4px solid #667eea;
+    margin-bottom: 1.5rem;
+}
+
+.scan-coverage-header h2 {
+    color: #fff;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid #2a2a4e;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.stat-divider {
+    width: 1px;
+    height: 2.5rem;
+    background: #2a2a4e;
+}
+
+.analyzers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.analyzer-item {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.analyzer-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 8px;
+}
+
+.analyzer-row:hover {
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.analyzer-status {
+    font-size: 1rem;
+    font-weight: 700;
+    min-width: 1.25rem;
     text-align: center;
 }
 
-.severity-card.critical {
-    border-left: 4px solid #ff4444;
+.analyzer-item[data-status="completed"] .analyzer-status {
+    color: #28a745;
 }
 
-.severity-card.high {
-    border-left: 4px solid #ff8c00;
+.analyzer-item[data-status="skipped"] .analyzer-status,
+.analyzer-item[data-status="not_configured"] .analyzer-status {
+    color: #555;
 }
 
-.severity-card.medium {
-    border-left: 4px solid #ffd700;
+.analyzer-name {
+    font-weight: 500;
+    color: #e0e0e0;
+    flex: 1;
 }
 
-.severity-card.low {
-    border-left: 4px solid #4488ff;
+.analyzer-patterns {
+    color: #888;
+    font-size: 0.85rem;
 }
 
-.severity-card.info {
-    border-left: 4px solid #888;
+.analyzer-patterns.not-configured {
+    color: #555;
+    font-style: italic;
 }
 
-.severity-count {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #fff;
+.analyzer-findings {
+    color: #667eea;
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-width: 4rem;
+    text-align: right;
 }
 
-.severity-label {
-    text-transform: uppercase;
+.analyzer-toggle {
+    color: #888;
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+}
+
+.category-list {
+    padding: 0 1rem 0.75rem 2.5rem;
+}
+
+.category-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+}
+
+.category-connector {
+    color: #2a2a4e;
+    font-size: 0.85rem;
+}
+
+.category-name {
+    color: #c0c0c0;
+    font-size: 0.875rem;
+}
+
+.category-patterns {
+    color: #666;
+    font-size: 0.8rem;
+}
+
+.category-findings {
+    color: #888;
+    font-size: 0.8rem;
+    margin-left: auto;
+}
+
+.category-findings.has-findings {
+    color: #ff8c00;
+    font-weight: 600;
+}
+
+/* C. Risk Score & Severity Row */
+.risk-severity-row {
+    display: flex;
+    align-items: stretch;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.risk-score-card {
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.risk-score-label {
     font-size: 0.875rem;
     color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.risk-score-value {
+    font-size: 2.75rem;
+    font-weight: 700;
+    line-height: 1;
     margin-top: 0.5rem;
 }
 
-/* Download Section */
+.risk-score-max {
+    font-size: 1rem;
+    color: #888;
+    font-weight: 400;
+}
+
+.risk-score-value.risk-low { color: #28a745; }
+.risk-score-value.risk-medium { color: #ffc107; }
+.risk-score-value.risk-high { color: #fd7e14; }
+.risk-score-value.risk-critical { color: #dc3545; }
+
+.severity-summary {
+    display: flex;
+    gap: 0.75rem;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.severity-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    min-width: 80px;
+    border: 1px solid transparent;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.severity-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.severity-pill.critical {
+    background: rgba(220, 53, 69, 0.12);
+    border-color: rgba(220, 53, 69, 0.3);
+}
+.severity-pill.high {
+    background: rgba(255, 140, 0, 0.12);
+    border-color: rgba(255, 140, 0, 0.3);
+}
+.severity-pill.medium {
+    background: rgba(255, 215, 0, 0.12);
+    border-color: rgba(255, 215, 0, 0.3);
+}
+.severity-pill.low {
+    background: rgba(68, 136, 255, 0.12);
+    border-color: rgba(68, 136, 255, 0.3);
+}
+.severity-pill.info {
+    background: rgba(136, 136, 136, 0.12);
+    border-color: rgba(136, 136, 136, 0.3);
+}
+
+.pill-count {
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+.severity-pill.critical .pill-count { color: #ff4444; }
+.severity-pill.high .pill-count { color: #ff8c00; }
+.severity-pill.medium .pill-count { color: #ffd700; }
+.severity-pill.low .pill-count { color: #4488ff; }
+.severity-pill.info .pill-count { color: #888; }
+
+.pill-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: #888;
+    letter-spacing: 0.03em;
+}
+
+/* D. Download Section */
 .download-section {
-    background: #16213e;
-    border: 1px solid #2a2a4e;
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 .download-section h3 {
@@ -384,16 +602,46 @@ input[type="text"]:focus {
     background: rgba(118, 75, 162, 0.1);
 }
 
-/* Findings Section */
-.findings-section {
-    background: #16213e;
-    border: 1px solid #2a2a4e;
-    border-radius: 12px;
-    padding: 1.5rem;
+/* E. Findings Section with Filter Tabs */
+.findings-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
 }
 
-.findings-section h3 {
-    margin-bottom: 1.5rem;
+.findings-header-row h3 {
+    color: #fff;
+    margin: 0;
+}
+
+.filter-tabs {
+    display: flex;
+    gap: 0.25rem;
+    background: #0f1629;
+    border-radius: 8px;
+    padding: 0.25rem;
+}
+
+.filter-tab {
+    background: transparent;
+    border: none;
+    color: #888;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-tab:hover {
+    color: #e0e0e0;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.filter-tab.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
     color: #fff;
 }
 
@@ -408,6 +656,7 @@ input[type="text"]:focus {
     border: 1px solid #2a2a4e;
     border-radius: 8px;
     overflow: hidden;
+    transition: border-color 0.2s;
 }
 
 .finding-card.expanded {
@@ -485,11 +734,13 @@ input[type="text"]:focus {
 .finding-toggle {
     color: #888;
     font-size: 0.75rem;
+    transition: transform 0.2s;
 }
 
 .finding-content {
     padding: 0 1rem 1rem;
     border-top: 1px solid #2a2a4e;
+    transition: max-height 0.3s ease;
 }
 
 .finding-description {
@@ -551,6 +802,12 @@ input[type="text"]:focus {
     color: #888;
 }
 
+.no-findings-icon {
+    font-size: 3rem;
+    color: #28a745;
+    margin-bottom: 1rem;
+}
+
 /* Footer */
 footer {
     background: #16213e;
@@ -580,14 +837,22 @@ footer a:hover {
         margin: 0 1rem;
     }
 
-    .results-header {
+    .project-header {
         flex-direction: column;
         gap: 1rem;
         text-align: center;
     }
 
+    .risk-severity-row {
+        flex-direction: column;
+    }
+
     .severity-summary {
-        grid-template-columns: repeat(2, 1fr);
+        flex-wrap: wrap;
+    }
+
+    .stats-bar {
+        justify-content: center;
     }
 
     .download-buttons {
@@ -603,5 +868,15 @@ footer a:hover {
     .finding-meta {
         width: 100%;
         justify-content: space-between;
+    }
+
+    .findings-header-row {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+
+    .filter-tabs {
+        flex-wrap: wrap;
     }
 }

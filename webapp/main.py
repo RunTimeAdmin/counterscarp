@@ -26,7 +26,12 @@ from webapp.config import (
 )
 
 # Import Sentinel Engine modules
-from heuristic_scanner import HeuristicFinding, scan_target
+from heuristic_scanner import (
+    HeuristicFinding,
+    RULE_CATEGORIES,
+    HEURISTIC_RULES,
+    scan_target,
+)
 from report_generator import (
     AuditReport,
     Finding,
@@ -178,6 +183,71 @@ async def audit(
     with open(findings_path, "w", encoding="utf-8") as f:
         json.dump(findings_data, f, indent=2)
 
+    # Save scan metadata (coverage / what was checked)
+    findings_per_category: dict[str, int] = {}
+    for cat, rule_ids in RULE_CATEGORIES.items():
+        findings_per_category[cat] = sum(
+            1 for fd in findings_data if fd["rule_id"] in rule_ids
+        )
+
+    scan_meta = {
+        "project_name": project_name,
+        "timestamp": datetime.now().isoformat(),
+        "files_scanned": len(uploaded_paths),
+        "total_source_lines": sum(
+            len(
+                open(fp, encoding="utf-8", errors="ignore").readlines()
+            )
+            for fp in uploaded_paths
+        ),
+        "analyzers": [
+            {
+                "name": "Heuristic Pattern Scanner",
+                "status": "completed",
+                "patterns_checked": len(HEURISTIC_RULES),
+                "categories": {
+                    cat: {
+                        "patterns": len(rules),
+                        "findings": findings_per_category.get(cat, 0),
+                    }
+                    for cat, rules in RULE_CATEGORIES.items()
+                },
+                "findings_count": len(findings),
+            },
+            {
+                "name": "Attack Graph Generator",
+                "status": (
+                    "completed"
+                    if (results_dir / "attack_graph.html").exists()
+                    else "skipped"
+                ),
+                "findings_count": 0,
+            },
+            {
+                "name": "Slither Static Analysis",
+                "status": "not_configured",
+                "findings_count": 0,
+            },
+            {
+                "name": "Aderyn Analyzer",
+                "status": "not_configured",
+                "findings_count": 0,
+            },
+            {
+                "name": "AI Audit Copilot",
+                "status": "not_configured",
+                "findings_count": 0,
+            },
+        ],
+        "rules_triggered": sorted(
+            set(f["rule_id"] for f in findings_data)
+        ),
+    }
+
+    meta_path = results_dir / "scan_meta.json"
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(scan_meta, f, indent=2)
+
     # Generate reports
     html_path = results_dir / "report.html"
     generate_html_report(report, str(html_path), logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None)
@@ -261,6 +331,13 @@ async def results(request: Request, audit_id: str):
     # Check for attack graph
     attack_graph_exists = (results_dir / "attack_graph.html").exists()
 
+    # Load scan metadata
+    meta_path = results_dir / "scan_meta.json"
+    scan_meta = {}
+    if meta_path.exists():
+        with open(meta_path, "r", encoding="utf-8") as f:
+            scan_meta = json.load(f)
+
     return templates.TemplateResponse(
         request,
         "results.html",
@@ -272,6 +349,7 @@ async def results(request: Request, audit_id: str):
             "risk_score": risk_score,
             "pass_fail": pass_fail,
             "attack_graph_exists": attack_graph_exists,
+            "scan_meta": scan_meta,
         },
     )
 

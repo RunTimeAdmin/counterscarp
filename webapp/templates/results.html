@@ -4,37 +4,132 @@
 
 {% block content %}
 <div class="container">
-    <div class="results-header">
-        <h1>Audit Results</h1>
-        <div class="risk-badge risk-{{ 'critical' if risk_score >= 60 else 'high' if risk_score >= 30 else 'medium' if risk_score >= 10 else 'low' }}">
-            Risk Score: {{ risk_score }}/100
+
+    <!-- A. Project Header Bar -->
+    <div class="project-header">
+        <div class="project-header-left">
+            <h1>{{ scan_meta.project_name | default('Audit Results') }}</h1>
+            {% if scan_meta.timestamp %}
+            <span class="project-timestamp">{{ scan_meta.timestamp[:19] | replace('T', '  ') }} UTC</span>
+            {% endif %}
+        </div>
+        <div class="project-header-right">
+            <span class="verdict-badge verdict-{{ pass_fail.lower() }}">
+                {% if pass_fail == 'PASS' %}&#10003; PASS
+                {% elif pass_fail == 'WARNING' %}&#9888; WARNING
+                {% else %}&#10007; FAIL{% endif %}
+            </span>
         </div>
     </div>
 
-    <div class="severity-summary">
-        <div class="severity-card critical">
-            <div class="severity-count">{{ severity_counts.CRITICAL }}</div>
-            <div class="severity-label">Critical</div>
+    <!-- B. Scan Coverage Section -->
+    <div class="scan-coverage card">
+        <div class="scan-coverage-header">
+            <h2>Scan Coverage</h2>
         </div>
-        <div class="severity-card high">
-            <div class="severity-count">{{ severity_counts.HIGH }}</div>
-            <div class="severity-label">High</div>
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-value">{{ scan_meta.files_scanned | default('?') }}</span>
+                <span class="stat-label">Files Analyzed</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-value">{{ scan_meta.total_source_lines | default('?') }}</span>
+                <span class="stat-label">Source Lines</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-value">
+                    {% if scan_meta.analyzers %}
+                        {{ scan_meta.analyzers[0].patterns_checked | default('?') }}
+                    {% else %}?{% endif %}
+                </span>
+                <span class="stat-label">Patterns</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-value">{{ total_findings }}</span>
+                <span class="stat-label">Findings</span>
+            </div>
         </div>
-        <div class="severity-card medium">
-            <div class="severity-count">{{ severity_counts.MEDIUM }}</div>
-            <div class="severity-label">Medium</div>
-        </div>
-        <div class="severity-card low">
-            <div class="severity-count">{{ severity_counts.LOW }}</div>
-            <div class="severity-label">Low</div>
-        </div>
-        <div class="severity-card info">
-            <div class="severity-count">{{ severity_counts.INFO }}</div>
-            <div class="severity-label">Info</div>
+
+        <div class="analyzers-list">
+            {% for analyzer in (scan_meta.analyzers or []) %}
+            <div class="analyzer-item" data-status="{{ analyzer.status }}">
+                <div class="analyzer-row" onclick="toggleAnalyzer(this)">
+                    <span class="analyzer-status">
+                        {% if analyzer.status == 'completed' %}&#10003;
+                        {% elif analyzer.status == 'skipped' %}&#9711;
+                        {% else %}&#9711;{% endif %}
+                    </span>
+                    <span class="analyzer-name">{{ analyzer.name }}</span>
+                    {% if analyzer.patterns_checked is defined %}
+                    <span class="analyzer-patterns">{{ analyzer.patterns_checked }} patterns</span>
+                    {% elif analyzer.status == 'completed' %}
+                    <span class="analyzer-patterns">Generated</span>
+                    {% elif analyzer.status == 'not_configured' %}
+                    <span class="analyzer-patterns not-configured">Not configured</span>
+                    {% else %}
+                    <span class="analyzer-patterns">Skipped</span>
+                    {% endif %}
+                    <span class="analyzer-findings">{{ analyzer.findings_count }} found</span>
+                    {% if analyzer.categories is defined %}
+                    <span class="analyzer-toggle">&#9662;</span>
+                    {% endif %}
+                </div>
+                {% if analyzer.categories is defined %}
+                <div class="category-list" style="display:none;">
+                    {% for cat_name, cat_data in analyzer.categories.items() %}
+                    <div class="category-row">
+                        <span class="category-connector">&#9507;</span>
+                        <span class="category-name">{{ cat_name }}</span>
+                        <span class="category-patterns">({{ cat_data.patterns }} patterns)</span>
+                        <span class="category-findings {% if cat_data.findings > 0 %}has-findings{% endif %}">
+                            {{ cat_data.findings }} found
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
     </div>
 
-    <div class="download-section">
+    <!-- C. Risk Score & Severity Summary -->
+    <div class="risk-severity-row">
+        <div class="risk-score-card card">
+            <div class="risk-score-label">Risk Score</div>
+            <div class="risk-score-value risk-{{ 'critical' if risk_score >= 60 else 'high' if risk_score >= 30 else 'medium' if risk_score >= 10 else 'low' }}">
+                {{ risk_score }}<span class="risk-score-max">/100</span>
+            </div>
+        </div>
+        <div class="severity-summary">
+            <div class="severity-pill critical" data-severity="CRITICAL">
+                <span class="pill-count">{{ severity_counts.CRITICAL }}</span>
+                <span class="pill-label">Critical</span>
+            </div>
+            <div class="severity-pill high" data-severity="HIGH">
+                <span class="pill-count">{{ severity_counts.HIGH }}</span>
+                <span class="pill-label">High</span>
+            </div>
+            <div class="severity-pill medium" data-severity="MEDIUM">
+                <span class="pill-count">{{ severity_counts.MEDIUM }}</span>
+                <span class="pill-label">Medium</span>
+            </div>
+            <div class="severity-pill low" data-severity="LOW">
+                <span class="pill-count">{{ severity_counts.LOW }}</span>
+                <span class="pill-label">Low</span>
+            </div>
+            <div class="severity-pill info" data-severity="INFO">
+                <span class="pill-count">{{ severity_counts.INFO }}</span>
+                <span class="pill-label">Info</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- D. Download Reports -->
+    <div class="download-section card">
         <h3>Download Reports</h3>
         <div class="download-buttons">
             <a href="/results/{{ audit_id }}/report/html" class="btn-download">
@@ -57,8 +152,19 @@
         </div>
     </div>
 
-    <div class="findings-section">
-        <h3>Findings ({{ total_findings }})</h3>
+    <!-- E. Findings Section with Filter Tabs -->
+    <div class="findings-section card">
+        <div class="findings-header-row">
+            <h3>Findings ({{ total_findings }})</h3>
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="ALL" onclick="filterFindings('ALL', this)">All</button>
+                <button class="filter-tab" data-filter="CRITICAL" onclick="filterFindings('CRITICAL', this)">Critical</button>
+                <button class="filter-tab" data-filter="HIGH" onclick="filterFindings('HIGH', this)">High</button>
+                <button class="filter-tab" data-filter="MEDIUM" onclick="filterFindings('MEDIUM', this)">Medium</button>
+                <button class="filter-tab" data-filter="LOW" onclick="filterFindings('LOW', this)">Low</button>
+                <button class="filter-tab" data-filter="INFO" onclick="filterFindings('INFO', this)">Info</button>
+            </div>
+        </div>
         {% if findings %}
             <div class="findings-list">
                 {% for finding in findings %}
@@ -103,6 +209,7 @@
             </div>
         {% else %}
             <div class="no-findings">
+                <div class="no-findings-icon">&#10003;</div>
                 <p>No findings detected. This does not guarantee complete security.</p>
             </div>
         {% endif %}
@@ -110,26 +217,62 @@
 </div>
 
 <script>
+    // Toggle finding card expand/collapse with animation
     function toggleFinding(header) {
         const card = header.parentElement;
         const content = card.querySelector('.finding-content');
         const toggle = header.querySelector('.finding-toggle');
 
-        if (content.style.display === 'none' || content.style.display === '') {
-            content.style.display = 'block';
-            toggle.innerHTML = '&#9652;';
-            card.classList.add('expanded');
-        } else {
-            content.style.display = 'none';
+        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+            content.style.maxHeight = '0px';
+            content.style.overflow = 'hidden';
             toggle.innerHTML = '&#9662;';
             card.classList.remove('expanded');
+        } else {
+            content.style.maxHeight = content.scrollHeight + 'px';
+            content.style.overflow = 'visible';
+            toggle.innerHTML = '&#9652;';
+            card.classList.add('expanded');
         }
     }
 
-    // Initialize all findings as collapsed
+    // Toggle analyzer category breakdown
+    function toggleAnalyzer(row) {
+        const item = row.closest('.analyzer-item');
+        const categoryList = item.querySelector('.category-list');
+        const toggleIcon = row.querySelector('.analyzer-toggle');
+        if (!categoryList) return;
+
+        if (categoryList.style.display === 'none') {
+            categoryList.style.display = 'block';
+            if (toggleIcon) toggleIcon.innerHTML = '&#9652;';
+        } else {
+            categoryList.style.display = 'none';
+            if (toggleIcon) toggleIcon.innerHTML = '&#9662;';
+        }
+    }
+
+    // Severity filter tabs
+    function filterFindings(severity, btn) {
+        // Update active tab
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Show/hide findings
+        document.querySelectorAll('.finding-card').forEach(card => {
+            if (severity === 'ALL' || card.dataset.severity === severity) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    // Initialize: all findings collapsed, categories collapsed
     document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.finding-content').forEach(content => {
-            content.style.display = 'none';
+            content.style.maxHeight = '0px';
+            content.style.overflow = 'hidden';
         });
     });
 </script>
