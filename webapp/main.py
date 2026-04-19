@@ -87,8 +87,13 @@ def run_slither_analysis(file_path: str) -> tuple[list[Finding], str]:
     Status can be: 'completed', 'not_installed', 'timeout', 'error'.
     """
     try:
+        # Use the slither binary from the same venv as this process
+        import sys
+        venv_bin = Path(sys.executable).parent
+        slither_bin = str(venv_bin / "slither")
+
         result = subprocess.run(
-            ["slither", file_path, "--json", "-"],
+            [slither_bin, file_path, "--json", "-"],
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode not in (0, 1):  # 1 means findings found
