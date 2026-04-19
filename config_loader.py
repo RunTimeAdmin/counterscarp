@@ -322,6 +322,87 @@ class CIConfig:
 
 
 @dataclass
+class RedTeamConfig:
+    """Red team scan configuration.
+
+    Attributes:
+        severity_allowlist: List of severity levels to include in findings.
+        ignore_checks: List of check IDs to ignore (noise filtering).
+    """
+    severity_allowlist: List[str] = field(default_factory=lambda: ["High", "Medium"])
+    ignore_checks: List[str] = field(default_factory=lambda: [
+        "solc-version",
+        "naming-convention",
+        "assembly",
+        "redundant-statements"
+    ])
+
+
+@dataclass
+class ExternalToolsConfig:
+    """External tool timeouts and settings.
+
+    Attributes:
+        aderyn_timeout: Aderyn static analyzer timeout in seconds.
+        mythril_timeout: Mythril symbolic execution timeout in seconds.
+        foundry_fuzz_runs: Foundry fuzzing default runs.
+    """
+    aderyn_timeout: int = 120
+    mythril_timeout: int = 600
+    foundry_fuzz_runs: int = 1000
+
+
+@dataclass
+class SupplyChainConfig:
+    """Supply chain security configuration.
+
+    Attributes:
+        ecosystem: Package ecosystem to check (npm, pypi, etc.).
+        osv_timeout: OSV API timeout in seconds.
+        osv_max_retries: OSV API max retries.
+        osv_rate_limit: OSV API rate limit (requests per second).
+    """
+    ecosystem: str = "npm"
+    osv_timeout: int = 10
+    osv_max_retries: int = 3
+    osv_rate_limit: int = 10
+
+
+@dataclass
+class ThreatIntelConfig:
+    """Threat intelligence configuration.
+
+    Attributes:
+        c4_timeout: Code4rena GitHub API timeout in seconds.
+        immunefi_timeout: Immunefi RSS feed timeout in seconds.
+        solana_github_timeout: Solana intelligence GitHub API timeout in seconds.
+        api_rate_limit: Default API rate limit (requests per second).
+    """
+    c4_timeout: int = 10
+    immunefi_timeout: int = 10
+    solana_github_timeout: int = 10
+    api_rate_limit: int = 5
+
+
+@dataclass
+class HttpConfig:
+    """HTTP client configuration.
+
+    Attributes:
+        default_timeout: Default timeout for HTTP requests in seconds.
+        max_retries: Default max retries for failed requests.
+        base_delay: Base delay for exponential backoff in seconds.
+        max_delay: Maximum delay cap for exponential backoff in seconds.
+        backoff_factor: Backoff multiplier for exponential backoff.
+    """
+    default_timeout: int = 30
+    max_retries: int = 3
+    base_delay: float = 1.0
+    max_delay: float = 30.0
+    backoff_factor: float = 2.0
+
+
+@dataclass
 class SentinelConfig:
     """Root configuration object.
 
@@ -335,6 +416,11 @@ class SentinelConfig:
         upgrade_diff: Upgrade safety settings.
         reporting: Reporting settings.
         ci: CI/CD integration settings.
+        red_team: Red team scan configuration.
+        external_tools: External tool timeouts and settings.
+        supply_chain: Supply chain security configuration.
+        threat_intel: Threat intelligence configuration.
+        http: HTTP client configuration.
     """
     engine: EngineConfig = field(default_factory=EngineConfig)
     heuristics: HeuristicConfig = field(default_factory=HeuristicConfig)
@@ -345,6 +431,11 @@ class SentinelConfig:
     upgrade_diff: UpgradeDiffConfig = field(default_factory=UpgradeDiffConfig)
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
     ci: CIConfig = field(default_factory=CIConfig)
+    red_team: RedTeamConfig = field(default_factory=RedTeamConfig)
+    external_tools: ExternalToolsConfig = field(default_factory=ExternalToolsConfig)
+    supply_chain: SupplyChainConfig = field(default_factory=SupplyChainConfig)
+    threat_intel: ThreatIntelConfig = field(default_factory=ThreatIntelConfig)
+    http: HttpConfig = field(default_factory=HttpConfig)
 
     def is_finding_suppressed(self, rule_id: str, file_path: str, line_no: int) -> Optional[Suppression]:
         """Check if a finding should be suppressed.
@@ -524,6 +615,59 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
             exclude_paths=ci.get('exclude_paths', [
                 "test/**", "script/**", "node_modules/**", ".git/**"
             ])
+        )
+
+    # Parse red team config
+    if 'red_team' in data:
+        rt = data['red_team']
+        config.red_team = RedTeamConfig(
+            severity_allowlist=rt.get('severity_allowlist', ["High", "Medium"]),
+            ignore_checks=rt.get('ignore_checks', [
+                "solc-version",
+                "naming-convention",
+                "assembly",
+                "redundant-statements"
+            ])
+        )
+
+    # Parse external tools config
+    if 'external_tools' in data:
+        et = data['external_tools']
+        config.external_tools = ExternalToolsConfig(
+            aderyn_timeout=et.get('aderyn_timeout', 120),
+            mythril_timeout=et.get('mythril_timeout', 600),
+            foundry_fuzz_runs=et.get('foundry_fuzz_runs', 1000)
+        )
+
+    # Parse supply chain config
+    if 'supply_chain' in data:
+        sc = data['supply_chain']
+        config.supply_chain = SupplyChainConfig(
+            ecosystem=sc.get('ecosystem', 'npm'),
+            osv_timeout=sc.get('osv_timeout', 10),
+            osv_max_retries=sc.get('osv_max_retries', 3),
+            osv_rate_limit=sc.get('osv_rate_limit', 10)
+        )
+
+    # Parse threat intel config
+    if 'threat_intel' in data:
+        ti = data['threat_intel']
+        config.threat_intel = ThreatIntelConfig(
+            c4_timeout=ti.get('c4_timeout', 10),
+            immunefi_timeout=ti.get('immunefi_timeout', 10),
+            solana_github_timeout=ti.get('solana_github_timeout', 10),
+            api_rate_limit=ti.get('api_rate_limit', 5)
+        )
+
+    # Parse HTTP config
+    if 'http' in data:
+        http = data['http']
+        config.http = HttpConfig(
+            default_timeout=http.get('default_timeout', 30),
+            max_retries=http.get('max_retries', 3),
+            base_delay=http.get('base_delay', 1.0),
+            max_delay=http.get('max_delay', 30.0),
+            backoff_factor=http.get('backoff_factor', 2.0)
         )
 
     logger.info("Configuration loaded successfully")

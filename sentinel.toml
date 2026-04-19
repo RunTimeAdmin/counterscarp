@@ -104,6 +104,95 @@ workers = 10
 
 
 # ============================================================================
+# Red Team Scan Configuration
+# ============================================================================
+
+[red_team]
+# Severity levels to include in findings (High, Medium, Low, Informational)
+severity_allowlist = ["High", "Medium"]
+
+# Check IDs to ignore (noise filtering)
+ignore_checks = [
+    "solc-version",
+    "naming-convention",
+    "assembly",
+    "redundant-statements"
+]
+
+
+# ============================================================================
+# External Tool Timeouts and Settings
+# ============================================================================
+
+[external_tools]
+# Aderyn static analyzer timeout (seconds)
+aderyn_timeout = 120
+
+# Mythril symbolic execution timeout (seconds)
+mythril_timeout = 600
+
+# Foundry fuzzing default runs
+foundry_fuzz_runs = 1000
+
+
+# ============================================================================
+# Supply Chain Security Configuration
+# ============================================================================
+
+[supply_chain]
+# Package ecosystem to check (npm, pypi, etc.)
+ecosystem = "npm"
+
+# OSV API timeout (seconds)
+osv_timeout = 10
+
+# OSV API max retries
+osv_max_retries = 3
+
+# OSV API rate limit (requests per second)
+osv_rate_limit = 10
+
+
+# ============================================================================
+# Threat Intelligence Configuration
+# ============================================================================
+
+[threat_intel]
+# Code4rena GitHub API timeout (seconds)
+c4_timeout = 10
+
+# Immunefi RSS feed timeout (seconds)
+immunefi_timeout = 10
+
+# Solana intelligence GitHub API timeout (seconds)
+solana_github_timeout = 10
+
+# Default API rate limit (requests per second)
+api_rate_limit = 5
+
+
+# ============================================================================
+# HTTP Client Configuration
+# ============================================================================
+
+[http]
+# Default timeout for HTTP requests (seconds)
+default_timeout = 30
+
+# Default max retries for failed requests
+max_retries = 3
+
+# Base delay for exponential backoff (seconds)
+base_delay = 1.0
+
+# Maximum delay cap for exponential backoff (seconds)
+max_delay = 30.0
+
+# Backoff multiplier for exponential backoff
+backoff_factor = 2.0
+
+
+# ============================================================================
 # Chain-Specific Settings
 # ============================================================================
 

@@ -13,20 +13,65 @@ from exceptions import (
     SentinelTimeoutError,
 )
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
+
+# Load configuration with fallback to defaults
+_config = None
+
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
 
 # CONFIGURATION
 # How many random scenarios to generate?
 # 500 is quick checks. 10,000+ is for deep audits.
-FUZZ_RUNS = 1000
+DEFAULT_FUZZ_RUNS = 1000
 
 
-def run_foundry_fuzz(target_contract: str, match_test: Optional[str] = None) -> str:
+def get_fuzz_runs() -> int:
+    """Get fuzz runs from config or use default."""
+    try:
+        # Try external_tools first, then fuzzing.foundry
+        config = get_config()
+        if hasattr(config, 'external_tools') and config.external_tools:
+            runs = config.external_tools.foundry_fuzz_runs
+            if runs:
+                return runs
+        # Fallback to fuzzing config
+        return config.fuzzing.foundry_runs
+    except Exception:
+        return DEFAULT_FUZZ_RUNS
+
+
+def run_foundry_fuzz(
+    target_contract: str,
+    match_test: Optional[str] = None,
+    fuzz_runs: Optional[int] = None
+) -> str:
     """Runs `forge test` specifically targeting invariant tests.
 
     Args:
         target_contract: Name of the contract to fuzz.
         match_test: Optional specific test function to run.
+        fuzz_runs: Number of fuzz runs (default: from config or 1000).
 
     Returns:
         Raw stdout from the fuzzing run.
@@ -36,9 +81,13 @@ def run_foundry_fuzz(target_contract: str, match_test: Optional[str] = None) -> 
         SentinelTimeoutError: If fuzzing times out.
         SentinelAnalysisError: If fuzzing fails.
     """
+    # Use config value if not provided
+    if fuzz_runs is None:
+        fuzz_runs = get_fuzz_runs()
+
     print("[*] Initializing Fuzz Engine (Foundry)...")
     print(f"[*] Target: {target_contract}")
-    print(f"[*] Runs: {FUZZ_RUNS} attempts per invariant")
+    print(f"[*] Runs: {fuzz_runs} attempts per invariant")
 
     cmd = [
         "forge",
@@ -46,8 +95,8 @@ def run_foundry_fuzz(target_contract: str, match_test: Optional[str] = None) -> 
         "--match-contract",
         target_contract,
         "--fuzz-runs",
-        str(FUZZ_RUNS),
-        "-vvv",  # Verbosity 3 is required to see Counterexamples in stdout
+        str(fuzz_runs),
+        "-vvv",  # Verbosity 3 is required to see Counterexamples
     ]
 
     if match_test:

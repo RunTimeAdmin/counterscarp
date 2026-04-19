@@ -11,18 +11,68 @@ from logger import get_logger
 from exceptions import SentinelAPIError, SentinelValidationError
 from http_utils import resilient_post, RateLimiter
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
 
-# CONFIGURATION
-# We explicitly check the 'npm' ecosystem because that's how most
-# Solidity-related libraries (OpenZeppelin, Hardhat, etc.) are distributed.
-ECOSYSTEM = "npm"
-OSV_API_TIMEOUT = 10  # seconds
-OSV_MAX_RETRIES = 3
+# Load configuration with fallback to defaults
+_config = None
+_osv_rate_limiter = None
 
-# Shared rate limiter for OSV API calls
-# OSV.dev is generally tolerant but we'll be polite
-_osv_rate_limiter = RateLimiter(requests_per_second=10)
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
+def get_osv_rate_limiter() -> RateLimiter:
+    """Get or create the OSV rate limiter."""
+    global _osv_rate_limiter
+    if _osv_rate_limiter is None:
+        try:
+            rate_limit = get_config().supply_chain.osv_rate_limit
+        except Exception:
+            rate_limit = 10
+        _osv_rate_limiter = RateLimiter(requests_per_second=rate_limit)
+    return _osv_rate_limiter
+
+
+def get_ecosystem() -> str:
+    """Get ecosystem from config or use default."""
+    try:
+        return get_config().supply_chain.ecosystem
+    except Exception:
+        return "npm"
+
+
+def get_osv_timeout() -> int:
+    """Get OSV API timeout from config or use default."""
+    try:
+        return get_config().supply_chain.osv_timeout
+    except Exception:
+        return 10
+
+
+def get_osv_max_retries() -> int:
+    """Get OSV API max retries from config or use default."""
+    try:
+        return get_config().supply_chain.osv_max_retries
+    except Exception:
+        return 3
 
 
 def clean_version(version_str: str) -> str:
@@ -57,7 +107,7 @@ def check_osv_api(package_name: str, version: str) -> List[Dict[str, Any]]:
     payload = {
         "package": {
             "name": package_name,
-            "ecosystem": ECOSYSTEM,
+            "ecosystem": get_ecosystem(),
         },
         "version": version,
     }
@@ -67,9 +117,9 @@ def check_osv_api(package_name: str, version: str) -> List[Dict[str, Any]]:
         response = resilient_post(
             url,
             json=payload,
-            timeout=OSV_API_TIMEOUT,
-            max_retries=OSV_MAX_RETRIES,
-            rate_limiter=_osv_rate_limiter
+            timeout=get_osv_timeout(),
+            max_retries=get_osv_max_retries(),
+            rate_limiter=get_osv_rate_limiter()
         )
         data = response.json()
         return data.get("vulns", [])

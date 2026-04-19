@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinel-engine"
+version = "2.3.0"
+description = "Production-ready smart contract security auditing platform"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Sentinel Engine Team"}]
+readme = "README.md"
+keywords = ["security", "audit", "smart-contracts", "solidity", "solana", "blockchain"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Homepage = "https://sentinel-engine.io"
+Repository = "https://github.com/RunTimeAdmin/sentinel-engine"
+
+dependencies = [
+    # Core dependencies (required)
+    "requests>=2.31.0",
+    "packaging>=23.0",
+    "tomli>=2.0.0; python_version < '3.11'",
+    "solc-select>=1.0.4",
+]
+
+[project.optional-dependencies]
+advanced = [
+    # Optional advanced tools
+    "openai>=1.0",
+]
+dev = [
+    # Development/testing dependencies
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+sentinel-engine = "orchestrator:main"
+sentinel = "orchestrator:main"
+
+[tool.pytest.ini_options]
+# Migrated from pytest.ini - this file can now be removed
+# Original pytest.ini location: pytest.ini
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*.py"]
+exclude = [
+    "tests*",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.toml", "*.txt", "*.md"]

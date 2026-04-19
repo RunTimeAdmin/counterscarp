@@ -30,10 +30,74 @@ from requests.exceptions import (
 from logger import get_logger
 from exceptions import SentinelAPIError, SentinelTimeoutError
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
 
+# Load configuration with fallback to defaults
+_config = None
 
-# Default configuration for HTTP requests
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
+def get_http_timeout() -> int:
+    """Get HTTP default timeout from config or use default."""
+    try:
+        return get_config().http.default_timeout
+    except Exception:
+        return 30
+
+
+def get_http_max_retries() -> int:
+    """Get HTTP max retries from config or use default."""
+    try:
+        return get_config().http.max_retries
+    except Exception:
+        return 3
+
+
+def get_http_base_delay() -> float:
+    """Get HTTP base delay from config or use default."""
+    try:
+        return get_config().http.base_delay
+    except Exception:
+        return 1.0
+
+
+def get_http_max_delay() -> float:
+    """Get HTTP max delay from config or use default."""
+    try:
+        return get_config().http.max_delay
+    except Exception:
+        return 30.0
+
+
+def get_http_backoff_factor() -> float:
+    """Get HTTP backoff factor from config or use default."""
+    try:
+        return get_config().http.backoff_factor
+    except Exception:
+        return 2.0
+
+
+# Default configuration for HTTP requests (fallback values)
 DEFAULT_TIMEOUT = 30
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BASE_DELAY = 1.0

@@ -12,8 +12,8 @@ import re
 import os
 import sys
 import argparse
-from typing import Dict, List, Any, Optional
-from pathlib import Path
+from typing import Dict, List, Any
+
 from dataclasses import dataclass
 
 
@@ -42,48 +42,36 @@ class SolanaFinding:
 
 
 # Anchor-specific vulnerability patterns
+# Expanded to 31 patterns for comprehensive Solana/Anchor security coverage
 ANCHOR_PATTERNS = [
+    # ========== ACCOUNT VALIDATION (8 patterns) ==========
     {
         "id": "MISSING_SIGNER_CHECK",
         "severity": "CRITICAL",
-        "pattern": re.compile(r'#\[account\(.*\)\](?!.*signer).*\bpub\s+(\w+):\s*AccountInfo'),
-        "description": "Account without signer validation - anyone can impersonate",
-        "fix": "Add 'signer' constraint: #[account(signer)] pub authority: AccountInfo"
+        "pattern": re.compile(
+            r'#\[account\(.*\)\](?!.*signer).*\bpub\s+(\w+):\s*AccountInfo'
+        ),
+        "description": "Account without signer validation",
+        "fix": "Add 'signer' constraint: #[account(signer)]"
     },
     {
         "id": "MISSING_OWNER_CHECK",
         "severity": "CRITICAL",
-        "pattern": re.compile(r'let\s+\w+\s*=\s*\w+\.to_account_info\(\)(?!.*owner)'),
+        "pattern": re.compile(
+            r'let\s+\w+\s*=\s*\w+\.to_account_info\(\)(?!.*owner)'
+        ),
         "description": "Account deserialization without owner check",
-        "fix": "Verify account.owner == expected_program_id before deserializing"
+        "fix": "Verify account.owner == expected_program_id"
     },
     {
-        "id": "UNCHECKED_ARITHMETIC",
+        "id": "MISSING_HAS_ONE_CONSTRAINT",
         "severity": "HIGH",
-        "pattern": re.compile(r'(\+|\-|\*|\/)\s*(?!checked_)'),
-        "description": "Unchecked arithmetic operation (overflow/underflow risk)",
-        "fix": "Use checked_add(), checked_sub(), checked_mul(), checked_div()"
-    },
-    {
-        "id": "UNVALIDATED_ACCOUNT_DATA",
-        "severity": "HIGH",
-        "pattern": re.compile(r'Account::try_from\(&.*\)(?!.*\.map_err)'),
-        "description": "Account deserialization without error handling",
-        "fix": "Use .map_err() or ? operator to handle deserialization errors"
-    },
-    {
-        "id": "MISSING_RENT_EXEMPTION",
-        "severity": "MEDIUM",
-        "pattern": re.compile(r'create_account\((?!.*rent)'),
-        "description": "Account creation without rent exemption check",
-        "fix": "Ensure account is rent-exempt: rent.minimum_balance(space)"
-    },
-    {
-        "id": "UNSAFE_INVOKE_SIGNED",
-        "severity": "HIGH",
-        "pattern": re.compile(r'invoke_signed\(.*\bseeds\b.*\)'),
-        "description": "invoke_signed with user-controlled seeds (PDA exploitation)",
-        "fix": "Ensure seeds are derived from program-controlled data only"
+        "pattern": re.compile(
+            r'#\[account\([^)]*\)\]\s*pub\s+\w+:\s*Box<Account<'
+            r'\w+>>\s*\{(?!.*has_one)'
+        ),
+        "description": "Missing has_one constraint for associated accounts",
+        "fix": "Add has_one constraint: #[account(has_one = authority)]"
     },
     {
         "id": "MISSING_DISCRIMINATOR_CHECK",
@@ -93,12 +81,268 @@ ANCHOR_PATTERNS = [
         "fix": "Add discriminator validation in account struct"
     },
     {
+        "id": "UNVALIDATED_PDA_SEEDS",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'Pubkey::create_program_address\([^)]+\)(?!.*seeds)'
+        ),
+        "description": "PDA derived without proper seed validation",
+        "fix": "Use find_program_address with validated seeds and bump"
+    },
+    {
+        "id": "MISSING_IS_SIGNER_RAW",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'account_info\.key\s*==\s*[^\n]+(?!.*is_signer)'
+        ),
+        "description": "Raw Solana program missing is_signer check",
+        "fix": "Add check: if !account_info.is_signer { return Err(...) }"
+    },
+    {
+        "id": "MISSING_ACCOUNT_DATA_VALIDATION",
+        "severity": "HIGH",
+        "pattern": re.compile(
+            r'Account::try_from_unchecked\(|try_from_slice_unchecked\('
+        ),
+        "description": "Unchecked account data deserialization",
+        "fix": "Use Account::try_from() or validate discriminator first"
+    },
+    {
+        "id": "UNVALIDATED_ACCOUNT_INFO",
+        "severity": "HIGH",
+        "pattern": re.compile(r'pub\s+\w+:\s*AccountInfo\s*[^,\n]*$'),
+        "description": "Raw AccountInfo without validation constraints",
+        "fix": "Use typed Account<T> wrappers or add validation"
+    },
+
+    # ========== CPI SECURITY (4 patterns) ==========
+    {
+        "id": "ARBITRARY_CPI",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'invoke\s*\([^)]*\w+\.key\)(?!.*program_id)'
+        ),
+        "description": "CPI without program ID verification",
+        "fix": "Verify target program ID matches expected"
+    },
+    {
+        "id": "MISSING_CPI_AUTHORITY",
+        "severity": "HIGH",
+        "pattern": re.compile(r'CpiContext::new\([^)]+\)(?!.*with_signer)'),
+        "description": "CPI context missing signer seeds for PDA authority",
+        "fix": "Use CpiContext::new_with_signer() when invoking from a PDA"
+    },
+    {
+        "id": "UNVERIFIED_PROGRAM_ACCOUNT",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'program_id:\s*&\w+\.to_account_info\(\)'
+        ),
+        "description": "CPI using unverified program account",
+        "fix": "Hardcode expected program IDs or verify against known"
+    },
+    {
+        "id": "UNSAFE_INVOKE_SIGNED",
+        "severity": "HIGH",
+        "pattern": re.compile(r'invoke_signed\(.*\bseeds\b.*\)'),
+        "description": "invoke_signed with user-controlled seeds",
+        "fix": "Ensure seeds are program-controlled only"
+    },
+
+    # ========== ARITHMETIC & LOGIC (5 patterns) ==========
+    {
+        "id": "UNCHECKED_ARITHMETIC",
+        "severity": "HIGH",
+        "pattern": re.compile(
+            r'(\+\s|(?<!checked_)-\s|(?<!checked_)\*\s|(?<!checked_)/\s)'
+        ),
+        "description": "Unchecked arithmetic operation",
+        "fix": "Use checked_add(), checked_sub(), checked_mul(), checked_div()"
+    },
+    {
+        "id": "INTEGER_OVERFLOW_RISK",
+        "severity": "HIGH",
+        "pattern": re.compile(r'\.wrapping_(add|sub|mul)\('),
+        "description": "Wrapping arithmetic can silently overflow",
+        "fix": "Use checked_* operations or document why wrapping is safe"
+    },
+    {
+        "id": "UNSAFE_CASTING",
+        "severity": "MEDIUM",
+        "pattern": re.compile(r'as\s+u64|as\s+i64|as\s+u32|as\s+i32'),
+        "description": "Unsafe type casting without bounds checking",
+        "fix": "Use try_from() or verify value fits before casting"
+    },
+    {
+        "id": "DIVISION_BY_ZERO_RISK",
+        "severity": "MEDIUM",
+        "pattern": re.compile(r'/\s*\w+[^;\n]*$'),
+        "description": "Division without zero-check on divisor",
+        "fix": "Add check: if divisor == 0 { return Err(...) }"
+    },
+    {
+        "id": "PRECISION_LOSS",
+        "severity": "MEDIUM",
+        "pattern": re.compile(r'/\s*\w+\s*\*\s*\w+'),
+        "description": "Division before multiplication causes precision loss",
+        "fix": "Reorder: multiply first, then divide (a * c / b)"
+    },
+
+    # ========== STATE MANAGEMENT (6 patterns) ==========
+    {
+        "id": "MISSING_RENT_EXEMPTION",
+        "severity": "MEDIUM",
+        "pattern": re.compile(r'create_account\((?!.*rent)'),
+        "description": "Account creation without rent exemption check",
+        "fix": "Ensure account is rent-exempt: rent.minimum_balance(space)"
+    },
+    {
+        "id": "UNINITIALIZED_ACCOUNT_USAGE",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'if\s+\w+\.data_len\(\)\s*==\s*0\s*\{(?!.*return|.*Err)'
+        ),
+        "description": "Uninitialized account check without error handling",
+        "fix": "Return error for uninitialized accounts"
+    },
+    {
+        "id": "ACCOUNT_REINITIALIZATION",
+        "severity": "CRITICAL",
+        "pattern": re.compile(r'\.init_if_needed\('),
+        "description": "init_if_needed allows reinitialization",
+        "fix": "Use init constraint or verify reinitialization safety"
+    },
+    {
+        "id": "MISSING_CLOSE_ACCOUNT",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'lamports\(\)\s*=\s*0|\.assign\(\s*&system_program'
+        ),
+        "description": "Account close without proper close constraint",
+        "fix": "Use #[account(close = destination)]"
+    },
+    {
+        "id": "STALE_ACCOUNT_DATA",
+        "severity": "HIGH",
+        "pattern": re.compile(
+            r'invoke\s*\(.*\).*\n.*\w+\.\w+\s*[^=](?!.*reload)'
+        ),
+        "description": "Account data used after CPI without reload",
+        "fix": "Call account.reload()? after CPI"
+    },
+    {
         "id": "UNCLOSED_ACCOUNT",
         "severity": "MEDIUM",
         "pattern": re.compile(r'close\s*=\s*\w+(?!.*realloc)'),
         "description": "Account close without realloc (resurrection attack)",
         "fix": "Use realloc(0) before closing to prevent resurrection"
-    }
+    },
+
+    # ========== ACCESS CONTROL (4 patterns) ==========
+    {
+        "id": "MISSING_ACCESS_CONTROL",
+        "severity": "HIGH",
+        "pattern": re.compile(
+            r'pub\s+fn\s+(withdraw|transfer|mint|burn|upgrade|set_authority)'
+            r'\s*\([^)]*\)\s*->\s*Result'
+        ),
+        "description": "Sensitive instruction missing #[access_control]",
+        "fix": "Add #[access_control] with authorization checks"
+    },
+    {
+        "id": "HARDCODED_AUTHORITY",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'Pubkey::from_str\("[1-9A-HJ-NP-Za-km-z]{32,44}"\)'
+            r'|pubkey!\s*\(\s*"[1-9A-HJ-NP-Za-km-z]{32,44}"\s*\)'
+        ),
+        "description": "Hardcoded authority pubkey reduces flexibility",
+        "fix": "Use configurable authority stored in program state"
+    },
+    {
+        "id": "MISSING_MULTISIG",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'pub\s+fn\s+(upgrade|set_authority|emergency|pause)'
+            r'\s*\([^)]*\).*only'
+        ),
+        "description": "Admin function may lack multi-signature protection",
+        "fix": "Implement multi-sig or timelock for admin functions"
+    },
+    {
+        "id": "WEAK_AUTHORITY_CHECK",
+        "severity": "HIGH",
+        "pattern": re.compile(
+            r'authority\s*==\s*ctx\.accounts\.\w+\.key\(\)'
+        ),
+        "description": "Authority check without signer verification",
+        "fix": "Verify key match AND is_signer"
+    },
+
+    # ========== TOKEN SECURITY (4 patterns) ==========
+    {
+        "id": "MISSING_TOKEN_ACCOUNT_VALIDATION",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'TokenAccount::try_from\(&.*\)(?!.*mint)'
+        ),
+        "description": "Token account validation missing mint verification",
+        "fix": "Verify token_account.mint == expected_mint"
+    },
+    {
+        "id": "UNCHECKED_TOKEN_BALANCE",
+        "severity": "HIGH",
+        "pattern": re.compile(r'token::transfer\([^)]*\)(?!.*balance)'),
+        "description": "Token transfer without checking source balance",
+        "fix": "Check source_token_account.amount >= amount"
+    },
+    {
+        "id": "MISSING_FREEZE_AUTHORITY_CHECK",
+        "severity": "MEDIUM",
+        "pattern": re.compile(r'token::mint_to\(|token::burn\('),
+        "description": "Token mint/burn without freeze authority check",
+        "fix": "Consider checking mint.freeze_authority"
+    },
+    {
+        "id": "UNVALIDATED_TOKEN_PROGRAM",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'token::\w+\s*\(\s*CpiContext::new\('
+            r'\s*ctx\.accounts\.token_program'
+        ),
+        "description": "Token program CPI without verifying program",
+        "fix": "Verify ctx.accounts.token_program.key == &token::ID"
+    },
+
+    # ========== GENERAL VALIDATION (4 patterns) ==========
+    {
+        "id": "UNVALIDATED_ACCOUNT_DATA",
+        "severity": "HIGH",
+        "pattern": re.compile(r'Account::try_from\(&.*\)(?!.*\.map_err)'),
+        "description": "Account deserialization without error handling",
+        "fix": "Use .map_err() or ? operator to handle deserialization errors"
+    },
+    {
+        "id": "UNCONSTRAINED_SYSTEM_PROGRAM",
+        "severity": "MEDIUM",
+        "pattern": re.compile(r'system_program::create_account\('),
+        "description": "System program CPI without program ID verification",
+        "fix": "Verify system_program account matches system_program::ID"
+    },
+    {
+        "id": "MISSING_CLOCK_VALIDATION",
+        "severity": "LOW",
+        "pattern": re.compile(r'Clock::get\(\)\?\.(unix_timestamp|slot)'),
+        "description": "Clock usage without timestamp/slot validation",
+        "fix": "Document clock dependency and drift tolerance"
+    },
+    {
+        "id": "DUPLICATE_MUTABLE_ACCOUNTS",
+        "severity": "HIGH",
+        "pattern": re.compile(r'&mut\s+\w+.*&mut\s+\w+.*same\s+account'),
+        "description": "Multiple mutable borrows of same account",
+        "fix": "Ensure accounts are distinct"
+    },
 ]
 
 
@@ -261,7 +505,8 @@ def analyze_solana_program(project_root: str) -> Dict[str, Any]:
     
     if "vulnerabilities" in audit_results:
         results["dependency_vulns"] = audit_results["vulnerabilities"]
-        print(f"    Found {len(audit_results['vulnerabilities'])} dependency vulnerabilities")
+        vuln_count = len(audit_results['vulnerabilities'])
+        print(f"    Found {vuln_count} dependency vulnerabilities")
     
     # 2. Pattern-based scanning
     print("\n[*] Scanning for Anchor/Solana vulnerability patterns...")
@@ -292,7 +537,7 @@ def analyze_solana_program(project_root: str) -> Dict[str, Any]:
     for finding in results["pattern_findings"]:
         results["summary"][finding.severity] += 1
     
-    print(f"\n[*] Pattern analysis complete:")
+    print("\n[*] Pattern analysis complete:")
     print(f"    CRITICAL: {results['summary']['CRITICAL']}")
     print(f"    HIGH:     {results['summary']['HIGH']}")
     print(f"    MEDIUM:   {results['summary']['MEDIUM']}")
@@ -329,8 +574,11 @@ def print_report(results: Dict[str, Any]) -> None:
         
         for vuln in dep_vulns:
             advisory = vuln.get("advisory", {})
-            print(f"\n[{advisory.get('severity', 'UNKNOWN')}] {advisory.get('title', 'Unknown')}")
-            print(f"  Package: {vuln.get('package', {}).get('name', 'unknown')}")
+            sev = advisory.get('severity', 'UNKNOWN')
+            title = advisory.get('title', 'Unknown')
+            print(f"\n[{sev}] {title}")
+            pkg = vuln.get('package', {}).get('name', 'unknown')
+            print(f"  Package: {pkg}")
             print(f"  ID: {advisory.get('id', 'N/A')}")
             print(f"  URL: {advisory.get('url', 'N/A')}")
     
@@ -343,7 +591,9 @@ def print_report(results: Dict[str, Any]) -> None:
         
         # Group by severity
         for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-            severity_findings = [f for f in pattern_findings if f.severity == severity]
+            severity_findings = [
+                f for f in pattern_findings if f.severity == severity
+            ]
             
             if severity_findings:
                 print(f"\n[{severity}]")
@@ -355,12 +605,15 @@ def print_report(results: Dict[str, Any]) -> None:
                     print(f"     Fix: {finding.fix_suggestion}")
                 
                 if len(severity_findings) > 10:
-                    print(f"\n  ... ({len(severity_findings) - 10} more {severity} findings)")
+                    more = len(severity_findings) - 10
+                    print(f"\n  ... ({more} more {severity} findings)")
     
     # Account analysis summary
     accounts = results.get("account_analysis", [])
     if accounts:
-        risky_accounts = [a for a in accounts if not a["has_signer"] or not a["has_owner"]]
+        risky_accounts = [
+            a for a in accounts if not a["has_signer"] or not a["has_owner"]
+        ]
         
         if risky_accounts:
             print("\n" + "-"*60)
@@ -379,7 +632,7 @@ def print_report(results: Dict[str, Any]) -> None:
 def main() -> None:
     """Main entry point for the Solana analyzer CLI."""
     parser = argparse.ArgumentParser(
-        description="🔍 Solana/Anchor Static Analyzer - Security analysis for Rust programs"
+        description="Solana/Anchor Static Analyzer - Security analysis"
     )
     parser.add_argument(
         "project_root",

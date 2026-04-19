@@ -7,22 +7,62 @@ from typing import Any, Dict, List
 from logger import get_logger
 from http_utils import resilient_get, RateLimiter
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
 
-# Shared rate limiter for API calls in this module
-_rate_limiter = RateLimiter(requests_per_second=5)
+# Load configuration with fallback to defaults
+_config = None
+_rate_limiter = None
+
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
+def get_rate_limiter() -> RateLimiter:
+    """Get or create the rate limiter."""
+    global _rate_limiter
+    if _rate_limiter is None:
+        try:
+            rate_limit = get_config().threat_intel.api_rate_limit
+        except Exception:
+            rate_limit = 5
+        _rate_limiter = RateLimiter(requests_per_second=rate_limit)
+    return _rate_limiter
+
+
+def get_github_timeout() -> int:
+    """Get GitHub API timeout from config or use default."""
+    try:
+        return get_config().threat_intel.solana_github_timeout
+    except Exception:
+        return 10
+
 
 # --- CONFIGURATION ---
 # The "Big Three" Solana Audit Repos (Publicly indexed data)
 SOURCES = {
-    "Neodyme": "https://api.github.com/search/issues?q=org:neodyme+is:issue+label:\"vulnerability\"",
-    "Solana-Labs": "https://api.github.com/search/issues?q=repo:solana-labs/solana+label:\"security\"",
+    "Neodyme": "https://api.github.com/search/issues?q=org:neodyme+is:issue+label:\"vulnerability\"",  # noqa: E501
+    "Solana-Labs": "https://api.github.com/search/issues?q=repo:solana-labs/solana+label:\"security\"",  # noqa: E501
     # Solodit is still the best aggregator, we just filter for Solana
     "Solodit_DeepLink": "https://solodit.xyz/search?q={KEYWORD}&ecosystem=SOLANA"
 }
-
-# Timeouts for different endpoints
-GITHUB_API_TIMEOUT = 10  # seconds
 
 # Key Context Indicators for Solana (Rust/Anchor)
 CONTEXT_KEYWORDS = {
@@ -80,9 +120,9 @@ def fetch_github_issues(api_url: str) -> List[Dict[str, Any]]:
         resp = resilient_get(
             api_url,
             headers=headers,
-            timeout=GITHUB_API_TIMEOUT,
+            timeout=get_github_timeout(),
             max_retries=3,
-            rate_limiter=_rate_limiter
+            rate_limiter=get_rate_limiter()
         )
         return resp.json().get("items", [])
     except (json.JSONDecodeError, KeyError) as e:

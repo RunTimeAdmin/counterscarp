@@ -13,10 +13,46 @@ from exceptions import (
     SentinelTimeoutError,
 )
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
 
+# Load configuration with fallback to defaults
+_config = None
 
-def run_mythril(target: str, function: Optional[str] = None, timeout: int = 600) -> str:
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
+def get_mythril_timeout() -> int:
+    """Get Mythril timeout from config or use default."""
+    try:
+        return get_config().external_tools.mythril_timeout
+    except Exception:
+        return 600
+
+
+def run_mythril(
+    target: str,
+    function: Optional[str] = None,
+    timeout: Optional[int] = None
+) -> str:
     """Run Mythril against a contract and return raw JSON output.
 
     Requires Mythril to be installed and available as the `myth` CLI:
@@ -25,7 +61,7 @@ def run_mythril(target: str, function: Optional[str] = None, timeout: int = 600)
     Args:
         target: Path to the Solidity file to analyze.
         function: Optional specific function to focus analysis on.
-        timeout: Execution timeout in seconds.
+        timeout: Execution timeout in seconds (default: from config or 600).
 
     Returns:
         Raw JSON output from Mythril.
@@ -35,6 +71,9 @@ def run_mythril(target: str, function: Optional[str] = None, timeout: int = 600)
         SentinelTimeoutError: If analysis times out.
         SentinelAnalysisError: If analysis fails.
     """
+    # Use config value if not provided
+    if timeout is None:
+        timeout = get_mythril_timeout()
     cmd = [
         "myth",
         "analyze",
@@ -68,7 +107,10 @@ def run_mythril(target: str, function: Optional[str] = None, timeout: int = 600)
         logger.error(f"Mythril analysis timed out after {timeout}s")
         raise SentinelTimeoutError(
             "Mythril analysis timed out",
-            details={"operation": "mythril_analysis", "timeout_seconds": timeout}
+            details={
+                "operation": "mythril_analysis",
+                "timeout_seconds": timeout
+            }
         ) from e
     except PermissionError as e:
         logger.error(f"Permission denied running Mythril: {e}")

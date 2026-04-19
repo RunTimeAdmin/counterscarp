@@ -22,7 +22,39 @@ from exceptions import (
     SentinelTimeoutError,
 )
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
+
+# Load configuration with fallback to defaults
+_config = None
+
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
+def get_aderyn_timeout() -> int:
+    """Get Aderyn timeout from config or use default."""
+    try:
+        return get_config().external_tools.aderyn_timeout
+    except Exception:
+        return 120
 
 
 def check_aderyn_installed() -> bool:
@@ -104,13 +136,14 @@ def run_aderyn(
     print(f"[*] Running Aderyn on {project_root}")
     print(f"[*] Command: {' '.join(cmd)}")
     
+    timeout = get_aderyn_timeout()
     try:
         result = subprocess.run(
             cmd,
             cwd=project_root,
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=timeout
         )
         
         # Aderyn writes to file, read it back
@@ -124,10 +157,10 @@ def run_aderyn(
             return parse_aderyn_output(result.stdout, result.stderr)
         
     except subprocess.TimeoutExpired as e:
-        logger.error("Aderyn timed out after 120s")
+        logger.error(f"Aderyn timed out after {timeout}s")
         raise SentinelTimeoutError(
             "Aderyn analysis timed out",
-            details={"operation": "aderyn_analysis", "timeout_seconds": 120}
+            details={"operation": "aderyn_analysis", "timeout_seconds": timeout}
         ) from e
     except FileNotFoundError as e:
         logger.error(f"Aderyn not found during execution: {e}")

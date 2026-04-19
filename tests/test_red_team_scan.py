@@ -16,8 +16,8 @@ from red_team_scan import (
     filter_vulnerabilities,
     parse_location,
     print_report,
-    SEVERITY_ALLOWLIST,
-    IGNORE_CHECKS,
+    DEFAULT_SEVERITY_ALLOWLIST,
+    DEFAULT_IGNORE_CHECKS,
 )
 
 
@@ -330,13 +330,13 @@ class TestConstants:
     """Test module constants."""
 
     def test_severity_allowlist(self):
-        """Test SEVERITY_ALLOWLIST contains expected values."""
-        assert "High" in SEVERITY_ALLOWLIST
-        assert "Medium" in SEVERITY_ALLOWLIST
-        assert "Low" not in SEVERITY_ALLOWLIST
+        """Test DEFAULT_SEVERITY_ALLOWLIST contains expected values."""
+        assert "High" in DEFAULT_SEVERITY_ALLOWLIST
+        assert "Medium" in DEFAULT_SEVERITY_ALLOWLIST
+        assert "Low" not in DEFAULT_SEVERITY_ALLOWLIST
 
     def test_ignore_checks(self):
-        """Test IGNORE_CHECKS contains expected values."""
-        assert "solc-version" in IGNORE_CHECKS
-        assert "naming-convention" in IGNORE_CHECKS
-        assert "assembly" in IGNORE_CHECKS
+        """Test DEFAULT_IGNORE_CHECKS contains expected values."""
+        assert "solc-version" in DEFAULT_IGNORE_CHECKS
+        assert "naming-convention" in DEFAULT_IGNORE_CHECKS
+        assert "assembly" in DEFAULT_IGNORE_CHECKS

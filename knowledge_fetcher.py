@@ -8,22 +8,69 @@ from urllib.parse import quote
 from logger import get_logger
 from http_utils import resilient_get, RateLimiter
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
 
-# Shared rate limiter for API calls in this module
-# GitHub API: 10 requests per second is reasonable for unauthenticated
-# RSS feeds: Can be more lenient
-_rate_limiter = RateLimiter(requests_per_second=5)
+# Load configuration with fallback to defaults
+_config = None
+_rate_limiter = None
+
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
+def get_rate_limiter() -> RateLimiter:
+    """Get or create the rate limiter."""
+    global _rate_limiter
+    if _rate_limiter is None:
+        try:
+            rate_limit = get_config().threat_intel.api_rate_limit
+        except Exception:
+            rate_limit = 5
+        _rate_limiter = RateLimiter(requests_per_second=rate_limit)
+    return _rate_limiter
+
+
+def get_c4_timeout() -> int:
+    """Get Code4rena API timeout from config or use default."""
+    try:
+        return get_config().threat_intel.c4_timeout
+    except Exception:
+        return 10
+
+
+def get_immunefi_timeout() -> int:
+    """Get Immunefi RSS timeout from config or use default."""
+    try:
+        return get_config().threat_intel.immunefi_timeout
+    except Exception:
+        return 10
+
 
 # --- CONFIGURATION ---
 # GitHub API for Code4rena
 C4_API_URL = "https://api.github.com/search/issues"
-C4_TIMEOUT = 10  # seconds
 
 # Immunefi publishes reports on Medium. We use the RSS feed to fetch
 # the latest "School of Rock" / Spotlights.
 IMMUNEFI_RSS = "https://medium.com/feed/immunefi"
-IMMUNEFI_TIMEOUT = 10  # seconds
 
 # Solodit URL constructor
 SOLODIT_BASE = "https://solodit.xyz/search"
@@ -83,9 +130,9 @@ def fetch_c4_findings(keywords: List[str]) -> List[Dict[str, Any]]:
         resp = resilient_get(
             C4_API_URL,
             params=params,
-            timeout=C4_TIMEOUT,
+            timeout=get_c4_timeout(),
             max_retries=3,
-            rate_limiter=_rate_limiter
+            rate_limiter=get_rate_limiter()
         )
         return resp.json().get("items", [])
     except Exception as e:
@@ -110,9 +157,9 @@ def fetch_immunefi_reports(keywords: List[str]) -> List[Dict[str, Any]]:
     try:
         resp = resilient_get(
             IMMUNEFI_RSS,
-            timeout=IMMUNEFI_TIMEOUT,
+            timeout=get_immunefi_timeout(),
             max_retries=3,
-            rate_limiter=_rate_limiter
+            rate_limiter=get_rate_limiter()
         )
 
         # Parse XML Feed

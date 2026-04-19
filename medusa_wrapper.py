@@ -21,7 +21,47 @@ from exceptions import (
     SentinelTimeoutError,
 )
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 logger = get_logger(__name__)
+
+# Load configuration with fallback to defaults
+_config = None
+
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
+def get_medusa_timeout() -> int:
+    """Get Medusa timeout from config or use default."""
+    try:
+        return get_config().fuzzing.medusa_timeout
+    except Exception:
+        return 300
+
+
+def get_medusa_test_limit() -> int:
+    """Get Medusa test limit from config or use default."""
+    try:
+        return get_config().fuzzing.medusa_test_limit
+    except Exception:
+        return 100000
 
 
 def check_medusa_installed() -> bool:
@@ -52,16 +92,19 @@ def check_medusa_installed() -> bool:
 def run_medusa_fuzz(
     project_root: str,
     target_contract: Optional[str] = None,
-    test_limit: int = 100000,
-    timeout: int = 300
+    test_limit: Optional[int] = None,
+    timeout: Optional[int] = None
 ) -> Dict[str, Any]:
     """Run Medusa fuzzer on a Foundry/Hardhat project.
 
     Args:
-        project_root: Path to project root (must contain foundry.toml or hardhat.config).
+        project_root: Path to project root (must contain foundry.toml or
+            hardhat.config).
         target_contract: Optional specific contract to fuzz.
-        test_limit: Maximum number of sequences to run (default: 100k).
-        timeout: Max execution time in seconds (default: 5 minutes).
+        test_limit: Maximum number of sequences to run (default: from config
+            or 100k).
+        timeout: Max execution time in seconds (default: from config or
+            5 minutes).
 
     Returns:
         Dict with findings, coverage data, and statistics.
@@ -71,6 +114,11 @@ def run_medusa_fuzz(
         SentinelTimeoutError: If fuzzing times out.
         SentinelAnalysisError: If fuzzing fails.
     """
+    # Use config values if not provided
+    if test_limit is None:
+        test_limit = get_medusa_test_limit()
+    if timeout is None:
+        timeout = get_medusa_timeout()
     if not check_medusa_installed():
         logger.error("Medusa not installed")
         print("[!] Medusa not installed. Install: https://github.com/crytic/medusa")
@@ -118,7 +166,10 @@ def run_medusa_fuzz(
         logger.error(f"Medusa timed out after {timeout}s")
         raise SentinelTimeoutError(
             "Medusa fuzzing timed out",
-            details={"operation": "medusa_fuzzing", "timeout_seconds": timeout}
+            details={
+                "operation": "medusa_fuzzing",
+                "timeout_seconds": timeout
+            }
         ) from e
     except FileNotFoundError as e:
         logger.error(f"Medusa not found during execution: {e}")

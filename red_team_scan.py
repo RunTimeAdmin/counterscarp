@@ -20,6 +20,13 @@ except ImportError:
     SentinelAnalysisError = None
     SentinelToolNotFoundError = None
 
+# Import config loader
+try:
+    from config_loader import load_config, SentinelConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
     logger = get_logger(__name__)
@@ -27,18 +34,55 @@ else:
     import logging
     logger = logging.getLogger(__name__)
 
+# Load configuration with fallback to defaults
+_config = None
+
+
+def get_config() -> SentinelConfig:
+    """Get or load the configuration."""
+    global _config
+    if _config is None:
+        if CONFIG_AVAILABLE:
+            try:
+                _config = load_config()
+            except Exception:
+                _config = SentinelConfig()
+        else:
+            _config = SentinelConfig()
+    return _config
+
+
 # CONFIGURATION: What defines "Noise" vs "Signal"
 # We ignore "Low" and "Informational" by default.
-SEVERITY_ALLOWLIST = ["High", "Medium"] 
+# These defaults are used if config is not available.
+DEFAULT_SEVERITY_ALLOWLIST = ["High", "Medium"]
 
 # IGNORE LIST: Specific check IDs that are often noise in modern contracts
-# Example: 'solc-version' is usually just complaining you aren't on the latest nightly build.
-IGNORE_CHECKS = [
+# Example: 'solc-version' is usually just complaining you aren't on the
+# latest nightly build.
+DEFAULT_IGNORE_CHECKS = [
     "solc-version",
-    "naming-convention", 
+    "naming-convention",
     "assembly",  # Often used intentionally for optimization
     "redundant-statements"
 ]
+
+
+def get_severity_allowlist() -> List[str]:
+    """Get severity allowlist from config or use default."""
+    try:
+        return get_config().red_team.severity_allowlist
+    except Exception:
+        return DEFAULT_SEVERITY_ALLOWLIST
+
+
+def get_ignore_checks() -> List[str]:
+    """Get ignore checks list from config or use default."""
+    try:
+        return get_config().red_team.ignore_checks
+    except Exception:
+        return DEFAULT_IGNORE_CHECKS
+
 
 def run_slither(target: str) -> Dict[str, Any]:
     """Runs Slither via subprocess and captures JSON output.
@@ -199,11 +243,11 @@ def filter_vulnerabilities(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         check_id = finding.get("check", "Unknown")
         
         # 1. Filter by Severity
-        if impact not in SEVERITY_ALLOWLIST:
+        if impact not in get_severity_allowlist():
             continue
-            
+
         # 2. Filter by Ignore List (Noise)
-        if check_id in IGNORE_CHECKS:
+        if check_id in get_ignore_checks():
             continue
             
         # 3. Construct clean finding object

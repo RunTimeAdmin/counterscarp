@@ -15,9 +15,9 @@ from supply_chain_check import (
     check_osv_api,
     scan_package_json,
     print_report,
-    ECOSYSTEM,
-    OSV_API_TIMEOUT,
-    OSV_MAX_RETRIES,
+    get_ecosystem,
+    get_osv_timeout,
+    get_osv_max_retries,
 )
 
 
@@ -299,15 +299,15 @@ class TestConstants:
     """Test module constants."""
 
     def test_ecosystem_is_npm(self):
-        """Test ECOSYSTEM constant is npm."""
-        assert ECOSYSTEM == "npm"
+        """Test get_ecosystem() returns npm."""
+        assert get_ecosystem() == "npm"
 
     def test_timeout_configured(self):
         """Test API timeout is configured."""
-        assert OSV_API_TIMEOUT > 0
-        assert OSV_API_TIMEOUT == 10
+        assert get_osv_timeout() > 0
+        assert get_osv_timeout() == 10
 
     def test_max_retries_configured(self):
         """Test max retries is configured."""
-        assert OSV_MAX_RETRIES > 0
-        assert OSV_MAX_RETRIES == 3
+        assert get_osv_max_retries() > 0
+        assert get_osv_max_retries() == 3
