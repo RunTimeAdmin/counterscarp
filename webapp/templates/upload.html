@@ -68,9 +68,11 @@
         }
     });
 
-    // Click to browse
-    uploadZone.addEventListener('click', () => {
-        fileInput.click();
+    // Click to browse — avoid double-trigger when clicking the file input itself
+    uploadZone.addEventListener('click', (e) => {
+        if (e.target !== fileInput) {
+            fileInput.click();
+        }
     });
 
     fileInput.addEventListener('change', () => {
