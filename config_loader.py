@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Sentinel Security Engine"
-    version: str = "2.2"
+    version: str = "3.1.3"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -702,7 +702,7 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Sentinel Security Engine'),
-            version=eng.get('version', '2.2'),
+            version=eng.get('version', '3.1.3'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )

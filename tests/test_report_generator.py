@@ -191,7 +191,7 @@ class TestGenerateHTMLReport:
             project_name="Test Project",
             target_path="./contracts",
             timestamp="2024-01-01 00:00:00",
-            engine_version="2.2",
+            engine_version="3.1.3",
             executive_summary={"CRITICAL": 1, "HIGH": 2, "MEDIUM": 0, "LOW": 0},
             sections=[
                 ReportSection(
@@ -234,7 +234,7 @@ class TestGenerateHTMLReport:
             project_name="Test",
             target_path="./",
             timestamp="2024-01-01",
-            engine_version="2.2",
+            engine_version="3.1.3",
             executive_summary={"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0},
             sections=[],
             risk_score=25.0,
@@ -260,7 +260,7 @@ class TestGenerateMarkdownReport:
             project_name="Test Project",
             target_path="./contracts",
             timestamp="2024-01-01 00:00:00",
-            engine_version="2.2",
+            engine_version="3.1.3",
             executive_summary={"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 0},
             sections=[
                 ReportSection(
@@ -303,7 +303,7 @@ class TestGenerateMarkdownReport:
             project_name="Test",
             target_path="./",
             timestamp="2024-01-01",
-            engine_version="2.2",
+            engine_version="3.1.3",
             executive_summary={"CRITICAL": 1, "HIGH": 2, "MEDIUM": 3, "LOW": 4},
             sections=[],
             risk_score=50.0,
@@ -641,7 +641,7 @@ class TestDataclasses:
             project_name="Test",
             target_path="./",
             timestamp="2024-01-01",
-            engine_version="2.2",
+            engine_version="3.1.3",
             executive_summary={},
             sections=[],
             risk_score=50.0,

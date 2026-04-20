@@ -16,6 +16,12 @@ from pathlib import Path
 
 from logger import get_logger
 from exceptions import SentinelReportError
+
+try:
+    from importlib.metadata import version as _pkg_version
+    _ENGINE_VERSION = _pkg_version("sentinel-engine")
+except Exception:
+    _ENGINE_VERSION = "3.1.3"
 from license_manager import LicenseManager, BRANDED_REPORTS
 
 logger = get_logger(__name__)
@@ -891,7 +897,7 @@ def create_audit_report(
     project_name: str,
     target_path: str,
     findings: List[Finding],
-    engine_version: str = "2.2"
+    engine_version: str = _ENGINE_VERSION
 ) -> AuditReport:
     """Build complete audit report from findings.
 

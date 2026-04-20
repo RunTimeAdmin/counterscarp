@@ -8,6 +8,12 @@ from typing import List, Dict, Optional, Any
 
 from logger import get_logger, setup_logging
 
+try:
+    from importlib.metadata import version as _pkg_version
+    _ENGINE_VERSION = _pkg_version("sentinel-engine")
+except Exception:
+    _ENGINE_VERSION = "3.1.3"
+
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
     SOLANA, BRANDED_REPORTS
@@ -1160,7 +1166,7 @@ def main() -> None:
             project_name=project_name,
             target_path=args.target,
             findings=all_findings,
-            engine_version="2.2"
+            engine_version=_ENGINE_VERSION
         )
         
         # Generate Markdown report (always free)
