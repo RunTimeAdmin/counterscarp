@@ -1,0 +1,79 @@
+D:\Python\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.3)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+Sentinel Engine scan initializing...
+Log file: z:\Sentinal Engine\sentinel-engine\sentinel_scan_20260420_153907.log
+Loading configuration from: z:\Sentinal Engine\sentinel-engine\sentinel.toml
+Configuration loaded successfully
+Heuristics: enabled, Disabled rules: 0, Suppressions: 1, Fail on: HIGH+
+Loaded config: Sentinel Security Engine v3.1.2
+Fail on: HIGH+ severity
+Active suppressions: 1
+Plugin discovery complete: 0 plugins loaded (0 analyzers, 0 rule sets)
+
+============================================================
+ [*] GENERATING REMEDIATION PLAN
+============================================================
+
+=== GENERATING REMEDIATION PLAN ===
+Target: z:\Sentinal Engine\ethernaut\contracts\src\levels
+>>> Assessing Supply Chain...
+[PHASE 1] Assessing Supply Chain
+No package.json found — skipping supply chain check
+
+>>> Analyzing Code Patterns...
+[PHASE 2] Running Static Analysis (Slither)
+[*] Spawning Slither process for target: z:\Sentinal Engine\ethernaut\contracts\src\levels...
+[*] Foundry/Hardhat project root detected: Z:\Sentinal Engine\ethernaut\contracts (forge available)
+[*] Foundry mode: project root + ignore-compile (using existing forge build artifacts)
+[*] Applied remappings: forge-std/=lib/forge-std/src/,openzeppelin-contracts-06/=lib/openzeppelin-contracts-06/contracts/,openzeppelin-contracts-08/=lib/openzeppelin-contracts-08/contracts/,openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/,openzeppelin-contracts-v5.4.0/=lib/openzeppelin-contracts-v5.4.0/contracts/,openzeppelin-contracts-v4.6.0/=lib/openzeppelin-contracts-v4.6.0/contracts/
+[*] Slither command: D:\Python\Scripts\slither.EXE . --json - --compile-force-framework foundry --foundry-ignore-compile --solc-remaps forge-std/=lib/forge-std/src/,openzeppelin-contracts-06/=lib/openzeppelin-contracts-06/contracts/,openzeppelin-contracts-08/=lib/openzeppelin-contracts-08/contracts/,openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/,openzeppelin-contracts-v5.4.0/=lib/openzeppelin-contracts-v5.4.0/contracts/,openzeppelin-contracts-v4.6.0/=lib/openzeppelin-contracts-v4.6.0/contracts/
+[*] Working directory: Z:\Sentinal Engine\ethernaut\contracts
+    [!] Slither analysis partial failure: unresolved reference to identifier tload
+    [*] Falling back to per-file solc analysis for target directory
+    [*] Per-file solc results: 63 succeeded, 22 failed, 1191 total detectors
+Loading configuration from: z:\Sentinal Engine\sentinel-engine\sentinel.toml
+Configuration loaded successfully
+Heuristics: enabled, Disabled rules: 0, Suppressions: 1, Fail on: HIGH+
+Slither analysis complete: 114 issues found
+
+>>> Running Heuristic Scan...
+[PHASE 4] Running Heuristic Scan
+Heuristic scan complete: 132 findings (total), 132 non-suppressed
+
+>>> Writing Action Plan...
+[PHASE 8] Writing Action Plan
+
+============================================================
+ [OK] ACTION PLAN READY: z:\Sentinal Engine\sentinel-engine\ACTION_PLAN_2026-04-20.md
+============================================================
+
+Action Plan ready: z:\Sentinal Engine\sentinel-engine\ACTION_PLAN_2026-04-20.md
+
+>>> Generating Professional Audit Report...
+[PHASE 9] Generating Professional Audit Report
+
+[*] Professional Report Generated:
+   Markdown: z:\Sentinal Engine\sentinel-engine\audit_report_2026-04-20.md
+Professional Markdown report: z:\Sentinal Engine\sentinel-engine\audit_report_2026-04-20.md
+
++--------------------------------------------------------------+
+|  [PRO] Branded HTML/SARIF Reports requires Sentinel Engine Developer
+|
+|  Upgrade to Developer ($49/mo) to unlock:
+|  * Branded HTML/SARIF Reports
+|
+|  -> https://app.sentinel-engine.io/pricing
+|  Set SENTINEL_PRO_LICENSE=your-key to activate
++--------------------------------------------------------------+
+
+
+   Risk Score: 40.8/100
+   Status: FAIL
+   Findings: 246 total
+Audit Summary — Risk Score: 40/100, Status: FAIL, Findings: 246
+Findings by severity: {'HIGH': 85, 'CRITICAL': 35, 'MEDIUM': 114, 'INFO': 12}
+Scan complete. Log file: z:\Sentinal Engine\sentinel-engine\sentinel_scan_20260420_153907.log
+
+============================================================
+ Log file: z:\Sentinal Engine\sentinel-engine\sentinel_scan_20260420_153907.log
+============================================================

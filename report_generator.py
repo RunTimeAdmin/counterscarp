@@ -122,8 +122,8 @@ SARIF_LEVEL_MAP = {
 }
 
 # Sentinel Engine version for SARIF reports
-SENTINEL_ENGINE_VERSION = "3.1.2"
-SENTINEL_ENGINE_SEMANTIC_VERSION = "3.1.2"
+SENTINEL_ENGINE_VERSION = "3.1.3"
+SENTINEL_ENGINE_SEMANTIC_VERSION = "3.1.3"
 SENTINEL_INFORMATION_URI = "https://github.com/RunTimeAdmin/sentinel-engine"
 
 # Remediation knowledge base
