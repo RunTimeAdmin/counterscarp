@@ -562,17 +562,18 @@ class LicenseManager:
             tier_label = required_tier.capitalize()
             price = "contact sales"
 
-        return f"""
-┌──────────────────────────────────────────────────────────────┐
-│  ⚡ {name} requires Sentinel Engine {tier_label}
-│
-│  Upgrade to {tier_label} ({price}) to unlock:
-│  • {name}
-│
-│  → https://app.sentinel-engine.io/pricing
-│  Set SENTINEL_PRO_LICENSE=your-key to activate
-└──────────────────────────────────────────────────────────────┘
-"""
+        line = "-" * 62
+        return (
+            f"\n+{line}+\n"
+            f"|  [PRO] {name} requires Sentinel Engine {tier_label}\n"
+            f"|\n"
+            f"|  Upgrade to {tier_label} ({price}) to unlock:\n"
+            f"|  * {name}\n"
+            f"|\n"
+            f"|  -> https://app.sentinel-engine.io/pricing\n"
+            f"|  Set SENTINEL_PRO_LICENSE=your-key to activate\n"
+            f"+{line}+\n"
+        )
 
 
 def check_pro_feature(feature: str) -> bool:
