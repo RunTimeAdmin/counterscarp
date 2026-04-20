@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import subprocess
 import json
+import shutil
+import sys
 import argparse
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import List, Dict, Any, Optional
 
 # Import logger and exceptions
 try:
@@ -83,8 +86,50 @@ def get_ignore_checks() -> List[str]:
         return DEFAULT_IGNORE_CHECKS
 
 
+def find_project_root(target_path: str) -> Optional[str]:
+    """Walk up from target to find Foundry/Hardhat project root.
+
+    Looks for foundry.toml, hardhat.config.js, or hardhat.config.ts
+    in ancestor directories.
+
+    Args:
+        target_path: Path to the Solidity file or directory being analyzed.
+
+    Returns:
+        Absolute path to project root, or None if not found.
+    """
+    path = Path(target_path).resolve()
+    if path.is_file():
+        path = path.parent
+    while path != path.parent:
+        foundry = (path / "foundry.toml").exists()
+        hardhat = (
+            (path / "hardhat.config.js").exists()
+            or (path / "hardhat.config.ts").exists()
+        )
+        if foundry or hardhat:
+            return str(path)
+        path = path.parent
+    return None
+
+
+def _resolve_slither_bin() -> str:
+    """Resolve the Slither binary path from the current venv.
+
+    Returns the venv-local slither path if it exists, otherwise
+    falls back to bare 'slither' (relies on PATH).
+    """
+    slither_bin = str(Path(sys.executable).parent / "slither")
+    if Path(slither_bin).exists():
+        return slither_bin
+    return "slither"
+
+
 def run_slither(target: str) -> Dict[str, Any]:
     """Runs Slither via subprocess and captures JSON output.
+
+    Detects Foundry/Hardhat project root so Slither can resolve
+    import remappings and framework-specific compilation settings.
 
     Args:
         target: Path to the Solidity file or directory to analyze.
@@ -94,26 +139,125 @@ def run_slither(target: str) -> Dict[str, Any]:
 
     Raises:
         SentinelToolNotFoundError: If Slither is not installed.
-        SentinelAnalysisError: If Slither analysis fails or output cannot be parsed.
+        SentinelAnalysisError: If Slither analysis fails or
+            output cannot be parsed.
     """
     print(f"[*] Spawning Slither process for target: {target}...")
-    
-    cmd = ["slither", target, "--json", "-"]
-    
+
+    # Resolve Slither binary from venv
+    slither_bin = _resolve_slither_bin()
+
+    # Detect Foundry/Hardhat project root
+    project_root = find_project_root(target)
+    forge_available = shutil.which("forge") is not None
+
+    # Determine working directory for subprocess
+    if project_root and forge_available:
+        # forge is available — safe to use project root as cwd
+        cwd = project_root
+        # Make target relative to project root so
+        # Slither resolves paths correctly
+        try:
+            root = Path(project_root).resolve()
+            rel_target = str(
+                Path(target).resolve().relative_to(root)
+            )
+        except ValueError:
+            rel_target = target
+        effective_target = rel_target
+        print(
+            f"[*] Foundry/Hardhat project root detected:"
+            f" {project_root} (forge available)"
+        )
+    elif project_root and not forge_available:
+        # forge NOT available — must NOT set cwd to project root
+        # because crytic-compile will auto-detect foundry.toml
+        # and crash trying to run `forge remappings`.
+        # Use the target directory itself as cwd instead.
+        target_path = Path(target).resolve()
+        if target_path.is_file():
+            cwd = str(target_path.parent)
+            effective_target = target_path.name
+        else:
+            cwd = str(target_path)
+            effective_target = "."
+        print(
+            f"[*] Foundry project detected at {project_root}"
+            f" but forge not in PATH;"
+            f" using target dir as cwd"
+        )
+    else:
+        # No project root found — run from target's parent directory
+        target_path = Path(target).resolve()
+        cwd = str(
+            target_path.parent if target_path.is_file()
+            else target_path
+        )
+        effective_target = target
+        project_root = None
+
+    # Build the Slither command
+    cmd = [slither_bin, effective_target, "--json", "-"]
+
+    # Add Foundry-specific flags if a foundry.toml was found
+    is_foundry = (
+        project_root
+        and (Path(project_root) / "foundry.toml").exists()
+    )
+    if is_foundry and forge_available:
+        cmd.append("--compile-force-framework")
+        cmd.append("foundry")
+
+    # Read remappings.txt and pass via --solc-remaps
+    # whether forge is available or not — Slither needs
+    # them for solc-based compilation too.
+    if is_foundry and project_root:
+        remappings_file = (
+            Path(project_root) / "remappings.txt"
+        )
+        if remappings_file.exists():
+            try:
+                remaps_content = remappings_file.read_text(
+                    encoding="utf-8"
+                ).strip()
+                if remaps_content:
+                    # Slither expects remappings as a
+                    # single comma-separated string
+                    remaps_joined = ",".join(
+                        line.strip()
+                        for line in remaps_content.splitlines()
+                        if line.strip()
+                        and not line.strip().startswith("#")
+                    )
+                    if remaps_joined:
+                        cmd.extend(["--solc-remaps", remaps_joined])
+                        print(
+                            f"[*] Applied remappings:"
+                            f" {remaps_joined}"
+                        )
+            except OSError as e:
+                logger.warning(
+                    f"Could not read remappings.txt: {e}"
+                )
+
+    print(f"[*] Slither command: {' '.join(cmd)}")
+    print(f"[*] Working directory: {cwd}")
+
     try:
         # Run slither and capture stdout/stderr
         result = subprocess.run(
-            cmd, 
-            capture_output=True, 
-            text=True, 
-            check=False # Don't crash on exit code 255 (Slither returns this on finding bugs)
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False  # Slither exits non-zero on findings
         )
-        
-        # Slither often mixes logs in stdout, but the JSON should be the last thing or the only thing
-        # However, using --json - usually dumps pure JSON to stdout.
-        # We need to handle cases where Slither outputs setup logs before the JSON.
+
+        # Slither may mix logs in stdout, but --json -
+        # usually dumps pure JSON. Handle setup logs before
+        # the JSON payload.
         output = result.stdout
-        
+
         # Attempt to find the start of the JSON structure
         json_start = output.find('{')
         if json_start == -1:
@@ -121,9 +265,13 @@ def run_slither(target: str) -> Dict[str, Any]:
             print(result.stderr)
             raise SentinelAnalysisError(
                 "Slither failed to produce JSON output",
-                details={"tool": "slither", "stderr": result.stderr}
+                details={
+                    "tool": "slither",
+                    "stderr": result.stderr,
+                    "cwd": cwd,
+                }
             )
-            
+
         json_data = output[json_start:]
         return json.loads(json_data)
 
@@ -143,7 +291,11 @@ def run_slither(target: str) -> Dict[str, Any]:
             "error": "json_parse_failed",
             "message": str(e),
             "raw_stderr": result.stderr if result else "No stderr available",
-            "raw_stdout_preview": (result.stdout[:500] + "...") if result and len(result.stdout) > 500 else (result.stdout if result else "")
+            "raw_stdout_preview": (
+                (result.stdout[:500] + "...")
+                if result and len(result.stdout) > 500
+                else (result.stdout if result else "")
+            )
         }
         raise SentinelAnalysisError(
             "Could not parse Slither output - tool may have crashed",
@@ -198,7 +350,10 @@ def validate_slither_output(data: Dict[str, Any]) -> bool:
 
     # Check for detectors (may not exist if no findings)
     if 'detectors' not in results:
-        logger.debug("Slither output has no 'detectors' key (may have no findings)")
+        logger.debug(
+            "Slither output has no 'detectors' key "
+            "(may have no findings)"
+        )
         # This is not an error, just means no findings
 
     # Check for other expected fields and log warnings
@@ -256,12 +411,15 @@ def filter_vulnerabilities(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         clean_finding = {
             "title": finding.get("check", "Unknown Issue"),
             "impact": impact,
-            "description": finding.get("description", "No description provided"),
+            "description": finding.get(
+                "description", "No description provided"
+            ),
             "location": parse_location(finding.get("elements", []))
         }
         relevant_findings.append(clean_finding)
         
     return relevant_findings
+
 
 def parse_location(elements: List[Dict[str, Any]]) -> str:
     """Extracts the first useful file/line number from the elements list.
