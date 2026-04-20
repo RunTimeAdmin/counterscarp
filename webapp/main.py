@@ -239,6 +239,17 @@ def run_ai_copilot(
         return "", "error"
 
 
+# Load persisted API keys from data/.env.local
+_env_local = Path(__file__).parent.parent / "data" / ".env.local"
+if _env_local.exists():
+    for _line in _env_local.read_text().splitlines():
+        if "=" in _line and not _line.startswith("#"):
+            _k, _v = _line.split("=", 1)
+            _k, _v = _k.strip(), _v.strip()
+            if _k and not os.environ.get(_k):  # Don't override system env vars
+                os.environ[_k] = _v
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup."""
@@ -655,6 +666,76 @@ async def stripe_webhook(request: Request):
         handle_checkout_completed(session)
 
     return JSONResponse({"status": "ok"})
+
+@app.get("/settings")
+async def settings_page(request: Request):
+    """Render the API key settings page."""
+    has_key = bool(os.environ.get("OPENAI_API_KEY", ""))
+    masked_key = ""
+    if has_key:
+        key = os.environ.get("OPENAI_API_KEY", "")
+        masked_key = "sk-..." + key[-4:] if len(key) > 4 else "****"
+    license_tier = _license.get_tier()
+    return templates.TemplateResponse(
+        request, "settings.html",
+        context={
+            "has_key": has_key,
+            "masked_key": masked_key,
+            "license_tier": license_tier,
+        },
+    )
+
+
+@app.post("/settings/api-key")
+async def save_api_key(request: Request):
+    """Save the OpenAI API key to env and persist it."""
+    form = await request.form()
+    api_key = form.get("openai_api_key", "").strip()
+    if api_key:
+        os.environ["OPENAI_API_KEY"] = api_key
+        # Persist to data/.env.local so it survives restarts
+        env_file = Path(__file__).parent.parent / "data" / ".env.local"
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        # Read existing vars, update, write back
+        env_vars: dict[str, str] = {}
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    env_vars[k.strip()] = v.strip()
+        env_vars["OPENAI_API_KEY"] = api_key
+        env_file.write_text(
+            "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n"
+        )
+    return RedirectResponse(url="/settings?saved=1", status_code=303)
+
+
+@app.post("/settings/test-key")
+async def test_api_key(request: Request):
+    """Quick test that the OpenAI key works."""
+    # Accept optional key from JSON body (for testing a new key before saving)
+    body_key = None
+    try:
+        body = await request.json()
+        body_key = body.get("key", None)
+    except Exception:
+        pass
+
+    key = body_key or os.environ.get("OPENAI_API_KEY", "")
+    if not key:
+        return JSONResponse({"ok": False, "error": "No API key configured"})
+    try:
+        import openai
+        client = openai.OpenAI(api_key=key)
+        client.models.list()
+        return JSONResponse({"ok": True, "message": "API key is valid"})
+    except ImportError:
+        return JSONResponse(
+            {"ok": False, "error": "openai package is not installed on the server"}
+        )
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
 
 @app.get("/license/status")
 async def license_status(request: Request):

@@ -43,3 +43,6 @@ sample_reports/
 .sentinel/
 vulnerability_timeline.json
 vulnerability_trends.md
+
+# Local environment secrets (API keys)
+data/.env.local

@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Sentinel Engine{% endblock %}
+
+{% block content %}
+<style>
+    .settings-container {
+        max-width: 700px;
+        margin: 2rem auto;
+    }
+    .settings-container h1 {
+        font-size: 1.75rem;
+        color: #fff;
+        margin-bottom: 0.5rem;
+    }
+    .settings-subtitle {
+        color: #a0a0b0;
+        margin-bottom: 2rem;
+        font-size: 1rem;
+    }
+    .settings-card {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .settings-card h2 {
+        color: #fff;
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .settings-card h2 .card-icon {
+        font-size: 1.4rem;
+    }
+    .settings-card .card-desc {
+        color: #a0a0b0;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+        line-height: 1.6;
+    }
+
+    /* Status indicator */
+    .key-status {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+    .key-status .status-icon {
+        font-size: 1.25rem;
+        line-height: 1;
+    }
+    .key-status .status-text {
+        font-size: 0.9rem;
+    }
+    .key-status.configured {
+        border-color: rgba(40, 167, 69, 0.4);
+    }
+    .key-status.configured .status-icon {
+        color: #28a745;
+    }
+    .key-status.configured .status-text {
+        color: #28a745;
+    }
+    .key-status.not-configured {
+        border-color: rgba(220, 53, 69, 0.4);
+    }
+    .key-status.not-configured .status-icon {
+        color: #dc3545;
+    }
+    .key-status.not-configured .status-text {
+        color: #dc3545;
+    }
+    .masked-key {
+        font-family: 'Consolas', 'Monaco', monospace;
+        color: #667eea;
+        font-size: 0.85rem;
+        margin-left: auto;
+    }
+
+    /* API key input group */
+    .api-key-group {
+        margin-bottom: 1.5rem;
+    }
+    .api-key-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #a0a0a0;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+    .input-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .api-key-input {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        border-radius: 8px;
+        color: #e0e0e0;
+        font-size: 1rem;
+        font-family: 'Consolas', 'Monaco', monospace;
+        transition: border-color 0.2s;
+    }
+    .api-key-input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    .api-key-input::placeholder {
+        color: #555;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .btn-toggle-visibility {
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        border-radius: 8px;
+        color: #888;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        transition: color 0.2s, border-color 0.2s;
+        font-size: 1rem;
+        line-height: 1;
+    }
+    .btn-toggle-visibility:hover {
+        color: #e0e0e0;
+        border-color: #667eea;
+    }
+
+    /* Buttons row */
+    .settings-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .btn-save {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+    }
+    .btn-save:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+    .btn-save:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+    .btn-test {
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        color: #a0a0b0;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-test:hover {
+        border-color: #667eea;
+        color: #e0e0e0;
+    }
+    .btn-test:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Test result feedback */
+    .test-result {
+        margin-top: 1rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        display: none;
+    }
+    .test-result.success {
+        background: rgba(40, 167, 69, 0.1);
+        border: 1px solid rgba(40, 167, 69, 0.3);
+        color: #28a745;
+        display: block;
+    }
+    .test-result.error {
+        background: rgba(220, 53, 69, 0.1);
+        border: 1px solid rgba(220, 53, 69, 0.3);
+        color: #dc3545;
+        display: block;
+    }
+
+    /* Toast notification */
+    .toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        background: #16213e;
+        border: 1px solid #28a745;
+        border-radius: 10px;
+        padding: 1rem 1.5rem;
+        color: #28a745;
+        font-weight: 500;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        transform: translateY(120%);
+        transition: transform 0.3s ease;
+        z-index: 1000;
+    }
+    .toast.show {
+        transform: translateY(0);
+    }
+
+    /* Privacy note */
+    .privacy-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: rgba(102, 126, 234, 0.05);
+        border: 1px solid rgba(102, 126, 234, 0.15);
+        border-radius: 10px;
+        margin-top: 1.5rem;
+    }
+    .privacy-note .note-icon {
+        font-size: 1.1rem;
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+    }
+    .privacy-note .note-text {
+        color: #a0a0b0;
+        font-size: 0.85rem;
+        line-height: 1.6;
+    }
+    .privacy-note .note-text strong {
+        color: #c0c0c0;
+    }
+
+    /* Pro banner (shown when not pro) */
+    .pro-banner {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 1px solid #e94560;
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    .pro-banner .pro-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .pro-banner h3 {
+        color: #e94560;
+        margin-bottom: 0.5rem;
+    }
+    .pro-banner p {
+        color: #a0a0b0;
+        margin-bottom: 1rem;
+    }
+    .pro-banner .upgrade-btn {
+        display: inline-block;
+        background: linear-gradient(135deg, #e94560, #c23152);
+        color: white;
+        padding: 0.6rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: transform 0.2s;
+    }
+    .pro-banner .upgrade-btn:hover {
+        transform: translateY(-2px);
+    }
+
+    @media (max-width: 768px) {
+        .settings-container {
+            padding: 0 1rem;
+        }
+        .input-row {
+            flex-direction: column;
+        }
+        .settings-actions {
+            flex-direction: column;
+        }
+        .btn-save, .btn-test {
+            width: 100%;
+            text-align: center;
+        }
+    }
+</style>
+
+<div class="container">
+    <div class="settings-container">
+        <h1>Settings</h1>
+        <p class="settings-subtitle">Configure API keys and integrations for Sentinel Engine.</p>
+
+        {% if license_tier == 'pro' or license_tier == 'enterprise' %}
+
+        <!-- AI Copilot Configuration -->
+        <div class="settings-card">
+            <h2><span class="card-icon">&#129302;</span> AI Copilot Configuration</h2>
+            <p class="card-desc">
+                The AI Audit Copilot uses OpenAI to provide intelligent vulnerability analysis
+                and remediation suggestions. Enter your OpenAI API key below to enable
+                AI-powered insights during audits.
+            </p>
+
+            <!-- Current key status -->
+            <div class="key-status {% if has_key %}configured{% else %}not-configured{% endif %}">
+                <span class="status-icon">
+                    {% if has_key %}&#10003;{% else %}&#10007;{% endif %}
+                </span>
+                <span class="status-text">
+                    {% if has_key %}API key is configured{% else %}No API key configured{% endif %}
+                </span>
+                {% if has_key %}
+                <span class="masked-key">{{ masked_key }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Key input form -->
+            <form id="apiKeyForm" method="POST" action="/settings/api-key">
+                <div class="api-key-group">
+                    <label for="openai_api_key">OpenAI API Key</label>
+                    <div class="input-row">
+                        <input type="password"
+                               id="openai_api_key"
+                               name="openai_api_key"
+                               class="api-key-input"
+                               placeholder="sk-..."
+                               autocomplete="off">
+                        <button type="button"
+                                class="btn-toggle-visibility"
+                                id="toggleBtn"
+                                onclick="toggleKeyVisibility()"
+                                title="Show/hide key">
+                            &#128065;
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-actions">
+                    <button type="submit" class="btn-save" id="saveBtn">Save Key</button>
+                    <button type="button" class="btn-test" id="testBtn" onclick="testKey()">Test Connection</button>
+                </div>
+            </form>
+
+            <!-- Test result -->
+            <div class="test-result" id="testResult"></div>
+
+            <!-- Privacy note -->
+            <div class="privacy-note">
+                <span class="note-icon">&#128274;</span>
+                <span class="note-text">
+                    <strong>Your API key is stored locally on this server and never shared.</strong>
+                    LLM costs are billed directly to your OpenAI account. Sentinel Engine does
+                    not proxy or pay for your API usage. If you set <code>OPENAI_API_KEY</code>
+                    as a system environment variable (e.g. via systemd), it takes priority over
+                    the key saved here.
+                </span>
+            </div>
+        </div>
+
+        {% else %}
+
+        <!-- Pro required banner -->
+        <div class="pro-banner">
+            <div class="pro-icon">&#128274;</div>
+            <h3>AI Copilot Configuration <span class="pro-badge">PRO</span></h3>
+            <p>Configure your OpenAI API key to enable AI-powered vulnerability analysis and remediation suggestions.</p>
+            <a href="/pricing" class="upgrade-btn">Upgrade to Pro</a>
+        </div>
+
+        {% endif %}
+    </div>
+</div>
+
+<!-- Toast for save confirmation -->
+<div class="toast" id="toast">API key saved successfully</div>
+
+<script>
+    // Show/hide password toggle
+    function toggleKeyVisibility() {
+        const input = document.getElementById('openai_api_key');
+        const btn = document.getElementById('toggleBtn');
+        if (input.type === 'password') {
+            input.type = 'text';
+            btn.innerHTML = '&#128064;';
+        } else {
+            input.type = 'password';
+            btn.innerHTML = '&#128065;';
+        }
+    }
+
+    // Test API key connection
+    async function testKey() {
+        const key = document.getElementById('openai_api_key').value.trim()
+            || undefined;  // let the server use the env var if input is empty
+        const testBtn = document.getElementById('testBtn');
+        const resultDiv = document.getElementById('testResult');
+
+        testBtn.disabled = true;
+        testBtn.textContent = 'Testing...';
+        resultDiv.className = 'test-result';
+        resultDiv.style.display = 'none';
+
+        try {
+            const resp = await fetch('/settings/test-key', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({key: key}),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                resultDiv.className = 'test-result success';
+                resultDiv.textContent = data.message || 'API key is valid!';
+            } else {
+                resultDiv.className = 'test-result error';
+                resultDiv.textContent = data.error || 'API key validation failed.';
+            }
+        } catch (err) {
+            resultDiv.className = 'test-result error';
+            resultDiv.textContent = 'Connection error: ' + err.message;
+        }
+
+        testBtn.disabled = false;
+        testBtn.textContent = 'Test Connection';
+    }
+
+    // Toast notification on save (triggered by ?saved=1 query param)
+    (function() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('saved') === '1') {
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+            // Clean up URL
+            window.history.replaceState({}, '', '/settings');
+        }
+    })();
+</script>
+{% endblock %}
