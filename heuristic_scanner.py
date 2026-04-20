@@ -211,7 +211,7 @@ RULES: List[HeuristicRule] = [
         id="DIVIDE_BEFORE_MULTIPLY",
         description="Potential precision loss: division before multiplication",
         severity="MEDIUM",
-        pattern=re.compile(r"/.*\*"),
+        pattern=re.compile(r"/[^*].*\*"),
         hint="Prefer (a * c) / b over (a / b) * c to avoid rounding to zero.",
     ),
     HeuristicRule(
@@ -228,7 +228,7 @@ RULES: List[HeuristicRule] = [
         id="UNCHECKED_EXTERNAL_CALL",
         description="Low-level call/transfer without return value check (funds may be lost)",
         severity="CRITICAL",
-        pattern=re.compile(r"\w+\.(call\{|transfer\(|transferFrom\()"),
+        pattern=re.compile(r"(\w+(?:\([^)]*\))?)\.(call\{|transfer\(|transferFrom\()"),
         hint="CRITICAL: Always check return values of external calls. Unchecked calls are top bug bounty targets ($10K-$100K).",
     ),
     
