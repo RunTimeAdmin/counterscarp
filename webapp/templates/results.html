@@ -151,9 +151,15 @@
     <div class="download-section card">
         <h3>Download Reports</h3>
         <div class="download-buttons">
+            {% if license_tier == 'pro' or license_tier == 'enterprise' %}
             <a href="/results/{{ audit_id }}/report/html" class="btn-download">
                 <span class="icon">&#128196;</span> HTML Report
             </a>
+            {% else %}
+            <a href="https://sentinel-engine.io/pricing" class="btn-download btn-pro-locked">
+                <span class="icon">&#128196;</span> HTML Report <span class="pro-badge">PRO</span>
+            </a>
+            {% endif %}
             <a href="/results/{{ audit_id }}/report/md" class="btn-download">
                 <span class="icon">&#128220;</span> Markdown
             </a>
@@ -235,12 +241,40 @@
     </div>
 
     <!-- F. AI Insights Section -->
+    {% if license_tier == 'pro' or license_tier == 'enterprise' %}
     {% if ai_summary %}
     <div class="ai-insights card">
         <h2>AI Audit Copilot Insights</h2>
         <div class="ai-summary-card">
             <p>{{ ai_summary }}</p>
         </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="upgrade-card">
+        <div class="upgrade-icon">&#128274;</div>
+        <h3>AI Audit Copilot</h3>
+        <p>Get AI-powered vulnerability analysis and remediation suggestions.</p>
+        <a href="https://sentinel-engine.io/pricing" class="upgrade-btn">Upgrade to Pro</a>
+    </div>
+    {% endif %}
+
+    <!-- G. Attack Graph Section -->
+    {% if license_tier == 'pro' or license_tier == 'enterprise' %}
+    {% if attack_graph_exists %}
+    <div class="attack-graph-section card">
+        <h2>Attack Graph Visualization</h2>
+        <a href="/results/{{ audit_id }}/attack-graph" class="btn-download btn-attack-graph" target="_blank">
+            <span class="icon">&#128200;</span> View Attack Graph
+        </a>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="upgrade-card">
+        <div class="upgrade-icon">&#128274;</div>
+        <h3>Attack Graph Visualization</h3>
+        <p>Visualize attack paths and exploit chains with interactive D3.js graphs.</p>
+        <a href="https://sentinel-engine.io/pricing" class="upgrade-btn">Upgrade to Pro</a>
     </div>
     {% endif %}
 </div>

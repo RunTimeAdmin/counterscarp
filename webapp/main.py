@@ -26,6 +26,17 @@ from webapp.config import (
     UPLOAD_DIR,
 )
 
+from license_manager import (
+    LicenseManager,
+    AI_COPILOT,
+    ATTACK_GRAPH,
+    BRANDED_REPORTS,
+)
+
+from webapp.license_api import license_router
+
+_license = LicenseManager()
+
 # Import Sentinel Engine modules
 from heuristic_scanner import (
     HeuristicFinding,
@@ -49,6 +60,9 @@ app = FastAPI(
     description="Smart Contract Security Audit Platform",
     version="2.3.0",
 )
+
+# Include license validation API routes
+app.include_router(license_router)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
@@ -220,7 +234,11 @@ async def startup_event():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Render the upload page."""
-    return templates.TemplateResponse(request, "upload.html")
+    license_tier = _license.get_tier()
+    return templates.TemplateResponse(
+        request, "upload.html",
+        context={"license_tier": license_tier},
+    )
 
 
 @app.get("/health")
@@ -301,11 +319,13 @@ async def audit(
                 slither_status = "completed"
     findings.extend(slither_findings)
 
-    # Run AI Audit Copilot
+    # Run AI Audit Copilot (PRO feature)
     ai_summary = ""
     ai_status = "skipped"
-    if findings:
+    if findings and _license.check_pro_feature(AI_COPILOT):
         ai_summary, ai_status = run_ai_copilot(findings, "")
+    elif findings:
+        ai_status = "pro_required"
 
     # Save AI summary to results
     if ai_summary:
@@ -343,12 +363,15 @@ async def audit(
     with open(findings_path, "w", encoding="utf-8") as f:
         json.dump(findings_data, f, indent=2)
 
-    # Generate reports
+    # Generate HTML report (PRO feature)
     html_path = results_dir / "report.html"
-    generate_html_report(
-        report, str(html_path),
-        logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
-    )
+    if _license.check_pro_feature(BRANDED_REPORTS):
+        generate_html_report(
+            report, str(html_path),
+            logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
+        )
+    else:
+        html_path = None
 
     md_path = results_dir / "report.md"
     generate_markdown_report(report, str(md_path))
@@ -361,9 +384,9 @@ async def audit(
     }
     save_sarif_report(findings, str(sarif_path), sarif_metadata)
 
-    # Generate attack graph (before scan_meta so status is accurate)
+    # Generate attack graph (PRO feature)
     attack_graph_generated = False
-    if findings:
+    if findings and _license.check_pro_feature(ATTACK_GRAPH):
         try:
             finding_dicts = [
                 {
@@ -397,6 +420,16 @@ async def audit(
             1 for fd in findings_data if fd["rule_id"] in rule_ids
         )
 
+    # Update AI Copilot analyzer status for free tier
+    ai_copilot_analyzer = {
+        "name": "AI Audit Copilot",
+        "status": ai_status,
+        "findings_count": 0,
+    }
+    # Add pro-only tag so templates can distinguish
+    if ai_status == "pro_required":
+        ai_copilot_analyzer["pro_only"] = True
+
     analyzers_list = [
         {
             "name": "Heuristic Pattern Scanner",
@@ -416,18 +449,23 @@ async def audit(
             "status": slither_status,
             "findings_count": len(slither_findings),
         },
-        {
-            "name": "AI Audit Copilot",
-            "status": ai_status,
-            "findings_count": 0,
-        },
+        ai_copilot_analyzer,
     ]
     if findings:
-        analyzers_list.append({
+        ag_status = (
+            "completed" if attack_graph_generated
+            else ("pro_required"
+                  if not _license.check_pro_feature(ATTACK_GRAPH)
+                  else "skipped")
+        )
+        attack_graph_analyzer = {
             "name": "Attack Graph Generator",
-            "status": "completed" if attack_graph_generated else "skipped",
+            "status": ag_status,
             "findings_count": 0,
-        })
+        }
+        if attack_graph_analyzer["status"] == "pro_required":
+            attack_graph_analyzer["pro_only"] = True
+        analyzers_list.append(attack_graph_analyzer)
 
     scan_meta = {
         "project_name": project_name,
@@ -513,6 +551,7 @@ async def results(request: Request, audit_id: str):
         with open(ai_path, "r", encoding="utf-8") as f:
             ai_summary = f.read()
 
+    license_tier = _license.get_tier()
     return templates.TemplateResponse(
         request,
         "results.html",
@@ -526,8 +565,16 @@ async def results(request: Request, audit_id: str):
             "attack_graph_exists": attack_graph_exists,
             "scan_meta": scan_meta,
             "ai_summary": ai_summary,
+            "license_tier": license_tier,
         },
     )
+
+
+@app.get("/license/status")
+async def license_status(request: Request):
+    """Return current license tier and available features."""
+    info = _license.get_license_info()
+    return {"tier": _license.get_tier(), "features": info.features}
 
 
 @app.get("/results/{audit_id}/report/{format}")

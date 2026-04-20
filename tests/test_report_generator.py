@@ -8,6 +8,7 @@ import os
 import json
 import tempfile
 from datetime import datetime
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -27,6 +28,15 @@ from report_generator import (
     SEVERITY_WEIGHTS,
     SARIF_LEVEL_MAP,
 )
+
+
+@pytest.fixture
+def mock_pro_license():
+    """Fixture to mock pro license for HTML/SARIF report generation tests."""
+    with patch('report_generator.LicenseManager') as mock_cls:
+        mock_instance = mock_cls.return_value
+        mock_instance.check_pro_feature.return_value = True
+        yield
 
 
 class TestCalculateRiskScore:
@@ -175,7 +185,7 @@ class TestEnrichFinding:
 class TestGenerateHTMLReport:
     """Test HTML report generation."""
 
-    def test_html_contains_expected_sections(self, tmp_path):
+    def test_html_contains_expected_sections(self, tmp_path, mock_pro_license):
         """Test HTML report contains expected sections."""
         report = AuditReport(
             project_name="Test Project",
@@ -218,7 +228,7 @@ class TestGenerateHTMLReport:
         assert "code here" in content
         assert "Fix it" in content
 
-    def test_html_risk_score_styling(self, tmp_path):
+    def test_html_risk_score_styling(self, tmp_path, mock_pro_license):
         """Test HTML includes risk score with appropriate styling."""
         report = AuditReport(
             project_name="Test",
@@ -314,7 +324,7 @@ class TestGenerateMarkdownReport:
 class TestGenerateSARIFReport:
     """Test SARIF report generation."""
 
-    def test_sarif_valid_structure(self):
+    def test_sarif_valid_structure(self, mock_pro_license):
         """Test SARIF output has valid 2.1.0 structure."""
         findings = [
             Finding(
@@ -338,7 +348,7 @@ class TestGenerateSARIFReport:
         assert "runs" in sarif
         assert len(sarif["runs"]) == 1
 
-    def test_sarif_tool_info(self):
+    def test_sarif_tool_info(self, mock_pro_license):
         """Test SARIF includes tool information."""
         findings = []
         sarif = generate_sarif_report(findings)
@@ -348,7 +358,7 @@ class TestGenerateSARIFReport:
         assert "version" in tool
         assert "informationUri" in tool
 
-    def test_sarif_results_structure(self):
+    def test_sarif_results_structure(self, mock_pro_license):
         """Test SARIF results have correct structure."""
         findings = [
             Finding(
@@ -375,7 +385,7 @@ class TestGenerateSARIFReport:
         assert location["artifactLocation"]["uri"] == "test.sol"
         assert location["region"]["startLine"] == 42
 
-    def test_sarif_rules_from_findings(self):
+    def test_sarif_rules_from_findings(self, mock_pro_license):
         """Test SARIF includes unique rules from findings."""
         findings = [
             Finding(rule_id="RULE_1", severity="HIGH", category="Test", title="T1", description="D1", file="t.sol", line_no=1),
@@ -389,7 +399,7 @@ class TestGenerateSARIFReport:
         rule_ids = {r["id"] for r in rules}
         assert rule_ids == {"RULE_1", "RULE_2"}
 
-    def test_sarif_severity_mapping(self):
+    def test_sarif_severity_mapping(self, mock_pro_license):
         """Test SARIF severity mapping is correct."""
         test_cases = [
             ("CRITICAL", "error"),
@@ -406,7 +416,7 @@ class TestGenerateSARIFReport:
             sarif = generate_sarif_report(findings)
             assert sarif["runs"][0]["results"][0]["level"] == expected_level
 
-    def test_sarif_with_metadata(self):
+    def test_sarif_with_metadata(self, mock_pro_license):
         """Test SARIF generation with metadata."""
         findings = []
         metadata = {
@@ -423,7 +433,7 @@ class TestGenerateSARIFReport:
 class TestSaveSARIFReport:
     """Test saving SARIF report to file."""
 
-    def test_save_sarif_creates_file(self, tmp_path):
+    def test_save_sarif_creates_file(self, tmp_path, mock_pro_license):
         """Test SARIF file is created correctly."""
         findings = [
             Finding(rule_id="TEST", severity="HIGH", category="Test", title="T", description="D", file="t.sol", line_no=1)

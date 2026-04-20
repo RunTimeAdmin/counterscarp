@@ -543,6 +543,16 @@ class PluginsConfig:
 
 
 @dataclass
+class LicenseConfig:
+    """License configuration for Pro features.
+
+    Attributes:
+        key: Pro license key for unlocking premium features.
+    """
+    key: str = ""
+
+
+@dataclass
 class SentinelConfig:
     """Root configuration object.
 
@@ -566,6 +576,7 @@ class SentinelConfig:
         fingerprint: Protocol fingerprint scanner settings.
         ai: AI and RAG configuration.
         plugins: Plugin system configuration.
+        license: License configuration for Pro features.
     """
     engine: EngineConfig = field(default_factory=EngineConfig)
     heuristics: HeuristicConfig = field(default_factory=HeuristicConfig)
@@ -591,6 +602,7 @@ class SentinelConfig:
     fingerprint: FingerprintConfig = field(default_factory=FingerprintConfig)
     ai: AIConfig = field(default_factory=AIConfig)
     plugins: PluginsConfig = field(default_factory=PluginsConfig)
+    license: LicenseConfig = field(default_factory=LicenseConfig)
 
     def is_finding_suppressed(
         self, rule_id: str, file_path: str, line_no: int
@@ -934,6 +946,13 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         config.plugins = PluginsConfig(
             enabled=plug.get('enabled', True),
             dirs=plug.get('dirs', ['.sentinel/plugins'])
+        )
+
+    # Parse license config
+    if 'license' in data:
+        lic = data['license']
+        config.license = LicenseConfig(
+            key=lic.get('key', '')
         )
 
     logger.info("Configuration loaded successfully")

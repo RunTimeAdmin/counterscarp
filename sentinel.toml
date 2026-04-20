@@ -429,6 +429,16 @@ dirs = [".sentinel/plugins"]
 
 
 # ============================================================================
+# License Configuration
+# ============================================================================
+
+[license]
+# Pro license key. Can also be set via SENTINEL_PRO_LICENSE env var.
+# Get your key at https://sentinel-engine.io/pricing
+key = ""
+
+
+# ============================================================================
 # EXAMPLES: Common Configuration Scenarios
 # ============================================================================
 

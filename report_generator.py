@@ -15,6 +15,7 @@ from pathlib import Path
 
 from logger import get_logger
 from exceptions import SentinelReportError
+from license_manager import LicenseManager, BRANDED_REPORTS
 
 logger = get_logger(__name__)
 
@@ -256,7 +257,7 @@ def enrich_finding(finding: Finding) -> Finding:
     return finding
 
 
-def generate_html_report(report: AuditReport, output_path: str, logo_path: Optional[str] = None) -> str:
+def generate_html_report(report: AuditReport, output_path: str, logo_path: Optional[str] = None) -> Optional[str]:
     """Generate professional HTML report.
 
     Args:
@@ -265,9 +266,13 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
         logo_path: Optional path to a logo image file to embed in the report.
 
     Returns:
-        Path to the generated HTML file.
+        Path to the generated HTML file, or None if pro feature not available.
     """
-    
+    _license = LicenseManager()
+    if not _license.check_pro_feature(BRANDED_REPORTS):
+        print(_license.get_upgrade_message(BRANDED_REPORTS))
+        return None
+
     # Process logo if provided
     logo_html = ""
     if logo_path and Path(logo_path).exists():
@@ -450,24 +455,29 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
     return output_path
 
 
-def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Generate a SARIF 2.1.0 compliant report from findings.
-    
+
     Args:
         findings: List of Finding objects to include in the report.
         metadata: Optional metadata dict with keys like 'project_name', 'target_path'.
-        
+
     Returns:
-        A dictionary representing a valid SARIF 2.1.0 JSON document.
-        
+        A dictionary representing a valid SARIF 2.1.0 JSON document, or None if pro feature not available.
+
     Raises:
         SentinelReportError: If report generation fails.
-        
+
     Example:
         >>> findings = [Finding(...), Finding(...)]
         >>> sarif = generate_sarif_report(findings, {"project_name": "MyProject"})
         >>> json.dump(sarif, open("report.sarif", "w"))
     """
+    _license = LicenseManager()
+    if not _license.check_pro_feature(BRANDED_REPORTS):
+        print(_license.get_upgrade_message(BRANDED_REPORTS))
+        return None
+
     try:
         metadata = metadata or {}
         

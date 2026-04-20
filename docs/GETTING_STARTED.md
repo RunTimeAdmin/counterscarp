@@ -9,6 +9,7 @@
 - [Installation](#installation)
 - [Your First Audit in 60 Seconds](#your-first-audit-in-60-seconds)
 - [Web UI Quick Start](#web-ui-quick-start)
+- [Pro License Activation](#pro-license-activation)
 - [Next Steps](#next-steps)
 
 ---
@@ -142,6 +143,47 @@ Open **http://localhost:8001** in your browser.
 ### Production Deployment
 
 For production deployment with nginx + SSL, see the [Deployment Guide](DEPLOYMENT.md).
+
+---
+
+## Pro License Activation
+
+Sentinel Engine ships with both free and pro features in a single package. Pro features require a valid license key to unlock.
+
+### Setting Your License Key
+
+**Option 1: Environment variable**
+
+```bash
+export SENTINEL_PRO_LICENSE=your-key-here
+```
+
+**Option 2: Configuration file**
+
+Add a `[license]` section to your `sentinel.toml`:
+
+```toml
+[license]
+key = "your-key-here"
+```
+
+The environment variable takes priority over the config file.
+
+### Pro Features
+
+A valid Pro license unlocks the following features:
+
+- **AI Audit Copilot** — RAG-based vulnerability explanations and remediation guidance
+- **Attack Graph Visualization** — Interactive D3.js cross-contract attack path graphs
+- **Exploit PoC Generator** — Automatic Foundry exploit test case generation
+- **Time-Travel Scanner** — Git-based historical vulnerability tracking
+- **Protocol Fingerprinting** — Protocol similarity and inherited vulnerability detection
+- **Solana Analyzer** — 35 Rust/Anchor security patterns with IDL validation
+- **Branded HTML/SARIF Reports** — Professional branded audit report output
+
+### Getting a License
+
+Visit [sentinel-engine.io/pricing](https://sentinel-engine.io/pricing) to purchase a Pro or Enterprise license.
 
 ---
 

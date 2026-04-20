@@ -48,6 +48,44 @@ go install github.com/crytic/medusa/cmd/medusa@latest
 
 ---
 
+## Free vs Pro
+
+Sentinel Engine includes both free and pro features in a single package. Pro features require a license key.
+
+| Feature | Free | Pro |
+|---------|------|-----|
+| Heuristic Scanner (23 EVM rules) | ✓ | ✓ |
+| Slither Integration | ✓ | ✓ |
+| Aderyn, Medusa, Mythril, Foundry | ✓ | ✓ |
+| Supply Chain & Access Matrix | ✓ | ✓ |
+| Intent Check & Upgrade Diff | ✓ | ✓ |
+| Markdown & JSON Reports | ✓ | ✓ |
+| CI/CD Pipeline Generator | ✓ | ✓ |
+| AI Audit Copilot | ✗ | ✓ |
+| Attack Graph Visualization | ✗ | ✓ |
+| Exploit PoC Generator | ✗ | ✓ |
+| Time-Travel Scanner | ✗ | ✓ |
+| Protocol Fingerprinting | ✗ | ✓ |
+| Solana Analyzer (35 rules) | ✗ | ✓ |
+| Branded HTML/SARIF Reports | ✗ | ✓ |
+
+### Activating Pro
+
+```bash
+export SENTINEL_PRO_LICENSE=your-key-here
+sentinel-engine path/to/contract.sol --rag --report html
+```
+
+Or add to `sentinel.toml`:
+```toml
+[license]
+key = "your-key-here"
+```
+
+Get your license at [sentinel-engine.io/pricing](https://sentinel-engine.io/pricing).
+
+---
+
 ### **Run Your First Audit**
 
 **Option 1: GUI (Easiest)**
@@ -1325,7 +1363,7 @@ python exploit_generator.py --finding-json findings.json
 
 ---
 
-**Version:** 2.3.0  
+**Version:** 3.0.0  
 **Last Updated:** April 19, 2026  
 **License:** MIT  
 **Chains:** EVM, Solana  

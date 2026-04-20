@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sentinel-engine"
-version = "2.3.0"
-description = "Production-ready smart contract security auditing platform"
+version = "3.0.0"
+description = "Smart contract security auditing platform with Pro features"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{name = "Sentinel Engine Team"}]
@@ -122,6 +122,7 @@ py-modules = [
     "fingerprint_scanner",
     "protocol_db",
     "plugin_manager",
+    "license_manager",
 ]
 
 [tool.setuptools.package-data]

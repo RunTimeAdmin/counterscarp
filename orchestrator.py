@@ -8,7 +8,13 @@ from typing import List, Dict, Optional, Any
 
 from logger import get_logger
 
+from license_manager import (
+    LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
+    SOLANA, BRANDED_REPORTS
+)
+
 logger = get_logger(__name__)
+_license = LicenseManager()
 
 # Import your specialists
 try:
@@ -581,6 +587,9 @@ def main() -> None:
 
     # Handle RAG index build
     if args.build_rag_index:
+        if not _license.check_pro_feature(AI_COPILOT):
+            print(_license.get_upgrade_message(AI_COPILOT))
+            return
         if not RAG_AVAILABLE:
             print("[!] RAG engine not available. Install dependencies: pip install sentence-transformers numpy")
             sys.exit(1)
@@ -620,6 +629,9 @@ def main() -> None:
 
     # Handle history scan mode
     if args.history:
+        if not _license.check_pro_feature(TIME_TRAVEL):
+            print(_license.get_upgrade_message(TIME_TRAVEL))
+            return
         if history_scanner is None:
             print("[!] History scanner not available")
             sys.exit(1)
@@ -808,7 +820,9 @@ def main() -> None:
 
     # [PHASE 4B] Protocol Fingerprint Scan (optional)
     fingerprint_results: List[Dict] = []
-    if args.fingerprint:
+    if args.fingerprint and not _license.check_pro_feature(FINGERPRINT):
+        print(_license.get_upgrade_message(FINGERPRINT))
+    elif args.fingerprint:
         print("\n>>> Running Protocol Fingerprint Scan...")
         if FINGERPRINT_AVAILABLE:
             try:
@@ -863,7 +877,9 @@ def main() -> None:
             symbolic_results = []
 
     # [PHASE 6] Solana Static Analysis (optional)
-    if args.solana_root:
+    if args.solana_root and not _license.check_pro_feature(SOLANA):
+        print(_license.get_upgrade_message(SOLANA))
+    elif args.solana_root:
         print("\n>>> Running Solana Static Analysis...")
         if solana_analyzer is None:
             print("[!] solana_analyzer module not available in this environment.")
@@ -889,7 +905,9 @@ def main() -> None:
                 upgrade_results = {"error": "Upgrade diff analysis failed"}
 
     # [PHASE 7.5] RAG Enrichment (optional)
-    if args.rag and RAG_AVAILABLE:
+    if args.rag and RAG_AVAILABLE and not _license.check_pro_feature(AI_COPILOT):
+        print(_license.get_upgrade_message(AI_COPILOT))
+    elif args.rag and RAG_AVAILABLE:
         print("\n>>> Enriching Findings with RAG Context...")
         try:
             # Get RAG config
@@ -1035,16 +1053,20 @@ def main() -> None:
             engine_version="2.2"
         )
         
-        # Generate both HTML and Markdown
-        html_file = f"audit_report_{datetime.date.today()}.html"
+        # Generate Markdown report (always free)
         md_file = f"audit_report_{datetime.date.today()}.md"
-        
-        html_path = generate_html_report(audit_report, html_file)
         md_path = generate_audit_markdown_report(audit_report, md_file)
-        
-        print(f"\n[*] Professional Reports Generated:")
-        print(f"   HTML: {os.path.abspath(html_path)}")
+
+        print(f"\n[*] Professional Report Generated:")
         print(f"   Markdown: {os.path.abspath(md_path)}")
+
+        # HTML/SARIF reports require Pro license
+        if _license.check_pro_feature(BRANDED_REPORTS):
+            html_file = f"audit_report_{datetime.date.today()}.html"
+            html_path = generate_html_report(audit_report, html_file)
+            print(f"   HTML: {os.path.abspath(html_path)}")
+        else:
+            print(_license.get_upgrade_message(BRANDED_REPORTS))
         print(f"\n   Risk Score: {audit_report.risk_score}/100")
         print(f"   Status: {audit_report.pass_fail}")
         print(f"   Findings: {len(all_findings)} total")
