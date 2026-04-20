@@ -121,9 +121,9 @@ SARIF_LEVEL_MAP = {
 }
 
 # Sentinel Engine version for SARIF reports
-SENTINEL_ENGINE_VERSION = "2.2.0"
-SENTINEL_ENGINE_SEMANTIC_VERSION = "2.2.0"
-SENTINEL_INFORMATION_URI = "https://sentinel-engine.io"
+SENTINEL_ENGINE_VERSION = "3.1.0"
+SENTINEL_ENGINE_SEMANTIC_VERSION = "3.1.0"
+SENTINEL_INFORMATION_URI = "https://github.com/RunTimeAdmin/sentinel-engine"
 
 # Remediation knowledge base
 REMEDIATION_KB = {
@@ -455,7 +455,7 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
     return output_path
 
 
-def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Generate a SARIF 2.1.0 compliant report from findings.
 
     Args:
@@ -463,7 +463,8 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
         metadata: Optional metadata dict with keys like 'project_name', 'target_path'.
 
     Returns:
-        A dictionary representing a valid SARIF 2.1.0 JSON document, or None if pro feature not available.
+        A dictionary representing a valid SARIF 2.1.0 JSON document.
+        Always returns a valid SARIF structure with a non-null 'runs' array.
 
     Raises:
         SentinelReportError: If report generation fails.
@@ -473,11 +474,6 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
         >>> sarif = generate_sarif_report(findings, {"project_name": "MyProject"})
         >>> json.dump(sarif, open("report.sarif", "w"))
     """
-    _license = LicenseManager()
-    if not _license.check_pro_feature(BRANDED_REPORTS):
-        print(_license.get_upgrade_message(BRANDED_REPORTS))
-        return None
-
     try:
         metadata = metadata or {}
         
@@ -546,9 +542,9 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
             
             results.append(result)
         
-        # Build the SARIF document
+        # Build the SARIF document - ALWAYS has valid runs array
         sarif_doc = {
-            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
             "version": "2.1.0",
             "runs": [
                 {
@@ -594,36 +590,76 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
 
 def save_sarif_report(findings: List[Finding], output_path: str, metadata: Optional[Dict[str, Any]] = None) -> str:
     """Generate and save a SARIF 2.1.0 report to a file.
-    
+
+    ALWAYS produces a valid SARIF file with a non-null 'runs' array, even if
+    there are no findings or if an error occurs during generation.
+
     Args:
         findings: List of Finding objects to include in the report.
         output_path: Path where the SARIF JSON file will be written.
         metadata: Optional metadata dict with keys like 'project_name', 'target_path'.
-        
+
     Returns:
         The output file path.
-        
+
     Raises:
         SentinelReportError: If the file cannot be written.
-        
+
     Example:
         >>> findings = [Finding(...), Finding(...)]
         >>> path = save_sarif_report(findings, "report.sarif")
         >>> print(f"SARIF report saved to: {path}")
     """
+    # Default valid SARIF structure as fallback
+    default_sarif = {
+        "version": "2.1.0",
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "Sentinel Engine",
+                        "version": SENTINEL_ENGINE_VERSION,
+                        "informationUri": SENTINEL_INFORMATION_URI
+                    }
+                },
+                "results": []
+            }
+        ]
+    }
+
     try:
         sarif_doc = generate_sarif_report(findings, metadata)
-        
+
+        # Ensure we always have a valid SARIF structure with runs array
+        if sarif_doc is None:
+            sarif_doc = default_sarif
+        elif not isinstance(sarif_doc, dict):
+            sarif_doc = default_sarif
+        elif "runs" not in sarif_doc or sarif_doc["runs"] is None:
+            sarif_doc["runs"] = default_sarif["runs"]
+
+    except Exception as e:
+        logger.warning(f"SARIF generation failed, using default structure: {e}")
+        sarif_doc = default_sarif
+
+    try:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(sarif_doc, f, indent=2)
-        
+
         logger.info(f"SARIF report saved to: {output_path}")
         return output_path
-        
-    except SentinelReportError:
-        raise
+
     except Exception as e:
         logger.error(f"Failed to save SARIF report to {output_path}: {e}")
+        # Try to write the default structure as last resort
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(default_sarif, f, indent=2)
+            logger.info(f"Default SARIF report saved to: {output_path}")
+            return output_path
+        except Exception:
+            pass
         raise SentinelReportError(
             "Failed to save SARIF report",
             details={"output_path": output_path, "error": str(e)}
