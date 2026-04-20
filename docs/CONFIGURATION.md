@@ -52,7 +52,7 @@ Engine-wide settings that control the overall analysis behavior.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `name` | string | `"Sentinel Security Engine"` | Display name for reports |
-| `version` | string | `"2.2"` | Engine version string |
+| `version` | string | `"3.1.0"` | Engine version string |
 | `fail_on_severity` | string | `"HIGH"` | Minimum severity to fail CI: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO` |
 | `max_findings` | int | `0` | Maximum findings before stopping scan (`0` = unlimited) |
 

@@ -172,8 +172,8 @@ SARIF (Static Analysis Results Interchange Format) is an OASIS standard for exch
       "tool": {
         "driver": {
           "name": "Sentinel Engine",
-          "version": "2.2.0",
-          "semanticVersion": "2.2.0",
+          "version": "3.1.0",
+          "semanticVersion": "3.1.0",
           "informationUri": "https://sentinel-engine.io",
           "rules": [
             {

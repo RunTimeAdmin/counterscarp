@@ -8,7 +8,7 @@
 
 [engine]
 name = "Sentinel Security Engine"
-version = "2.2"
+version = "3.1.0"
 profile = "bounty_hunter"
 
 # Never fail (report everything, let human decide)

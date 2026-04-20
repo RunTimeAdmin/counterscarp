@@ -266,7 +266,7 @@ Sentinel Engine uses TOML configuration files. Below are all available sections:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `name` | string | "Sentinel Security Engine" | Engine name |
-| `version` | string | "3.0.0" | Engine version |
+| `version` | string | "3.1.0" | Engine version |
 | `fail_on_severity` | string | "HIGH" | Minimum severity to fail CI (CRITICAL, HIGH, MEDIUM, LOW, INFO) |
 | `max_findings` | int | 0 | Maximum findings before stopping (0 = unlimited) |
 
@@ -1348,7 +1348,7 @@ python exploit_generator.py --finding-json findings.json
 
 ---
 
-**Version:** 3.0.0  
+**Version:** 3.1.0  
 **Last Updated:** April 19, 2026  
 **License:** MIT  
 **Chains:** EVM, Solana  

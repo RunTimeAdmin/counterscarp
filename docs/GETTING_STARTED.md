@@ -155,8 +155,10 @@ Sentinel Engine ships with both free and pro features in a single package. Pro f
 **Option 1: Environment variable**
 
 ```bash
-export SENTINEL_PRO_LICENSE=your-key-here
+export SENTINEL_PRO_LICENSE=SE-PRO-XXXXXXXXXXXX
 ```
+
+Replace the prefix based on your tier: `SE-DEV-xxx`, `SE-PRO-xxx`, `SE-TEAM-xxx`, or `SE-ENT-xxx`.
 
 **Option 2: Configuration file**
 
@@ -164,26 +166,48 @@ Add a `[license]` section to your `sentinel.toml`:
 
 ```toml
 [license]
-key = "your-key-here"
+key = "SE-PRO-XXXXXXXXXXXX"
 ```
 
 The environment variable takes priority over the config file.
 
-### Pro Features
+### License Tiers
 
-A valid Pro license unlocks the following features:
+Sentinel Engine offers five license tiers:
+
+| Tier | Price | Key Prefix | Features |
+|------|-------|------------|----------|
+| **Community** | Free | — | Core heuristic scanner, Slither, basic reports (Markdown/JSON), CLI |
+| **Developer** | $49/mo | `SE-DEV-xxx` | Web app, Solana Analyzer, HTML/SARIF reports |
+| **Pro** | $149/mo | `SE-PRO-xxx` | AI Copilot, Attack Graph, Exploit PoC, Time-Travel, Fingerprinting |
+| **Team** | $399/mo | `SE-TEAM-xxx` | 10 seats, shared workspace, API access |
+| **Enterprise** | Custom | `SE-ENT-xxx` | Unlimited seats, custom integrations, priority support |
+
+### Tier Features
+
+**Developer tier** unlocks:
+
+- **Web App** — Full web-based audit interface at app.sentinel-engine.io
+- **Solana Analyzer** — 35 Rust/Anchor security patterns with IDL validation
+- **Branded HTML/SARIF Reports** — Professional branded audit report output
+
+**Pro tier** unlocks (includes all Developer features):
 
 - **AI Audit Copilot** — RAG-based vulnerability explanations and remediation guidance
 - **Attack Graph Visualization** — Interactive D3.js cross-contract attack path graphs
 - **Exploit PoC Generator** — Automatic Foundry exploit test case generation
 - **Time-Travel Scanner** — Git-based historical vulnerability tracking
 - **Protocol Fingerprinting** — Protocol similarity and inherited vulnerability detection
-- **Solana Analyzer** — 35 Rust/Anchor security patterns with IDL validation
-- **Branded HTML/SARIF Reports** — Professional branded audit report output
+
+**Team tier** unlocks (includes all Pro features):
+
+- **10 Seats** — Shared team access with centralized management
+- **Shared Workspace** — Collaborative audit projects and findings
+- **API Access** — Programmatic integration with CI/CD pipelines
 
 ### Getting a License
 
-Visit [sentinel-engine.io/pricing](https://sentinel-engine.io/pricing) to purchase a Pro or Enterprise license.
+Visit [app.sentinel-engine.io/pricing](https://app.sentinel-engine.io/pricing) to purchase a Developer, Pro, Team, or Enterprise license.
 
 ---
 
