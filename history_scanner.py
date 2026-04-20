@@ -187,7 +187,8 @@ def parse_git_history(
             capture_output=True,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            timeout=300
         )
         
         if result.returncode != 0:
@@ -196,6 +197,12 @@ def parse_git_history(
                 details={"error": result.stderr, "path": repo_path}
             )
         
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            f"Git log command timed out for {repo_path} "
+            f"(limit: 300s). Returning empty commit list."
+        )
+        return []
     except FileNotFoundError:
         raise SentinelAnalysisError(
             "Git command not found",
@@ -306,7 +313,8 @@ def scan_commit(
                     capture_output=True,
                     text=True,
                     encoding="utf-8",
-                    errors="replace"
+                    errors="replace",
+                    timeout=30
                 )
                 
                 if result.returncode != 0:
@@ -341,6 +349,12 @@ def scan_commit(
                     }
                     all_findings.append(finding_dict)
                 
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    f"Git show timed out for {file_path} "
+                    f"at {commit_hash[:8]} (limit: 30s). Skipping file."
+                )
+                continue
             except subprocess.SubprocessError as e:
                 logger.warning(
                     f"Failed to scan {file_path} "
