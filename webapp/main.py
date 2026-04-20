@@ -685,13 +685,23 @@ async def settings_page(request: Request):
     if has_key:
         key = os.environ.get("OPENAI_API_KEY", "")
         masked_key = "sk-..." + key[-4:] if len(key) > 4 else "****"
+
+    # License context for the template
     license_tier = _license.get_tier()
+    license_key = os.environ.get("SENTINEL_PRO_LICENSE", "")
+    license_key_set = bool(license_key)
+    license_masked_key = _mask_license_key(license_key) if license_key else ""
+    license_features = _get_tier_features(license_tier)
+
     return templates.TemplateResponse(
         request, "settings.html",
         context={
             "has_key": has_key,
             "masked_key": masked_key,
             "license_tier": license_tier,
+            "license_key_set": license_key_set,
+            "license_masked_key": license_masked_key,
+            "license_features": license_features,
         },
     )
 
@@ -752,6 +762,142 @@ async def license_status(request: Request):
     """Return current license tier and available features."""
     info = _license.get_license_info()
     return {"tier": _license.get_tier(), "features": info.features}
+
+
+# Valid license key prefixes
+LICENSE_PREFIXES = ("SE-DEV-", "SE-PRO-", "SE-TEAM-", "SE-ENT-")
+
+
+def _mask_license_key(key: str) -> str:
+    """Mask a license key for display (show first 7 chars and last 4)."""
+    if not key or len(key) < 12:
+        return "****"
+    return key[:7] + "****-****-" + key[-4:]
+
+
+def _get_tier_features(tier: str) -> list[str]:
+    """Get list of feature names available for a tier."""
+    from license_manager import FEATURE_TIERS, FEATURE_NAMES, TIER_HIERARCHY
+
+    tier_idx = TIER_HIERARCHY.index(tier) if tier in TIER_HIERARCHY else 0
+    features = []
+    for feature, min_tier in FEATURE_TIERS.items():
+        min_idx = TIER_HIERARCHY.index(min_tier)
+        if tier_idx >= min_idx:
+            features.append(FEATURE_NAMES.get(feature, feature))
+    return sorted(features)
+
+
+@app.post("/settings/license-key")
+async def save_license_key(request: Request):
+    """Save the license key to env and persist it."""
+    form = await request.form()
+    license_key = form.get("license_key", "").strip()
+
+    if not license_key:
+        return JSONResponse(
+            {"success": False, "error": "No license key provided"},
+            status_code=400,
+        )
+
+    # Validate key format
+    if not any(license_key.upper().startswith(prefix) for prefix in LICENSE_PREFIXES):
+        return JSONResponse(
+            {
+                "success": False,
+                "error": "Invalid key format. Key must start with SE-DEV-, SE-PRO-, SE-TEAM-, or SE-ENT-",
+            },
+            status_code=400,
+        )
+
+    # Set environment variable
+    os.environ["SENTINEL_PRO_LICENSE"] = license_key
+
+    # Persist to data/.env.local
+    env_file = Path(__file__).parent.parent / "data" / ".env.local"
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Read existing vars, update, write back
+    env_vars: dict[str, str] = {}
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                env_vars[k.strip()] = v.strip()
+
+    env_vars["SENTINEL_PRO_LICENSE"] = license_key
+    env_file.write_text(
+        "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n"
+    )
+
+    # Clear LicenseManager cache so it picks up the new key
+    _license.clear_cache()
+
+    # Determine tier and features
+    tier = _license.get_tier()
+    features = _get_tier_features(tier)
+
+    return JSONResponse(
+        {
+            "success": True,
+            "tier": tier,
+            "features": features,
+        }
+    )
+
+
+@app.post("/settings/remove-license")
+async def remove_license(request: Request):
+    """Remove the license key from env and persistence."""
+    # Remove from environment
+    if "SENTINEL_PRO_LICENSE" in os.environ:
+        del os.environ["SENTINEL_PRO_LICENSE"]
+
+    # Remove from data/.env.local
+    env_file = Path(__file__).parent.parent / "data" / ".env.local"
+    if env_file.exists():
+        env_vars: dict[str, str] = {}
+        for line in env_file.read_text().splitlines():
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                if k.strip() != "SENTINEL_PRO_LICENSE":
+                    env_vars[k.strip()] = v.strip()
+
+        if env_vars:
+            env_file.write_text(
+                "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n"
+            )
+        else:
+            # No vars left, remove file or keep empty
+            env_file.write_text("")
+
+    # Clear LicenseManager cache
+    _license.clear_cache()
+
+    return JSONResponse(
+        {
+            "success": True,
+            "tier": "community",
+        }
+    )
+
+
+@app.get("/settings/license-status")
+async def get_license_status(request: Request):
+    """Return current license status for the settings page."""
+    tier = _license.get_tier()
+    key = os.environ.get("SENTINEL_PRO_LICENSE", "")
+
+    masked_key = _mask_license_key(key) if key else ""
+    features = _get_tier_features(tier)
+
+    return JSONResponse(
+        {
+            "tier": tier,
+            "masked_key": masked_key,
+            "features": features,
+        }
+    )
 
 
 @app.get("/results/{audit_id}/report/{format}")

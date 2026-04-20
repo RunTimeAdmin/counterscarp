@@ -248,6 +248,62 @@
         color: #c0c0c0;
     }
 
+    /* Features list */
+    .features-list {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: rgba(40, 167, 69, 0.05);
+        border: 1px solid rgba(40, 167, 69, 0.2);
+        border-radius: 10px;
+    }
+    .features-list h4 {
+        color: #28a745;
+        font-size: 0.9rem;
+        margin-bottom: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .features-list ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 0.5rem;
+    }
+    .features-list li {
+        color: #c0c0c0;
+        font-size: 0.85rem;
+        padding-left: 1.25rem;
+        position: relative;
+    }
+    .features-list li::before {
+        content: "✓";
+        position: absolute;
+        left: 0;
+        color: #28a745;
+        font-weight: bold;
+    }
+
+    /* Pricing link */
+    .pricing-link {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #2a2a4e;
+        text-align: center;
+        color: #888;
+        font-size: 0.9rem;
+    }
+    .pricing-link a {
+        color: #667eea;
+        text-decoration: none;
+        margin-left: 0.5rem;
+        font-weight: 500;
+    }
+    .pricing-link a:hover {
+        text-decoration: underline;
+    }
+
     /* Pro banner (shown when not pro) */
     .pro-banner {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -305,7 +361,82 @@
         <h1>Settings</h1>
         <p class="settings-subtitle">Configure API keys and integrations for Sentinel Engine.</p>
 
-        {% if license_tier == 'pro' or license_tier == 'enterprise' %}
+        <!-- License Configuration Card (visible to all users) -->
+        <div class="settings-card" id="licenseCard">
+            <h2><span class="card-icon">&#128274;</span> License Configuration</h2>
+            <p class="card-desc">
+                Activate your Developer, Pro, Team, or Enterprise license to unlock premium features.
+            </p>
+
+            <!-- Current license status -->
+            <div class="key-status {% if license_key_set %}configured{% else %}not-configured{% endif %}" id="licenseStatus">
+                <span class="status-icon" id="licenseStatusIcon">
+                    {% if license_key_set %}&#10003;{% else %}&#10007;{% endif %}
+                </span>
+                <span class="status-text" id="licenseStatusText">
+                    {% if license_key_set %}
+                        {{ license_tier.capitalize() }} License Active
+                    {% else %}
+                        Community (Free)
+                    {% endif %}
+                </span>
+                {% if license_key_set %}
+                <span class="masked-key" id="licenseMaskedKey">{{ license_masked_key }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Features unlocked display -->
+            {% if license_key_set %}
+            <div class="features-list" id="featuresList">
+                <h4>Unlocked Features:</h4>
+                <ul>
+                    {% for feature in license_features %}
+                    <li>{{ feature }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- License key input form -->
+            <form id="licenseKeyForm" onsubmit="return saveLicenseKey(event)">
+                <div class="api-key-group">
+                    <label for="license_key">License Key</label>
+                    <div class="input-row">
+                        <input type="password"
+                               id="license_key"
+                               name="license_key"
+                               class="api-key-input"
+                               placeholder="SE-PRO-XXXX-XXXX-XXXX-XXXX"
+                               autocomplete="off">
+                        <button type="button"
+                                class="btn-toggle-visibility"
+                                id="toggleLicenseBtn"
+                                onclick="toggleLicenseVisibility()"
+                                title="Show/hide key">
+                            &#128065;
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-actions">
+                    <button type="submit" class="btn-save" id="saveLicenseBtn">Activate License</button>
+                    {% if license_key_set %}
+                    <button type="button" class="btn-test" id="removeLicenseBtn" onclick="removeLicense()">Remove License</button>
+                    {% endif %}
+                </div>
+            </form>
+
+            <!-- Validation feedback -->
+            <div class="test-result" id="licenseResult"></div>
+
+            <!-- Pricing link -->
+            <div class="pricing-link">
+                <span>Don't have a license?</span>
+                <a href="/pricing">View pricing plans</a>
+            </div>
+        </div>
+
+        {% if license_tier == 'pro' or license_tier == 'enterprise' or license_tier == 'developer' or license_tier == 'team' %}
 
         <!-- AI Copilot Configuration -->
         <div class="settings-card">
@@ -449,5 +580,106 @@
             window.history.replaceState({}, '', '/settings');
         }
     })();
+
+    // License key visibility toggle
+    function toggleLicenseVisibility() {
+        const input = document.getElementById('license_key');
+        const btn = document.getElementById('toggleLicenseBtn');
+        if (input.type === 'password') {
+            input.type = 'text';
+            btn.innerHTML = '&#128064;';
+        } else {
+            input.type = 'password';
+            btn.innerHTML = '&#128065;';
+        }
+    }
+
+    // Save license key
+    async function saveLicenseKey(event) {
+        event.preventDefault();
+        const key = document.getElementById('license_key').value.trim();
+        const saveBtn = document.getElementById('saveLicenseBtn');
+        const resultDiv = document.getElementById('licenseResult');
+
+        if (!key) {
+            resultDiv.className = 'test-result error';
+            resultDiv.textContent = 'Please enter a license key';
+            return false;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Activating...';
+        resultDiv.className = 'test-result';
+        resultDiv.style.display = 'none';
+
+        try {
+            const resp = await fetch('/settings/license-key', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `license_key=${encodeURIComponent(key)}`,
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+                resultDiv.className = 'test-result success';
+                resultDiv.textContent = `${data.tier.charAt(0).toUpperCase() + data.tier.slice(1)} license activated successfully!`;
+                // Reload page to show updated status
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                resultDiv.className = 'test-result error';
+                resultDiv.textContent = data.error || 'License activation failed';
+            }
+        } catch (err) {
+            resultDiv.className = 'test-result error';
+            resultDiv.textContent = 'Connection error: ' + err.message;
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Activate License';
+        return false;
+    }
+
+    // Remove license key
+    async function removeLicense() {
+        if (!confirm('Are you sure you want to remove your license key? This will revert you to the Community (Free) tier.')) {
+            return;
+        }
+
+        const removeBtn = document.getElementById('removeLicenseBtn');
+        const resultDiv = document.getElementById('licenseResult');
+
+        if (removeBtn) {
+            removeBtn.disabled = true;
+            removeBtn.textContent = 'Removing...';
+        }
+
+        try {
+            const resp = await fetch('/settings/remove-license', {
+                method: 'POST',
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+                resultDiv.className = 'test-result success';
+                resultDiv.textContent = 'License removed successfully';
+                // Reload page to show updated status
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                resultDiv.className = 'test-result error';
+                resultDiv.textContent = data.error || 'Failed to remove license';
+                if (removeBtn) {
+                    removeBtn.disabled = false;
+                    removeBtn.textContent = 'Remove License';
+                }
+            }
+        } catch (err) {
+            resultDiv.className = 'test-result error';
+            resultDiv.textContent = 'Connection error: ' + err.message;
+            if (removeBtn) {
+                removeBtn.disabled = false;
+                removeBtn.textContent = 'Remove License';
+            }
+        }
+    }
 </script>
 {% endblock %}

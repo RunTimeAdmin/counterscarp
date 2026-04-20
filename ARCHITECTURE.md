@@ -27,22 +27,22 @@ flowchart TD
     end
 
     subgraph Orchestrator["Central Orchestrator"]
-        ORCH["Orchestrator<br/>Pipeline Controller"]
+        ORCH["Orchestrator"]
     end
 
     subgraph SecurityAnalyzers["Security Analyzers"]
         direction TB
         STATIC["Static Analysis"]
         DYNAMIC["Dynamic Analysis"]
-        HEURISTIC["Heuristic Scanner<br/>(31 EVM Rules)"]
-        SOLANA["Solana Analyzer<br/>(35 Patterns)"]
+        HEURISTIC["Heuristic Scanner"]
+        SOLANA["Solana Analyzer"]
         UPGRADE["Upgrade Diff"]
     end
 
     subgraph StaticTools["Static Analysis Tools"]
-        SLITHER["Slither<br/>(red_team_scan)"]
+        SLITHER["Slither"]
         ADERYN["Aderyn"]
-        MYTHRIL["Mythril<br/>(symbolic)"]
+        MYTHRIL["Mythril"]
     end
 
     subgraph DynamicTools["Dynamic Analysis Tools"]
@@ -68,15 +68,15 @@ flowchart TD
 
     subgraph Innovative["Innovative Features"]
         direction TB
-        RAG["RAG Engine<br/>(rag_engine.py)"]
-        EMB["Embeddings<br/>(embeddings.py)"]
-        AG["Attack Graph<br/>(attack_graph.py)"]
-        VIS["Visualizer<br/>(visualizer.py)"]
-        HIST["History Scanner<br/>(history_scanner.py)"]
-        IDL["IDL Validator<br/>(idl_validator.py)"]
-        PIPE["Pipeline Gen<br/>(pipeline_generator.py)"]
-        FP["Fingerprint<br/>(fingerprint_scanner.py)"]
-        PDB["Protocol DB<br/>(protocol_db.py)"]
+        RAG["RAG Engine"]
+        EMB["Embeddings"]
+        AG["Attack Graph"]
+        VIS["Visualizer"]
+        HIST["History Scanner"]
+        IDL["IDL Validator"]
+        PIPE["Pipeline Gen"]
+        FP["Fingerprint"]
+        PDB["Protocol DB"]
     end
 
     subgraph Infrastructure["Core Infrastructure"]
@@ -155,12 +155,7 @@ flowchart TD
     REPORT --> MD
     REPORT --> SARIF
 
-    style ORCH fill:#e1f5fe
-    style LOGGER fill:#fff3e0
-    style EXCEPTIONS fill:#fff3e0
-    style CONFIG fill:#fff3e0
-    style REPORT fill:#e8f5e9
-    style Innovative fill:#f3e5f5
+
 ```
 
 ---
@@ -171,108 +166,80 @@ The orchestrator executes a 13-phase sequential pipeline. Each phase can be enab
 
 ```mermaid
 flowchart TD
-    START(["Start Analysis"]) --> DEC0
+    START(["Start"]) --> DEC0
 
-    DEC0{"RAG enabled?"} -->|Yes| PHASE0
+    DEC0{"RAG?"} -->|Yes| PHASE0
     DEC0 -->|No| PHASE1
 
-    PHASE0["Phase 0: RAG Knowledge Enrichment<br/>AI Copilot context loading"] --> PHASE1
+    PHASE0["Phase 0: RAG Enrichment"] --> PHASE1
 
-    PHASE1["Phase 1: Supply Chain Analysis<br/>OSV.dev vulnerability check"] --> PHASE2
-    PHASE1 -.->|"No package.json"| PHASE2
+    PHASE1["Phase 1: Supply Chain"] --> PHASE2
 
-    PHASE2["Phase 2: Static Analysis - Slither<br/>Core vulnerability detection"] --> DEC2
+    PHASE2["Phase 2: Slither Analysis"] --> DEC2
 
-    DEC2{"Aderyn enabled?"} -->|Yes| PHASE2B
+    DEC2{"Aderyn?"} -->|Yes| PHASE2B
     DEC2 -->|No| DEC3
 
-    PHASE2B["Phase 2B: Static Analysis - Aderyn<br/>Rust-based Solidity analyzer"] --> DEC3
+    PHASE2B["Phase 2B: Aderyn"] --> DEC3
 
-    DEC3{"Foundry fuzz contract?"} -->|Yes| PHASE3
+    DEC3{"Foundry?"} -->|Yes| PHASE3
     DEC3 -->|No| DEC4
 
-    PHASE3["Phase 3: Fuzzing - Foundry<br/>Invariant testing"] --> DEC4
+    PHASE3["Phase 3: Foundry Fuzz"] --> DEC4
 
-    DEC4{"Medusa enabled?"} -->|Yes| PHASE3B
+    DEC4{"Medusa?"} -->|Yes| PHASE3B
     DEC4 -->|No| DEC4A
 
-    PHASE3B["Phase 3B: Fuzzing - Medusa<br/>Coverage-guided fuzzing"] --> DEC4A
+    PHASE3B["Phase 3B: Medusa"] --> DEC4A
 
-    DEC4A{"Fingerprint scan enabled?"} -->|Yes| PHASE3C
+    DEC4A{"Fingerprint?"} -->|Yes| PHASE3C
     DEC4A -->|No| PHASE4
 
-    PHASE3C["Phase 3C: Protocol Fingerprinting<br/>Similarity analysis"] --> PHASE4
+    PHASE3C["Phase 3C: Fingerprint"] --> PHASE4
 
-    PHASE4["Phase 4: Heuristic Scan<br/>31 EVM security rules"] --> DEC5
+    PHASE4["Phase 4: Heuristic Scan"] --> DEC5
 
-    DEC5{"Symbolic analysis enabled?"} -->|Yes| PHASE5
+    DEC5{"Mythril?"} -->|Yes| PHASE5
     DEC5 -->|No| DEC5A
 
-    PHASE5["Phase 5: Symbolic Execution - Mythril<br/>Path exploration"] --> DEC5A
+    PHASE5["Phase 5: Mythril"] --> DEC5A
 
-    DEC5A{"History scan enabled?"} -->|Yes| PHASE5B
+    DEC5A{"History?"} -->|Yes| PHASE5B
     DEC5A -->|No| DEC6
 
-    PHASE5B["Phase 5B: Time-Travel Scan<br/>Git history analysis"] --> DEC6
+    PHASE5B["Phase 5B: History Scan"] --> DEC6
 
-    DEC6{"Solana root provided?"} -->|Yes| PHASE6
+    DEC6{"Solana?"} -->|Yes| PHASE6
     DEC6 -->|No| DEC6A
 
-    PHASE6["Phase 6: Solana Analysis<br/>35 Anchor/Rust patterns"] --> DEC6A
+    PHASE6["Phase 6: Solana"] --> DEC6A
 
-    DEC6A{"IDL validation enabled?"} -->|Yes| PHASE6B
+    DEC6A{"IDL?"} -->|Yes| PHASE6B
     DEC6A -->|No| DEC7
 
-    PHASE6B["Phase 6B: Anchor IDL Validation<br/>Constraint & CPI analysis"] --> DEC7
+    PHASE6B["Phase 6B: IDL Validate"] --> DEC7
 
-    DEC7{"Upgrade paths provided?"} -->|Yes| PHASE7
+    DEC7{"Upgrade?"} -->|Yes| PHASE7
     DEC7 -->|No| DEC7A
 
-    PHASE7["Phase 7: Upgrade Diff Analysis<br/>Implementation comparison"] --> DEC7A
+    PHASE7["Phase 7: Upgrade Diff"] --> DEC7A
 
-    DEC7A{"Attack graph enabled?"} -->|Yes| PHASE7B
+    DEC7A{"Attack Graph?"} -->|Yes| PHASE7B
     DEC7A -->|No| PHASE8
 
-    PHASE7B["Phase 7B: Attack Path Visualization<br/>Cross-contract graph"] --> PHASE8
+    PHASE7B["Phase 7B: Attack Graph"] --> PHASE8
 
-    PHASE8["Phase 8: Report Generation<br/>Markdown action plan"] --> DEC9
+    PHASE8["Phase 8: Report Gen"] --> DEC9
 
-    DEC9{"Professional report requested?"} -->|Yes| PHASE9
+    DEC9{"Full Report?"} -->|Yes| PHASE9
     DEC9 -->|No| END1
 
-    PHASE9["Phase 9: Professional Reports<br/>HTML / Markdown / SARIF"] --> END2
+    PHASE9["Phase 9: Full Reports"] --> END2
 
-    END1(["Action Plan Generated"])
-    END2(["Full Audit Reports Generated"])
+    END1(["Action Plan"])
+    END2(["Full Reports"])
 
-    style PHASE0 fill:#f3e5f5
-    style PHASE1 fill:#ffebee
-    style PHASE2 fill:#ffebee
-    style PHASE2B fill:#fff3e0
-    style PHASE3 fill:#fff3e0
-    style PHASE3B fill:#fff3e0
-    style PHASE3C fill:#f3e5f5
-    style PHASE4 fill:#ffebee
-    style PHASE5 fill:#fff3e0
-    style PHASE5B fill:#f3e5f5
-    style PHASE6 fill:#fff3e0
-    style PHASE6B fill:#f3e5f5
-    style PHASE7 fill:#fff3e0
-    style PHASE7B fill:#f3e5f5
-    style PHASE8 fill:#e8f5e9
-    style PHASE9 fill:#e8f5e9
-    style DEC0 fill:#e3f2fd
-    style DEC2 fill:#e3f2fd
-    style DEC3 fill:#e3f2fd
-    style DEC4 fill:#e3f2fd
-    style DEC4A fill:#e3f2fd
-    style DEC5 fill:#e3f2fd
-    style DEC5A fill:#e3f2fd
-    style DEC6 fill:#e3f2fd
-    style DEC6A fill:#e3f2fd
-    style DEC7 fill:#e3f2fd
-    style DEC7A fill:#e3f2fd
-    style DEC9 fill:#e3f2fd
+
 ```
 
 ---
@@ -283,65 +250,55 @@ This diagram shows the import dependencies between modules. Core infrastructure 
 
 ```mermaid
 flowchart LR
-    subgraph CoreInfra["Core Infrastructure"]
+    subgraph Core["Core Infrastructure"]
         direction TB
-        EXC["exceptions.py"]
-        LOG["logger.py"]
-        CFG["config_loader.py"]
-        HTTP["http_utils.py"]
+        EXC["Exceptions"]
+        LOG["Logger"]
+        CFG["Config"]
+        HTTP["HTTP"]
     end
 
-    subgraph Analyzers["Security Analyzers"]
+    subgraph Analyzers["Analyzers"]
         direction TB
-        RTS["red_team_scan.py"]
-        HS["heuristic_scanner.py"]
-        FW["fuzz_wrapper.py"]
-        SW["symbolic_wrapper.py"]
-        AW["aderyn_wrapper.py"]
-        MW["medusa_wrapper.py"]
-        SA["solana_analyzer.py"]
-        UD["upgrade_diff.py"]
-        IC["intent_check.py"]
-        AM["access_matrix.py"]
+        RTS["Red Team"]
+        HS["Heuristic"]
+        FW["Fuzz"]
+        SW["Symbolic"]
+        AW["Aderyn"]
+        MW["Medusa"]
+        SA["Solana"]
+        UD["Upgrade"]
     end
 
-    subgraph APIModules["API Modules"]
+    subgraph APIs["API Modules"]
         direction TB
-        KF["knowledge_fetcher.py"]
-        SI["solana_intel.py"]
-        SCC["supply_chain_check.py"]
-        TI["threat_intel.py"]
+        KF["Knowledge"]
+        SI["Solana Intel"]
+        SCC["Supply Chain"]
+        TI["Threat Intel"]
     end
 
-    subgraph Innovative["Innovative Features"]
+    subgraph Innovative["Innovative"]
         direction TB
-        RAG["rag_engine.py"]
-        EMB["embeddings.py"]
-        AG["attack_graph.py"]
-        VIS["visualizer.py"]
-        HIST["history_scanner.py"]
-        IDL["idl_validator.py"]
-        PIPE["pipeline_generator.py"]
-        FP["fingerprint_scanner.py"]
-        PDB["protocol_db.py"]
+        RAG["RAG"]
+        EMB["Embeddings"]
+        AG["Attack Graph"]
+        VIS["Visualizer"]
+        HIST["History"]
+        IDL["IDL"]
+        PIPE["Pipeline"]
+        FP["Fingerprint"]
+        PDB["Protocol DB"]
     end
 
     subgraph Interfaces["Interfaces"]
         direction TB
-        ORCH["orchestrator.py"]
-        GUI["gui.py"]
+        ORCH["Orchestrator"]
+        GUI["GUI"]
     end
 
     subgraph Reporting["Reporting"]
-        RG["report_generator.py"]
-    end
-
-    subgraph Exploit["Exploit Generation"]
-        EG["exploit_generator.py"]
-    end
-
-    subgraph Inflation["Inflation"]
-        IS["inflation_scaffold.py"]
+        RG["Report Gen"]
     end
 
     %% Core dependencies
@@ -369,18 +326,14 @@ flowchart LR
     SA -.-> EXC
     UD -.-> LOG
     UD -.-> EXC
-    IC -.-> LOG
-    IC -.-> EXC
-    AM -.-> LOG
-    AM -.-> EXC
 
-    %% API modules depend on http_utils
+    %% API modules depend on http
     KF -.-> HTTP
     SI -.-> HTTP
     SCC -.-> HTTP
     TI -.-> HTTP
 
-    %% Innovative features dependencies
+    %% Innovative features
     RAG -.-> EMB
     RAG -.-> HTTP
     RAG -.-> LOG
@@ -401,7 +354,7 @@ flowchart LR
     RG -.-> LOG
     RG -.-> EXC
 
-    %% Orchestrator imports everything
+    %% Orchestrator imports
     ORCH --> RTS
     ORCH --> SCC
     ORCH --> FW
@@ -420,20 +373,11 @@ flowchart LR
     ORCH --> PIPE
     ORCH --> FP
 
-    %% GUI imports most modules
+    %% GUI imports
     GUI -.-> ORCH
     GUI -.-> HS
     GUI -.-> RTS
     GUI -.-> SCC
-
-    style CoreInfra fill:#fff3e0
-    style Analyzers fill:#ffebee
-    style APIModules fill:#e3f2fd
-    style Innovative fill:#f3e5f5
-    style Interfaces fill:#e8f5e9
-    style Reporting fill:#f3e5f5
-    style Exploit fill:#fce4ec
-    style Inflation fill:#fce4ec
 ```
 
 ---
@@ -509,80 +453,55 @@ The configuration system uses a layered approach with base configuration and pro
 
 ```mermaid
 flowchart LR
-    subgraph ConfigFiles["Configuration Files"]
-        BASE["sentinel.toml<br/>Base Configuration"]
-        PR["sentinel-pr.toml<br/>PR Mode Profile"]
-        AUDIT["sentinel-audit.toml<br/>Audit Mode Profile"]
-        BOUNTY["sentinel-bounty.toml<br/>Bounty Mode Profile"]
+    subgraph ConfigFiles["Config Files"]
+        BASE["sentinel.toml"]
+        PR["sentinel-pr.toml"]
+        AUDIT["sentinel-audit.toml"]
+        BOUNTY["sentinel-bounty.toml"]
     end
 
     subgraph Loader["Config Loader"]
-        LOADER["config_loader.py"]
-        VALIDATE["Validation Engine"]
+        LOADER["Loader"]
+        VALIDATE["Validation"]
     end
 
-    subgraph DataClasses["Typed Dataclasses"]
-        ROOT["SentinelConfig<br/>Root Configuration"]
+    subgraph DataClasses["Dataclasses"]
+        ROOT["SentinelConfig"]
 
-        subgraph Sections["21 Configuration Sections"]
-            ENGINE["EngineConfig"]
-            HEUR["HeuristicConfig"]
-            SUPP["Suppression list"]
-            STATIC["StaticAnalysisConfig"]
-            FUZZ["FuzzingConfig"]
-            RED["RedTeamConfig"]
-            EXT["ExternalToolsConfig"]
-            SC["SupplyChainConfig"]
-            TI["ThreatIntelConfig"]
-            HTTP["HttpConfig"]
-            CHAIN["ChainConfig"]
-            UPGRADE["UpgradeDiffConfig"]
-            REP["ReportingConfig"]
-            CI["CIConfig"]
-            AI["AIConfig"]
-            VIZ["VisualizationConfig"]
-            HIST["HistoryConfig"]
-            IDL["IDLConfig"]
-            CIGEN["CIGeneratorConfig"]
-            EXP["ExploitGenerationConfig"]
-            FP["FingerprintConfig"]
+        subgraph Sections["Config Sections"]
+            ENGINE["Engine"]
+            HEUR["Heuristic"]
+            STATIC["Static"]
+            FUZZ["Fuzzing"]
+            SC["Supply Chain"]
+            TI["Threat Intel"]
+            REP["Reporting"]
+            AI["AI"]
         end
     end
 
-    subgraph Consumers["Module Consumers"]
-        MODULES["Individual Analysis Modules"]
+    subgraph Consumers["Consumers"]
+        MODULES["Modules"]
     end
 
     BASE --> LOADER
-    PR -->|"Override"| LOADER
-    AUDIT -->|"Override"| LOADER
-    BOUNTY -->|"Override"| LOADER
+    PR --> LOADER
+    AUDIT --> LOADER
+    BOUNTY --> LOADER
 
     LOADER --> VALIDATE
     VALIDATE --> ROOT
 
     ROOT --> ENGINE
     ROOT --> HEUR
-    ROOT --> SUPP
     ROOT --> STATIC
     ROOT --> FUZZ
-    ROOT --> RED
-    ROOT --> EXT
     ROOT --> SC
     ROOT --> TI
-    ROOT --> HTTP
-    ROOT --> CHAIN
-    ROOT --> UPGRADE
     ROOT --> REP
-    ROOT --> CI
+    ROOT --> AI
 
     ROOT --> MODULES
-
-    style ConfigFiles fill:#e3f2fd
-    style Loader fill:#fff3e0
-    style DataClasses fill:#e8f5e9
-    style Sections fill:#f1f8e9
-    style Consumers fill:#ffebee
 ```
 
 ### Configuration Sections Overview
@@ -646,49 +565,49 @@ This sequence diagram shows how a security finding flows through the system from
 
 ```mermaid
 sequenceDiagram
-    participant Analyzer as Security Analyzer
+    participant Analyzer as Analyzer
     participant Orchestrator as Orchestrator
-    participant Config as Config Loader
-    participant ReportGen as Report Generator
-    participant Output as Output Files
+    participant Config as Config
+    participant ReportGen as ReportGen
+    participant Output as Output
 
-    Analyzer->>Analyzer: Detect vulnerability<br/>in source code
-    Analyzer->>Analyzer: Classify severity<br/>(CRITICAL/HIGH/MEDIUM/LOW)
-    Analyzer->>Orchestrator: Return raw finding<br/>(rule_id, file, line, message)
+    Analyzer->>Analyzer: Detect vulnerability
+    Analyzer->>Analyzer: Classify severity
+    Analyzer->>Orchestrator: Return finding
 
-    Orchestrator->>Config: Check suppression<br/>is_finding_suppressed()
+    Orchestrator->>Config: Check suppression
 
-    alt Finding is suppressed
-        Config-->>Orchestrator: Return Suppression object
-        Orchestrator->>Orchestrator: Mark as suppressed<br/>Skip from report
-    else Finding not suppressed
-        Config-->>Orchestrator: Return None
-        Orchestrator->>Orchestrator: Add to active findings list
+    alt Suppressed
+        Config-->>Orchestrator: Suppressed
+        Orchestrator->>Orchestrator: Skip
+    else Not suppressed
+        Config-->>Orchestrator: Active
+        Orchestrator->>Orchestrator: Add to findings
     end
 
-    Orchestrator->>Orchestrator: Aggregate findings<br/>from all analyzers
+    Orchestrator->>Orchestrator: Aggregate findings
 
-    Orchestrator->>ReportGen: Pass findings collection<br/>(severity-sorted)
+    Orchestrator->>ReportGen: Pass findings
 
-    ReportGen->>ReportGen: Format findings<br/>by report type
+    ReportGen->>ReportGen: Format by type
 
-    alt Markdown Report
-        ReportGen->>ReportGen: Generate action plan<br/>with remediation steps
-        ReportGen->>Output: Write ACTION_PLAN_*.md
+    alt Markdown
+        ReportGen->>ReportGen: Generate MD
+        ReportGen->>Output: Write MD
     end
 
-    alt HTML Report
-        ReportGen->>ReportGen: Generate styled HTML<br/>with syntax highlighting
-        ReportGen->>Output: Write audit_report_*.html
+    alt HTML
+        ReportGen->>ReportGen: Generate HTML
+        ReportGen->>Output: Write HTML
     end
 
-    alt SARIF Report
-        ReportGen->>ReportGen: Format as SARIF 2.1.0<br/>for GitHub integration
-        ReportGen->>Output: Write *.sarif
+    alt SARIF
+        ReportGen->>ReportGen: Generate SARIF
+        ReportGen->>Output: Write SARIF
     end
 
-    Output-->>Orchestrator: Confirm file paths
-    Orchestrator->>Orchestrator: Display summary<br/>to user
+    Output-->>Orchestrator: Confirm paths
+    Orchestrator->>Orchestrator: Display summary
 ```
 
 ### Finding Data Structure
@@ -726,26 +645,26 @@ The RAG-based knowledge system enriches findings with contextual explanations fr
 
 ```mermaid
 flowchart LR
-    subgraph Input["Finding Input"]
-        FINDING["Security Finding<br/>rule_id, code_snippet"]
+    subgraph Input["Input"]
+        FINDING["Finding"]
     end
 
     subgraph RAGPipeline["RAG Pipeline"]
-        EMB["Embedding Generator<br/>(embeddings.py)"]
-        VDB["Vector Database<br/>Local/Remote"]
-        RETRIEVE["Context Retrieval<br/>top_k similar findings"]
-        PROMPT["Prompt Builder<br/>System + Context + Finding"]
+        EMB["Embedding"]
+        VDB["Vector DB"]
+        RETRIEVE["Retrieve"]
+        PROMPT["Prompt"]
     end
 
-    subgraph LLM["LLM Providers"]
-        OPENAI["OpenAI API<br/>GPT-4"]
-        ANTHROPIC["Anthropic API<br/>Claude"]
+    subgraph LLM["LLM"]
+        OPENAI["OpenAI"]
+        ANTHROPIC["Anthropic"]
     end
 
-    subgraph Output["Enriched Output"]
-        EXPLANATION["Vulnerability Explanation"]
-        FIX["Suggested Fix"]
-        REFS["References & CWE"]
+    subgraph Output["Output"]
+        EXPLANATION["Explanation"]
+        FIX["Fix"]
+        REFS["Refs"]
     end
 
     FINDING --> EMB
@@ -774,22 +693,22 @@ Generates interactive force-directed graphs showing cross-contract vulnerability
 
 ```mermaid
 flowchart TD
-    subgraph DataCollection["Data Collection"]
-        FINDINGS["Security Findings"]
-        CALLGRAPH["Call Graph<br/>Cross-contract calls"]
-        STATE["State Dependencies<br/>Storage variables"]
+    subgraph Data["Data"]
+        FINDINGS["Findings"]
+        CALLGRAPH["Call Graph"]
+        STATE["State"]
     end
 
-    subgraph GraphBuilder["Attack Graph Builder<br/>(attack_graph.py)"]
-        NODES["Node Extraction<br/>Contracts, Functions"]
-        EDGES["Edge Creation<br/>Calls, Dependencies"]
-        RISK["Risk Scoring<br/>Severity propagation"]
+    subgraph Builder["Graph Builder"]
+        NODES["Nodes"]
+        EDGES["Edges"]
+        RISK["Risk"]
     end
 
-    subgraph Visualization["Visualization<br/>(visualizer.py)"]
-        D3["D3.js Force Graph"]
-        INTERACTIVE["Interactive Controls<br/>Zoom, Filter, Highlight"]
-        EXPORT["Export Formats<br/>HTML, Mermaid, DOT"]
+    subgraph Viz["Visualization"]
+        D3["D3.js"]
+        INTERACTIVE["Controls"]
+        EXPORT["Export"]
     end
 
     FINDINGS --> NODES
@@ -810,22 +729,22 @@ Git-based historical analysis for tracking when vulnerabilities were introduced.
 
 ```mermaid
 flowchart LR
-    subgraph Git["Git Repository"]
-        LOG["Git Log<br/>Commit history"]
-        DIFF["Git Diff<br/>File changes"]
-        BLAME["Git Blame<br/>Line attribution"]
+    subgraph Git["Git"]
+        LOG["Log"]
+        DIFF["Diff"]
+        BLAME["Blame"]
     end
 
-    subgraph Scanner["History Scanner<br/>(history_scanner.py)"]
-        COMMITS["Commit Iterator<br/>--commits N"]
-        CHECKOUT["Checkout & Scan<br/>Incremental analysis"]
-        TRACK["Vulnerability Tracker<br/>Introduction/Fix dates"]
+    subgraph Scanner["Scanner"]
+        COMMITS["Commits"]
+        CHECKOUT["Checkout"]
+        TRACK["Tracker"]
     end
 
     subgraph Output["Output"]
-        TIMELINE["Security Timeline"]
-        DEBT["Technical Debt Report"]
-        ATTRIB["Contributor Attribution"]
+        TIMELINE["Timeline"]
+        DEBT["Debt"]
+        ATTRIB["Attribution"]
     end
 
     LOG --> COMMITS
@@ -846,22 +765,22 @@ Solana-specific IDL validation for Anchor programs.
 
 ```mermaid
 flowchart TD
-    subgraph Input["Anchor Project"]
-        IDL["IDL JSON<br/>Interface Definition"]
-        RS["Rust Source<br/>Program code"]
+    subgraph Input["Input"]
+        IDL["IDL"]
+        RS["Rust"]
     end
 
-    subgraph Validation["IDL Validator<br/>(idl_validator.py)"]
-        PARSE["IDL Parser<br/>Accounts, Instructions"]
-        CONSTRAINT["Constraint Checker<br/>signer, mut, has_one"]
-        CPI["CPI Flow Tracer<br/>Cross-program calls"]
-        MATRIX["Permission Matrix<br/>Account access rights"]
+    subgraph Validation["Validation"]
+        PARSE["Parser"]
+        CONSTRAINT["Constraints"]
+        CPI["CPI"]
+        MATRIX["Matrix"]
     end
 
-    subgraph Output["Validation Output"]
-        ERRORS["Constraint Violations"]
-        FLOWS["CPI Flow Diagrams"]
-        PERMS["Account Permission Map"]
+    subgraph Output["Output"]
+        ERRORS["Errors"]
+        FLOWS["Flows"]
+        PERMS["Perms"]
     end
 
     IDL --> PARSE
@@ -882,23 +801,23 @@ Multi-platform pipeline generation for security automation.
 
 ```mermaid
 flowchart LR
-    subgraph Config["Configuration"]
-        TOML["sentinel.toml<br/>User config"]
-        PROFILES["Execution Profiles<br/>PR/Audit/Bounty"]
+    subgraph Config["Config"]
+        TOML["sentinel.toml"]
+        PROFILES["Profiles"]
     end
 
-    subgraph Generator["Pipeline Generator<br/>(pipeline_generator.py)"]
-        TEMPLATES["Template Engine<br/>Jinja2"]
-        GITHUB["GitHub Actions<br/>.github/workflows/"]
-        GITLAB["GitLab CI<br/>.gitlab-ci.yml"]
-        AZURE["Azure DevOps<br/>azure-pipelines.yml"]
-        JENKINS["Jenkins<br/>Jenkinsfile"]
+    subgraph Generator["Generator"]
+        TEMPLATES["Templates"]
+        GITHUB["GitHub"]
+        GITLAB["GitLab"]
+        AZURE["Azure"]
+        JENKINS["Jenkins"]
     end
 
-    subgraph Features["Pipeline Features"]
-        PR["PR Comments<br/>Findings summary"]
-        SARIF["SARIF Upload<br/>GitHub Security"]
-        NOTIFY["Notifications<br/>Slack/Discord"]
+    subgraph Features["Features"]
+        PR["PR"]
+        SARIF["SARIF"]
+        NOTIFY["Notify"]
     end
 
     TOML --> TEMPLATES
@@ -920,28 +839,28 @@ Pattern-to-template exploit generation with multi-LLM support.
 
 ```mermaid
 flowchart TD
-    subgraph Input["Vulnerability Input"]
-        RULE["Rule ID<br/>REENTRANCY, etc."]
-        CODE["Vulnerable Code<br/>Snippet"]
-        CONTEXT["Contract Context<br/>State variables"]
+    subgraph Input["Input"]
+        RULE["Rule"]
+        CODE["Code"]
+        CONTEXT["Context"]
     end
 
-    subgraph Generator["Exploit Generator<br/>(exploit_generator.py)]
-        MAPPER["Pattern Mapper<br/>Rule → Template"]
-        TEMPLATES["Template Library<br/>6 Foundry templates"]
-        INFERENCE["State Inference<br/>Setup generation"]
-        ORACLE["Assertion Oracle<br/>Exploit validation"]
+    subgraph Generator["Generator"]
+        MAPPER["Mapper"]
+        TEMPLATES["Templates"]
+        INFERENCE["Inference"]
+        ORACLE["Oracle"]
     end
 
-    subgraph LLM["LLM Integration"]
-        OPENAI["OpenAI<br/>GPT-4"]
-        ANTHROPIC["Anthropic<br/>Claude"]
+    subgraph LLM["LLM"]
+        OPENAI["OpenAI"]
+        ANTHROPIC["Anthropic"]
     end
 
-    subgraph Output["Generated Exploit"]
-        TEST["Foundry Test<br/>*.t.sol"]
-        SETUP["Deployment Script"]
-        PROOF["Proof of Concept"]
+    subgraph Output["Output"]
+        TEST["Test"]
+        SETUP["Setup"]
+        PROOF["PoC"]
     end
 
     RULE --> MAPPER
@@ -967,30 +886,30 @@ Protocol similarity detection and inherited vulnerability analysis.
 
 ```mermaid
 flowchart LR
-    subgraph Database["Protocol Database<br/>(protocol_db.py)"]
-        UNI["Uniswap V2/V3"]
+    subgraph Database["Database"]
+        UNI["Uniswap"]
         COMP["Compound"]
         AAVE["Aave"]
         OZ["OpenZeppelin"]
-        CUSTOM["Custom Fingerprints"]
+        CUSTOM["Custom"]
     end
 
-    subgraph Scanner["Fingerprint Scanner<br/>(fingerprint_scanner.py)"]
-        AST["AST Analysis<br/>Structure extraction"]
-        SIMILARITY["Similarity Engine<br/>Cosine/Jaccard"]
-        MATCHING["Protocol Matching<br/>Threshold > 0.75"]
+    subgraph Scanner["Scanner"]
+        AST["AST"]
+        SIMILARITY["Similarity"]
+        MATCHING["Matching"]
     end
 
-    subgraph Analysis["Vulnerability Analysis"]
-        INHERIT["Inherited Vulns<br/>From parent protocol"]
-        HISTORY["Exploit History<br/>Known issues"]
-        RISK["Risk Scoring<br/>Genetic risk"]
+    subgraph Analysis["Analysis"]
+        INHERIT["Inherited"]
+        HISTORY["History"]
+        RISK["Risk"]
     end
 
-    subgraph Output["Fingerprint Report"]
-        MATCH["Protocol Match<br/>% similarity"]
-        WARNINGS["Inherited Warnings"]
-        RECS["Recommendations"]
+    subgraph Output["Report"]
+        MATCH["Match"]
+        WARNINGS["Warnings"]
+        RECS["Recs"]
     end
 
     UNI --> AST

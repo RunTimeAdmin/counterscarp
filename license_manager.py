@@ -381,6 +381,17 @@ class LicenseManager:
             except Exception:
                 pass
 
+    def clear_cache(self):
+        """Public method to clear the license cache and reload license key.
+
+        Call this after changing the license key to force re-validation.
+        """
+        with self._cache_lock:
+            self._clear_cache()
+            self._cached_result = None
+            self._cache_valid = False
+            self._license_key = _get_license_key()
+
     def _validate_license(self) -> Optional[LicenseInfo]:
         """Validate license with server or cache."""
         if not self._license_key:
