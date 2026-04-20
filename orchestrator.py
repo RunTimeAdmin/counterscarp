@@ -196,7 +196,11 @@ def generate_markdown_report(
     filename = f"ACTION_PLAN_{datetime.date.today()}.md"
 
     # Risk Calculation
-    critical_count = len(fuzz_results) + len([x for x in static_results if x.get("impact") == "High"])
+    critical_count = (
+        len(fuzz_results)
+        + len([x for x in static_results if x.get("impact", "").lower() in ("high", "critical")])
+        + len([x for x in heuristic_results if x.get("severity", "").upper() == "CRITICAL"])
+    )
     status_icon = "[CRITICAL]" if critical_count > 0 else "[STABLE]"
 
     with open(filename, "w", encoding="utf-8", errors="replace") as f:

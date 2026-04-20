@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import json
 import shutil
@@ -251,6 +252,9 @@ def _slither_per_file_fallback(
             file_cmd.extend(["--solc-remaps", remaps])
 
         try:
+            _env = os.environ.copy()
+            _env["PYTHONWARNINGS"] = "ignore"
+            _env["PYTHONDONTWRITEBYTECODE"] = "1"
             result = subprocess.run(
                 file_cmd,
                 cwd=project_root,
@@ -258,6 +262,7 @@ def _slither_per_file_fallback(
                 text=True,
                 check=False,
                 timeout=300,
+                env=_env,
             )
             output = result.stdout
             json_start = output.find("{")
@@ -447,6 +452,9 @@ def run_slither(target: str) -> Dict[str, Any]:
 
     try:
         # Run slither and capture stdout/stderr
+        _slither_env = os.environ.copy()
+        _slither_env["PYTHONWARNINGS"] = "ignore"
+        _slither_env["PYTHONDONTWRITEBYTECODE"] = "1"
         result = subprocess.run(
             cmd,
             cwd=cwd,
@@ -454,6 +462,7 @@ def run_slither(target: str) -> Dict[str, Any]:
             text=True,
             check=False,  # Slither exits non-zero on findings
             timeout=300,
+            env=_slither_env,
         )
 
         # Slither may mix logs in stdout, but --json -
@@ -464,6 +473,22 @@ def run_slither(target: str) -> Dict[str, Any]:
         # Attempt to find the start of the JSON structure
         json_start = output.find('{')
         if json_start == -1:
+            # Try per-file solc fallback for directory targets
+            # (covers plain .sol directories with no project root)
+            target_path_obj = Path(target).resolve()
+            if target_path_obj.is_dir():
+                print(
+                    "[!] Slither produced no JSON for directory;"
+                    " trying per-file solc fallback..."
+                )
+                fallback = _slither_per_file_fallback(
+                    target,
+                    str(target_path_obj),  # use target dir as root
+                    slither_bin,
+                    cmd,
+                )
+                if fallback is not None:
+                    return fallback
             print("[!] CRITICAL: Slither failed to generate JSON. Raw output:")
             print(result.stderr)
             raise SentinelAnalysisError(
