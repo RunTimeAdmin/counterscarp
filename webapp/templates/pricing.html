@@ -4,51 +4,34 @@
 
 {% block content %}
 <style>
-    /* Free trial banner */
-    .free-trial-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 12px;
-        padding: 1.5rem 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1.5rem;
-        margin: 1.5rem auto;
-        max-width: 900px;
-        flex-wrap: wrap;
-    }
-    .free-trial-banner p {
-        color: #fff;
-        font-size: 1.1rem;
-        font-weight: 500;
-        margin: 0;
-    }
-    .free-trial-banner .btn-start-free {
-        background: #fff;
-        color: #667eea;
-        padding: 0.65rem 1.75rem;
-        border-radius: 8px;
-        font-weight: 700;
-        text-decoration: none;
-        transition: transform 0.2s, box-shadow 0.2s;
-        white-space: nowrap;
-    }
-    .free-trial-banner .btn-start-free:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+    :root {
+        --bg-card: #16213e;
+        --border-color: rgba(255,255,255,0.08);
+        --text-primary: #ffffff;
+        --text-secondary: rgba(255,255,255,0.8);
+        --text-muted: rgba(255,255,255,0.5);
+        --accent-cyan: #00d4ff;
+        --accent-green: #00ff88;
+        --accent-orange: #ff6b35;
+        --radius-lg: 16px;
+        --radius-sm: 8px;
+        --font-mono: 'JetBrains Mono', monospace;
     }
 
     .pricing-hero {
         text-align: center;
-        padding: 2.5rem 0 1rem;
+        padding: 3rem 0 1.5rem;
     }
     .pricing-hero h1 {
         font-size: 2.5rem;
-        color: #fff;
-        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+        font-weight: 700;
     }
     .pricing-hero p {
-        color: #a0a0b0;
+        color: var(--text-muted);
         font-size: 1.15rem;
         max-width: 600px;
         margin: 0 auto;
@@ -64,17 +47,18 @@
         max-width: 400px;
     }
     .billing-toggle label {
-        color: #a0a0b0;
+        color: var(--text-muted);
         font-size: 0.95rem;
         font-weight: 500;
         cursor: pointer;
+        transition: color 0.2s;
     }
     .billing-toggle label.active {
-        color: #fff;
+        color: var(--text-primary);
     }
     .billing-toggle .save-badge {
-        background: linear-gradient(135deg, #28a745, #20c997);
-        color: #fff;
+        background: var(--accent-green);
+        color: #0a0a1a;
         font-size: 0.7rem;
         font-weight: 700;
         padding: 2px 8px;
@@ -91,7 +75,7 @@
         transition: background 0.3s;
     }
     .toggle-switch.active {
-        background: linear-gradient(135deg, #667eea, #764ba2);
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
     }
     .toggle-switch::after {
         content: '';
@@ -108,202 +92,196 @@
         transform: translateX(24px);
     }
 
-    /* Pricing grid - horizontal scroll on mobile */
-    .pricing-grid {
-        display: flex;
-        gap: 1.5rem;
-        max-width: 1400px;
-        margin: 2rem auto;
+    /* Community Banner */
+    .community-banner {
+        max-width: 1200px;
+        margin: 0 auto 2rem;
         padding: 0 1rem;
-        overflow-x: auto;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-        scrollbar-color: #667eea #0a0a1a;
     }
-    .pricing-grid::-webkit-scrollbar {
-        height: 8px;
+    .community-card-horizontal {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 2rem;
+        flex-wrap: wrap;
     }
-    .pricing-grid::-webkit-scrollbar-track {
-        background: #0a0a1a;
+    .community-card-horizontal .left {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        flex: 1;
     }
-    .pricing-grid::-webkit-scrollbar-thumb {
-        background: #667eea;
-        border-radius: 4px;
+    .community-card-horizontal .pricing-tier {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent-cyan);
+        background: rgba(0, 212, 255, 0.1);
+        padding: 4px 12px;
+        border-radius: 20px;
     }
+    .community-card-horizontal .pricing-name {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .community-card-horizontal .pricing-price {
+        font-family: var(--font-mono);
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .community-card-horizontal .pricing-desc {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+    .community-card-horizontal .btn-buy {
+        background: transparent;
+        border: 1px solid var(--accent-cyan);
+        color: var(--accent-cyan);
+        padding: 0.6rem 1.5rem;
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    .community-card-horizontal .btn-buy:hover {
+        background: rgba(0, 212, 255, 0.1);
+    }
+
+    /* Pricing Grid - 3 columns for paid tiers */
+    .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        max-width: 1200px;
+        margin: 0 auto 3rem;
+        padding: 0 1rem;
+    }
+
+    /* Pricing Card */
     .pricing-card {
-        flex: 0 0 280px;
-        background: #16213e;
-        border: 1px solid #2a2a4e;
-        border-radius: 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
         padding: 1.75rem;
-        text-align: center;
-        transition: border-color 0.3s, transform 0.2s;
-        position: relative;
-        scroll-snap-align: start;
         display: flex;
         flex-direction: column;
+        position: relative;
+        transition: border-color 0.3s, transform 0.2s;
     }
     .pricing-card:hover {
-        border-color: #667eea;
+        border-color: rgba(255,255,255,0.15);
         transform: translateY(-4px);
     }
     .pricing-card.featured {
-        flex: 0 0 300px;
         border: 2px solid transparent;
         background: linear-gradient(#16213e, #16213e) padding-box,
-                    linear-gradient(135deg, #e94560, #764ba2) border-box;
-        box-shadow: 0 0 40px rgba(233, 69, 96, 0.2);
-        transform: scale(1.02);
+                    linear-gradient(135deg, var(--accent-cyan), var(--accent-green)) border-box;
+        box-shadow: 0 0 40px rgba(0, 212, 255, 0.15);
     }
-    .pricing-card.featured:hover {
-        transform: scale(1.02) translateY(-4px);
-    }
-    .most-popular-badge {
+
+    /* Badge */
+    .pricing-badge {
         position: absolute;
         top: -12px;
         left: 50%;
         transform: translateX(-50%);
-        background: linear-gradient(135deg, #e94560, #c23152);
-        color: #fff;
-        font-size: 0.7rem;
-        font-weight: 700;
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+        color: #0a0a1a;
+        font-size: 0.65rem;
+        font-weight: 800;
         letter-spacing: 0.08em;
-        padding: 4px 16px;
+        padding: 5px 16px;
         border-radius: 12px;
         text-transform: uppercase;
     }
-    .guarantee-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        background: rgba(40, 167, 69, 0.1);
-        border: 1px solid #28a745;
-        border-radius: 20px;
-        padding: 0.35rem 0.85rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #28a745;
-        margin-bottom: 1rem;
+
+    /* Card Header */
+    .pricing-tier {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 0.5rem;
     }
-    .guarantee-badge svg {
-        width: 14px;
-        height: 14px;
-        fill: #28a745;
-    }
-    .pricing-card h3 {
-        font-size: 1.25rem;
-        color: #fff;
-        margin-bottom: 0.25rem;
-    }
-    .tier-subtitle {
-        font-size: 0.8rem;
-        color: #888;
-        margin-bottom: 1rem;
+    .pricing-name {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
     }
     .pricing-price {
-        margin: 0.75rem 0;
-        min-height: 80px;
+        margin-bottom: 0.75rem;
     }
     .pricing-price .amount {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #fff;
+        font-family: var(--font-mono);
+        font-size: 2.75rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        line-height: 1;
     }
     .pricing-price .currency {
-        font-size: 1.1rem;
-        color: #a0a0b0;
+        font-family: var(--font-mono);
+        font-size: 1.25rem;
+        color: var(--text-muted);
         vertical-align: top;
-        line-height: 2.2;
+        line-height: 1.5;
     }
     .pricing-price .period {
         font-size: 0.9rem;
-        color: #888;
+        color: var(--text-muted);
+        margin-left: 0.25rem;
     }
     .pricing-price .billing-note {
         display: block;
         font-size: 0.75rem;
-        color: #888;
-        margin-top: 0.15rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
     }
     .pricing-price .save-badge-inline {
         display: inline-block;
-        background: linear-gradient(135deg, #28a745, #20c997);
-        color: #fff;
+        background: var(--accent-green);
+        color: #0a0a1a;
         font-size: 0.65rem;
         font-weight: 700;
         padding: 2px 8px;
-        border-radius: 8px;
+        border-radius: 6px;
         margin-left: 6px;
         vertical-align: middle;
     }
     .enterprise-price {
-        font-size: 1.5rem;
-        color: #ffd700;
+        font-family: var(--font-mono);
+        font-size: 1.75rem;
         font-weight: 600;
+        color: var(--accent-orange);
     }
     .enterprise-starting {
         font-size: 0.85rem;
-        color: #888;
-        margin-top: 0.25rem;
+        color: var(--text-muted);
     }
     .pricing-desc {
-        color: #a0a0b0;
-        font-size: 0.85rem;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
         margin-bottom: 1.25rem;
         line-height: 1.5;
+        min-height: 2.7em;
     }
-    .pricing-features {
-        list-style: none;
-        text-align: left;
-        margin-bottom: 1.5rem;
-        padding: 0;
-        flex-grow: 1;
+    .pricing-cta {
+        margin-bottom: 1.25rem;
     }
-    .pricing-features li {
-        padding: 0.35rem 0;
-        color: #c0c0c0;
-        font-size: 0.85rem;
-        line-height: 1.4;
-    }
-    .pricing-features li::before {
-        content: "\2713";
-        color: #28a745;
-        margin-right: 0.5rem;
-        font-weight: 700;
-    }
-    .pricing-features li.pro-item::before {
-        color: #e94560;
-    }
-    .pricing-features li.coming-soon {
-        color: #888;
-    }
-    .pricing-features li.coming-soon::before {
-        content: "\25CB";
-        color: #667eea;
-    }
-    .coming-badge {
-        font-size: 0.65rem;
-        color: #667eea;
-        margin-left: 4px;
-        font-weight: 600;
-    }
-    .activation-note {
-        font-size: 0.7rem;
-        color: #888;
-        text-align: left;
-        margin-bottom: 1rem;
-        padding: 0.5rem 0.75rem;
-        background: rgba(102, 126, 234, 0.06);
-        border-radius: 6px;
-        line-height: 1.4;
-        border-left: 3px solid #667eea;
-    }
-    .btn-buy {
-        display: inline-block;
+    .pricing-cta .btn-buy {
+        display: block;
         width: 100%;
         padding: 0.75rem 1.25rem;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         font-size: 0.95rem;
         font-weight: 600;
         text-align: center;
@@ -311,70 +289,176 @@
         cursor: pointer;
         transition: opacity 0.2s, transform 0.2s;
         text-decoration: none;
-        color: #fff;
-        margin-top: auto;
+        color: #0a0a1a;
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
     }
-    .btn-buy:hover {
+    .pricing-cta .btn-buy:hover {
         opacity: 0.9;
         transform: translateY(-2px);
     }
-    .btn-buy-free {
-        background: linear-gradient(135deg, #667eea, #764ba2);
+    .pricing-cta .btn-buy-secondary {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
     }
-    .btn-buy-primary {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-    }
-    .btn-buy-featured {
-        background: linear-gradient(135deg, #e94560, #c23152);
-    }
-    .btn-buy-enterprise {
-        background: #0f1629;
-        border: 1px solid #ffd700;
-        color: #ffd700;
-    }
-    .btn-buy-enterprise:hover {
-        background: rgba(255, 215, 0, 0.1);
-    }
-    .pricing-card.community-card {
-        border-top: 3px solid #667eea;
-    }
-    .pricing-card.enterprise-card {
-        border-top: 3px solid #ffd700;
+    .pricing-cta .btn-buy-secondary:hover {
+        border-color: var(--accent-cyan);
+        background: rgba(0, 212, 255, 0.05);
     }
 
-    /* Feature comparison table */
+    .pricing-divider {
+        height: 1px;
+        background: var(--border-color);
+        margin: 0 0 1rem 0;
+        border: none;
+    }
+
+    /* Features List */
+    .pricing-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        flex-grow: 1;
+    }
+    .pricing-features li {
+        padding: 0.4rem 0;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        line-height: 1.4;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .pricing-features li.section-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--border-color);
+    }
+    .pricing-features li.section-label:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+    }
+    .pricing-features .check {
+        color: var(--accent-green);
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    .pricing-features .soon {
+        background: rgba(255, 107, 53, 0.15);
+        color: var(--accent-orange);
+        font-size: 0.6rem;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+    .pricing-features li.coming-soon {
+        color: var(--text-muted);
+    }
+
+    /* Enterprise Banner */
+    .enterprise-banner {
+        max-width: 1200px;
+        margin: 0 auto 4rem;
+        padding: 0 1rem;
+    }
+    .enterprise-card-full {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        align-items: center;
+    }
+    .enterprise-card-full .left {
+        border-right: 1px solid var(--border-color);
+        padding-right: 2rem;
+    }
+    .enterprise-card-full .pricing-tier {
+        color: var(--accent-orange);
+    }
+    .enterprise-card-full .pricing-name {
+        font-size: 1.75rem;
+    }
+    .enterprise-card-full .pricing-desc {
+        min-height: auto;
+        margin-bottom: 1.5rem;
+    }
+    .enterprise-card-full .btn-buy {
+        display: inline-block;
+        padding: 0.75rem 2rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-align: center;
+        border: 1px solid var(--accent-orange);
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        color: var(--accent-orange);
+        background: transparent;
+    }
+    .enterprise-card-full .btn-buy:hover {
+        background: rgba(255, 107, 53, 0.1);
+    }
+    .enterprise-card-full .right {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    .enterprise-card-full .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+    .enterprise-card-full .feature-item .check {
+        color: var(--accent-orange);
+        font-weight: 700;
+    }
+
+    /* Comparison Table */
     .comparison-section {
-        max-width: 1000px;
-        margin: 3rem auto;
+        max-width: 1100px;
+        margin: 0 auto 4rem;
         padding: 0 1rem;
     }
     .comparison-section h2 {
         text-align: center;
         font-size: 1.75rem;
-        color: #fff;
+        color: var(--text-primary);
         margin-bottom: 1.5rem;
     }
     .comparison-table-wrapper {
         overflow-x: auto;
-        border-radius: 12px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
     }
     .comparison-table {
         width: 100%;
         min-width: 700px;
         border-collapse: collapse;
-        background: #16213e;
-        border-radius: 12px;
-        overflow: hidden;
+        background: var(--bg-card);
     }
     .comparison-table th,
     .comparison-table td {
-        padding: 0.75rem 1rem;
+        padding: 0.875rem 1rem;
         text-align: center;
-        border-bottom: 1px solid #2a2a4e;
+        border-bottom: 1px solid var(--border-color);
     }
     .comparison-table th {
-        background: #0f1629;
-        color: #a0a0b0;
+        background: rgba(0,0,0,0.2);
+        color: var(--text-muted);
         font-size: 0.75rem;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -382,284 +466,326 @@
     }
     .comparison-table th:first-child {
         text-align: left;
-        width: 35%;
+        width: 30%;
+    }
+    .comparison-table th.hl {
+        background: rgba(0, 212, 255, 0.1);
+        color: var(--accent-cyan);
     }
     .comparison-table td:first-child {
         text-align: left;
-        color: #c0c0c0;
+        color: var(--text-secondary);
         font-size: 0.9rem;
     }
-    .comparison-table td {
-        color: #e0e0e0;
-        font-size: 0.9rem;
+    .comparison-table td.cat-row {
+        background: rgba(0,0,0,0.15);
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
-    .check-yes { color: #28a745; font-weight: 700; }
-    .check-no { color: #555; }
-    .check-partial { color: #667eea; font-size: 0.8rem; }
+    .comparison-table td.hl {
+        background: rgba(0, 212, 255, 0.03);
+    }
+    .comparison-table .y { color: var(--accent-green); font-weight: 700; }
+    .comparison-table .n { color: var(--text-muted); opacity: 0.4; }
+    .comparison-table .p { color: var(--accent-orange); font-size: 0.85rem; }
 
-    /* FAQ */
+    /* FAQ Section */
     .faq-section {
-        max-width: 750px;
-        margin: 3rem auto;
+        max-width: 800px;
+        margin: 0 auto 4rem;
         padding: 0 1rem;
     }
     .faq-section h2 {
         text-align: center;
         font-size: 1.75rem;
-        color: #fff;
+        color: var(--text-primary);
         margin-bottom: 1.5rem;
     }
     .faq-item {
-        background: #16213e;
-        border: 1px solid #2a2a4e;
-        border-radius: 10px;
-        margin-bottom: 0.75rem;
-        overflow: hidden;
+        border-bottom: 1px solid var(--border-color);
     }
     .faq-question {
-        padding: 1rem 1.25rem;
+        padding: 1.25rem 0;
         cursor: pointer;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        color: #e0e0e0;
+        color: var(--text-primary);
         font-weight: 500;
-        transition: background 0.2s;
+        font-size: 1rem;
+        transition: color 0.2s;
     }
     .faq-question:hover {
-        background: rgba(102, 126, 234, 0.05);
+        color: var(--accent-cyan);
     }
-    .faq-arrow {
+    .faq-icon {
+        width: 20px;
+        height: 20px;
+        position: relative;
+        flex-shrink: 0;
+        margin-left: 1rem;
+    }
+    .faq-icon::before,
+    .faq-icon::after {
+        content: '';
+        position: absolute;
+        background: currentColor;
         transition: transform 0.2s;
-        color: #888;
     }
-    .faq-item.open .faq-arrow {
-        transform: rotate(180deg);
+    .faq-icon::before {
+        width: 12px;
+        height: 2px;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    .faq-icon::after {
+        width: 2px;
+        height: 12px;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    .faq-item.open .faq-icon::after {
+        transform: translate(-50%, -50%) rotate(90deg);
     }
     .faq-answer {
-        padding: 0 1.25rem 1rem;
-        color: #a0a0b0;
-        line-height: 1.6;
-        display: none;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease, padding 0.3s ease;
+        color: var(--text-secondary);
+        line-height: 1.7;
     }
     .faq-item.open .faq-answer {
-        display: block;
+        max-height: 500px;
+        padding-bottom: 1.25rem;
     }
     .faq-answer a {
-        color: #667eea;
+        color: var(--accent-cyan);
         text-decoration: none;
     }
     .faq-answer a:hover {
         text-decoration: underline;
     }
+    .faq-answer code {
+        background: rgba(0,0,0,0.3);
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-family: var(--font-mono);
+        font-size: 0.85em;
+    }
 
+    /* Responsive */
+    @media (max-width: 900px) {
+        .pricing-grid {
+            grid-template-columns: 1fr;
+            max-width: 400px;
+        }
+        .community-card-horizontal {
+            flex-direction: column;
+            text-align: center;
+        }
+        .community-card-horizontal .left {
+            flex-direction: column;
+        }
+        .enterprise-card-full {
+            grid-template-columns: 1fr;
+        }
+        .enterprise-card-full .left {
+            border-right: none;
+            border-bottom: 1px solid var(--border-color);
+            padding-right: 0;
+            padding-bottom: 1.5rem;
+            text-align: center;
+        }
+        .enterprise-card-full .right {
+            grid-template-columns: 1fr;
+        }
+    }
     @media (max-width: 768px) {
         .pricing-hero h1 { font-size: 1.75rem; }
-        .pricing-grid {
-            padding: 0 0.5rem;
-        }
-        .pricing-card {
-            flex: 0 0 260px;
-        }
-        .pricing-card.featured {
-            flex: 0 0 280px;
-        }
-        .comparison-table { font-size: 0.8rem; }
-        .free-trial-banner { flex-direction: column; text-align: center; }
+        .pricing-hero p { font-size: 1rem; }
     }
 </style>
 
 <div class="container">
-    <!-- Start Free Banner -->
-    <div class="free-trial-banner">
-        <p>Try Sentinel Engine for free &mdash; 16 analyzers, no credit card required</p>
-        <a href="/" class="btn-start-free">Start Free</a>
-    </div>
-
     <div class="pricing-hero">
         <h1>Choose Your Plan</h1>
-        <p>
-            From solo developers to enterprise teams, find the perfect plan
-            for your smart contract security needs.
-        </p>
+        <p>From solo developers to enterprise teams, find the perfect plan for your smart contract security needs.</p>
     </div>
 
     <!-- Billing Toggle -->
     <div class="billing-toggle">
         <label id="monthly-label" class="active">Monthly</label>
         <div class="toggle-switch" id="billing-toggle" onclick="toggleBilling()"></div>
-        <label id="annual-label">Annual <span class="save-badge">Save up to 17%</span></label>
+        <label id="annual-label">Annual <span class="save-badge">Save 17%</span></label>
     </div>
 
-    <!-- Pricing cards -->
-    <div class="pricing-grid">
-        <!-- Community (Free) -->
-        <div class="pricing-card community-card">
-            <h3>Community</h3>
-            <div class="tier-subtitle">Free Forever</div>
-            <div class="pricing-price">
-                <span class="currency">$</span><span class="amount">0</span>
+    <!-- Community Banner -->
+    <div class="community-banner">
+        <div class="community-card-horizontal">
+            <div class="left">
+                <span class="pricing-tier">Community</span>
+                <div>
+                    <div class="pricing-name">Free Forever</div>
+                    <div class="pricing-desc">Perfect for open source contributors and solo learners</div>
+                </div>
             </div>
-            <p class="pricing-desc">
-                Perfect for open source contributors and solo learners.
-            </p>
-            <ul class="pricing-features">
-                <li>16 security analyzers</li>
-                <li>CLI access</li>
-                <li>Markdown + JSON reports</li>
-                <li>Community support (GitHub)</li>
-            </ul>
-            <a href="/" class="btn-buy btn-buy-free">Get Started Free</a>
+            <div class="pricing-price">$0</div>
+            <a href="/" class="btn-buy">Get Started Free</a>
         </div>
+    </div>
 
+    <!-- Pricing Cards - 3 Paid Tiers -->
+    <div class="pricing-grid">
         <!-- Developer -->
         <div class="pricing-card">
-            <div class="guarantee-badge">
-                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v4h-2V7zm0 6h2v2h-2v-2z"/></svg>
-                14-Day Money-Back Guarantee
-            </div>
-            <h3>Developer</h3>
-            <div class="tier-subtitle">For Individual Developers</div>
+            <div class="pricing-tier">Developer Tier</div>
+            <div class="pricing-name">Developer</div>
             <div class="pricing-price">
-                <div class="monthly-price" style="display: block;">
-                    <span class="currency">$</span><span class="amount">49</span><span class="period">/mo</span>
+                <div class="monthly-price">
+                    <span class="currency">$</span><span class="amount">49</span><span class="period">/month</span>
                 </div>
                 <div class="annual-price" style="display: none;">
-                    <span class="currency">$</span><span class="amount">40.83</span><span class="period">/mo</span>
+                    <span class="currency">$</span><span class="amount">40.83</span><span class="period">/month</span>
                     <span class="save-badge-inline">Save 17%</span>
                     <span class="billing-note">billed annually at $490</span>
                 </div>
             </div>
-            <p class="pricing-desc">
-                Everything in Community, plus web app and advanced reports.
-            </p>
-            <ul class="pricing-features">
-                <li>Everything in Community</li>
-                <li class="pro-item">Web app access (5 scans/month)</li>
-                <li class="pro-item">Solana Analyzer (35 rules)</li>
-                <li class="pro-item">Branded HTML reports</li>
-                <li class="pro-item">SARIF reports (GitHub Actions)</li>
-                <li>1 machine activation</li>
-                <li>Email support</li>
-            </ul>
-            <div class="activation-note">
-                Each activation is tied to one computer via hardware fingerprint.
+            <p class="pricing-desc">Everything in Community, plus web app and advanced reports.</p>
+            <div class="pricing-cta">
+                <form method="POST" action="/checkout/create-session">
+                    <input type="hidden" name="product" value="dev_monthly" class="product-input" data-monthly="dev_monthly" data-annual="dev_annual">
+                    <button type="submit" class="btn-buy btn-buy-secondary">Start Developer</button>
+                </form>
             </div>
-            <form method="POST" action="/checkout/create-session">
-                <input type="hidden" name="product" value="dev_monthly" class="product-input" data-monthly="dev_monthly" data-annual="dev_annual">
-                <button type="submit" class="btn-buy btn-buy-primary">Start Developer</button>
-            </form>
+            <hr class="pricing-divider">
+            <ul class="pricing-features">
+                <li class="section-label">Core Analysis</li>
+                <li><span class="check">&#10003;</span> 16 security analyzers</li>
+                <li><span class="check">&#10003;</span> CLI access</li>
+                <li><span class="check">&#10003;</span> Markdown + JSON reports</li>
+                <li class="section-label">Web App</li>
+                <li><span class="check">&#10003;</span> Web app access (5 scans/mo)</li>
+                <li class="section-label">Reports</li>
+                <li><span class="check">&#10003;</span> Branded HTML reports</li>
+                <li><span class="check">&#10003;</span> SARIF (GitHub Actions)</li>
+                <li class="section-label">Blockchain</li>
+                <li><span class="check">&#10003;</span> Solana Analyzer (35 rules)</li>
+                <li class="section-label">Infrastructure</li>
+                <li><span class="check">&#10003;</span> 1 machine activation</li>
+                <li><span class="check">&#10003;</span> Email support</li>
+            </ul>
         </div>
 
         <!-- Pro (Featured) -->
         <div class="pricing-card featured">
-            <span class="most-popular-badge">Most Popular</span>
-            <div class="guarantee-badge">
-                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v4h-2V7zm0 6h2v2h-2v-2z"/></svg>
-                14-Day Money-Back Guarantee
-            </div>
-            <h3>Pro</h3>
-            <div class="tier-subtitle">For Security Professionals</div>
+            <span class="pricing-badge">Most Popular</span>
+            <div class="pricing-tier">Pro Tier</div>
+            <div class="pricing-name">Pro</div>
             <div class="pricing-price">
-                <div class="monthly-price" style="display: block;">
-                    <span class="currency">$</span><span class="amount">149</span><span class="period">/mo</span>
+                <div class="monthly-price">
+                    <span class="currency">$</span><span class="amount">149</span><span class="period">/month</span>
                 </div>
                 <div class="annual-price" style="display: none;">
-                    <span class="currency">$</span><span class="amount">124.17</span><span class="period">/mo</span>
+                    <span class="currency">$</span><span class="amount">124.17</span><span class="period">/month</span>
                     <span class="save-badge-inline">Save 17%</span>
                     <span class="billing-note">billed annually at $1,490</span>
                 </div>
             </div>
-            <p class="pricing-desc">
-                Everything in Developer, plus AI-powered features and unlimited scans.
-            </p>
-            <ul class="pricing-features">
-                <li>Everything in Developer</li>
-                <li class="pro-item">AI Audit Copilot (RAG)</li>
-                <li class="pro-item">Attack Graph Visualization (D3.js)</li>
-                <li class="pro-item">Exploit PoC Generator</li>
-                <li class="pro-item">Time-Travel Git Scanner</li>
-                <li class="pro-item">Protocol Fingerprinting</li>
-                <li>Unlimited web app scans</li>
-                <li>3 machine activations</li>
-                <li>Priority email support (24hr SLA)</li>
-            </ul>
-            <div class="activation-note">
-                Each activation is tied to one computer via hardware fingerprint.
+            <p class="pricing-desc">Everything in Developer, plus AI-powered features and unlimited scans.</p>
+            <div class="pricing-cta">
+                <form method="POST" action="/checkout/create-session">
+                    <input type="hidden" name="product" value="pro_monthly" class="product-input" data-monthly="pro_monthly" data-annual="pro_annual">
+                    <button type="submit" class="btn-buy">Start Pro</button>
+                </form>
             </div>
-            <form method="POST" action="/checkout/create-session">
-                <input type="hidden" name="product" value="pro_monthly" class="product-input" data-monthly="pro_monthly" data-annual="pro_annual">
-                <button type="submit" class="btn-buy btn-buy-featured">Start Pro</button>
-            </form>
+            <hr class="pricing-divider">
+            <ul class="pricing-features">
+                <li class="section-label">Everything in Developer</li>
+                <li><span class="check">&#10003;</span> All Developer features</li>
+                <li class="section-label">AI & Advanced</li>
+                <li><span class="check">&#10003;</span> AI Audit Copilot (RAG)</li>
+                <li><span class="check">&#10003;</span> Attack Graph (D3.js)</li>
+                <li><span class="check">&#10003;</span> Exploit PoC Generator</li>
+                <li><span class="check">&#10003;</span> Time-Travel Git Scanner</li>
+                <li><span class="check">&#10003;</span> Protocol Fingerprinting</li>
+                <li class="section-label">Infrastructure</li>
+                <li><span class="check">&#10003;</span> Unlimited scans</li>
+                <li><span class="check">&#10003;</span> 3 machine activations</li>
+                <li><span class="check">&#10003;</span> Priority support (24hr SLA)</li>
+            </ul>
         </div>
 
         <!-- Team -->
         <div class="pricing-card">
-            <div class="guarantee-badge">
-                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v4h-2V7zm0 6h2v2h-2v-2z"/></svg>
-                14-Day Money-Back Guarantee
-            </div>
-            <h3>Team</h3>
-            <div class="tier-subtitle">For Growing Teams</div>
+            <div class="pricing-tier">Team Tier</div>
+            <div class="pricing-name">Team</div>
             <div class="pricing-price">
-                <div class="monthly-price" style="display: block;">
-                    <span class="currency">$</span><span class="amount">399</span><span class="period">/mo</span>
+                <div class="monthly-price">
+                    <span class="currency">$</span><span class="amount">399</span><span class="period">/month</span>
                 </div>
                 <div class="annual-price" style="display: none;">
-                    <span class="currency">$</span><span class="amount">332.50</span><span class="period">/mo</span>
+                    <span class="currency">$</span><span class="amount">332.50</span><span class="period">/month</span>
                     <span class="save-badge-inline">Save 17%</span>
                     <span class="billing-note">billed annually at $3,990</span>
                 </div>
             </div>
-            <p class="pricing-desc">
-                Everything in Pro, plus collaboration features for teams.
-            </p>
-            <ul class="pricing-features">
-                <li>Everything in Pro</li>
-                <li class="pro-item">10 user seats included</li>
-                <li class="pro-item coming-soon">Shared project workspace <span class="coming-badge">SOON</span></li>
-                <li class="pro-item coming-soon">API access — 1,000 calls/mo <span class="coming-badge">SOON</span></li>
-                <li class="pro-item coming-soon">SSO — Google, GitHub Org <span class="coming-badge">SOON</span></li>
-                <li class="pro-item coming-soon">Slack integration <span class="coming-badge">SOON</span></li>
-                <li>Dedicated onboarding call</li>
-                <li>10 machine activations</li>
-            </ul>
-            <div class="activation-note">
-                Each activation is tied to one computer via hardware fingerprint.
+            <p class="pricing-desc">Everything in Pro, plus collaboration features for teams.</p>
+            <div class="pricing-cta">
+                <form method="POST" action="/checkout/create-session">
+                    <input type="hidden" name="product" value="team_monthly" class="product-input" data-monthly="team_monthly" data-annual="team_annual">
+                    <button type="submit" class="btn-buy btn-buy-secondary">Start Team</button>
+                </form>
             </div>
-            <form method="POST" action="/checkout/create-session">
-                <input type="hidden" name="product" value="team_monthly" class="product-input" data-monthly="team_monthly" data-annual="team_annual">
-                <button type="submit" class="btn-buy btn-buy-primary">Start Team</button>
-            </form>
-        </div>
-
-        <!-- Enterprise -->
-        <div class="pricing-card enterprise-card">
-            <h3>Enterprise</h3>
-            <div class="tier-subtitle">For Large Organizations</div>
-            <div class="pricing-price">
-                <div class="enterprise-price">Custom</div>
-                <div class="enterprise-starting">Starting at $2,000/mo</div>
-            </div>
-            <p class="pricing-desc">
-                Full control, custom integrations, and dedicated support.
-            </p>
+            <hr class="pricing-divider">
             <ul class="pricing-features">
-                <li>Everything in Team</li>
-                <li class="pro-item">Unlimited seats</li>
-                <li class="pro-item">Self-hosted deployment option</li>
-                <li class="pro-item">Custom rule packs</li>
-                <li class="pro-item">SLA (99.9% uptime)</li>
-                <li class="pro-item">Dedicated customer success manager</li>
-                <li class="pro-item">On-site training</li>
-                <li class="pro-item">Custom integrations (SIEM, Jira, Linear)</li>
-                <li>Unlimited machine activations</li>
+                <li class="section-label">Everything in Pro</li>
+                <li><span class="check">&#10003;</span> All Pro features</li>
+                <li class="section-label">Collaboration</li>
+                <li><span class="check">&#10003;</span> 10 user seats included</li>
+                <li class="section-label">Coming Soon</li>
+                <li class="coming-soon"><span class="check">&#10003;</span> Shared workspace <span class="soon">SOON</span></li>
+                <li class="coming-soon"><span class="check">&#10003;</span> API access (1,000 calls/mo) <span class="soon">SOON</span></li>
+                <li class="coming-soon"><span class="check">&#10003;</span> SSO (Google/GitHub) <span class="soon">SOON</span></li>
+                <li class="coming-soon"><span class="check">&#10003;</span> Slack integration <span class="soon">SOON</span></li>
+                <li class="section-label">Infrastructure</li>
+                <li><span class="check">&#10003;</span> 10 machine activations</li>
+                <li><span class="check">&#10003;</span> Dedicated onboarding</li>
             </ul>
-            <a href="mailto:support@sentinel-engine.io" class="btn-buy btn-buy-enterprise">Contact Sales</a>
         </div>
     </div>
 
-    <!-- Feature comparison table -->
+    <!-- Enterprise Banner -->
+    <div class="enterprise-banner">
+        <div class="enterprise-card-full">
+            <div class="left">
+                <div class="pricing-tier">Enterprise Tier</div>
+                <div class="pricing-name">Enterprise</div>
+                <div class="pricing-price">
+                    <div class="enterprise-price">Custom</div>
+                    <div class="enterprise-starting">Starting at $2,000/month</div>
+                </div>
+                <p class="pricing-desc">Full control, custom integrations, and dedicated support for large organizations.</p>
+                <a href="mailto:support@sentinel-engine.io" class="btn-buy">Contact Sales</a>
+            </div>
+            <div class="right">
+                <div class="feature-item"><span class="check">&#10003;</span> Everything in Team</div>
+                <div class="feature-item"><span class="check">&#10003;</span> Unlimited seats</div>
+                <div class="feature-item"><span class="check">&#10003;</span> Self-hosted option</div>
+                <div class="feature-item"><span class="check">&#10003;</span> Custom rule packs</div>
+                <div class="feature-item"><span class="check">&#10003;</span> SLA (99.9% uptime)</div>
+                <div class="feature-item"><span class="check">&#10003;</span> Customer Success Manager</div>
+                <div class="feature-item"><span class="check">&#10003;</span> On-site training</div>
+                <div class="feature-item"><span class="check">&#10003;</span> SIEM/Jira/Linear integrations</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Comparison Table -->
     <div class="comparison-section">
         <h2>Feature Comparison</h2>
         <div class="comparison-table-wrapper">
@@ -669,137 +795,216 @@
                         <th>Feature</th>
                         <th>Community</th>
                         <th>Developer</th>
-                        <th>Pro</th>
+                        <th class="hl">Pro</th>
                         <th>Team</th>
                         <th>Enterprise</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Core Analyzers (16)</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td class="cat-row" colspan="6">Core Analysis</td>
                     </tr>
                     <tr>
-                        <td>CLI</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td>16 Security Analyzers</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>CLI Access</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
                     </tr>
                     <tr>
                         <td>Markdown/JSON Reports</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Web App</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-partial">5/mo</td>
-                        <td class="check-yes">Unlimited</td>
-                        <td class="check-yes">Unlimited</td>
-                        <td class="check-yes">Unlimited</td>
+                        <td class="cat-row" colspan="6">Web & Reports</td>
                     </tr>
                     <tr>
-                        <td>Solana Analyzer</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td>Web App Access</td>
+                        <td class="n">&#10007;</td>
+                        <td class="p">5/mo</td>
+                        <td class="y hl">Unlimited</td>
+                        <td class="y">Unlimited</td>
+                        <td class="y">Unlimited</td>
                     </tr>
                     <tr>
-                        <td>HTML/SARIF Reports</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td>Branded HTML Reports</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>AI Copilot</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td>SARIF (GitHub Actions)</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Attack Graph</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td class="cat-row" colspan="6">Blockchain</td>
                     </tr>
                     <tr>
-                        <td>Exploit PoC Gen</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td>Solana Analyzer (35 rules)</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Time-Travel Scanner</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td class="cat-row" colspan="6">AI & Advanced</td>
+                    </tr>
+                    <tr>
+                        <td>AI Audit Copilot (RAG)</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Attack Graph (D3.js)</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Exploit PoC Generator</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Time-Travel Git Scanner</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
                     </tr>
                     <tr>
                         <td>Protocol Fingerprinting</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
-                        <td class="check-yes">&#10003;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y hl">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td class="cat-row" colspan="6">Collaboration</td>
                     </tr>
                     <tr>
                         <td>User Seats</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-no">&mdash;</td>
-                        <td class="check-yes">10</td>
-                        <td class="check-yes">Unlimited</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n hl">&#10007;</td>
+                        <td class="y">10</td>
+                        <td class="y">Unlimited</td>
+                    </tr>
+                    <tr>
+                        <td>Shared Workspace</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n hl">&#10007;</td>
+                        <td class="p">Soon</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>API Access</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n hl">&#10007;</td>
+                        <td class="p">Soon</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>SSO (Google/GitHub)</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n hl">&#10007;</td>
+                        <td class="p">Soon</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td class="cat-row" colspan="6">Infrastructure</td>
                     </tr>
                     <tr>
                         <td>Machine Activations</td>
                         <td>0</td>
                         <td>1</td>
-                        <td>3</td>
+                        <td class="hl">3</td>
                         <td>10</td>
                         <td>Unlimited</td>
                     </tr>
                     <tr>
-                        <td>Support</td>
-                        <td>GitHub</td>
+                        <td>Self-Hosted Option</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n hl">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>SLA</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="n hl">&#10007;</td>
+                        <td class="n">&#10007;</td>
+                        <td class="y">99.9%</td>
+                    </tr>
+                    <tr>
+                        <td class="cat-row" colspan="6">Support</td>
+                    </tr>
+                    <tr>
+                        <td>Support Level</td>
+                        <td>GitHub Issues</td>
                         <td>Email</td>
-                        <td>Priority (24hr)</td>
+                        <td class="hl">Priority (24hr)</td>
                         <td>Dedicated</td>
-                        <td>CSM</td>
+                        <td>CSM + Training</td>
                     </tr>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <!-- FAQ -->
+    <!-- FAQ Section -->
     <div class="faq-section">
         <h2>Frequently Asked Questions</h2>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+            <div class="faq-question" onclick="toggleFaq(this)">
+                <span>Is Sentinel Engine free to use?</span>
+                <span class="faq-icon"></span>
+            </div>
+            <div class="faq-answer">
+                Yes! The Community tier is free forever, MIT licensed, and includes all 16 security analyzers. No account or credit card required. Perfect for open source projects and learning.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="toggleFaq(this)">
                 <span>What's the difference between Developer and Pro?</span>
-                <span class="faq-arrow">&#9660;</span>
+                <span class="faq-icon"></span>
             </div>
             <div class="faq-answer">
                 Developer gives you access to the web app (5 scans/month), Solana Analyzer, and advanced report formats (HTML/SARIF). Pro unlocks all AI-powered features including the AI Audit Copilot, Attack Graph Visualization, Exploit PoC Generator, Time-Travel Scanner, and Protocol Fingerprinting. Pro also includes unlimited web app scans, 3 machine activations (vs 1), and priority email support with a 24-hour SLA.
@@ -807,29 +1012,39 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+            <div class="faq-question" onclick="toggleFaq(this)">
+                <span>Does Sentinel Engine support Solana?</span>
+                <span class="faq-icon"></span>
+            </div>
+            <div class="faq-answer">
+                Yes! Solana analysis is available in the Developer tier and above. Sentinel Engine is the only security tool that covers both EVM and Solana natively with a unified interface.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="toggleFaq(this)">
                 <span>What are machine activations?</span>
-                <span class="faq-arrow">&#9660;</span>
+                <span class="faq-icon"></span>
             </div>
             <div class="faq-answer">
-                Each activation is tied to one computer (identified by a hardware fingerprint). This allows you to use your license on multiple machines. For example, with Developer you get 1 activation (one machine), with Pro you get 3 activations (e.g., work laptop, home desktop, and a VM), and Team gives you 10 activations to share across your team. Enterprise includes unlimited activations.
+                Machine activations represent the number of unique computers your license key can be used on simultaneously. Each activation is tied to one machine via hardware fingerprint. Developer includes 1 activation, Pro includes 3, Team includes 10, and Enterprise offers unlimited activations.
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+            <div class="faq-question" onclick="toggleFaq(this)">
                 <span>Can I upgrade from Developer to Pro?</span>
-                <span class="faq-arrow">&#9660;</span>
+                <span class="faq-icon"></span>
             </div>
             <div class="faq-answer">
-                Yes! You can upgrade at any time. When you upgrade, we'll prorate your remaining subscription time and apply it to your new plan. Simply purchase the Pro plan and your license will be automatically upgraded.
+                Yes! You can upgrade at any time through your account. When you upgrade, we'll prorate your remaining subscription time and apply it to your new plan. The transition is seamless through Stripe.
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+            <div class="faq-question" onclick="toggleFaq(this)">
                 <span>Do you offer a free trial?</span>
-                <span class="faq-arrow">&#9660;</span>
+                <span class="faq-icon"></span>
             </div>
             <div class="faq-answer">
                 We offer a 14-day money-back guarantee on all paid plans. If you're not satisfied, contact <a href="mailto:support@sentinel-engine.io">support@sentinel-engine.io</a> for a full refund within 14 days of purchase. You can also use the Community tier completely free forever to evaluate the core analyzers.
@@ -837,46 +1052,22 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
-                <span>How do I cancel?</span>
-                <span class="faq-arrow">&#9660;</span>
+            <div class="faq-question" onclick="toggleFaq(this)">
+                <span>Can I use Sentinel Engine in commercial audits?</span>
+                <span class="faq-icon"></span>
             </div>
             <div class="faq-answer">
-                You can cancel anytime through the <a href="https://billing.stripe.com/p/login/test_placeholder" target="_blank">Stripe Customer Portal</a>. Your license will remain active until the end of the current billing period, after which you'll automatically revert to the Community tier.
+                Yes! The MIT license permits commercial use. The Community tier can be used for commercial audits without any restrictions. Paid tiers add convenience features and advanced capabilities.
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
-                <span>What about Enterprise?</span>
-                <span class="faq-arrow">&#9660;</span>
+            <div class="faq-question" onclick="toggleFaq(this)">
+                <span>Is the Cloud App available?</span>
+                <span class="faq-icon"></span>
             </div>
             <div class="faq-answer">
-                Enterprise is designed for large organizations with specific security and compliance needs. It includes everything in Team plus unlimited seats, self-hosted deployment options, custom rule packs, 99.9% uptime SLA, a dedicated customer success manager, on-site training, and custom integrations with your existing tools (SIEM, Jira, Linear). Contact <a href="mailto:support@sentinel-engine.io">support@sentinel-engine.io</a> to discuss your requirements.
-            </div>
-        </div>
-
-        <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
-                <span>What happens after I purchase?</span>
-                <span class="faq-arrow">&#9660;</span>
-            </div>
-            <div class="faq-answer">
-                After payment, you'll be redirected to a success page with your license key. You can activate it immediately by setting the <code>SENTINEL_PRO_LICENSE</code> environment variable or adding it to your <code>sentinel.toml</code> config file.
-            </div>
-        </div>
-
-        <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
-                <span>How do I activate my license?</span>
-                <span class="faq-arrow">&#9660;</span>
-            </div>
-            <div class="faq-answer">
-                There are two ways to activate:<br><br>
-                <strong>Option 1 &mdash; Environment Variable:</strong><br>
-                <code>export SENTINEL_PRO_LICENSE=SE-PRO-xxxxx</code><br><br>
-                <strong>Option 2 &mdash; Config File (<code>sentinel.toml</code>):</strong><br>
-                <code>[license]<br>key = "SE-PRO-xxxxx"</code>
+                Yes! The cloud app is live at <a href="https://app.sentinel-engine.io" target="_blank">app.sentinel-engine.io</a>. No local installation needed. Developer tier and above get web app access.
             </div>
         </div>
     </div>
@@ -908,5 +1099,94 @@
             el.value = isAnnual ? el.dataset.annual : el.dataset.monthly;
         });
     }
+
+    function toggleFaq(element) {
+        const faqItem = element.parentElement;
+        const isOpen = faqItem.classList.contains('open');
+        
+        // Close all other items
+        document.querySelectorAll('.faq-item.open').forEach(item => {
+            item.classList.remove('open');
+        });
+        
+        // Toggle current item
+        if (!isOpen) {
+            faqItem.classList.add('open');
+        }
+    }
+</script>
+
+<!-- FAQ Schema.org Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is Sentinel Engine free to use?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes! The Community tier is free forever, MIT licensed, and includes all 16 security analyzers. No account or credit card required. Perfect for open source projects and learning."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What's the difference between Developer and Pro?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Developer gives you access to the web app (5 scans/month), Solana Analyzer, and advanced report formats (HTML/SARIF). Pro unlocks all AI-powered features including the AI Audit Copilot, Attack Graph Visualization, Exploit PoC Generator, Time-Travel Scanner, and Protocol Fingerprinting. Pro also includes unlimited web app scans, 3 machine activations (vs 1), and priority email support with a 24-hour SLA."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Sentinel Engine support Solana?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes! Solana analysis is available in the Developer tier and above. Sentinel Engine is the only security tool that covers both EVM and Solana natively with a unified interface."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What are machine activations?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Machine activations represent the number of unique computers your license key can be used on simultaneously. Each activation is tied to one machine via hardware fingerprint. Developer includes 1 activation, Pro includes 3, Team includes 10, and Enterprise offers unlimited activations."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I upgrade from Developer to Pro?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes! You can upgrade at any time through your account. When you upgrade, we'll prorate your remaining subscription time and apply it to your new plan. The transition is seamless through Stripe."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do you offer a free trial?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "We offer a 14-day money-back guarantee on all paid plans. If you're not satisfied, contact support@sentinel-engine.io for a full refund within 14 days of purchase. You can also use the Community tier completely free forever to evaluate the core analyzers."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use Sentinel Engine in commercial audits?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes! The MIT license permits commercial use. The Community tier can be used for commercial audits without any restrictions. Paid tiers add convenience features and advanced capabilities."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is the Cloud App available?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes! The cloud app is live at app.sentinel-engine.io. No local installation needed. Developer tier and above get web app access."
+      }
+    }
+  ]
+}
 </script>
 {% endblock %}
