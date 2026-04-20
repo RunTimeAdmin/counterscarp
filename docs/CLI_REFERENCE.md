@@ -1,5 +1,7 @@
 # CLI Reference
 
+> **Installation:** `pip install sentinel-engine` — See [Getting Started](GETTING_STARTED.md) for details.
+
 ## Table of Contents
 
 - [Command Entry Points](#command-entry-points)

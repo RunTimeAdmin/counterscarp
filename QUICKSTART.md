@@ -6,9 +6,30 @@
 
 ## Zero-to-Audit in 3 Commands
 
-### **1. Build the Engine**
+### **1. Install the Engine**
 
-**Option A: Docker (Recommended for Production)**
+**Option A: pip install (Recommended)**
+```bash
+# Install from PyPI
+pip install sentinel-engine
+
+# Verify installation
+sentinel-engine --help
+```
+
+**Optional extras:**
+```bash
+# With web UI support
+pip install sentinel-engine[web]
+
+# With AI/RAG features
+pip install sentinel-engine[ai]
+
+# With development dependencies
+pip install sentinel-engine[dev]
+```
+
+**Option B: Docker (For isolated environments)**
 ```bash
 docker build -t sentinel-engine .
 ```
@@ -26,24 +47,13 @@ docker build -t sentinel-engine .
 **⏱️ Build time:** ~3-5 minutes (one-time setup)  
 **📦 Image size:** ~600MB
 
-**Option B: Local Development (pip install)**
-```bash
-# Clone the repository
-git clone https://github.com/RunTimeAdmin/sentinel-engine.git
-cd sentinel-engine
-
-# Install in editable mode
-pip install -e ".[dev]"
-
-# Verify installation
-sentinel-engine --help
-```
-
 **Configuration Profiles:**
 Sentinel Engine includes three pre-built configuration profiles:
 - `sentinel-pr.toml` - Fast PR checks (< 2 min)
 - `sentinel-audit.toml` - Full audit mode (10-30 min)
 - `sentinel-bounty.toml` - Bug bounty hunting (1-2 hours)
+
+**Try it online:** [https://app.sentinel-engine.io](https://app.sentinel-engine.io) — No installation required
 
 ---
 
@@ -215,7 +225,7 @@ RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
    ```yaml
    # .github/workflows/security.yml
    - name: Install Sentinel Engine
-     run: pip install -e .
+     run: pip install sentinel-engine
    - name: Security Scan
      run: |
        sentinel-engine --target ./contracts --config sentinel-pr.toml

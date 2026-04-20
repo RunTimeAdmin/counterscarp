@@ -1,8 +1,11 @@
 # Getting Started with Sentinel Engine
 
+> **Try it online:** [https://app.sentinel-engine.io](https://app.sentinel-engine.io) — Run audits in your browser, no installation required.
+
 ## Table of Contents
 
 - [What is Sentinel Engine?](#what-is-sentinel-engine)
+- [Try It Online](#try-it-online)
 - [Installation](#installation)
 - [Your First Audit in 60 Seconds](#your-first-audit-in-60-seconds)
 - [Web UI Quick Start](#web-ui-quick-start)
@@ -18,7 +21,25 @@ Whether you're running a quick PR check, a full audit, or a bug bounty sweep, Se
 
 ---
 
+## Try It Online
+
+The fastest way to try Sentinel Engine is via the live web app:
+
+**[https://app.sentinel-engine.io](https://app.sentinel-engine.io)**
+
+The online demo allows you to:
+- Upload and audit `.sol` or `.rs` files
+- View risk scores and severity breakdowns
+- Download professional audit reports
+- Explore interactive attack graphs
+
+---
+
 ## Installation
+
+### PyPI Package
+
+Sentinel Engine is available on PyPI: [https://pypi.org/project/sentinel-engine/](https://pypi.org/project/sentinel-engine/)
 
 ### Requirements
 
@@ -40,11 +61,8 @@ pip install "sentinel-engine[web]"
 # AI/RAG enrichment (local embeddings, no API needed)
 pip install "sentinel-engine[ai]"
 
-# OpenAI-powered LLM features
-pip install "sentinel-engine[advanced]"
-
 # Everything at once
-pip install "sentinel-engine[web,ai,advanced]"
+pip install "sentinel-engine[web,ai]"
 
 # Development dependencies (pytest, mypy, benchmarks)
 pip install "sentinel-engine[dev]"

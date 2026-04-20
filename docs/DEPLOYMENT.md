@@ -62,32 +62,39 @@ If you prefer to deploy manually:
 # 1. Create service user
 useradd -r -s /bin/false sentinel
 
-# 2. Clone repository
+# 2. Setup directory (choose one method)
+
+# Method A: Install from PyPI (recommended for production)
 mkdir -p /opt/sentinel-engine
 cd /opt/sentinel-engine
-git clone https://github.com/RunTimeAdmin/sentinel-engine.git .
-
-# 3. Setup Python environment
 python3 -m venv venv
 ./venv/bin/pip install --upgrade pip
-./venv/bin/pip install -e ".[web]"
+./venv/bin/pip install "sentinel-engine[web]"
 
-# 4. Create directories
+# Method B: Clone from GitHub (for development/customization)
+# mkdir -p /opt/sentinel-engine
+# cd /opt/sentinel-engine
+# git clone https://github.com/RunTimeAdmin/sentinel-engine.git .
+# python3 -m venv venv
+# ./venv/bin/pip install --upgrade pip
+# ./venv/bin/pip install -e ".[web]"
+
+# 3. Create directories
 mkdir -p /opt/sentinel-engine/uploads
 mkdir -p /opt/sentinel-engine/results
 
-# 5. Set ownership
+# 4. Set ownership
 chown -R sentinel:sentinel /opt/sentinel-engine
 
-# 6. Configure nginx
+# 5. Configure nginx
 cp deploy/nginx-sentinel.conf /etc/nginx/sites-available/sentinel
 ln -sf /etc/nginx/sites-available/sentinel /etc/nginx/sites-enabled/sentinel
 nginx -t && systemctl reload nginx
 
-# 7. SSL certificate
+# 6. SSL certificate
 certbot certonly --nginx -d app.sentinel-engine.io --non-interactive --agree-tos -m your@email.com
 
-# 8. Start service
+# 7. Start service
 cp deploy/sentinel-engine.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable sentinel-engine
@@ -313,8 +320,14 @@ This script:
 
 ```bash
 cd /opt/sentinel-engine
-git pull origin main
-./venv/bin/pip install -e ".[web]" --quiet
+
+# Method A: Update from PyPI (if installed via pip)
+./venv/bin/pip install --upgrade "sentinel-engine[web]"
+
+# Method B: Update from Git (if cloned)
+# git pull origin main
+# ./venv/bin/pip install -e ".[web]" --quiet
+
 chown -R sentinel:sentinel /opt/sentinel-engine
 sudo systemctl restart sentinel-engine
 ```

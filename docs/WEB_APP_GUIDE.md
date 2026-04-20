@@ -1,5 +1,7 @@
 # Web Application Guide
 
+> **Live Demo:** [https://app.sentinel-engine.io](https://app.sentinel-engine.io) — Official beta instance
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -31,9 +33,17 @@ uvicorn webapp.main:app --reload --port 8001
 
 Open **http://localhost:8001** in your browser.
 
-### Production
+### Production (Official Beta)
 
-The production deployment is available at **https://app.sentinel-engine.io**. See the [Deployment Guide](DEPLOYMENT.md) for setup instructions.
+The official beta instance is available at **https://app.sentinel-engine.io**.
+
+This is the live production deployment where you can:
+- Upload and audit smart contracts without any local installation
+- Generate professional security reports
+- Explore interactive attack graphs
+- Download findings in multiple formats (HTML, Markdown, SARIF, JSON)
+
+See the [Deployment Guide](DEPLOYMENT.md) for instructions on setting up your own instance.
 
 ---
 

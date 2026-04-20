@@ -4,7 +4,9 @@
 
 > One command. Zero false positives. Client-ready deliverables.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI](https://img.shields.io/pypi/v/sentinel-engine)](https://pypi.org/project/sentinel-engine/)
+[![Python](https://img.shields.io/pypi/pyversions/sentinel-engine)](https://pypi.org/project/sentinel-engine/)
+[![License](https://img.shields.io/pypi/l/sentinel-engine)](https://pypi.org/project/sentinel-engine/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 ---
@@ -14,28 +16,29 @@
 ### **Installation**
 
 ```powershell
-# 1. Clone or download
-cd /path/to/sentinel-engine  # Or on Windows: C:\path\to\sentinel-engine
+# 1. Install from PyPI (recommended)
+pip install sentinel-engine
 
-# 2. Install using pyproject.toml (recommended)
-pip install -e .
+# 2. Install with web UI support
+pip install sentinel-engine[web]
 
-# Or install core dependencies manually
-pip install requests packaging tomli solc-select
+# 3. Install with AI/RAG features
+pip install sentinel-engine[ai]
 
-# 3. Install Slither (static analysis)
+# 4. Install with development dependencies
+pip install sentinel-engine[dev]
+
+# 5. Verify installation
+sentinel-engine --help
+```
+
+**Optional External Tools (for full functionality):**
+```powershell
+# Slither (static analysis)
 pip install slither-analyzer
 solc-select install 0.8.19
 solc-select use 0.8.19
 
-# 4. Verify installation
-python orchestrator.py --help
-# Or use CLI entry point (after pip install):
-sentinel-engine --help
-```
-
-**Optional (for full functionality):**
-```powershell
 # Aderyn (Rust-based analyzer)
 cargo install aderyn
 
@@ -169,7 +172,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install Sentinel Engine
-        run: pip install -e .
+        run: pip install sentinel-engine
       - name: Sentinel PR Check
         run: |
           sentinel-engine --target ./contracts --config sentinel-pr.toml
@@ -488,6 +491,18 @@ Detects dangerous proxy upgrade patterns:
   Function had modifier ['onlyOwner'] which is now removed.
   Anyone can call it!
 ```
+
+---
+
+## 🌐 **Web Application**
+
+Try Sentinel Engine online at **https://app.sentinel-engine.io** — no installation required.
+
+The web app provides:
+- Upload and audit `.sol` or `.rs` files via browser
+- View risk scores and severity breakdowns
+- Download reports in HTML, Markdown, SARIF, or JSON
+- Interactive attack graph visualization
 
 ---
 
@@ -1026,6 +1041,12 @@ python solana_intel.py programs/token/lib.rs
 
 ## 📚 **Documentation**
 
+- **[Getting Started](docs/GETTING_STARTED.md)** - Installation and first audit
+- **[CLI Reference](docs/CLI_REFERENCE.md)** - All commands and flags
+- **[Configuration](docs/CONFIGURATION.md)** - Full sentinel.toml reference
+- **[Web App Guide](docs/WEB_APP_GUIDE.md)** - Web UI features and API
+- **[Deployment](docs/DEPLOYMENT.md)** - Production server setup
+
 ### **Design Philosophy**
 Read [Pragmatic Security Engine.txt](./Pragmatic%20Security%20Engine.txt) for the original vision:
 - Action-oriented (not academic)
@@ -1093,7 +1114,7 @@ Upload SARIF results to GitHub Advanced Security:
 
 ```yaml
 - name: Install Sentinel Engine
-  run: pip install -e .
+  run: pip install sentinel-engine
 
 - name: Run Sentinel Scan
   run: |
