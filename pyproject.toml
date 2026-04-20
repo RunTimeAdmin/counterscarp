@@ -7,14 +7,13 @@ name = "sentinel-engine"
 version = "2.3.0"
 description = "Production-ready smart contract security auditing platform"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [{name = "Sentinel Engine Team"}]
 readme = "README.md"
 keywords = ["security", "audit", "smart-contracts", "solidity", "solana", "blockchain"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -34,6 +33,8 @@ dependencies = [
 [project.urls]
 Homepage = "https://sentinel-engine.io"
 Repository = "https://github.com/RunTimeAdmin/sentinel-engine"
+Documentation = "https://github.com/RunTimeAdmin/sentinel-engine/tree/main/docs"
+"Bug Tracker" = "https://github.com/RunTimeAdmin/sentinel-engine/issues"
 
 [project.optional-dependencies]
 ai = [
@@ -85,6 +86,8 @@ markers = [
 ]
 
 [tool.setuptools]
+include-package-data = true
+packages = ["webapp", "webapp.templates", "webapp.static"]
 py-modules = [
     "orchestrator",
     "config_loader",
@@ -123,6 +126,7 @@ py-modules = [
 
 [tool.setuptools.package-data]
 "*" = ["*.toml", "*.txt", "*.md", "py.typed", "*.pyi"]
+webapp = ["templates/*.html", "static/*.css", "static/*.png"]
 
 [tool.mypy]
 python_version = "3.10"

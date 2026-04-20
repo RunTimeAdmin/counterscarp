@@ -1,0 +1,8 @@
+recursive-include exploit_templates *.sol
+recursive-include data *.json
+recursive-include assets *.png
+recursive-include webapp/templates *.html
+recursive-include webapp/static *.css *.png
+include sentinel.toml
+include LICENSE
+include README.md
