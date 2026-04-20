@@ -456,6 +456,27 @@ def generate_markdown_report(
     return filename
 
 
+def _safe_line_no(location_str: str) -> int:
+    """Extract line number from location string, handling various formats.
+
+    Handles:
+    - Standard ``file:line`` format (e.g. ``Contract.sol:42``)
+    - Slither multi-line format ``file (Lines: [80, 81, 82, ...])``
+    """
+    if not location_str or ":" not in location_str:
+        return 0
+    try:
+        part = location_str.split(":")[-1].strip()
+        # Handle "(Lines: [80, 81, ...])" suffix — extract first number
+        if part.startswith("[") or part.startswith(" ["):
+            import re
+            nums = re.findall(r'\d+', part)
+            return int(nums[0]) if nums else 0
+        return int(part)
+    except (ValueError, IndexError):
+        return 0
+
+
 def main() -> None:
     """Main entry point for the Sentinel orchestrator.
 
@@ -1085,7 +1106,7 @@ def main() -> None:
                 title=s.get("title", "Slither Finding"),
                 description=s.get("description", ""),
                 file=s.get("location", "").split(":")[0] if ":" in s.get("location", "") else s.get("location", ""),
-                line_no=int(s.get("location", ":0").split(":")[-1]) if ":" in s.get("location", "") else 0
+                line_no=_safe_line_no(s.get("location", ""))
             ))
         
         # Aderyn (if available)
