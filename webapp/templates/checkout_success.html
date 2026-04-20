@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Purchase Complete - Sentinel Engine Pro{% endblock %}
+
+{% block content %}
+<style>
+    .success-container {
+        max-width: 700px;
+        margin: 2rem auto;
+        text-align: center;
+    }
+    .success-icon {
+        font-size: 4rem;
+        margin-bottom: 0.5rem;
+        color: #28a745;
+    }
+    .success-header {
+        font-size: 2rem;
+        color: #fff;
+        margin-bottom: 0.5rem;
+    }
+    .success-subtitle {
+        color: #a0a0b0;
+        margin-bottom: 2rem;
+        font-size: 1.05rem;
+    }
+    .license-card {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 16px;
+        padding: 2rem;
+        text-align: left;
+        margin-bottom: 2rem;
+    }
+    .license-card h3 {
+        color: #fff;
+        margin-bottom: 0.25rem;
+        font-size: 1.2rem;
+    }
+    .license-tier {
+        color: #e94560;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 1rem;
+    }
+    .license-key-box {
+        background: #0f1629;
+        border: 2px solid #2a2a4e;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .license-key-text {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 1.1rem;
+        color: #667eea;
+        word-break: break-all;
+        user-select: all;
+    }
+    .btn-copy {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: opacity 0.2s;
+    }
+    .btn-copy:hover {
+        opacity: 0.85;
+    }
+    .btn-copy.copied {
+        background: #28a745;
+    }
+    .activation-section {
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .activation-section h4 {
+        color: #fff;
+        margin-bottom: 1rem;
+        font-size: 1rem;
+    }
+    .activation-option {
+        margin-bottom: 1rem;
+    }
+    .activation-option:last-child {
+        margin-bottom: 0;
+    }
+    .activation-option .option-label {
+        color: #a0a0b0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+    }
+    .activation-option .option-code {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 6px;
+        padding: 0.6rem 0.9rem;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.85rem;
+        color: #c0c0c0;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    .email-note {
+        color: #888;
+        font-size: 0.85rem;
+        margin-top: 1rem;
+        font-style: italic;
+    }
+    .btn-continue {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        padding: 0.85rem 2.5rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: opacity 0.2s, transform 0.2s;
+    }
+    .btn-continue:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+    }
+    .no-key-message {
+        color: #a0a0b0;
+        padding: 2rem;
+    }
+    .no-key-message p {
+        margin-bottom: 0.5rem;
+    }
+</style>
+
+<div class="container">
+    <div class="success-container">
+        {% if license_key %}
+            <div class="success-icon">&#10004;</div>
+            <h1 class="success-header">Purchase Complete!</h1>
+            <p class="success-subtitle">
+                Your Sentinel Engine Pro license is ready.
+            </p>
+
+            <div class="license-card">
+                <h3>Your Sentinel Engine Pro License</h3>
+                <div class="license-tier">{{ tier|upper }} Tier</div>
+
+                <div class="license-key-box">
+                    <span class="license-key-text" id="licenseKey">{{ license_key }}</span>
+                    <button class="btn-copy" id="copyBtn" onclick="copyKey()">
+                        Copy
+                    </button>
+                </div>
+
+                <div class="activation-section">
+                    <h4>Activation Instructions</h4>
+
+                    <div class="activation-option">
+                        <div class="option-label">
+                            Option 1: Environment Variable
+                        </div>
+                        <div class="option-code" id="envCmd">export SENTINEL_PRO_LICENSE={{ license_key }}</div>
+                    </div>
+
+                    <div class="activation-option">
+                        <div class="option-label">
+                            Option 2: Config File (sentinel.toml)
+                        </div>
+                        <div class="option-code">[license]
+key = "{{ license_key }}"</div>
+                    </div>
+                </div>
+
+                <p class="email-note">
+                    A copy of your license key has also been sent to
+                    {% if email %}<strong>{{ email }}</strong>{% else %}your email{% endif %}.
+                </p>
+            </div>
+
+            <a href="/" class="btn-continue">
+                Start using Pro features
+            </a>
+        {% else %}
+            <div class="success-icon">&#9203;</div>
+            <h1 class="success-header">Processing&hellip;</h1>
+            <div class="no-key-message">
+                <p>
+                    Your payment is being processed. If you just
+                    completed checkout, please refresh this page in
+                    a few seconds.
+                </p>
+                <p>
+                    If the issue persists, contact
+                    <a href="mailto:help@protocol14019.com"
+                       style="color:#667eea">
+                        help@protocol14019.com
+                    </a>.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    function copyKey() {
+        const keyEl = document.getElementById('licenseKey');
+        const btn = document.getElementById('copyBtn');
+        const text = keyEl.textContent.trim();
+
+        navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = 'Copy';
+                btn.classList.remove('copied');
+            }, 2000);
+        }).catch(() => {
+            // Fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = 'Copy';
+                btn.classList.remove('copied');
+            }, 2000);
+        });
+    }
+</script>
+{% endblock %}

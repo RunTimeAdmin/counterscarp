@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import List
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -34,6 +39,15 @@ from license_manager import (
 )
 
 from webapp.license_api import license_router
+from webapp.stripe_integration import (
+    create_checkout_session,
+    handle_checkout_completed,
+    get_session_license_key,
+    STRIPE_PUBLISHABLE_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    PRODUCTS,
+)
+import stripe as _stripe
 
 _license = LicenseManager()
 
@@ -569,6 +583,78 @@ async def results(request: Request, audit_id: str):
         },
     )
 
+
+@app.get("/pricing")
+async def pricing_page(request: Request):
+    """Render the pricing / upgrade page."""
+    return templates.TemplateResponse(
+        request, "pricing.html",
+        context={
+            "stripe_key": STRIPE_PUBLISHABLE_KEY,
+            "products": PRODUCTS,
+        },
+    )
+
+@app.post("/checkout/create-session")
+async def create_checkout(request: Request):
+    """Create a Stripe Checkout Session and redirect."""
+    form = await request.form()
+    product_key = form.get("product", "pro_monthly")
+    base_url = str(request.base_url).rstrip("/")
+    success_url = (
+        f"{base_url}/checkout/success"
+        f"?session_id={{CHECKOUT_SESSION_ID}}"
+    )
+    cancel_url = f"{base_url}/pricing"
+    session_url = create_checkout_session(
+        product_key, success_url, cancel_url,
+    )
+    return RedirectResponse(url=session_url, status_code=303)
+
+@app.get("/checkout/success")
+async def checkout_success(request: Request):
+    """Show the checkout success page with the license key."""
+    session_id = request.query_params.get("session_id", "")
+    license_info = get_session_license_key(session_id)
+    return templates.TemplateResponse(
+        request, "checkout_success.html",
+        context={
+            "license_key": (
+                license_info.get("key", "") if license_info else ""
+            ),
+            "tier": (
+                license_info.get("tier", "pro") if license_info else "pro"
+            ),
+            "email": (
+                license_info.get("customer_email", "")
+                if license_info else ""
+            ),
+        },
+    )
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events (checkout.session.completed)."""
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    if STRIPE_WEBHOOK_SECRET:
+        try:
+            event = _stripe.Webhook.construct_event(
+                payload, sig_header, STRIPE_WEBHOOK_SECRET,
+            )
+        except (ValueError, _stripe.error.SignatureVerificationError):
+            return JSONResponse(
+                {"error": "Invalid signature"}, status_code=400,
+            )
+    else:
+        event = json.loads(payload)
+
+    if event.get("type") == "checkout.session.completed":
+        session = event["data"]["object"]
+        handle_checkout_completed(session)
+
+    return JSONResponse({"status": "ok"})
 
 @app.get("/license/status")
 async def license_status(request: Request):

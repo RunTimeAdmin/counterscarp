@@ -1,0 +1,562 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing - Sentinel Engine Pro{% endblock %}
+
+{% block content %}
+<style>
+    .pricing-hero {
+        text-align: center;
+        padding: 3rem 0 1rem;
+    }
+    .pricing-hero h1 {
+        font-size: 2.5rem;
+        color: #fff;
+        margin-bottom: 0.5rem;
+    }
+    .pricing-hero p {
+        color: #a0a0b0;
+        font-size: 1.15rem;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        max-width: 1000px;
+        margin: 2rem auto;
+    }
+    .pricing-card {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 16px;
+        padding: 2rem;
+        text-align: center;
+        transition: border-color 0.3s, transform 0.2s;
+        position: relative;
+    }
+    .pricing-card:hover {
+        border-color: #667eea;
+        transform: translateY(-4px);
+    }
+    .pricing-card.featured {
+        border-color: #e94560;
+        box-shadow: 0 0 30px rgba(233, 69, 96, 0.15);
+    }
+    .best-value-badge {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #e94560, #c23152);
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 4px 16px;
+        border-radius: 12px;
+    }
+    .pricing-card h3 {
+        font-size: 1.3rem;
+        color: #fff;
+        margin-bottom: 0.5rem;
+    }
+    .pricing-price {
+        margin: 1.25rem 0;
+    }
+    .pricing-price .amount {
+        font-size: 3rem;
+        font-weight: 700;
+        color: #fff;
+    }
+    .pricing-price .currency {
+        font-size: 1.25rem;
+        color: #a0a0b0;
+        vertical-align: top;
+        line-height: 2.5;
+    }
+    .pricing-price .period {
+        font-size: 0.95rem;
+        color: #888;
+    }
+    .pricing-price .old-price {
+        text-decoration: line-through;
+        color: #666;
+        font-size: 1rem;
+    }
+    .pricing-desc {
+        color: #a0a0b0;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+    .pricing-features {
+        list-style: none;
+        text-align: left;
+        margin-bottom: 2rem;
+        padding: 0;
+    }
+    .pricing-features li {
+        padding: 0.4rem 0;
+        color: #c0c0c0;
+        font-size: 0.9rem;
+    }
+    .pricing-features li::before {
+        content: "\2713";
+        color: #28a745;
+        margin-right: 0.5rem;
+        font-weight: 700;
+    }
+    .btn-buy {
+        display: inline-block;
+        width: 100%;
+        padding: 0.85rem 1.5rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-align: center;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+        text-decoration: none;
+        color: #fff;
+    }
+    .btn-buy:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+    }
+    .btn-buy-primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+    .btn-buy-featured {
+        background: linear-gradient(135deg, #e94560, #c23152);
+    }
+    .btn-buy-enterprise {
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        color: #a0a0b0;
+    }
+    .btn-buy-enterprise:hover {
+        border-color: #667eea;
+        color: #e0e0e0;
+    }
+
+    /* Feature comparison table */
+    .comparison-section {
+        max-width: 900px;
+        margin: 3rem auto;
+    }
+    .comparison-section h2 {
+        text-align: center;
+        font-size: 1.75rem;
+        color: #fff;
+        margin-bottom: 1.5rem;
+    }
+    .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #16213e;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .comparison-table th,
+    .comparison-table td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid #2a2a4e;
+    }
+    .comparison-table th {
+        background: #0f1629;
+        color: #a0a0b0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .comparison-table th:first-child {
+        width: 60%;
+    }
+    .comparison-table td:first-child {
+        color: #c0c0c0;
+    }
+    .comparison-table td {
+        text-align: center;
+        color: #e0e0e0;
+    }
+    .comparison-table td:first-child {
+        text-align: left;
+    }
+    .check-yes { color: #28a745; font-weight: 700; }
+    .check-no { color: #555; }
+    .pro-label {
+        color: #e94560;
+        font-size: 0.7rem;
+        font-weight: 700;
+        margin-left: 6px;
+        letter-spacing: 0.03em;
+    }
+
+    /* FAQ */
+    .faq-section {
+        max-width: 750px;
+        margin: 3rem auto;
+    }
+    .faq-section h2 {
+        text-align: center;
+        font-size: 1.75rem;
+        color: #fff;
+        margin-bottom: 1.5rem;
+    }
+    .faq-item {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 10px;
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+    }
+    .faq-question {
+        padding: 1rem 1.25rem;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #e0e0e0;
+        font-weight: 500;
+        transition: background 0.2s;
+    }
+    .faq-question:hover {
+        background: rgba(102, 126, 234, 0.05);
+    }
+    .faq-arrow {
+        transition: transform 0.2s;
+        color: #888;
+    }
+    .faq-item.open .faq-arrow {
+        transform: rotate(180deg);
+    }
+    .faq-answer {
+        padding: 0 1.25rem 1rem;
+        color: #a0a0b0;
+        line-height: 1.6;
+        display: none;
+    }
+    .faq-item.open .faq-answer {
+        display: block;
+    }
+
+    @media (max-width: 768px) {
+        .pricing-hero h1 { font-size: 1.75rem; }
+        .pricing-grid { grid-template-columns: 1fr; }
+        .comparison-table { font-size: 0.85rem; }
+    }
+</style>
+
+<div class="container">
+    <div class="pricing-hero">
+        <h1>Sentinel Engine Pro</h1>
+        <p>
+            Unlock every analyzer, AI-powered insights, and professional
+            reporting — from first scan to final audit.
+        </p>
+    </div>
+
+    <!-- Pricing cards -->
+    <div class="pricing-grid">
+        <!-- Pro Monthly -->
+        <div class="pricing-card">
+            <h3>Pro Monthly</h3>
+            <div class="pricing-price">
+                <span class="currency">$</span><span class="amount">99</span>
+                <span class="period">/ month</span>
+            </div>
+            <p class="pricing-desc">
+                Full access to all 21 analyzers, AI Copilot, Attack
+                Graphs, and more.
+            </p>
+            <ul class="pricing-features">
+                <li>All 21 analyzers unlocked</li>
+                <li>AI Audit Copilot</li>
+                <li>Attack Graph Visualization</li>
+                <li>Exploit PoC Generator</li>
+                <li>Time-Travel Scanner</li>
+                <li>Protocol Fingerprinting</li>
+                <li>Solana Analyzer (35 rules)</li>
+                <li>HTML &amp; SARIF Reports</li>
+                <li>2 machine activations</li>
+            </ul>
+            <form method="POST" action="/checkout/create-session">
+                <input type="hidden" name="product" value="pro_monthly">
+                <button type="submit" class="btn-buy btn-buy-primary">
+                    Buy Now
+                </button>
+            </form>
+        </div>
+
+        <!-- Pro Annual (featured) -->
+        <div class="pricing-card featured">
+            <span class="best-value-badge">BEST VALUE</span>
+            <h3>Pro Annual</h3>
+            <div class="pricing-price">
+                <span class="currency">$</span><span class="amount">999</span>
+                <span class="period">/ year</span><br>
+                <span class="old-price">$1,188/year</span>
+            </div>
+            <p class="pricing-desc">
+                Everything in Pro Monthly. Save $189/year with the
+                annual plan!
+            </p>
+            <ul class="pricing-features">
+                <li>Everything in Pro Monthly</li>
+                <li>Save $189 vs monthly billing</li>
+                <li>Priority email support</li>
+                <li>Early access to new features</li>
+                <li>2 machine activations</li>
+            </ul>
+            <form method="POST" action="/checkout/create-session">
+                <input type="hidden" name="product" value="pro_annual">
+                <button type="submit" class="btn-buy btn-buy-featured">
+                    Buy Now
+                </button>
+            </form>
+        </div>
+
+        <!-- Enterprise -->
+        <div class="pricing-card">
+            <h3>Enterprise</h3>
+            <div class="pricing-price">
+                <span class="amount" style="font-size:2rem">Custom</span>
+            </div>
+            <p class="pricing-desc">
+                For teams and organizations that need unlimited
+                activations, SSO, and dedicated support.
+            </p>
+            <ul class="pricing-features">
+                <li>Everything in Pro</li>
+                <li>Unlimited machine activations</li>
+                <li>SSO &amp; team management</li>
+                <li>Custom rule packs</li>
+                <li>Dedicated support</li>
+            </ul>
+            <a href="mailto:help@protocol14019.com"
+               class="btn-buy btn-buy-enterprise">
+                Contact Us
+            </a>
+        </div>
+    </div>
+
+    <!-- Feature comparison table -->
+    <div class="comparison-section">
+        <h2>Feature Comparison</h2>
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Free</th>
+                    <th>Pro</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Heuristic Scanner (23 EVM rules)</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Slither Integration</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Markdown &amp; JSON Reports</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>CLI Orchestrator</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Config System</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Supply Chain Checker</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Access Matrix Analyzer</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Intent Check</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Upgrade Diff Scanner</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Threat Intel Feed</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Knowledge Fetcher</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Inflation Scaffold</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Pipeline Generator</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Plugin Manager</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>GUI Dashboard</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Web App Upload</td>
+                    <td class="check-yes">&#10003;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>AI Audit Copilot <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Attack Graph Visualization <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Exploit PoC Generator <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Time-Travel Scanner <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Protocol Fingerprinting <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Solana Analyzer (35 rules) <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>HTML &amp; SARIF Branded Reports <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+                <tr>
+                    <td>Web App Pro Panels <span class="pro-label">PRO</span></td>
+                    <td class="check-no">&mdash;</td>
+                    <td class="check-yes">&#10003;</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- FAQ -->
+    <div class="faq-section">
+        <h2>Frequently Asked Questions</h2>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                <span>What happens after I purchase?</span>
+                <span class="faq-arrow">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                After payment, you'll be redirected to a success page
+                with your license key. You can activate it immediately
+                by setting the
+                <code>SENTINEL_PRO_LICENSE</code> environment variable
+                or adding it to your
+                <code>sentinel.toml</code> config file.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                <span>How do I activate my license?</span>
+                <span class="faq-arrow">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                There are two ways to activate:<br><br>
+                <strong>Option 1 &mdash; Environment Variable:</strong><br>
+                <code>export SENTINEL_PRO_LICENSE=SE-PRO-xxxxx</code><br><br>
+                <strong>Option 2 &mdash; Config File
+                (<code>sentinel.toml</code>):</strong><br>
+                <code>[license]<br>key = "SE-PRO-xxxxx"</code>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                <span>Can I cancel my subscription?</span>
+                <span class="faq-arrow">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                Yes. You can cancel anytime from the Stripe
+                customer portal. Your license will remain active
+                until the end of the current billing period. After
+                that, you'll revert to the free tier automatically.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                <span>How many machines can I activate?</span>
+                <span class="faq-arrow">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                Each Pro license supports up to 2 machine
+                activations. If you need more, contact us about
+                our Enterprise plan at
+                <a href="mailto:help@protocol14019.com"
+                   style="color:#667eea">
+                    help@protocol14019.com
+                </a>.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                <span>Is there a refund policy?</span>
+                <span class="faq-arrow">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                We offer a 14-day money-back guarantee. If you're
+                not satisfied, contact
+                <a href="mailto:help@protocol14019.com"
+                   style="color:#667eea">
+                    help@protocol14019.com
+                </a>
+                for a full refund.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
