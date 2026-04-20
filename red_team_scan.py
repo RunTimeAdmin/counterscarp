@@ -116,13 +116,74 @@ def find_project_root(target_path: str) -> Optional[str]:
 def _resolve_slither_bin() -> str:
     """Resolve the Slither binary path from the current venv.
 
-    Returns the venv-local slither path if it exists, otherwise
-    falls back to bare 'slither' (relies on PATH).
+    Checks for slither and slither.exe in the venv Scripts directory,
+    falls back to shutil.which("slither"), then bare "slither".
+
+    Returns:
+        Path to the Slither binary.
     """
-    slither_bin = str(Path(sys.executable).parent / "slither")
-    if Path(slither_bin).exists():
-        return slither_bin
+    venv_bin_dir = Path(sys.executable).parent
+
+    # Check for slither.exe first (Windows), then slither (Unix)
+    for candidate in ("slither.exe", "slither"):
+        candidate_path = venv_bin_dir / candidate
+        if candidate_path.exists():
+            logger.debug(f"Resolved slither binary: {candidate_path}")
+            return str(candidate_path)
+
+    # Fallback: use shutil.which to search PATH
+    which_result = shutil.which("slither")
+    if which_result:
+        logger.debug(
+            f"Resolved slither binary via shutil.which: {which_result}"
+        )
+        return which_result
+
+    # Last resort: bare name, rely on OS PATH resolution
+    logger.debug("Falling back to bare 'slither' (relying on PATH)")
     return "slither"
+
+
+def _parse_json_with_fallback(json_str: str, context: str = "") -> Any:
+    """Parse JSON with brace-counting fallback for trailing data.
+
+    Attempts json.loads() first.  If that fails, tries to find the
+    matching closing brace by counting braces, then parses just
+    that substring.
+
+    Args:
+        json_str: String starting with '{' containing JSON data.
+        context: Optional context for warning messages.
+
+    Returns:
+        Parsed JSON data.
+
+    Raises:
+        json.JSONDecodeError: If parsing fails even after fallback.
+    """
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        brace_count = 0
+        end_idx = -1
+        for i, ch in enumerate(json_str):
+            if ch == '{':
+                brace_count += 1
+            elif ch == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i + 1
+                    break
+        if end_idx != -1:
+            truncated = json_str[end_idx:].strip()
+            if truncated:
+                ctx = f" for {context}" if context else ""
+                logger.warning(
+                    f"Truncated trailing data from JSON output{ctx} "
+                    f"({len(truncated)} chars after closing brace)"
+                )
+            return json.loads(json_str[:end_idx])
+        raise
 
 
 def _slither_per_file_fallback(
@@ -196,6 +257,7 @@ def _slither_per_file_fallback(
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=300,
             )
             output = result.stdout
             json_start = output.find("{")
@@ -203,7 +265,9 @@ def _slither_per_file_fallback(
                 fail_count += 1
                 continue
 
-            data = json.loads(output[json_start:])
+            data = _parse_json_with_fallback(
+                output[json_start:], context=sol_name
+            )
             if data.get("success", True):
                 success_count += 1
                 detectors = data.get("results", {}).get("detectors", [])
@@ -212,6 +276,10 @@ def _slither_per_file_fallback(
                 fail_count += 1
                 err = data.get("error", "unknown")
                 errors.append(f"{sol_name}: {err}")
+        except subprocess.TimeoutExpired:
+            fail_count += 1
+            logger.warning(f"Slither timed out on {sol_name} (300s)")
+            errors.append(f"{sol_name}: timeout after 300s")
         except Exception as exc:
             fail_count += 1
             errors.append(f"{sol_name}: {exc}")
@@ -384,7 +452,8 @@ def run_slither(target: str) -> Dict[str, Any]:
             cwd=cwd,
             capture_output=True,
             text=True,
-            check=False  # Slither exits non-zero on findings
+            check=False,  # Slither exits non-zero on findings
+            timeout=300,
         )
 
         # Slither may mix logs in stdout, but --json -
@@ -407,7 +476,7 @@ def run_slither(target: str) -> Dict[str, Any]:
             )
 
         json_data = output[json_start:]
-        parsed = json.loads(json_data)
+        parsed = _parse_json_with_fallback(json_data, context="Slither")
 
         # Handle "success: false" from Slither (e.g., tload
         # or other IR analysis errors). Try fallback to
@@ -479,6 +548,12 @@ def run_slither(target: str) -> Dict[str, Any]:
             "Slither analysis failed",
             details={"returncode": e.returncode, "stderr": e.stderr}
         ) from e
+    except subprocess.TimeoutExpired:
+        logger.error("Slither analysis timed out (300s)")
+        raise SentinelAnalysisError(
+            "Slither analysis timed out after 300 seconds",
+            details={"tool": "slither", "timeout": 300}
+        )
     except PermissionError as e:
         logger.error(f"Permission denied running Slither: {e}")
         raise SentinelAnalysisError(

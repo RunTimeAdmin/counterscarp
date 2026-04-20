@@ -199,7 +199,7 @@ def generate_markdown_report(
     critical_count = len(fuzz_results) + len([x for x in static_results if x.get("impact") == "High"])
     status_icon = "[CRITICAL]" if critical_count > 0 else "[STABLE]"
 
-    with open(filename, "w", encoding="utf-8") as f:
+    with open(filename, "w", encoding="utf-8", errors="replace") as f:
         # Executive Summary
         f.write("# Security Remediation Plan\n")
         f.write(f"**Target:** `{project_name}`\n")
@@ -566,6 +566,28 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # --- Path validation (fast-fail before any scan work) ---
+    if not os.path.exists(args.target):
+        msg = f"Target path does not exist: {args.target}"
+        logger.error(msg)
+        print(f"[!] ERROR: {msg}")
+        sys.exit(1)
+    if os.path.isfile(args.target) and not args.target.lower().endswith(".sol"):
+        msg = f"Target file must be a Solidity (.sol) file, got: {args.target}"
+        logger.error(msg)
+        print(f"[!] ERROR: {msg}")
+        sys.exit(1)
+    if args.upgrade_old and not os.path.exists(args.upgrade_old):
+        msg = f"--upgrade-old path does not exist: {args.upgrade_old}"
+        logger.error(msg)
+        print(f"[!] ERROR: {msg}")
+        sys.exit(1)
+    if args.upgrade_new and not os.path.exists(args.upgrade_new):
+        msg = f"--upgrade-new path does not exist: {args.upgrade_new}"
+        logger.error(msg)
+        print(f"[!] ERROR: {msg}")
+        sys.exit(1)
+
     # Load config
     config = None
     if CONFIG_AVAILABLE:
@@ -573,19 +595,26 @@ def main() -> None:
             config = load_config(args.config)
             if config:
                 logger.info("Loaded config: %s v%s", config.engine.name, config.engine.version)
-                print(f"[*] Loaded config: {config.engine.name} v{config.engine.version}")
                 logger.info("Fail on: %s+ severity", config.engine.fail_on_severity)
-                print(f"    Fail on: {config.engine.fail_on_severity}+ severity")
                 if config.heuristics.disabled_rules:
                     logger.info("Disabled heuristic rules: %d", len(config.heuristics.disabled_rules))
-                    print(f"    Disabled heuristic rules: {len(config.heuristics.disabled_rules)}")
                 if config.suppressions:
                     logger.info("Active suppressions: %d", len(config.suppressions))
-                    print(f"    Active suppressions: {len(config.suppressions)}")
+        except FileNotFoundError:
+            # config path was explicitly provided but not found
+            logger.error("Config file not found: %s", args.config)
+            logger.info("Continuing with default settings...")
+        except PermissionError as e:
+            logger.error("Permission denied reading config '%s': %s", args.config or "sentinel.toml", e)
+            logger.info("Continuing with default settings...")
         except Exception as e:
-            logger.error("Error loading config: %s", e)
-            print(f"[!] Error loading config: {e}")
-            print("[*] Continuing with default settings...\n")
+            logger.error(
+                "Error loading config '%s' (%s): %s",
+                args.config or "sentinel.toml",
+                type(e).__name__,
+                e,
+            )
+            logger.info("Continuing with default settings...")
 
     # Initialize plugin manager
     plugin_mgr = None
@@ -597,9 +626,6 @@ def main() -> None:
                 logger.info("Plugins loaded: %d (%d analyzers, %d rule sets)",
                             plugin_count, plugin_mgr.get_analyzer_count(),
                             plugin_mgr.get_rule_plugin_count())
-                print(f"[*] Plugins loaded: {plugin_count} "
-                      f"({plugin_mgr.get_analyzer_count()} analyzers, "
-                      f"{plugin_mgr.get_rule_plugin_count()} rule sets)")
         except Exception as e:
             logger.warning(f"Plugin initialization failed: {e}")
             plugin_mgr = None
@@ -739,7 +765,6 @@ def main() -> None:
         logger.info("Slither analysis complete: %d issues found", len(static_issues))
     except SentinelAnalysisError as e:
         logger.error("Slither analysis failed: %s", e)
-        print(f"    [!] Slither analysis failed: {e}")
         static_issues = []
         raw_slither = None
     except Exception as e:
@@ -753,7 +778,6 @@ def main() -> None:
         logger.info("[PHASE 2B] Running Aderyn Static Analysis")
         if aderyn_wrapper is None:
             logger.warning("Aderyn wrapper not available in this environment")
-            print("[!] Aderyn wrapper not available in this environment.")
         else:
             try:
                 import sys as _sys
@@ -790,7 +814,6 @@ def main() -> None:
         logger.info("[PHASE 3B] Running Medusa Fuzzing")
         if medusa_wrapper is None:
             logger.warning("Medusa wrapper not available in this environment")
-            print("[!] Medusa wrapper not available in this environment.")
         else:
             medusa_target = args.target if os.path.isdir(args.target) else os.path.dirname(args.target)
             try:
@@ -804,7 +827,6 @@ def main() -> None:
                 logger.info("Medusa fuzzing complete")
             except Exception as e:
                 logger.error("Medusa fuzzing failed: %s", e)
-                print("[!] Medusa fuzzing failed; continuing without Medusa results.")
                 medusa_results = {"error": "Medusa run failed"}
             finally:
                 try:
@@ -907,14 +929,11 @@ def main() -> None:
                             print(f"      Risk Level: {risk.get('risk_level', 'N/A')}")
                 else:
                     logger.info("No protocol matches found")
-                    print("    No protocol matches found")
 
             except Exception as e:
                 logger.error("Fingerprint scan failed: %s", e)
-                print(f"[!] Fingerprint scan failed: {e}")
         else:
             logger.warning("Fingerprint scanner not available")
-            print("[!] Fingerprint scanner not available")
 
     # [PHASE 5] Symbolic Analysis (optional)
     if args.symbolic and os.path.isfile(args.target):
@@ -937,14 +956,12 @@ def main() -> None:
         logger.info("[PHASE 6] Running Solana Static Analysis")
         if solana_analyzer is None:
             logger.warning("solana_analyzer module not available")
-            print("[!] solana_analyzer module not available in this environment.")
         else:
             try:
                 solana_results = solana_analyzer.analyze_solana_program(args.solana_root)
                 logger.info("Solana analysis complete")
             except Exception as e:
                 logger.error("Solana analysis failed: %s", e)
-                print("[!] Solana analysis failed; continuing without Solana results.")
                 solana_results = {"error": "Solana analysis failed"}
 
     # [PHASE 7] Upgrade Diff Analysis (optional)
@@ -953,7 +970,6 @@ def main() -> None:
         logger.info("[PHASE 7] Running Upgrade Diff Analyzer")
         if upgrade_diff is None:
             logger.warning("upgrade_diff module not available")
-            print("[!] upgrade_diff module not available in this environment.")
         else:
             try:
                 upgrade_results = upgrade_diff.analyze_upgrade(
@@ -962,7 +978,6 @@ def main() -> None:
                 logger.info("Upgrade diff analysis complete")
             except Exception as e:
                 logger.error("Upgrade diff analysis failed: %s", e)
-                print("[!] Upgrade diff analysis failed; continuing without upgrade results.")
                 upgrade_results = {"error": "Upgrade diff analysis failed"}
 
     # [PHASE 7.5] RAG Enrichment (optional)
@@ -1153,7 +1168,6 @@ def main() -> None:
         logger.info("Findings by severity: %s", severity_counts)
     elif args.report and not REPORT_GENERATOR_AVAILABLE:
         logger.error("Report generation requested but report_generator.py not available")
-        print("[!] Report generation requested but report_generator.py not available")
 
     # Final log file reference — always printed so users know where to find results
     logger.info("Scan complete. Log file: %s", _log_file)
@@ -1166,7 +1180,7 @@ def main() -> None:
         _report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _report_name)
         if os.path.exists(_report_path):
             try:
-                with open(_report_path, "a", encoding="utf-8") as _rf:
+                with open(_report_path, "a", encoding="utf-8", errors="replace") as _rf:
                     _rf.write(f"\n---\n\n**Scan Log File:** `{_log_file}`\n")
             except Exception:
                 pass

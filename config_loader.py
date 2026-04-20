@@ -648,22 +648,42 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
 
     logger.info(f"Loading configuration from: {config_path}")
 
+    # Determine the TOML parse error class for whichever library was loaded
+    _toml_decode_error: type = Exception  # fallback: catch-all
+    try:
+        _toml_decode_error = toml.TOMLDecodeError  # tomllib / tomli
+    except AttributeError:
+        try:
+            _toml_decode_error = toml.TomlDecodeError  # older toml package
+        except AttributeError:
+            pass  # keep generic Exception fallback
+
     try:
         with open(config_path, 'rb') as f:
             data = toml.load(f)
-    except (IOError, OSError) as e:
-        logger.error(f"Could not read config file: {e}")
+    except FileNotFoundError:
+        logger.warning("Config file not found (skipping): %s", config_path)
+        return SentinelConfig()
+    except (PermissionError, IOError) as e:
+        logger.error("Cannot read config file '%s': %s", config_path, e)
+        return SentinelConfig()
+    except _toml_decode_error as e:
+        logger.error(
+            "TOML syntax error in config file '%s': %s",
+            config_path,
+            e,
+        )
         if SentinelConfigError:
             raise SentinelConfigError(
-                "Failed to read configuration file",
+                "Failed to parse configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
         return SentinelConfig()
     except Exception as e:
-        logger.error(f"Error parsing config file: {e}")
+        logger.error("Unexpected error reading config '%s' (%s): %s", config_path, type(e).__name__, e)
         if SentinelConfigError:
             raise SentinelConfigError(
-                "Failed to parse configuration file",
+                "Failed to read configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
         return SentinelConfig()

@@ -488,10 +488,11 @@ def scan_file(
         return findings
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
             content = "".join(lines)
-    except OSError:
+    except OSError as e:
+        logger.warning("Failed to read file %s: %s", path, e)
         return findings
 
     # Get all rules (built-in + plugin rules)

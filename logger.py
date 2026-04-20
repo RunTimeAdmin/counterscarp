@@ -16,6 +16,7 @@ Example:
 import os
 import sys
 import json
+import threading
 import logging
 from typing import Optional, Dict, Any, Union
 from datetime import datetime
@@ -161,6 +162,7 @@ class TextFormatter(logging.Formatter):
 # Global flag to track if logging has been configured
 _logging_configured = False
 _root_handlers: list = []
+_logging_lock = threading.Lock()
 
 
 def setup_logging(
@@ -187,57 +189,58 @@ def setup_logging(
         ... )
     """
     global _logging_configured, _root_handlers
-    
-    # Get configuration from environment variables or defaults
-    if level is None:
-        level = os.environ.get("SENTINEL_LOG_LEVEL", DEFAULT_LOG_LEVEL)
-    
-    if format is None:
-        format = os.environ.get("SENTINEL_LOG_FORMAT", DEFAULT_LOG_FORMAT)
-    
-    if log_file is None:
-        log_file = os.environ.get("SENTINEL_LOG_FILE")
-    
-    # Convert level string to int if needed
-    if isinstance(level, str):
-        level = LOG_LEVELS.get(level.upper(), logging.INFO)
-    
-    # Get root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
-    
-    # Remove existing handlers to avoid duplicates
-    for handler in _root_handlers:
-        root_logger.removeHandler(handler)
-    _root_handlers = []
-    
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    
-    if format.lower() == "json":
-        console_handler.setFormatter(JSONFormatter())
-    else:
-        console_handler.setFormatter(ColoredFormatter(use_color=use_color))
-    
-    root_logger.addHandler(console_handler)
-    _root_handlers.append(console_handler)
-    
-    # File handler (optional)
-    if log_file:
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setLevel(level)
-        
-        # Use JSON for file logs if specified, otherwise plain text
+
+    with _logging_lock:
+        # Get configuration from environment variables or defaults
+        if level is None:
+            level = os.environ.get("SENTINEL_LOG_LEVEL", DEFAULT_LOG_LEVEL)
+
+        if format is None:
+            format = os.environ.get("SENTINEL_LOG_FORMAT", DEFAULT_LOG_FORMAT)
+
+        if log_file is None:
+            log_file = os.environ.get("SENTINEL_LOG_FILE")
+
+        # Convert level string to int if needed
+        if isinstance(level, str):
+            level = LOG_LEVELS.get(level.upper(), logging.INFO)
+
+        # Get root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(level)
+
+        # Remove existing handlers to avoid duplicates
+        for handler in _root_handlers:
+            root_logger.removeHandler(handler)
+        _root_handlers = []
+
+        # Console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(level)
+
         if format.lower() == "json":
-            file_handler.setFormatter(JSONFormatter())
+            console_handler.setFormatter(JSONFormatter())
         else:
-            file_handler.setFormatter(TextFormatter())
-        
-        root_logger.addHandler(file_handler)
-        _root_handlers.append(file_handler)
-    
-    _logging_configured = True
+            console_handler.setFormatter(ColoredFormatter(use_color=use_color))
+
+        root_logger.addHandler(console_handler)
+        _root_handlers.append(console_handler)
+
+        # File handler (optional)
+        if log_file:
+            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+            file_handler.setLevel(level)
+
+            # Use JSON for file logs if specified, otherwise plain text
+            if format.lower() == "json":
+                file_handler.setFormatter(JSONFormatter())
+            else:
+                file_handler.setFormatter(TextFormatter())
+
+            root_logger.addHandler(file_handler)
+            _root_handlers.append(file_handler)
+
+        _logging_configured = True
 
 
 def get_logger(name: str) -> logging.Logger:

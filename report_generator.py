@@ -6,6 +6,7 @@ Generates client-ready HTML/Markdown reports with risk ratings and remediation
 
 from __future__ import annotations
 
+import math
 import os
 import json
 from typing import Dict, List, Any, Optional
@@ -121,8 +122,8 @@ SARIF_LEVEL_MAP = {
 }
 
 # Sentinel Engine version for SARIF reports
-SENTINEL_ENGINE_VERSION = "3.1.1"
-SENTINEL_ENGINE_SEMANTIC_VERSION = "3.1.1"
+SENTINEL_ENGINE_VERSION = "3.1.2"
+SENTINEL_ENGINE_SEMANTIC_VERSION = "3.1.2"
 SENTINEL_INFORMATION_URI = "https://github.com/RunTimeAdmin/sentinel-engine"
 
 # Remediation knowledge base
@@ -204,8 +205,15 @@ def calculate_risk_score(findings: List[Finding]) -> float:
     total_weight = sum(SEVERITY_WEIGHTS.get(f.severity, 0) for f in findings)
     # Normalize to 0-100 scale (assume max 10 critical findings = 100)
     max_possible = len(findings) * SEVERITY_WEIGHTS["CRITICAL"]
-    score = min(100.0, (total_weight / max(max_possible, 1.0)) * 100)
-    
+    # Guard against zero division
+    max_possible = max(max_possible, 1)
+    score = min(100.0, (total_weight / max_possible) * 100)
+
+    # Guard against NaN / infinity from corrupted inputs
+    if math.isnan(score) or math.isinf(score):
+        logger.error("Risk score calculation produced invalid result")
+        score = 50.0  # Default to medium risk
+
     return round(score, 1)
 
 
@@ -273,16 +281,20 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
         print(_license.get_upgrade_message(BRANDED_REPORTS))
         return None
 
-    # Process logo if provided
+    # Process logo if provided (never crash on logo issues)
     logo_html = ""
     if logo_path and Path(logo_path).exists():
-        import base64
-        with open(logo_path, 'rb') as f:
-            logo_data = f.read()
-        logo_b64 = base64.b64encode(logo_data).decode('utf-8')
-        ext = Path(logo_path).suffix.lower().lstrip('.')
-        mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'svg': 'image/svg+xml'}.get(ext, 'image/png')
-        logo_html = f'<img src="data:{mime};base64,{logo_b64}" alt="Sentinel Engine" style="height: 60px; margin-right: 15px; vertical-align: middle;">'
+        try:
+            import base64
+            with open(logo_path, 'rb') as f:
+                logo_data = f.read()
+            logo_b64 = base64.b64encode(logo_data).decode('utf-8')
+            ext = Path(logo_path).suffix.lower().lstrip('.')
+            mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'svg': 'image/svg+xml'}.get(ext, 'image/png')
+            logo_html = f'<img src="data:{mime};base64,{logo_b64}" alt="Sentinel Engine" style="height: 60px; margin-right: 15px; vertical-align: middle;">'
+        except (IOError, OSError, Exception) as e:
+            logger.warning(f"Failed to load logo from {logo_path}: {e}. Continuing without logo.")
+            logo_html = ""
     
     # Determine status badge color
     status_colors = {

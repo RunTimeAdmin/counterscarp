@@ -108,6 +108,7 @@ def run_foundry_fuzz(
             cmd,
             capture_output=True,
             text=True,
+            timeout=3600,
         )
         return result.stdout
     except FileNotFoundError as e:
@@ -131,10 +132,6 @@ def run_foundry_fuzz(
             "Foundry fuzzing timed out",
             details={"operation": "foundry_fuzzing"}
         ) from e
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Foundry process failed: {e}")
-        # Don't raise - Foundry returns non-zero when tests fail
-        return e.stdout if hasattr(e, 'stdout') and e.stdout else ""
 
 
 def parse_counterexamples(log_output: str) -> List[Dict[str, Any]]:

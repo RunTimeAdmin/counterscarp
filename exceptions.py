@@ -57,7 +57,7 @@ class SentinelError(Exception):
         """
         if self.details:
             details_str = ", ".join(
-                f"{k}={v}" for k, v in self.details.items()
+                f"{k}={repr(v)}" for k, v in self.details.items()
             )
             return f"{self.message} ({details_str})"
         return self.message

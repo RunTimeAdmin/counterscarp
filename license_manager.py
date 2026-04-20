@@ -9,11 +9,13 @@ import functools
 import hashlib
 import hmac
 import json
+import logging
 import os
 import platform
 import secrets
 import sys
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -21,6 +23,8 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+
+_logger = logging.getLogger(__name__)
 
 # Pro feature gates
 AI_COPILOT = "ai_copilot"
@@ -95,7 +99,11 @@ FEATURE_NAMES = {
 LICENSE_SERVER_URL = "https://api.sentinel-engine.io/license/validate"
 CACHE_TTL_HOURS = 24
 GRACE_PERIOD_DAYS = 7
-PRODUCT_VERSION = "3.0.0"
+try:
+    from importlib.metadata import version as _get_version
+    PRODUCT_VERSION = _get_version("sentinel-engine")
+except Exception:
+    PRODUCT_VERSION = "3.0.0"  # Fallback for dev installs
 
 
 class LicenseError(Exception):
@@ -168,7 +176,7 @@ def _load_toml_license_key() -> str:
                 key = license_section.get("key", "")
                 if key:
                     return key
-            except Exception:
+            except (OSError, KeyError, TypeError):
                 continue
 
     return ""
@@ -279,7 +287,8 @@ class LicenseManager:
                 current_activations=result.get("current_activations", 0),
             )
 
-        except Exception:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
+            _logger.warning("Failed to load license cache: %s", e)
             return None
 
     def _load_grace_period_cache(self) -> Optional[LicenseInfo]:
@@ -331,7 +340,8 @@ class LicenseManager:
                 current_activations=result.get("current_activations", 0),
             )
 
-        except Exception:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
+            _logger.warning("Failed to load grace period cache: %s", e)
             return None
 
     def _save_cached_result(self, result: LicenseInfo):
@@ -369,8 +379,8 @@ class LicenseManager:
             with self._cache_lock:
                 with open(_get_cache_path(), "w") as f:
                     json.dump(cache, f, indent=2)
-        except Exception as e:
-            print(f"Warning: Could not save license cache: {e}")
+        except (OSError, json.JSONDecodeError) as e:
+            _logger.warning("Could not save license cache: %s", e)
 
     def _clear_cache(self):
         """Clear the license cache."""
@@ -378,8 +388,8 @@ class LicenseManager:
         if cache_path.exists():
             try:
                 cache_path.unlink()
-            except Exception:
-                pass
+            except OSError as e:
+                _logger.warning("Could not delete license cache: %s", e)
 
     def clear_cache(self):
         """Public method to clear the license cache and reload license key.
@@ -414,58 +424,72 @@ class LicenseManager:
             "timestamp": timestamp,
         }
 
-        try:
-            response = requests.post(
-                LICENSE_SERVER_URL,
-                json=payload,
-                timeout=10,
-                headers={"Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-            data = response.json()
+        _max_attempts = 3
+        _last_exc: Optional[Exception] = None
+        for _attempt in range(_max_attempts):
+            try:
+                response = requests.post(
+                    LICENSE_SERVER_URL,
+                    json=payload,
+                    timeout=10,
+                    headers={"Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                data = response.json()
 
-            if not data.get("valid", False):
-                self._clear_cache()
-                return None
+                if not data.get("valid", False):
+                    self._clear_cache()
+                    return None
 
-            result = LicenseInfo(
-                valid=data.get("valid", False),
-                tier=data.get("tier", "free"),
-                expires_at=(
-                    datetime.fromisoformat(
-                        data.get("expires_at").replace("Z", "+00:00")
-                    )
-                    if data.get("expires_at")
-                    else None
-                ),
-                features=data.get("features", []),
-                max_activations=data.get("max_activations", 0),
-                current_activations=data.get("current_activations", 0),
-            )
+                result = LicenseInfo(
+                    valid=data.get("valid", False),
+                    tier=data.get("tier", "free"),
+                    expires_at=(
+                        datetime.fromisoformat(
+                            data.get("expires_at").replace("Z", "+00:00")
+                        )
+                        if data.get("expires_at")
+                        else None
+                    ),
+                    features=data.get("features", []),
+                    max_activations=data.get("max_activations", 0),
+                    current_activations=data.get("current_activations", 0),
+                )
 
-            # Save to cache
-            self._save_cached_result(result)
+                # Save to cache
+                self._save_cached_result(result)
 
-            with self._cache_lock:
-                self._cached_result = result
-                self._cache_valid = True
-
-            return result
-
-        except requests.exceptions.RequestException:
-            # Network error: try grace period cache
-            grace_result = self._load_grace_period_cache()
-            if grace_result:
                 with self._cache_lock:
-                    self._cached_result = grace_result
+                    self._cached_result = result
                     self._cache_valid = True
-                return grace_result
 
-            # No valid cache available
-            return None
+                return result
 
-        except Exception:
-            return None
+            except (requests.RequestException, json.JSONDecodeError, ValueError, KeyError) as exc:
+                _last_exc = exc
+                if _attempt < _max_attempts - 1:
+                    _backoff = 2 ** _attempt  # 1s, 2s, 4s
+                    _logger.warning(
+                        "License validation attempt %d/%d failed (%s: %s); retrying in %ds",
+                        _attempt + 1, _max_attempts, type(exc).__name__, exc, _backoff,
+                    )
+                    time.sleep(_backoff)
+                else:
+                    _logger.warning(
+                        "License validation failed after %d attempts (%s: %s); trying grace period cache",
+                        _max_attempts, type(exc).__name__, exc,
+                    )
+
+        # All retries exhausted - try grace period cache
+        grace_result = self._load_grace_period_cache()
+        if grace_result:
+            with self._cache_lock:
+                self._cached_result = grace_result
+                self._cache_valid = True
+            return grace_result
+
+        # No valid cache available
+        return None
 
     def _get_or_validate_license(self) -> LicenseInfo:
         """Get cached license or validate new one."""
