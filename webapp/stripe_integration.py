@@ -19,28 +19,53 @@ stripe.api_key = STRIPE_SECRET_KEY
 
 # Product definitions (prices created via Stripe API on first use)
 PRODUCTS = {
+    "dev_monthly": {
+        "name": "Sentinel Engine Developer - Monthly",
+        "description": "Web app, Solana Analyzer, branded HTML/SARIF reports. 1 machine activation.",
+        "price_cents": 4900,
+        "interval": "month",
+        "tier": "developer",
+        "max_activations": 1,
+    },
+    "dev_annual": {
+        "name": "Sentinel Engine Developer - Annual",
+        "description": "Web app, Solana Analyzer, branded HTML/SARIF reports. 1 machine activation. Save $98/year!",
+        "price_cents": 49000,
+        "interval": "year",
+        "tier": "developer",
+        "max_activations": 1,
+    },
     "pro_monthly": {
         "name": "Sentinel Engine Pro - Monthly",
-        "description": (
-            "Full access to all 21 analyzers,"
-            " AI Copilot, Attack Graphs, and more."
-        ),
-        "price_cents": 9900,  # $99
+        "description": "Full access: AI Copilot, Attack Graphs, Exploit PoC, Time-Travel, Fingerprinting. 3 machine activations.",
+        "price_cents": 14900,
         "interval": "month",
         "tier": "pro",
-        "max_activations": 2,
+        "max_activations": 3,
     },
     "pro_annual": {
         "name": "Sentinel Engine Pro - Annual",
-        "description": (
-            "Full access to all 21 analyzers,"
-            " AI Copilot, Attack Graphs, and more."
-            " Save $189/year!"
-        ),
-        "price_cents": 99900,  # $999
+        "description": "Full access: AI Copilot, Attack Graphs, Exploit PoC, Time-Travel, Fingerprinting. 3 machine activations. Save $298/year!",
+        "price_cents": 149000,
         "interval": "year",
         "tier": "pro",
-        "max_activations": 2,
+        "max_activations": 3,
+    },
+    "team_monthly": {
+        "name": "Sentinel Engine Team - Monthly",
+        "description": "Everything in Pro + 10 seats, shared workspace, API access. 10 machine activations.",
+        "price_cents": 39900,
+        "interval": "month",
+        "tier": "team",
+        "max_activations": 10,
+    },
+    "team_annual": {
+        "name": "Sentinel Engine Team - Annual",
+        "description": "Everything in Pro + 10 seats, shared workspace, API access. 10 machine activations. Save $798/year!",
+        "price_cents": 399000,
+        "interval": "year",
+        "tier": "team",
+        "max_activations": 10,
     },
 }
 

@@ -48,26 +48,26 @@ go install github.com/crytic/medusa/cmd/medusa@latest
 
 ---
 
-## Free vs Pro
+## Pricing Tiers
 
 Sentinel Engine includes both free and pro features in a single package. Pro features require a license key.
 
-| Feature | Free | Pro |
-|---------|------|-----|
-| Heuristic Scanner (23 EVM rules) | ✓ | ✓ |
-| Slither Integration | ✓ | ✓ |
-| Aderyn, Medusa, Mythril, Foundry | ✓ | ✓ |
-| Supply Chain & Access Matrix | ✓ | ✓ |
-| Intent Check & Upgrade Diff | ✓ | ✓ |
-| Markdown & JSON Reports | ✓ | ✓ |
-| CI/CD Pipeline Generator | ✓ | ✓ |
-| AI Audit Copilot | ✗ | ✓ |
-| Attack Graph Visualization | ✗ | ✓ |
-| Exploit PoC Generator | ✗ | ✓ |
-| Time-Travel Scanner | ✗ | ✓ |
-| Protocol Fingerprinting | ✗ | ✓ |
-| Solana Analyzer (35 rules) | ✗ | ✓ |
-| Branded HTML/SARIF Reports | ✗ | ✓ |
+| Feature | Community (Free) | Developer ($49/mo) | Pro ($149/mo) | Team ($399/mo) | Enterprise |
+|---------|-----------------|-------------------|---------------|----------------|-----------|
+| 16 Core Analyzers | Yes | Yes | Yes | Yes | Yes |
+| CLI + Markdown/JSON Reports | Yes | Yes | Yes | Yes | Yes |
+| Web App Access | - | 5 scans/mo | Unlimited | Unlimited | Unlimited |
+| Solana Analyzer (35 rules) | - | Yes | Yes | Yes | Yes |
+| Branded HTML/SARIF Reports | - | Yes | Yes | Yes | Yes |
+| AI Audit Copilot (RAG) | - | - | Yes | Yes | Yes |
+| Attack Graph Visualization | - | - | Yes | Yes | Yes |
+| Exploit PoC Generator | - | - | Yes | Yes | Yes |
+| Time-Travel Git Scanner | - | - | Yes | Yes | Yes |
+| Protocol Fingerprinting | - | - | Yes | Yes | Yes |
+| Machine Activations | - | 1 | 3 | 10 | Unlimited |
+| Support | GitHub | Email | Priority (24hr) | Dedicated | CSM |
+
+See full pricing at https://app.sentinel-engine.io/pricing
 
 ### Activating Pro
 

@@ -32,6 +32,32 @@ SOLANA = "solana"
 BRANDED_REPORTS = "branded_reports"
 WEB_APP = "web_app"
 
+# Tier levels
+COMMUNITY = "community"
+DEVELOPER = "developer"
+PRO = "pro"
+TEAM = "team"
+ENTERPRISE = "enterprise"
+
+# Tier hierarchy (higher index = more features)
+TIER_HIERARCHY = [COMMUNITY, DEVELOPER, PRO, TEAM, ENTERPRISE]
+
+# Tier key prefixes
+TIER_PREFIXES = {
+    DEVELOPER: "SE-DEV-",
+    PRO: "SE-PRO-",
+    TEAM: "SE-TEAM-",
+    ENTERPRISE: "SE-ENT-",
+}
+
+# Default max activations per tier
+TIER_DEFAULT_ACTIVATIONS = {
+    DEVELOPER: 1,
+    PRO: 3,
+    TEAM: 10,
+    ENTERPRISE: 100,
+}
+
 ALL_PRO_FEATURES = [
     AI_COPILOT,
     ATTACK_GRAPH,
@@ -42,6 +68,18 @@ ALL_PRO_FEATURES = [
     BRANDED_REPORTS,
     WEB_APP,
 ]
+
+# Feature-to-minimum-tier mapping
+FEATURE_TIERS = {
+    SOLANA: DEVELOPER,
+    BRANDED_REPORTS: DEVELOPER,
+    WEB_APP: DEVELOPER,
+    AI_COPILOT: PRO,
+    ATTACK_GRAPH: PRO,
+    EXPLOIT_GEN: PRO,
+    TIME_TRAVEL: PRO,
+    FINGERPRINT: PRO,
+}
 
 FEATURE_NAMES = {
     AI_COPILOT: "AI Audit Copilot",
@@ -61,18 +99,21 @@ PRODUCT_VERSION = "3.0.0"
 
 
 class LicenseError(Exception):
-    """Raised when a pro feature is used without a valid license."""
+    """Raised when a gated feature is used without a sufficient
+    license tier."""
 
     def __init__(self, feature: str, message: str = ""):
         self.feature = feature
-        default = f"Feature '{feature}' requires Pro license"
+        required_tier = FEATURE_TIERS.get(feature, PRO)
+        tier_label = required_tier.capitalize()
+        default = f"Feature '{feature}' requires {tier_label} license"
         super().__init__(message or default)
 
 
 @dataclass
 class LicenseInfo:
     valid: bool
-    tier: str  # "free", "pro", "enterprise"
+    tier: str  # "community", "developer", "pro", "team", "enterprise"
     expires_at: Optional[datetime]
     features: list
     max_activations: int
@@ -425,10 +466,10 @@ class LicenseManager:
         if result:
             return result
 
-        # Return free tier info
+        # Return community tier info
         return LicenseInfo(
             valid=False,
-            tier="free",
+            tier=COMMUNITY,
             expires_at=None,
             features=[],
             max_activations=0,
@@ -436,18 +477,19 @@ class LicenseManager:
         )
 
     def check_pro_feature(self, feature: str) -> bool:
-        """Check if a pro feature is available."""
-        if feature not in ALL_PRO_FEATURES:
-            return True  # Unknown features are allowed
+        """Check if the current license tier grants access to a feature."""
+        required_tier = FEATURE_TIERS.get(feature)
+        if not required_tier:
+            return True  # Feature not gated
 
-        license_info = self._get_or_validate_license()
-        if not license_info.valid:
-            return False
-
-        if license_info.tier == "enterprise":
-            return True
-
-        return feature in license_info.features
+        current_tier = self.get_tier()
+        # Check hierarchy: current tier must be >= required tier
+        current_idx = (
+            TIER_HIERARCHY.index(current_tier)
+            if current_tier in TIER_HIERARCHY else 0
+        )
+        required_idx = TIER_HIERARCHY.index(required_tier)
+        return current_idx >= required_idx
 
     def require_pro_feature(self, feature: str) -> None:
         """Check if a pro feature is available. Raises LicenseError if not."""
@@ -459,26 +501,65 @@ class LicenseManager:
         return self._get_or_validate_license()
 
     def get_tier(self) -> str:
-        """Get current tier: 'free', 'pro', or 'enterprise'."""
+        """Get current tier: 'community', 'developer', 'pro',
+        'team', or 'enterprise'."""
+        if not self._license_key:
+            return COMMUNITY
+
         license_info = self._get_or_validate_license()
-        return license_info.tier
+        if license_info.valid and license_info.tier != COMMUNITY:
+            return license_info.tier
+
+        # Fallback: derive tier from key prefix
+        return self._tier_from_key_prefix()
+
+    def _tier_from_key_prefix(self) -> str:
+        """Derive tier from the license key prefix."""
+        if not self._license_key:
+            return COMMUNITY
+
+        key = self._license_key.upper()
+        if key.startswith("SE-DEV-"):
+            return DEVELOPER
+        elif key.startswith("SE-PRO-"):
+            return PRO
+        elif key.startswith("SE-TEAM-"):
+            return TEAM
+        elif key.startswith("SE-ENT-"):
+            return ENTERPRISE
+        # Legacy: support old SE-ENTERPRISE- prefix
+        elif key.startswith("SE-ENTERPRISE-"):
+            return ENTERPRISE
+        return COMMUNITY
 
     @staticmethod
     def get_upgrade_message(feature: str) -> str:
         """Get a formatted upgrade message for CLI output."""
         name = FEATURE_NAMES.get(feature, feature)
+        required_tier = FEATURE_TIERS.get(feature, PRO)
+
+        if required_tier == DEVELOPER:
+            tier_label = "Developer"
+            price = "$49/mo"
+        elif required_tier == PRO:
+            tier_label = "Pro"
+            price = "$149/mo"
+        elif required_tier == TEAM:
+            tier_label = "Team"
+            price = "$399/mo"
+        else:
+            tier_label = required_tier.capitalize()
+            price = "contact sales"
+
         return f"""
 ┌──────────────────────────────────────────────────────────────┐
-│  ⚡ {name} requires Sentinel Engine Pro                      
-│                                                              
-│  Upgrade to unlock:                                          
-│  • All 21 analyzers            • AI Audit Copilot           
-│  • Attack Graph Visualization  • Exploit PoC Generator      
-│  • Time-Travel Scanner         • Protocol Fingerprinting    
-│  • Branded HTML/SARIF Reports  • Solana Analyzer            
-│                                                              
-│  → https://sentinel-engine.io/pricing                       
-│  Set SENTINEL_PRO_LICENSE=your-key to activate              
+│  ⚡ {name} requires Sentinel Engine {tier_label}
+│
+│  Upgrade to {tier_label} ({price}) to unlock:
+│  • {name}
+│
+│  → https://app.sentinel-engine.io/pricing
+│  Set SENTINEL_PRO_LICENSE=your-key to activate
 └──────────────────────────────────────────────────────────────┘
 """
 
@@ -506,10 +587,13 @@ def require_pro(feature: str):
 
 
 def generate_license_key(
-    tier: str, email: str, expires: str, max_activations: int
+    tier: str, email: str, expires: str, max_activations: Optional[int] = None
 ) -> dict:
     """Generate a new license key entry for the licenses.json database."""
-    key = f"SE-{tier.upper()}-{secrets.token_hex(16)}"
+    prefix = TIER_PREFIXES.get(tier, f"SE-{tier.upper()}-")
+    if max_activations is None:
+        max_activations = TIER_DEFAULT_ACTIVATIONS.get(tier, 1)
+    key = f"{prefix}{secrets.token_hex(16)}"
     return {
         "key": key,
         "customer_email": email,
@@ -567,7 +651,7 @@ if __name__ == "__main__":
     )
     gen_parser.add_argument(
         "--tier", required=True,
-        choices=["pro", "enterprise"],
+        choices=["developer", "pro", "team", "enterprise"],
         help="License tier"
     )
     gen_parser.add_argument("--email", required=True, help="Customer email")
@@ -577,8 +661,8 @@ if __name__ == "__main__":
     gen_parser.add_argument(
         "--max-activations",
         type=int,
-        default=2,
-        help="Maximum number of machine activations",
+        default=None,
+        help="Maximum number of machine activations (default: per-tier)",
     )
     gen_parser.add_argument(
         "--save",

@@ -83,34 +83,52 @@ SECTION 3. PRO FEATURES COVERED
 This EULA governs the following Pro features of Sentinel Engine, which
 require a valid License Key for activation:
 
-  (a) AI Audit Copilot — RAG-based knowledge retrieval engine with
-      local embeddings and optional LLM integration for intelligent
-      vulnerability analysis and remediation guidance.
+  Developer Tier:
+  (a) Web Application — Access to the hosted web application at
+      app.sentinel-engine.io for up to 5 scans per month.
 
-  (b) Attack Graph Visualization — Interactive D3.js force-directed graph
-      rendering cross-contract attack paths and vulnerability chains.
-
-  (c) Exploit PoC Generator — Pattern-to-template mapping system that
-      generates working Foundry exploit proof-of-concept test cases.
-
-  (d) Time-Travel Git History Scanner — Git-based historical vulnerability
-      tracking across commit history with blame attribution and security
-      debt analysis.
-
-  (e) Protocol Fingerprinting — Protocol similarity detection against known
-      protocols (Uniswap, Compound, Aave, etc.) with inherited vulnerability
-      reporting.
-
-  (f) Solana Analyzer — 35 Rust/Anchor security pattern detectors, IDL
+  (b) Solana Analyzer — 35 Rust/Anchor security pattern detectors, IDL
       constraint validation, and CPI flow tracing for Solana programs.
 
-  (g) Branded HTML/SARIF Reports — Professional branded report generation
+  (c) Branded HTML/SARIF Reports — Professional branded report generation
       in HTML and SARIF 2.1.0 formats with risk scoring, severity badges,
       and remediation steps.
 
-  (h) Web Application — Access to the hosted web application at
-      app.sentinel-engine.io, including Pro panels for AI Copilot and
-      attack graph visualization.
+  Pro Tier (includes all Developer tier features):
+  (d) AI Audit Copilot — RAG-based knowledge retrieval engine with
+      local embeddings and optional LLM integration for intelligent
+      vulnerability analysis and remediation guidance.
+
+  (e) Attack Graph Visualization — Interactive D3.js force-directed graph
+      rendering cross-contract attack paths and vulnerability chains.
+
+  (f) Exploit PoC Generator — Pattern-to-template mapping system that
+      generates working Foundry exploit proof-of-concept test cases.
+
+  (g) Time-Travel Git History Scanner — Git-based historical vulnerability
+      tracking across commit history with blame attribution and security
+      debt analysis.
+
+  (h) Protocol Fingerprinting — Protocol similarity detection against known
+      protocols (Uniswap, Compound, Aave, etc.) with inherited vulnerability
+      reporting.
+
+  Team Tier (includes all Pro tier features):
+  (i) Multiple Seats — License key valid for up to 10 team members.
+
+  (j) Shared Workspace — Collaborative audit workspace with shared
+      configurations and report templates.
+
+  (k) API Access — Programmatic access to Sentinel Engine audit APIs
+      for CI/CD integration.
+
+  Enterprise Tier (includes all features):
+  (l) All Pro Features — Unlimited access to all Pro features.
+
+  (m) Unlimited Usage — No scan limits or activation restrictions.
+
+  (n) Custom Integrations — Tailored integrations and priority feature
+      development.
 
 
 ------------------------------------------------------------------------
@@ -160,12 +178,22 @@ SECTION 5. SUBSCRIPTION AND PAYMENT
 
 5.1  Subscription Tiers.
 
-     (a) Pro Tier: Available as a monthly or annual subscription. Pricing
-         is published at https://sentinel-engine.io/pricing and may be
-         updated by Licensor with thirty (30) days' prior notice.
+     (a) Developer Tier: $49/month or $490/year (2 months free).
+         Includes Web App access (5 scans/month), Solana Analyzer, and
+         Branded HTML/SARIF Reports. 1 machine activation.
 
-     (b) Enterprise Tier: Custom pricing and terms negotiated between
+     (b) Pro Tier: $149/month or $1,490/year (2 months free).
+         Includes all Developer tier features plus AI Audit Copilot,
+         Attack Graph Visualization, Exploit PoC Generator, Time-Travel
+         Scanner, and Protocol Fingerprinting. 3 machine activations.
+
+     (c) Team Tier: $399/month or $3,990/year (2 months free).
+         Includes all Pro tier features for up to 10 team members with
+         shared workspace and API access. 10 machine activations.
+
+     (d) Enterprise Tier: Custom pricing and terms negotiated between
          Licensor and Licensee, as documented in a separate agreement.
+         Includes all features with unlimited usage and activations.
 
 5.2  Auto-Renewal. Subscriptions auto-renew at the end of each billing
      period (monthly or annual) unless Licensee cancels before the renewal
@@ -188,9 +216,15 @@ SECTION 6. MACHINE ACTIVATION
 
 6.1  Activation Limit. Each License Key may be activated on up to the
      number of Machines specified by the max_activations value in the
-     Licensee's subscription. A Machine is uniquely identified by a hardware
-     fingerprint comprising hostname, MAC address, and operating system
-     identifiers.
+     Licensee's subscription tier:
+
+     (a) Developer Tier: 1 machine activation.
+     (b) Pro Tier: 3 machine activations.
+     (c) Team Tier: 10 machine activations.
+     (d) Enterprise Tier: Unlimited machine activations.
+
+     A Machine is uniquely identified by a hardware fingerprint comprising
+     hostname, MAC address, and operating system identifiers.
 
 6.2  Exceeding Activation Limit. If Licensee attempts to activate the
      License Key on a Machine that would exceed the max_activations limit,
