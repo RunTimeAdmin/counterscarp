@@ -6,7 +6,7 @@ import argparse
 import datetime
 from typing import List, Dict, Optional, Any
 
-from logger import get_logger
+from logger import get_logger, setup_logging
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
@@ -462,6 +462,17 @@ def main() -> None:
     Parses command-line arguments, runs all configured security checks,
     and generates comprehensive remediation reports.
     """
+    # Set up dual logging: console + timestamped log file
+    # This ensures scan metadata, errors, and summary stats are always
+    # persisted to a log file regardless of shell piping or redirection.
+    _log_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        f"sentinel_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    )
+    setup_logging(log_file=_log_file)
+    logger.info("Sentinel Engine scan initializing...")
+    logger.info("Log file: %s", _log_file)
+
     parser = argparse.ArgumentParser(description="Action-Oriented Security Engine")
     parser.add_argument("--target", required=True, help="Path to project root or .sol file")
     parser.add_argument(
@@ -561,13 +572,18 @@ def main() -> None:
         try:
             config = load_config(args.config)
             if config:
+                logger.info("Loaded config: %s v%s", config.engine.name, config.engine.version)
                 print(f"[*] Loaded config: {config.engine.name} v{config.engine.version}")
+                logger.info("Fail on: %s+ severity", config.engine.fail_on_severity)
                 print(f"    Fail on: {config.engine.fail_on_severity}+ severity")
                 if config.heuristics.disabled_rules:
+                    logger.info("Disabled heuristic rules: %d", len(config.heuristics.disabled_rules))
                     print(f"    Disabled heuristic rules: {len(config.heuristics.disabled_rules)}")
                 if config.suppressions:
+                    logger.info("Active suppressions: %d", len(config.suppressions))
                     print(f"    Active suppressions: {len(config.suppressions)}")
         except Exception as e:
+            logger.error("Error loading config: %s", e)
             print(f"[!] Error loading config: {e}")
             print("[*] Continuing with default settings...\n")
 
@@ -578,6 +594,9 @@ def main() -> None:
             plugin_mgr = PluginManager()
             plugin_count = plugin_mgr.discover_plugins(config.plugins.dirs)
             if plugin_count > 0:
+                logger.info("Plugins loaded: %d (%d analyzers, %d rule sets)",
+                            plugin_count, plugin_mgr.get_analyzer_count(),
+                            plugin_mgr.get_rule_plugin_count())
                 print(f"[*] Plugins loaded: {plugin_count} "
                       f"({plugin_mgr.get_analyzer_count()} analyzers, "
                       f"{plugin_mgr.get_rule_plugin_count()} rule sets)")
@@ -680,6 +699,8 @@ def main() -> None:
     print("\n" + "=" * 60)
     print(" [*] GENERATING REMEDIATION PLAN")
     print("=" * 60 + "\n")
+    logger.info("=== GENERATING REMEDIATION PLAN ===")
+    logger.info("Target: %s", args.target)
 
     # Initialize containers
     supply_issues: List[Dict] = []
@@ -694,34 +715,44 @@ def main() -> None:
 
     # [PHASE 1] Supply Chain
     print(">>> Assessing Supply Chain...")
+    logger.info("[PHASE 1] Assessing Supply Chain")
     if os.path.isdir(args.target):
         pkg_json = os.path.join(args.target, "package.json")
         if os.path.exists(pkg_json):
             try:
                 supply_issues = supply_chain_check.scan_package_json(pkg_json)
+                logger.info("Supply chain scan complete: %d issues found", len(supply_issues))
             except Exception as e:
                 logger.warning(f"Supply chain check failed for {pkg_json}: {e}")
                 supply_issues = []
+        else:
+            logger.info("No package.json found — skipping supply chain check")
+    else:
+        logger.info("Target is not a directory — skipping supply chain check")
 
     # [PHASE 2] Static Analysis (Slither)
     print("\n>>> Analyzing Code Patterns...")
+    logger.info("[PHASE 2] Running Static Analysis (Slither)")
     try:
         raw_slither = red_team_scan.run_slither(args.target)
         static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
+        logger.info("Slither analysis complete: %d issues found", len(static_issues))
     except SentinelAnalysisError as e:
-        logger.warning(f"Slither analysis failed: {e}")
+        logger.error("Slither analysis failed: %s", e)
         print(f"    [!] Slither analysis failed: {e}")
         static_issues = []
         raw_slither = None
-    except Exception:
-        # Fail silently for now; in production, log this.
+    except Exception as e:
+        logger.error("Slither analysis unexpected failure: %s", e)
         static_issues = []
         raw_slither = None
 
     # [PHASE 2B] Aderyn Static Analysis (optional)
     if args.aderyn and os.path.isdir(args.target):
         print("\n>>> Running Aderyn Static Analysis...")
+        logger.info("[PHASE 2B] Running Aderyn Static Analysis")
         if aderyn_wrapper is None:
+            logger.warning("Aderyn wrapper not available in this environment")
             print("[!] Aderyn wrapper not available in this environment.")
         else:
             try:
@@ -730,7 +761,9 @@ def main() -> None:
                 old_exit = _sys.exit
                 _sys.exit = lambda code=0: None
                 aderyn_results = aderyn_wrapper.run_aderyn(args.target)
-            except Exception:
+                logger.info("Aderyn analysis complete")
+            except Exception as e:
+                logger.error("Aderyn analysis failed: %s", e)
                 print("[!] Aderyn analysis failed; continuing without Aderyn results.")
                 aderyn_results = {"error": "Aderyn run failed"}
             finally:
@@ -742,16 +775,21 @@ def main() -> None:
     # [PHASE 3] Fuzzing (Foundry)
     if args.fuzz_contract:
         print("\n>>> Stress Testing Logic (Foundry)...")
+        logger.info("[PHASE 3] Running Foundry Fuzzing on %s", args.fuzz_contract)
         try:
             raw_fuzz = fuzz_wrapper.run_foundry_fuzz(args.fuzz_contract)
             fuzz_issues = fuzz_wrapper.parse_counterexamples(raw_fuzz)
-        except Exception:
+            logger.info("Foundry fuzzing complete: %d issues found", len(fuzz_issues))
+        except Exception as e:
+            logger.error("Foundry fuzzing failed: %s", e)
             fuzz_issues = []
 
     # [PHASE 3B] Medusa Fuzzing (optional)
     if args.medusa:
         print("\n>>> Running Medusa Fuzzing (coverage-guided)...")
+        logger.info("[PHASE 3B] Running Medusa Fuzzing")
         if medusa_wrapper is None:
+            logger.warning("Medusa wrapper not available in this environment")
             print("[!] Medusa wrapper not available in this environment.")
         else:
             medusa_target = args.target if os.path.isdir(args.target) else os.path.dirname(args.target)
@@ -763,7 +801,9 @@ def main() -> None:
                 medusa_results = medusa_wrapper.run_medusa_fuzz(
                     medusa_target, target_contract=args.fuzz_contract
                 )
-            except Exception:
+                logger.info("Medusa fuzzing complete")
+            except Exception as e:
+                logger.error("Medusa fuzzing failed: %s", e)
                 print("[!] Medusa fuzzing failed; continuing without Medusa results.")
                 medusa_results = {"error": "Medusa run failed"}
             finally:
@@ -774,6 +814,7 @@ def main() -> None:
 
     # [PHASE 4] Heuristic Scan
     print("\n>>> Running Heuristic Scan...")
+    logger.info("[PHASE 4] Running Heuristic Scan")
     try:
         heuristic_findings = heuristic_scanner.scan_target(
             args.target, config, plugin_mgr
@@ -791,13 +832,16 @@ def main() -> None:
                         "line_text": hf.line_text,
                     }
                 )
-    except Exception:
-        # Fail silently for now; in production, log this.
+        logger.info("Heuristic scan complete: %d findings (total), %d non-suppressed",
+                    len(heuristic_findings), len(heuristic_results))
+    except Exception as e:
+        logger.error("Heuristic scan failed: %s", e)
         heuristic_results = []
 
     # [PHASE 4C] Plugin Analyzers (optional)
     if plugin_mgr and plugin_mgr.get_analyzer_count() > 0:
         print("\n>>> Running Plugin Analyzers...")
+        logger.info("[PHASE 4C] Running Plugin Analyzers")
         for plugin in plugin_mgr.get_analyzers():
             try:
                 logger.info("Running plugin analyzer: %s", plugin.name)
@@ -824,6 +868,7 @@ def main() -> None:
         print(_license.get_upgrade_message(FINGERPRINT))
     elif args.fingerprint:
         print("\n>>> Running Protocol Fingerprint Scan...")
+        logger.info("[PHASE 4B] Running Protocol Fingerprint Scan")
         if FINGERPRINT_AVAILABLE:
             try:
                 # Get config values
@@ -850,6 +895,9 @@ def main() -> None:
                 )
 
                 if fingerprint_results:
+                    total_fp_matches = sum(len(r.get('matches', [])) for r in fingerprint_results)
+                    logger.info("Fingerprint scan complete: %d contracts with %d protocol matches",
+                                len(fingerprint_results), total_fp_matches)
                     print(f"    Found {len(fingerprint_results)} contract(s) with protocol matches")
                     for result in fingerprint_results:
                         matches = result.get('matches', [])
@@ -858,21 +906,26 @@ def main() -> None:
                         if risk:
                             print(f"      Risk Level: {risk.get('risk_level', 'N/A')}")
                 else:
+                    logger.info("No protocol matches found")
                     print("    No protocol matches found")
 
             except Exception as e:
-                logger.warning(f"Fingerprint scan failed: {e}")
+                logger.error("Fingerprint scan failed: %s", e)
                 print(f"[!] Fingerprint scan failed: {e}")
         else:
+            logger.warning("Fingerprint scanner not available")
             print("[!] Fingerprint scanner not available")
 
     # [PHASE 5] Symbolic Analysis (optional)
     if args.symbolic and os.path.isfile(args.target):
         print("\n>>> Running Symbolic Analysis (Mythril)...")
+        logger.info("[PHASE 5] Running Symbolic Analysis (Mythril)")
         try:
             raw_symbolic = symbolic_wrapper.run_mythril(args.target)
             symbolic_results = symbolic_wrapper.parse_issues(raw_symbolic)
-        except Exception:
+            logger.info("Symbolic analysis complete: %d issues found", len(symbolic_results))
+        except Exception as e:
+            logger.error("Symbolic analysis failed: %s", e)
             # In case Mythril or the CLI fails, don't crash the whole pipeline
             symbolic_results = []
 
@@ -881,26 +934,34 @@ def main() -> None:
         print(_license.get_upgrade_message(SOLANA))
     elif args.solana_root:
         print("\n>>> Running Solana Static Analysis...")
+        logger.info("[PHASE 6] Running Solana Static Analysis")
         if solana_analyzer is None:
+            logger.warning("solana_analyzer module not available")
             print("[!] solana_analyzer module not available in this environment.")
         else:
             try:
                 solana_results = solana_analyzer.analyze_solana_program(args.solana_root)
-            except Exception:
+                logger.info("Solana analysis complete")
+            except Exception as e:
+                logger.error("Solana analysis failed: %s", e)
                 print("[!] Solana analysis failed; continuing without Solana results.")
                 solana_results = {"error": "Solana analysis failed"}
 
     # [PHASE 7] Upgrade Diff Analysis (optional)
     if args.upgrade_old and args.upgrade_new:
         print("\n>>> Running Upgrade Diff Analyzer...")
+        logger.info("[PHASE 7] Running Upgrade Diff Analyzer")
         if upgrade_diff is None:
+            logger.warning("upgrade_diff module not available")
             print("[!] upgrade_diff module not available in this environment.")
         else:
             try:
                 upgrade_results = upgrade_diff.analyze_upgrade(
                     args.upgrade_old, args.upgrade_new
                 )
-            except Exception:
+                logger.info("Upgrade diff analysis complete")
+            except Exception as e:
+                logger.error("Upgrade diff analysis failed: %s", e)
                 print("[!] Upgrade diff analysis failed; continuing without upgrade results.")
                 upgrade_results = {"error": "Upgrade diff analysis failed"}
 
@@ -909,6 +970,7 @@ def main() -> None:
         print(_license.get_upgrade_message(AI_COPILOT))
     elif args.rag and RAG_AVAILABLE:
         print("\n>>> Enriching Findings with RAG Context...")
+        logger.info("[PHASE 7.5] Running RAG Enrichment")
         try:
             # Get RAG config
             rag_config = {}
@@ -929,6 +991,7 @@ def main() -> None:
                         heuristic_results
                     )
                     print(f"    Enriched {len(heuristic_results)} heuristic findings")
+                    logger.info("Enriched %d heuristic findings", len(heuristic_results))
                 
                 # Enrich static issues
                 if static_issues:
@@ -936,20 +999,25 @@ def main() -> None:
                         static_issues
                     )
                     print(f"    Enriched {len(static_issues)} static analysis findings")
+                    logger.info("Enriched %d static analysis findings", len(static_issues))
                 
                 print("    [+] RAG enrichment complete")
+                logger.info("RAG enrichment complete")
             else:
                 print("    [!] No RAG index found. Build with: --build-rag-index")
+                logger.warning("No RAG index found — cannot enrich findings")
                 
         except Exception as e:
             logger.warning(f"RAG enrichment failed: {e}")
             print(f"    [!] RAG enrichment failed: {e}")
     elif args.rag and not RAG_AVAILABLE:
         print("\n>>> RAG Enrichment Requested...")
+        logger.warning("RAG engine not available — cannot enrich findings")
         print("    [!] RAG engine not available. Install: pip install sentence-transformers numpy")
 
     # [PHASE 8] Action Report
     print("\n>>> Writing Action Plan...")
+    logger.info("[PHASE 8] Writing Action Plan")
     report_file = generate_markdown_report(
         "Target Protocol",
         static_issues,
@@ -967,10 +1035,12 @@ def main() -> None:
     print("\n" + "=" * 60)
     print(f" [OK] ACTION PLAN READY: {os.path.abspath(report_file)}")
     print("=" * 60 + "\n")
+    logger.info("Action Plan ready: %s", os.path.abspath(report_file))
 
     # [PHASE 9] Professional Report (Optional)
     if args.report and REPORT_GENERATOR_AVAILABLE:
         print("\n>>> Generating Professional Audit Report...")
+        logger.info("[PHASE 9] Generating Professional Audit Report")
         
         # Aggregate findings from all sources
         from report_generator import Finding
@@ -1059,19 +1129,47 @@ def main() -> None:
 
         print(f"\n[*] Professional Report Generated:")
         print(f"   Markdown: {os.path.abspath(md_path)}")
+        logger.info("Professional Markdown report: %s", os.path.abspath(md_path))
 
         # HTML/SARIF reports require Pro license
         if _license.check_pro_feature(BRANDED_REPORTS):
             html_file = f"audit_report_{datetime.date.today()}.html"
             html_path = generate_html_report(audit_report, html_file)
             print(f"   HTML: {os.path.abspath(html_path)}")
+            logger.info("Professional HTML report: %s", os.path.abspath(html_path))
         else:
             print(_license.get_upgrade_message(BRANDED_REPORTS))
         print(f"\n   Risk Score: {audit_report.risk_score}/100")
         print(f"   Status: {audit_report.pass_fail}")
         print(f"   Findings: {len(all_findings)} total")
+        logger.info("Audit Summary — Risk Score: %d/100, Status: %s, Findings: %d",
+                    audit_report.risk_score, audit_report.pass_fail, len(all_findings))
+
+        # Log severity breakdown
+        severity_counts: Dict[str, int] = {}
+        for f in all_findings:
+            sev = f.severity if hasattr(f, 'severity') else 'UNKNOWN'
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        logger.info("Findings by severity: %s", severity_counts)
     elif args.report and not REPORT_GENERATOR_AVAILABLE:
+        logger.error("Report generation requested but report_generator.py not available")
         print("[!] Report generation requested but report_generator.py not available")
+
+    # Final log file reference — always printed so users know where to find results
+    logger.info("Scan complete. Log file: %s", _log_file)
+    print(f"\n{'=' * 60}")
+    print(f" Log file: {_log_file}")
+    print(f"{'=' * 60}")
+
+    # Add log file reference to the ACTION_PLAN and audit_report files
+    for _report_name in [report_file, f"audit_report_{datetime.date.today()}.md"]:
+        _report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _report_name)
+        if os.path.exists(_report_path):
+            try:
+                with open(_report_path, "a", encoding="utf-8") as _rf:
+                    _rf.write(f"\n---\n\n**Scan Log File:** `{_log_file}`\n")
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

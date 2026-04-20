@@ -125,6 +125,121 @@ def _resolve_slither_bin() -> str:
     return "slither"
 
 
+def _slither_per_file_fallback(
+    target: str,
+    project_root: str,
+    slither_bin: str,
+    original_cmd: List[str],
+) -> Optional[Dict[str, Any]]:
+    """Run Slither on individual .sol files using solc.
+
+    When Foundry-based Slither analysis fails (e.g., due to
+    tload/unsupported Yul instructions in dependencies),
+    fall back to running Slither on each .sol file in the
+    target directory individually using solc with remappings.
+
+    Args:
+        target: Original target path (directory of .sol files).
+        project_root: Foundry project root directory.
+        slither_bin: Path to the Slither binary.
+        original_cmd: The original Slither command (for remaps).
+
+    Returns:
+        Aggregated Slither JSON output, or None on failure.
+    """
+    import glob as glob_mod
+
+    target_path = Path(target).resolve()
+    if not target_path.is_dir():
+        return None
+
+    sol_files = sorted(glob_mod.glob(str(target_path / "*.sol")))
+    if not sol_files:
+        print("    [!] No .sol files found for per-file fallback")
+        return None
+
+    # Extract remappings from original command
+    remaps = None
+    if "--solc-remaps" in original_cmd:
+        idx = original_cmd.index("--solc-remaps")
+        if idx + 1 < len(original_cmd):
+            remaps = original_cmd[idx + 1]
+
+    # Make target relative to project root
+    root = Path(project_root).resolve()
+
+    all_detectors: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    success_count = 0
+    fail_count = 0
+
+    for sol_file in sol_files:
+        sol_name = Path(sol_file).name
+        # Build relative path from project root
+        try:
+            rel_file = str(Path(sol_file).relative_to(root))
+        except ValueError:
+            rel_file = sol_name
+
+        file_cmd = [
+            slither_bin, rel_file,
+            "--json", "-",
+            "--compile-force-framework", "solc",
+        ]
+        if remaps:
+            file_cmd.extend(["--solc-remaps", remaps])
+
+        try:
+            result = subprocess.run(
+                file_cmd,
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stdout
+            json_start = output.find("{")
+            if json_start == -1:
+                fail_count += 1
+                continue
+
+            data = json.loads(output[json_start:])
+            if data.get("success", True):
+                success_count += 1
+                detectors = data.get("results", {}).get("detectors", [])
+                all_detectors.extend(detectors)
+            else:
+                fail_count += 1
+                err = data.get("error", "unknown")
+                errors.append(f"{sol_name}: {err}")
+        except Exception as exc:
+            fail_count += 1
+            errors.append(f"{sol_name}: {exc}")
+
+    print(
+        f"    [*] Per-file solc results:"
+        f" {success_count} succeeded, {fail_count} failed,"
+        f" {len(all_detectors)} total detectors"
+    )
+    if errors:
+        for e in errors[:3]:
+            print(f"    [!]   Error: {e}")
+        if len(errors) > 3:
+            print(f"    [!]   ... and {len(errors) - 3} more")
+
+    if not all_detectors and fail_count > 0:
+        return None
+
+    # Return in standard Slither JSON format
+    return {
+        "success": True,
+        "error": None,
+        "results": {
+            "detectors": all_detectors,
+        },
+    }
+
+
 def run_slither(target: str) -> Dict[str, Any]:
     """Runs Slither via subprocess and captures JSON output.
 
@@ -206,8 +321,20 @@ def run_slither(target: str) -> Dict[str, Any]:
     )
     if is_foundry:
         if forge_available:
-            cmd.append("--compile-force-framework")
-            cmd.append("foundry")
+            # Strategy: Use Foundry framework with project root as
+            # target and --foundry-ignore-compile (forge already
+            # built). This avoids compile_all iterating over .sol
+            # files (which causes NotADirectoryError) and the
+            # overhead of re-running forge build.
+            cmd[1] = "."
+            cmd.extend([
+                "--compile-force-framework", "foundry",
+                "--foundry-ignore-compile",
+            ])
+            print(
+                "[*] Foundry mode: project root + ignore-compile"
+                " (using existing forge build artifacts)"
+            )
         else:
             # Force solc to prevent crytic-compile from
             # auto-detecting foundry.toml and invoking forge
@@ -280,7 +407,45 @@ def run_slither(target: str) -> Dict[str, Any]:
             )
 
         json_data = output[json_start:]
-        return json.loads(json_data)
+        parsed = json.loads(json_data)
+
+        # Handle "success: false" from Slither (e.g., tload
+        # or other IR analysis errors). Try fallback to
+        # per-file solc analysis if Foundry mode failed.
+        if not parsed.get("success", True):
+            error_msg = parsed.get("error", "unknown")
+            print(
+                f"    [!] Slither analysis partial failure:"
+                f" {error_msg}"
+            )
+
+            # If we were in Foundry mode, try per-file solc
+            # as fallback for the original target directory
+            if is_foundry and forge_available:
+                print(
+                    "    [*] Falling back to per-file solc"
+                    " analysis for target directory"
+                )
+                fallback = _slither_per_file_fallback(
+                    target, project_root, slither_bin, cmd
+                )
+                if fallback is not None:
+                    return fallback
+
+            # If no fallback worked, return the partial
+            # result (may have 0 detectors but is valid JSON)
+            if parsed.get("results", {}).get("detectors"):
+                print(
+                    f"    [*] Returning {len(parsed['results']['detectors'])}"
+                    f" detectors from partial Slither run"
+                )
+            else:
+                print(
+                    "    [!] No detectors from Slither"
+                    " (analysis error prevented detection)"
+                )
+
+        return parsed
 
     except FileNotFoundError as e:
         logger.error("Slither command not found")
