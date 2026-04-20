@@ -148,7 +148,7 @@ python orchestrator.py --target ./contracts --config sentinel-pr.toml
 - **Code Snippets** with exact file:line locations
 - **HTML + Markdown** formats for clients and GitHub
 
-### **Zero False Positives**
+### **Noise-Free Results**
 - **Configurable suppressions** via `sentinel.toml`
 - **Per-rule severity overrides** (e.g., downgrade timestamp usage for timelocks)
 - **Expiry-based accepted risks** ("This is safe until 2026-12-31")
