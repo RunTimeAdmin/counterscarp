@@ -1,0 +1,458 @@
+SENTINEL ENGINE PRO
+END USER LICENSE AGREEMENT
+
+Version 1.0
+Effective Date: April 19, 2026
+
+IMPORTANT — READ CAREFULLY
+
+This End User License Agreement ("EULA") is a legal agreement between you ("Licensee" or "you") and Sentinel Engine ("Licensor" or "we") for the Pro features of the Sentinel Engine software. By activating or using any Pro feature, you acknowledge that you have read this EULA, understand it, and agree to be bound by its terms. If you do not agree with the terms of this EULA, you may not activate or use any Pro feature.
+
+The Community Edition of Sentinel Engine, which does not require a license key, is governed by the MIT License (see the LICENSE file). This EULA applies exclusively to the Pro-gated features and functionality described in Section 3.
+
+
+------------------------------------------------------------------------
+SECTION 1. DEFINITIONS
+------------------------------------------------------------------------
+
+1.1  "Software" means the Sentinel Engine Pro features — the proprietary,
+     license-gated functionality within the sentinel-engine package that
+     requires a valid License Key to activate, as described in Section 3.
+
+1.2  "Licensor" means Sentinel Engine, the entity that develops, owns, and
+     distributes the Software.
+
+1.3  "Licensee" means the individual or organization that has purchased or
+     otherwise obtained a valid License Key and agrees to be bound by this
+     EULA.
+
+1.4  "License Key" means the unique activation credential
+     (SENTINEL_PRO_LICENSE) issued by Licensor to Licensee, which enables
+     access to the Pro features of the Software.
+
+1.5  "Machine" means a unique computing environment identified by a machine
+     fingerprint derived from hardware attributes including, but not limited
+     to, hostname, MAC address, and operating system identifiers.
+
+1.6  "max_activations" means the maximum number of Machines on which a
+     single License Key may be simultaneously activated, as specified in the
+     Licensee's subscription plan.
+
+1.7  "expires_at" means the date and time at which the Licensee's
+     subscription period ends and the License Key ceases to be valid unless
+     renewed.
+
+1.8  "Community Edition" means the free, open-source components of
+     sentinel-engine that are governed by the MIT License and do not require
+     a License Key.
+
+
+------------------------------------------------------------------------
+SECTION 2. GRANT OF LICENSE
+------------------------------------------------------------------------
+
+2.1  Grant. Subject to the terms and conditions of this EULA and payment of
+     all applicable fees, Licensor hereby grants to Licensee a
+     non-exclusive, non-transferable, revocable license to use the Software
+     solely for Licensee's own internal business purposes during the
+     subscription period.
+
+2.2  Scope. The license is limited to the number of Machines specified by
+     the max_activations value associated with the Licensee's subscription
+     plan. Each simultaneous activation on a Machine counts toward this
+     limit.
+
+2.3  Personal to Licensee. This license is personal to Licensee and may not
+     be sublicensed, assigned, shared, distributed, or otherwise transferred
+     to any third party without the prior written consent of Licensor.
+
+2.4  Subscription Period. The license is valid only for the subscription
+     period as defined by the expires_at date associated with the License
+     Key. Upon expiration, all rights granted under this EULA terminate
+     automatically unless the subscription is renewed.
+
+2.5  Reservation of Rights. All rights not expressly granted in this EULA
+     are reserved by Licensor. Licensee receives no implied licenses or
+     rights by estoppel or otherwise.
+
+
+------------------------------------------------------------------------
+SECTION 3. PRO FEATURES COVERED
+------------------------------------------------------------------------
+
+This EULA governs the following Pro features of Sentinel Engine, which
+require a valid License Key for activation:
+
+  (a) AI Audit Copilot — RAG-based knowledge retrieval engine with
+      local embeddings and optional LLM integration for intelligent
+      vulnerability analysis and remediation guidance.
+
+  (b) Attack Graph Visualization — Interactive D3.js force-directed graph
+      rendering cross-contract attack paths and vulnerability chains.
+
+  (c) Exploit PoC Generator — Pattern-to-template mapping system that
+      generates working Foundry exploit proof-of-concept test cases.
+
+  (d) Time-Travel Git History Scanner — Git-based historical vulnerability
+      tracking across commit history with blame attribution and security
+      debt analysis.
+
+  (e) Protocol Fingerprinting — Protocol similarity detection against known
+      protocols (Uniswap, Compound, Aave, etc.) with inherited vulnerability
+      reporting.
+
+  (f) Solana Analyzer — 35 Rust/Anchor security pattern detectors, IDL
+      constraint validation, and CPI flow tracing for Solana programs.
+
+  (g) Branded HTML/SARIF Reports — Professional branded report generation
+      in HTML and SARIF 2.1.0 formats with risk scoring, severity badges,
+      and remediation steps.
+
+  (h) Web Application — Access to the hosted web application at
+      app.sentinel-engine.io, including Pro panels for AI Copilot and
+      attack graph visualization.
+
+
+------------------------------------------------------------------------
+SECTION 4. RESTRICTIONS
+------------------------------------------------------------------------
+
+Licensee shall not:
+
+4.1  Share, redistribute, publish, disclose, or otherwise make available
+     any License Key to any third party.
+
+4.2  Resell, sublicense, lease, lend, or otherwise transfer any License Key
+     or access to Pro features.
+
+4.3  Circumvent, disable, bypass, or interfere with the license validation
+     system, including but not limited to machine fingerprinting, server-side
+     validation checks, HMAC-signed cache verification, and offline fallback
+     mechanisms.
+
+4.4  Reverse engineer, decompile, disassemble, or otherwise attempt to
+     derive the source code, algorithms, or logic of the license validation
+     system or any Pro feature.
+
+4.5  Use a single License Key across more Machines than authorized by the
+     max_activations limit for the Licensee's subscription plan.
+
+4.6  Use automated tools, scripts, or other means to generate, discover,
+     guess, or brute-force License Keys or circumvent the license
+     enforcement mechanism.
+
+4.7  Modify, alter, or create derivative works of the license validation
+     system or any Pro feature for the purpose of circumventing license
+     enforcement.
+
+4.8  Use the Software in any manner that violates applicable law or
+     regulation.
+
+4.9  License Keys found to be shared, distributed, or used in violation of
+     this Section 4 will be immediately revoked without refund. Licensor
+     reserves the right to pursue additional legal remedies as permitted by
+     law.
+
+
+------------------------------------------------------------------------
+SECTION 5. SUBSCRIPTION AND PAYMENT
+------------------------------------------------------------------------
+
+5.1  Subscription Tiers.
+
+     (a) Pro Tier: Available as a monthly or annual subscription. Pricing
+         is published at https://sentinel-engine.io/pricing and may be
+         updated by Licensor with thirty (30) days' prior notice.
+
+     (b) Enterprise Tier: Custom pricing and terms negotiated between
+         Licensor and Licensee, as documented in a separate agreement.
+
+5.2  Auto-Renewal. Subscriptions auto-renew at the end of each billing
+     period (monthly or annual) unless Licensee cancels before the renewal
+     date. Cancellation may be performed through the Licensor's website or
+     by contacting help@protocol14019.com.
+
+5.3  Refund Policy. Licensee is entitled to a full refund within fourteen
+     (14) calendar days of the initial purchase of a Pro subscription. This
+     money-back guarantee applies only to the first purchase and does not
+     apply to renewals. After the 14-day period, all fees are non-refundable.
+
+5.4  Payment. Licensee must provide valid payment information and authorize
+     Licensor to charge the applicable fees. Failure to pay may result in
+     suspension or termination of the license as described in Section 11.
+
+
+------------------------------------------------------------------------
+SECTION 6. MACHINE ACTIVATION
+------------------------------------------------------------------------
+
+6.1  Activation Limit. Each License Key may be activated on up to the
+     number of Machines specified by the max_activations value in the
+     Licensee's subscription. A Machine is uniquely identified by a hardware
+     fingerprint comprising hostname, MAC address, and operating system
+     identifiers.
+
+6.2  Exceeding Activation Limit. If Licensee attempts to activate the
+     License Key on a Machine that would exceed the max_activations limit,
+     the activation will be denied. Licensee must either deactivate an
+     existing Machine or upgrade the subscription plan to increase the
+     activation limit.
+
+6.3  Deactivation. Licensee may deactivate a Machine by contacting
+     help@protocol14019.com or through the Licensor's website. Deactivation
+     frees an activation slot for use on another Machine.
+
+6.4  Abuse Detection. Licensor reserves the right to revoke activations
+     and, in cases of sustained abuse, revoke the License Key entirely if
+     activation patterns indicate unauthorized sharing, redistribution, or
+     other violations of this EULA.
+
+6.5  Re-Validation. Licensor may periodically re-validate active
+     activations to confirm continued compliance with the terms of this
+     EULA. Licensee consents to such re-validation as a condition of use.
+
+
+------------------------------------------------------------------------
+SECTION 7. DATA COLLECTION
+------------------------------------------------------------------------
+
+7.1  Data Transmitted. During license validation, the Software transmits the
+     following data to Licensor's validation server:
+
+     (a) License Key value
+     (b) Machine fingerprint (hostname, MAC address, operating system)
+     (c) Product version
+     (d) Timestamp of the validation request
+
+7.2  Data Not Collected. The license validation process does NOT transmit:
+     source code, audit results, contract files, vulnerability findings,
+     or any personal data beyond the Machine fingerprint.
+
+7.3  Purpose. Data collected under this Section is used solely for license
+     enforcement, including verifying activation limits, detecting abuse,
+     and ensuring compliance with this EULA.
+
+7.4  Retention. Licensor will retain validation data only for as long as
+     reasonably necessary for license enforcement purposes and in accordance
+     with applicable data protection laws.
+
+7.5  Consent. By using the Software, Licensee consents to the data
+     collection described in this Section.
+
+
+------------------------------------------------------------------------
+SECTION 8. INTELLECTUAL PROPERTY
+------------------------------------------------------------------------
+
+8.1  Ownership. The Software, including all Pro features, user interfaces,
+     algorithms, documentation, and associated intellectual property, is and
+     shall remain the exclusive property of Licensor. No ownership rights are
+     transferred to Licensee under this EULA.
+
+8.2  Community Edition. The Community Edition components of sentinel-engine
+     are governed by the MIT License as set forth in the LICENSE file. This
+     EULA does not modify, restrict, or supersede the rights granted under
+     the MIT License for Community Edition components.
+
+8.3  Scope of EULA. This EULA applies only to the Pro-gated features and
+     functionality described in Section 3. Use of Community Edition features
+     without a License Key remains governed by the MIT License.
+
+8.4  Feedback. Licensee may provide suggestions, feedback, or ideas
+     regarding the Software. Licensor is free to use such feedback without
+     restriction or obligation to Licensee.
+
+
+------------------------------------------------------------------------
+SECTION 9. WARRANTY DISCLAIMER
+------------------------------------------------------------------------
+
+9.1  AS IS. THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT
+     WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY.
+
+9.2  No Implied Warranties. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE
+     LAW, LICENSOR DISCLAIMS ALL IMPLIED WARRANTIES, INCLUDING BUT NOT
+     LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+     PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+9.3  No Guarantee of Results. The Software is a security analysis tool.
+     Licensor does not guarantee that the Software will identify all
+     vulnerabilities, security issues, or defects in any smart contract or
+     codebase. The Software is not a substitute for a professional security
+     audit conducted by qualified security experts.
+
+9.4  No Guarantee of Accuracy. Findings, reports, and analyses produced by
+     the Software may contain false positives or false negatives. Licensee
+     is responsible for independently verifying all results before relying
+     on them.
+
+9.5  Third-Party Components. The Software integrates with and depends on
+     third-party tools and services (including but not limited to Slither,
+     Aderyn, Medusa, Mythril, and Foundry). Licensor makes no warranty
+     regarding the availability, accuracy, or performance of such
+     third-party components.
+
+
+------------------------------------------------------------------------
+SECTION 10. LIMITATION OF LIABILITY
+------------------------------------------------------------------------
+
+10.1 No Consequential Damages. TO THE MAXIMUM EXTENT PERMITTED BY
+     APPLICABLE LAW, IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY INDIRECT,
+     INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT
+     NOT LIMITED TO LOSS OF PROFITS, DATA, BUSINESS OPPORTUNITY, OR
+     GOODWILL, ARISING OUT OF OR IN CONNECTION WITH THIS EULA OR THE USE OF
+     THE SOFTWARE, REGARDLESS OF THE CAUSE OF ACTION OR THE THEORY OF
+     LIABILITY.
+
+10.2 Cap on Liability. LICENSOR'S TOTAL AGGREGATE LIABILITY UNDER THIS
+     EULA SHALL NOT EXCEED THE TOTAL FEES PAID BY LICENSEE TO LICENSOR IN
+     THE TWELVE (12) MONTHS IMMEDIATELY PRECEDING THE EVENT GIVING RISE TO
+     THE CLAIM.
+
+10.3 Smart Contract and Financial Losses. LICENSOR SHALL NOT BE LIABLE FOR
+     ANY DAMAGES ARISING FROM SMART CONTRACT EXPLOITS, FINANCIAL LOSSES,
+     SECURITY BREACHES, OR ANY OTHER HARM RESULTING FROM THE DEPLOYMENT OR
+     USE OF CODE ANALYZED BY THE SOFTWARE. THE SOFTWARE IS A DIAGNOSTIC
+     TOOL, NOT INSURANCE.
+
+10.4 Basis of Bargain. The limitations and disclaimers in this Section 10
+     are fundamental elements of the basis of the bargain between Licensor
+     and Licensee. Licensor would not provide the Software without such
+     limitations.
+
+
+------------------------------------------------------------------------
+SECTION 11. TERMINATION
+------------------------------------------------------------------------
+
+11.1 Termination for Breach. Licensor may terminate this EULA and revoke
+     the License Key if Licensee breaches any material term of this EULA
+     and fails to cure such breach within fifteen (15) calendar days after
+     receiving written notice from Licensor.
+
+11.2 Termination for Non-Payment. If Licensee fails to pay any applicable
+     fees when due, Licensor may suspend the License Key after a grace
+     period of seven (7) calendar days. If payment is not received within
+     thirty (30) calendar days of the due date, Licensor may terminate this
+     EULA and revoke the License Key.
+
+11.3 Immediate Revocation. Licensor may immediately revoke any License Key
+     that is found to be shared, redistributed, or used in violation of
+     Section 4, without prior notice and without refund.
+
+11.4 Effect of Termination. Upon termination of this EULA for any reason:
+
+     (a) All rights granted to Licensee under this EULA cease immediately.
+     (b) Licensee must cease all use of Pro features.
+     (c) The Software will revert to the Community Edition (free tier).
+         The sentinel-engine package continues to function, but Pro features
+         will display an upgrade prompt instead of executing.
+     (d) Sections 1, 4, 8, 9, 10, 11.4, 12, and 13 shall survive
+         termination.
+
+11.5 No Refund on Termination. Except as provided in Section 5.3, Licensee
+     is not entitled to any refund upon termination of this EULA.
+
+
+------------------------------------------------------------------------
+SECTION 12. GOVERNING LAW AND DISPUTE RESOLUTION
+------------------------------------------------------------------------
+
+12.1 Governing Law. This EULA shall be governed by and construed in
+     accordance with the laws of the State of Texas, United States, without
+     regard to its conflict of law principles.
+
+12.2 Arbitration. Any dispute, claim, or controversy arising out of or
+     relating to this EULA, including the breach, termination, enforcement,
+     interpretation, or validity thereof, shall be resolved by binding
+     arbitration administered under the rules of the American Arbitration
+     Association (AAA). The arbitration shall be conducted in Austin, Texas,
+     or such other location as the parties may agree.
+
+12.3 injunctive Relief. Notwithstanding Section 12.2, Licensor may seek
+     injunctive or other equitable relief in any court of competent
+     jurisdiction for breaches of Section 4 (Restrictions) or Section 8
+     (Intellectual Property) without the requirement to post a bond.
+
+12.4 Waiver of Class Actions. TO THE MAXIMUM EXTENT PERMITTED BY
+     APPLICABLE LAW, EACH PARTY AGREES THAT ANY DISPUTE RESOLUTION
+     PROCEEDINGS WILL BE CONDUCTED ONLY ON AN INDIVIDUAL BASIS AND NOT IN
+     A CLASS, CONSOLIDATED, OR REPRESENTATIVE ACTION.
+
+
+------------------------------------------------------------------------
+SECTION 13. MODIFICATIONS
+------------------------------------------------------------------------
+
+13.1 Right to Modify. Licensor reserves the right to modify or update this
+     EULA at any time. Material changes will be communicated to Licensee
+     with at least thirty (30) calendar days' prior notice via email (to the
+     address associated with the Licensee's account) or through a
+     notification within the Software.
+
+13.2 Acceptance of Modifications. Continued use of the Software after the
+     effective date of any modification to this EULA constitutes Licensee's
+     acceptance of such modifications.
+
+13.3 Rejection of Modifications. If Licensee does not agree with a modified
+     EULA, Licensee may terminate this EULA by discontinuing use of the
+     Software and requesting a pro-rata refund for the unused portion of the
+     current subscription period by contacting help@protocol14019.com within
+     thirty (30) calendar days of the modification notice.
+
+
+------------------------------------------------------------------------
+SECTION 14. GENERAL PROVISIONS
+------------------------------------------------------------------------
+
+14.1 Entire Agreement. This EULA, together with any applicable subscription
+     agreement, constitutes the entire agreement between Licensor and
+     Licensee with respect to the Software and supersedes all prior or
+     contemporaneous understandings, agreements, representations, and
+     warranties.
+
+14.2 Severability. If any provision of this EULA is held to be invalid or
+     unenforceable, the remaining provisions shall remain in full force and
+     effect. The invalid or unenforceable provision shall be modified to the
+     minimum extent necessary to make it valid and enforceable while
+     preserving the intent of the original provision.
+
+14.3 No Waiver. The failure of Licensor to enforce any right or provision
+     of this EULA shall not constitute a waiver of such right or provision.
+     Any waiver of any provision of this EULA must be in writing and signed
+     by Licensor to be effective.
+
+14.4 Assignment. Licensee may not assign or transfer this EULA or any
+     rights or obligations hereunder without the prior written consent of
+     Licensor. Licensor may assign this EULA to any successor or affiliate
+     without Licensee's consent.
+
+14.5 Notices. All notices required or permitted under this EULA shall be in
+     writing and delivered via email to the address associated with the
+     Licensee's account or as otherwise specified in Section 14.7.
+
+14.6 Force Majeure. Licensor shall not be liable for any failure or delay
+     in performing its obligations under this EULA to the extent that such
+     failure or delay results from circumstances beyond Licensor's
+     reasonable control, including but not limited to acts of God, natural
+     disasters, war, terrorism, riots, embargoes, acts of civil or military
+     authorities, fire, floods, accidents, strikes, or shortages of
+     transportation, facilities, fuel, energy, labor, or materials.
+
+14.7 Contact Information. For questions, notices, or requests relating to
+     this EULA, please contact:
+
+     Sentinel Engine
+     Email: help@protocol14019.com
+     Website: https://sentinel-engine.io
+
+
+------------------------------------------------------------------------
+
+By activating or using any Pro feature of Sentinel Engine, you acknowledge
+that you have read, understood, and agree to be bound by the terms and
+conditions of this End User License Agreement.
+
+Sentinel Engine
+Version 1.0 — April 19, 2026

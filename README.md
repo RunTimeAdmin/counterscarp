@@ -1294,9 +1294,8 @@ HeuristicRule(
 
 ## 📄 **License**
 
-**MIT License** - Free for commercial and personal use.
-
-See LICENSE for details.
+- **Community features:** MIT License (see [LICENSE](LICENSE))
+- **Pro features:** Commercial License (see [LICENSE-PRO](LICENSE-PRO))
 
 ---
 
