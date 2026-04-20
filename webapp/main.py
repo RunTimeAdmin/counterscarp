@@ -606,6 +606,16 @@ async def pricing_page(request: Request):
         },
     )
 
+
+@app.get("/privacy")
+async def privacy_page(request: Request):
+    return templates.TemplateResponse(request, "privacy.html", context={})
+
+
+@app.get("/terms")
+async def terms_page(request: Request):
+    return templates.TemplateResponse(request, "terms.html", context={})
+
 @app.post("/checkout/create-session")
 async def create_checkout(request: Request):
     """Create a Stripe Checkout Session and redirect."""

@@ -266,7 +266,7 @@ Sentinel Engine uses TOML configuration files. Below are all available sections:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `name` | string | "Sentinel Security Engine" | Engine name |
-| `version` | string | "2.3.0" | Engine version |
+| `version` | string | "3.0.0" | Engine version |
 | `fail_on_severity` | string | "HIGH" | Minimum severity to fail CI (CRITICAL, HIGH, MEDIUM, LOW, INFO) |
 | `max_findings` | int | 0 | Maximum findings before stopping (0 = unlimited) |
 
@@ -959,12 +959,6 @@ sentinel-engine/
 ├── Dockerfile                  # 🐳 Single-command deployment
 ├── docker-compose.yml          # ⚡ Easy orchestration
 ├── .dockerignore               # Image optimization
-│
-└── [Design Documents]
-    ├── Pragmatic Security Engine.txt
-    ├── Action-Oriented Orchestrator.txt
-    ├── God Mode Matrix.txt
-    └── Directions for tools.txt
 ```
 
 ---
@@ -1072,7 +1066,7 @@ python solana_intel.py programs/token/lib.rs
 - **Slither/Mythril optional** - GUI gracefully degrades if not installed
 - **False positives** - Heuristic patterns may flag safe code (review manually)
 - **Liar Detector** - Relies on comment keywords (can miss context-specific security assumptions)
-- **Solana support** - Threat intel only (no static analysis for Rust yet)
+- **Solana support** — Available with 35 security rules and IDL validation
 - **Watchtower** - Provides Forta templates; manual deployment required
 
 ---
@@ -1085,16 +1079,8 @@ python solana_intel.py programs/token/lib.rs
 - **[Web App Guide](docs/WEB_APP_GUIDE.md)** - Web UI features and API
 - **[Deployment](docs/DEPLOYMENT.md)** - Production server setup
 
-### **Design Philosophy**
-Read [Pragmatic Security Engine.txt](./Pragmatic%20Security%20Engine.txt) for the original vision:
-- Action-oriented (not academic)
-- Noise filtering (only show what matters)
-- Remediation-focused (not just detection)
-
 ### **Module Details**
-- [Action-Oriented Orchestrator.txt](./Action-Oriented%20Orchestrator.txt) - CLI pipeline design
-- [God Mode Matrix.txt](./God%20Mode%20Matrix.txt) - Access control analysis methodology
-- [Directions for tools.txt](./Directions%20for%20tools.txt) - Module integration guide
+See the source code for detailed module documentation.
 
 ---
 

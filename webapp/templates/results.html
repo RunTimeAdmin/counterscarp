@@ -156,23 +156,31 @@
                 <span class="icon">&#128196;</span> HTML Report
             </a>
             {% else %}
-            <a href="https://sentinel-engine.io/pricing" class="btn-download btn-pro-locked">
+            <a href="/pricing" class="btn-download btn-pro-locked">
                 <span class="icon">&#128196;</span> HTML Report <span class="pro-badge">PRO</span>
             </a>
             {% endif %}
             <a href="/results/{{ audit_id }}/report/md" class="btn-download">
                 <span class="icon">&#128220;</span> Markdown
             </a>
+            {% if license_tier == 'pro' or license_tier == 'enterprise' %}
             <a href="/results/{{ audit_id }}/report/sarif" class="btn-download">
                 <span class="icon">&#128190;</span> SARIF
             </a>
+            {% else %}
+            <a href="/pricing" class="btn-download btn-pro-locked">
+                <span class="icon">&#128190;</span> SARIF <span class="pro-badge">PRO</span>
+            </a>
+            {% endif %}
             <a href="/results/{{ audit_id }}/report/json" class="btn-download">
                 <span class="icon">&#128203;</span> JSON
             </a>
+            {% if license_tier == 'pro' or license_tier == 'enterprise' %}
             {% if attack_graph_exists %}
             <a href="/results/{{ audit_id }}/attack-graph" class="btn-download btn-attack-graph" target="_blank">
                 <span class="icon">&#128200;</span> Attack Graph
             </a>
+            {% endif %}
             {% endif %}
         </div>
     </div>
@@ -251,11 +259,32 @@
     </div>
     {% endif %}
     {% else %}
-    <div class="upgrade-card">
-        <div class="upgrade-icon">&#128274;</div>
-        <h3>AI Audit Copilot</h3>
-        <p>Get AI-powered vulnerability analysis and remediation suggestions.</p>
-        <a href="https://sentinel-engine.io/pricing" class="upgrade-btn">Upgrade to Pro</a>
+    <!-- AI Copilot Pro Upgrade Card -->
+    <div class="pro-upgrade-card">
+        <div class="pro-upgrade-header">
+            <div class="pro-upgrade-icon-wrap">
+                <span class="pro-upgrade-icon">&#129302;</span>
+            </div>
+            <div class="pro-upgrade-title-wrap">
+                <h3>Unlock AI Copilot</h3>
+                <span class="pro-badge">PRO</span>
+            </div>
+        </div>
+        <p class="pro-upgrade-desc">
+            Get AI-powered vulnerability analysis with contextual remediation advice.
+            The AI Copilot understands your contract's logic and provides targeted fix
+            suggestions for every finding.
+        </p>
+        {% if total_findings and total_findings > 0 %}
+        <div class="pro-teaser">
+            <span class="pro-teaser-icon">&#128161;</span>
+            Your scan found <strong>{{ total_findings }}</strong> vulnerabilit{{ 'y' if total_findings == 1 else 'ies' }}.
+            With Pro, the AI Copilot would provide detailed remediation guidance for each finding.
+        </div>
+        {% endif %}
+        <a href="/pricing" class="pro-upgrade-btn">
+            Upgrade to Pro &mdash; $99/mo
+        </a>
     </div>
     {% endif %}
 
@@ -270,14 +299,273 @@
     </div>
     {% endif %}
     {% else %}
-    <div class="upgrade-card">
-        <div class="upgrade-icon">&#128274;</div>
-        <h3>Attack Graph Visualization</h3>
-        <p>Visualize attack paths and exploit chains with interactive D3.js graphs.</p>
-        <a href="https://sentinel-engine.io/pricing" class="upgrade-btn">Upgrade to Pro</a>
+    <!-- Attack Graph Pro Upgrade Card -->
+    <div class="pro-upgrade-card">
+        <div class="pro-upgrade-header">
+            <div class="pro-upgrade-icon-wrap">
+                <span class="pro-upgrade-icon">&#128202;</span>
+            </div>
+            <div class="pro-upgrade-title-wrap">
+                <h3>Unlock Attack Graph</h3>
+                <span class="pro-badge">PRO</span>
+            </div>
+        </div>
+        <p class="pro-upgrade-desc">
+            Visualize attack paths and exploit chains in your contract.
+            Interactive D3.js graphs reveal how vulnerabilities connect and compound,
+            so you can prioritize the fixes that matter most.
+        </p>
+        <a href="/pricing" class="pro-upgrade-btn">
+            Upgrade to Pro &mdash; $99/mo
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- H. Get More with Pro Banner (bottom) -->
+    {% if license_tier != 'pro' and license_tier != 'enterprise' %}
+    <div class="pro-bottom-banner">
+        <div class="pro-bottom-banner-content">
+            <h2>Get More with Pro</h2>
+            <div class="pro-feature-grid">
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#129302;</span>
+                    <div>
+                        <strong>AI Audit Copilot</strong>
+                        <p>AI-powered analysis &amp; remediation</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#128202;</span>
+                    <div>
+                        <strong>Attack Graph Visualization</strong>
+                        <p>Interactive exploit chain mapping</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#128163;</span>
+                    <div>
+                        <strong>Exploit PoC Generator</strong>
+                        <p>Auto-generated proof-of-concept exploits</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#9203;</span>
+                    <div>
+                        <strong>Time-Travel Scanner</strong>
+                        <p>Historical vulnerability tracking</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#128300;</span>
+                    <div>
+                        <strong>Protocol Fingerprinting</strong>
+                        <p>Identify known protocol patterns</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#128196;</span>
+                    <div>
+                        <strong>HTML &amp; SARIF Reports</strong>
+                        <p>Professional branded report formats</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#127757;</span>
+                    <div>
+                        <strong>Solana Analyzer</strong>
+                        <p>35 Solana-specific security rules</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="pro-feature-icon">&#128274;</span>
+                    <div>
+                        <strong>Web Pro Panels</strong>
+                        <p>Full Pro dashboard in your browser</p>
+                    </div>
+                </div>
+            </div>
+            <div class="pro-bottom-cta">
+                <a href="/pricing" class="pro-upgrade-btn pro-upgrade-btn-lg">
+                    Upgrade to Pro &mdash; Starting at $99/mo
+                </a>
+                <span class="pro-bottom-note">14-day money-back guarantee &bull; Cancel anytime</span>
+            </div>
+        </div>
     </div>
     {% endif %}
 </div>
+
+<style>
+    /* Pro Upgrade Cards */
+    .pro-upgrade-card {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 1px solid #e94560;
+        border-radius: 12px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        position: relative;
+        overflow: hidden;
+    }
+    .pro-upgrade-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #e94560, #667eea);
+    }
+    .pro-upgrade-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .pro-upgrade-icon-wrap {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: rgba(233, 69, 96, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .pro-upgrade-icon {
+        font-size: 1.5rem;
+    }
+    .pro-upgrade-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .pro-upgrade-card h3 {
+        color: #fff;
+        font-size: 1.25rem;
+        margin: 0;
+    }
+    .pro-upgrade-desc {
+        color: #a0a0b0;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 1.25rem;
+    }
+    .pro-teaser {
+        background: rgba(102, 126, 234, 0.08);
+        border: 1px solid rgba(102, 126, 234, 0.25);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1.25rem;
+        font-size: 0.9rem;
+        color: #c0c0c0;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        line-height: 1.5;
+    }
+    .pro-teaser-icon {
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .pro-teaser strong {
+        color: #667eea;
+    }
+    .pro-upgrade-btn {
+        display: inline-block;
+        background: linear-gradient(135deg, #e94560, #c23152);
+        color: white;
+        padding: 0.75rem 1.75rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 1rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .pro-upgrade-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+    }
+    .pro-upgrade-btn-lg {
+        padding: 1rem 2.5rem;
+        font-size: 1.1rem;
+    }
+
+    /* Get More with Pro Bottom Banner */
+    .pro-bottom-banner {
+        background: linear-gradient(135deg, #0f1629 0%, #16213e 100%);
+        border: 1px solid #2a2a4e;
+        border-top: 3px solid #e94560;
+        border-radius: 16px;
+        padding: 2.5rem;
+        margin: 3rem 0 1rem;
+    }
+    .pro-bottom-banner h2 {
+        color: #fff;
+        font-size: 1.75rem;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .pro-feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.25rem;
+        margin-bottom: 2rem;
+    }
+    .pro-feature-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 8px;
+        background: rgba(233, 69, 96, 0.04);
+        border: 1px solid rgba(233, 69, 96, 0.12);
+        transition: border-color 0.2s;
+    }
+    .pro-feature-item:hover {
+        border-color: rgba(233, 69, 96, 0.3);
+    }
+    .pro-feature-icon {
+        font-size: 1.5rem;
+        flex-shrink: 0;
+        margin-top: 0.15rem;
+    }
+    .pro-feature-item strong {
+        color: #e0e0e0;
+        font-size: 0.9rem;
+        display: block;
+        margin-bottom: 0.15rem;
+    }
+    .pro-feature-item p {
+        color: #888;
+        font-size: 0.8rem;
+        margin: 0;
+    }
+    .pro-bottom-cta {
+        text-align: center;
+    }
+    .pro-bottom-note {
+        display: block;
+        margin-top: 0.75rem;
+        color: #666;
+        font-size: 0.8rem;
+    }
+
+    @media (max-width: 768px) {
+        .pro-upgrade-header {
+            flex-direction: column;
+            text-align: center;
+        }
+        .pro-upgrade-title-wrap {
+            justify-content: center;
+        }
+        .pro-feature-grid {
+            grid-template-columns: 1fr;
+        }
+        .pro-bottom-banner {
+            padding: 1.5rem;
+        }
+    }
+</style>
 
 <script>
     // Toggle finding card expand/collapse with animation

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy — Sentinel Engine{% endblock %}
+
+{% block content %}
+<div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+    <h1 style="color:#e94560;margin-bottom:8px;">Privacy Policy</h1>
+    <p style="color:#8888aa;font-size:0.9rem;margin-bottom:32px;">Effective date: April 19, 2026</p>
+
+    <section style="margin-bottom:32px;">
+        <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">1. Information We Collect</h2>
+        <p style="color:#ccccdd;line-height:1.7;">We collect the following information to provide and improve our services:</p>
+        <ul style="color:#ccccdd;line-height:2;padding-left:24px;">
+            <li><strong>Uploaded smart contract source code</strong> — submitted for scanning purposes only</li>
+            <li><strong>License key and machine fingerprint</strong> — used for license validation and activation management</li>
+            <li><strong>Payment information</strong> — processed by Stripe; we never see or store your card details</li>
+            <li><strong>OpenAI API key</strong> — stored locally on the server if entered via Settings, used only to call OpenAI on your behalf</li>
+        </ul>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">2. How We Use Your Data</h2>
+        <ul style="color:#ccccdd;line-height:2;padding-left:24px;">
+            <li>Uploaded code is analyzed <strong>in-memory</strong> and is not stored permanently after the scan completes</li>
+            <li>License validation sends only: your license key, machine fingerprint, product version, and timestamp</li>
+            <li><strong>No source code, audit results, or personal data</strong> is transmitted to third parties</li>
+            <li>OpenAI API keys are stored locally in an encrypted environment file and used only to call OpenAI on your behalf</li>
+        </ul>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">3. Data Retention</h2>
+        <ul style="color:#ccccdd;line-height:2;padding-left:24px;">
+            <li>Scan results are available for download during your session and deleted afterward</li>
+            <li>License activation records are retained for subscription management</li>
+            <li>Payment records are managed by Stripe per their privacy policy</li>
+        </ul>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">4. Third-Party Services</h2>
+        <p style="color:#ccccdd;line-height:1.7;">We use the following third-party services that may collect information as described in their respective privacy policies:</p>
+        <ul style="color:#ccccdd;line-height:2;padding-left:24px;">
+            <li><strong>Stripe</strong> (payment processing) — <a href="https://stripe.com/privacy" style="color:#667eea;">stripe.com/privacy</a></li>
+            <li><strong>OpenAI</strong> (AI Copilot, if configured by user) — <a href="https://openai.com/privacy" style="color:#667eea;">openai.com/privacy</a></li>
+        </ul>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">5. Your Rights</h2>
+        <ul style="color:#ccccdd;line-height:2;padding-left:24px;">
+            <li>You may request deletion of your data at any time</li>
+            <li>You may request that your license activations be cleared</li>
+            <li>Contact us: <a href="mailto:support@sentinel-engine.io" style="color:#667eea;">support@sentinel-engine.io</a></li>
+        </ul>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">6. Updates to This Policy</h2>
+        <p style="color:#ccccdd;line-height:1.7;">We may update this Privacy Policy from time to time. We will provide at least 30 days' notice before any material changes take effect. Continued use of Sentinel Engine after changes become effective constitutes acceptance of the updated policy.</p>
+    </section>
+
+    <div style="margin-top:40px;padding-top:20px;border-top:1px solid #1e1e3a;color:#8888aa;font-size:0.85rem;">
+        Questions? Contact us at <a href="mailto:support@sentinel-engine.io" style="color:#667eea;">support@sentinel-engine.io</a>
+    </div>
+</div>
+{% endblock %}

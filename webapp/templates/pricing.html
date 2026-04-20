@@ -4,9 +4,43 @@
 
 {% block content %}
 <style>
+    /* Free trial banner */
+    .free-trial-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 1.5rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        margin: 1.5rem auto;
+        max-width: 900px;
+        flex-wrap: wrap;
+    }
+    .free-trial-banner p {
+        color: #fff;
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin: 0;
+    }
+    .free-trial-banner .btn-start-free {
+        background: #fff;
+        color: #667eea;
+        padding: 0.65rem 1.75rem;
+        border-radius: 8px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: transform 0.2s, box-shadow 0.2s;
+        white-space: nowrap;
+    }
+    .free-trial-banner .btn-start-free:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+
     .pricing-hero {
         text-align: center;
-        padding: 3rem 0 1rem;
+        padding: 2.5rem 0 1rem;
     }
     .pricing-hero h1 {
         font-size: 2.5rem;
@@ -21,9 +55,9 @@
     }
     .pricing-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 1.5rem;
-        max-width: 1000px;
+        max-width: 1200px;
         margin: 2rem auto;
     }
     .pricing-card {
@@ -56,6 +90,25 @@
         padding: 4px 16px;
         border-radius: 12px;
     }
+    /* Money-back guarantee badge */
+    .guarantee-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(40, 167, 69, 0.1);
+        border: 1px solid #28a745;
+        border-radius: 20px;
+        padding: 0.35rem 0.85rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #28a745;
+        margin-bottom: 1rem;
+    }
+    .guarantee-badge svg {
+        width: 14px;
+        height: 14px;
+        fill: #28a745;
+    }
     .pricing-card h3 {
         font-size: 1.3rem;
         color: #fff;
@@ -84,6 +137,12 @@
         color: #666;
         font-size: 1rem;
     }
+    .pricing-price .billing-note {
+        display: block;
+        font-size: 0.8rem;
+        color: #888;
+        margin-top: 0.15rem;
+    }
     .pricing-desc {
         color: #a0a0b0;
         font-size: 0.9rem;
@@ -107,6 +166,21 @@
         margin-right: 0.5rem;
         font-weight: 700;
     }
+    .pricing-features li.pro-item::before {
+        color: #e94560;
+    }
+    /* Machine activation tooltip */
+    .activation-note {
+        font-size: 0.75rem;
+        color: #888;
+        text-align: left;
+        margin-bottom: 1.25rem;
+        padding: 0.5rem 0.75rem;
+        background: rgba(102, 126, 234, 0.06);
+        border-radius: 6px;
+        line-height: 1.5;
+        border-left: 3px solid #667eea;
+    }
     .btn-buy {
         display: inline-block;
         width: 100%;
@@ -125,6 +199,9 @@
         opacity: 0.9;
         transform: translateY(-2px);
     }
+    .btn-buy-free {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+    }
     .btn-buy-primary {
         background: linear-gradient(135deg, #667eea, #764ba2);
     }
@@ -139,6 +216,20 @@
     .btn-buy-enterprise:hover {
         border-color: #667eea;
         color: #e0e0e0;
+    }
+    /* Free card accent */
+    .pricing-card.free-card {
+        border-top: 3px solid #667eea;
+    }
+    /* Enterprise card */
+    .pricing-card.enterprise-card {
+        border-top: 3px solid #ffd700;
+    }
+    .enterprise-price-line {
+        font-size: 1.1rem;
+        color: #ffd700;
+        font-weight: 600;
+        margin-top: 0.25rem;
     }
 
     /* Feature comparison table */
@@ -247,42 +338,92 @@
         .pricing-hero h1 { font-size: 1.75rem; }
         .pricing-grid { grid-template-columns: 1fr; }
         .comparison-table { font-size: 0.85rem; }
+        .free-trial-banner { flex-direction: column; text-align: center; }
     }
 </style>
 
 <div class="container">
+    <!-- Start Free Banner -->
+    <div class="free-trial-banner">
+        <p>Try Sentinel Engine for free &mdash; 16 analyzers, no credit card required</p>
+        <a href="/" class="btn-start-free">Start Free</a>
+    </div>
+
     <div class="pricing-hero">
         <h1>Sentinel Engine Pro</h1>
         <p>
             Unlock every analyzer, AI-powered insights, and professional
-            reporting — from first scan to final audit.
+            reporting &mdash; from first scan to final audit.
         </p>
     </div>
 
     <!-- Pricing cards -->
     <div class="pricing-grid">
+        <!-- Free Tier -->
+        <div class="pricing-card free-card">
+            <h3>Free</h3>
+            <div class="pricing-price">
+                <span class="currency">$</span><span class="amount">0</span>
+                <span class="period">/ month</span>
+            </div>
+            <p class="pricing-desc">
+                Free forever &mdash; no credit card, no time limit.
+                16 security analyzers out of the box.
+            </p>
+            <ul class="pricing-features">
+                <li>Heuristic Scanner (23 EVM rules)</li>
+                <li>Slither Integration</li>
+                <li>Aderyn Static Analysis</li>
+                <li>Mythril Symbolic Analysis</li>
+                <li>Medusa Fuzzing</li>
+                <li>Foundry Fuzzing</li>
+                <li>Supply Chain Checker</li>
+                <li>Access Matrix Analyzer</li>
+                <li>Intent Check</li>
+                <li>Upgrade Diff Scanner</li>
+                <li>Threat Intel Feed</li>
+                <li>Knowledge Fetcher</li>
+                <li>Inflation Scaffold</li>
+                <li>Pipeline Generator</li>
+                <li>Markdown &amp; JSON Reports</li>
+                <li>CLI Access &amp; Plugin System</li>
+            </ul>
+            <a href="/" class="btn-buy btn-buy-free">
+                Get Started Free
+            </a>
+        </div>
+
         <!-- Pro Monthly -->
         <div class="pricing-card">
+            <div class="guarantee-badge">
+                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v4h-2V7zm0 6h2v2h-2v-2z"/></svg>
+                14-Day Money-Back Guarantee
+            </div>
             <h3>Pro Monthly</h3>
             <div class="pricing-price">
                 <span class="currency">$</span><span class="amount">99</span>
                 <span class="period">/ month</span>
             </div>
             <p class="pricing-desc">
-                Full access to all 21 analyzers, AI Copilot, Attack
-                Graphs, and more.
+                Everything in Free, plus 9 Pro-exclusive tools
+                including AI Copilot, Attack Graphs, and more.
             </p>
             <ul class="pricing-features">
-                <li>All 21 analyzers unlocked</li>
-                <li>AI Audit Copilot</li>
-                <li>Attack Graph Visualization</li>
-                <li>Exploit PoC Generator</li>
-                <li>Time-Travel Scanner</li>
-                <li>Protocol Fingerprinting</li>
-                <li>Solana Analyzer (35 rules)</li>
-                <li>HTML &amp; SARIF Reports</li>
+                <li>Everything in Free</li>
+                <li class="pro-item">AI Audit Copilot</li>
+                <li class="pro-item">Attack Graph Visualization</li>
+                <li class="pro-item">Exploit PoC Generator</li>
+                <li class="pro-item">Time-Travel Scanner</li>
+                <li class="pro-item">Protocol Fingerprinting</li>
+                <li class="pro-item">Solana Analyzer (35 rules)</li>
+                <li class="pro-item">HTML &amp; SARIF Reports</li>
                 <li>2 machine activations</li>
             </ul>
+            <div class="activation-note">
+                Each activation is tied to one computer (identified by hardware
+                fingerprint). Work laptop + home laptop = 2 activations.
+                Need more? <a href="mailto:support@sentinel-engine.io" style="color:#667eea">Contact us</a>.
+            </div>
             <form method="POST" action="/checkout/create-session">
                 <input type="hidden" name="product" value="pro_monthly">
                 <button type="submit" class="btn-buy btn-buy-primary">
@@ -294,10 +435,15 @@
         <!-- Pro Annual (featured) -->
         <div class="pricing-card featured">
             <span class="best-value-badge">BEST VALUE</span>
+            <div class="guarantee-badge">
+                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v4h-2V7zm0 6h2v2h-2v-2z"/></svg>
+                14-Day Money-Back Guarantee
+            </div>
             <h3>Pro Annual</h3>
             <div class="pricing-price">
-                <span class="currency">$</span><span class="amount">999</span>
-                <span class="period">/ year</span><br>
+                <span class="currency">$</span><span class="amount">83.25</span>
+                <span class="period">/ month</span>
+                <span class="billing-note">billed annually at $999</span>
                 <span class="old-price">$1,188/year</span>
             </div>
             <p class="pricing-desc">
@@ -311,6 +457,11 @@
                 <li>Early access to new features</li>
                 <li>2 machine activations</li>
             </ul>
+            <div class="activation-note">
+                Each activation is tied to one computer (identified by hardware
+                fingerprint). Work laptop + home laptop = 2 activations.
+                Need more? <a href="mailto:support@sentinel-engine.io" style="color:#667eea">Contact us</a>.
+            </div>
             <form method="POST" action="/checkout/create-session">
                 <input type="hidden" name="product" value="pro_annual">
                 <button type="submit" class="btn-buy btn-buy-featured">
@@ -320,23 +471,26 @@
         </div>
 
         <!-- Enterprise -->
-        <div class="pricing-card">
+        <div class="pricing-card enterprise-card">
             <h3>Enterprise</h3>
             <div class="pricing-price">
-                <span class="amount" style="font-size:2rem">Custom</span>
+                <span class="amount" style="font-size:1.75rem">Custom</span>
+                <span class="enterprise-price-line">Starting at $4,999/year</span>
             </div>
             <p class="pricing-desc">
                 For teams and organizations that need unlimited
-                activations, SSO, and dedicated support.
+                activations, custom integrations, and dedicated support.
             </p>
             <ul class="pricing-features">
                 <li>Everything in Pro</li>
                 <li>Unlimited machine activations</li>
                 <li>SSO &amp; team management</li>
-                <li>Custom rule packs</li>
-                <li>Dedicated support</li>
+                <li>Custom rule packs &amp; integrations</li>
+                <li>Dedicated support &amp; SLA</li>
+                <li>Priority feature requests</li>
+                <li>On-premise deployment option</li>
             </ul>
-            <a href="mailto:help@protocol14019.com"
+            <a href="mailto:support@sentinel-engine.io"
                class="btn-buy btn-buy-enterprise">
                 Contact Us
             </a>
@@ -519,10 +673,15 @@
                 <span class="faq-arrow">&#9660;</span>
             </div>
             <div class="faq-answer">
-                Yes. You can cancel anytime from the Stripe
-                customer portal. Your license will remain active
-                until the end of the current billing period. After
-                that, you'll revert to the free tier automatically.
+                Yes. You can cancel anytime &mdash; manage your subscription
+                through the
+                <a href="https://billing.stripe.com/p/login/test_placeholder"
+                   style="color:#667eea" target="_blank">
+                    Stripe Customer Portal
+                </a>.
+                Your license will remain active until the end of the current
+                billing period. After that, you'll revert to the free tier
+                automatically.
             </div>
         </div>
 
@@ -533,11 +692,14 @@
             </div>
             <div class="faq-answer">
                 Each Pro license supports up to 2 machine
-                activations. If you need more, contact us about
-                our Enterprise plan at
-                <a href="mailto:help@protocol14019.com"
+                activations. Each activation is tied to one computer
+                (identified by a hardware fingerprint). For example,
+                your work laptop + home laptop = 2 activations.
+                If you need more, contact us about our Enterprise
+                plan at
+                <a href="mailto:support@sentinel-engine.io"
                    style="color:#667eea">
-                    help@protocol14019.com
+                    support@sentinel-engine.io
                 </a>.
             </div>
         </div>
@@ -550,9 +712,9 @@
             <div class="faq-answer">
                 We offer a 14-day money-back guarantee. If you're
                 not satisfied, contact
-                <a href="mailto:help@protocol14019.com"
+                <a href="mailto:support@sentinel-engine.io"
                    style="color:#667eea">
-                    help@protocol14019.com
+                    support@sentinel-engine.io
                 </a>
                 for a full refund.
             </div>

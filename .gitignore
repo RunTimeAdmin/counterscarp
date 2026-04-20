@@ -25,6 +25,7 @@ sentinel-custom.toml
 .idea/
 *.swp
 *.swo
+*.code-workspace
 
 # OS
 .DS_Store
@@ -43,6 +44,7 @@ sample_reports/
 .sentinel/
 vulnerability_timeline.json
 vulnerability_trends.md
+uploads/
 
 # Local environment secrets (API keys)
 data/.env.local

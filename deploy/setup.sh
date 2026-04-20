@@ -44,7 +44,7 @@ systemctl reload nginx
 # Obtain SSL certificate (nginx must be running first for challenge)
 echo "[7/8] Obtaining SSL certificate..."
 if [ ! -d "/etc/letsencrypt/live/app.sentinel-engine.io" ]; then
-    certbot certonly --nginx -d app.sentinel-engine.io --non-interactive --agree-tos -m help@protocol14019.com
+    certbot certonly --nginx -d app.sentinel-engine.io --non-interactive --agree-tos -m support@sentinel-engine.io
     systemctl reload nginx
 else
     echo "   SSL certificate already exists, skipping..."
