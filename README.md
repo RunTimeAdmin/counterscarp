@@ -54,7 +54,7 @@ Sentinel Engine includes both free and pro features in a single package. Pro fea
 
 | Feature | Community (Free) | Developer ($49/mo) | Pro ($149/mo) | Team ($399/mo) | Enterprise |
 |---------|-----------------|-------------------|---------------|----------------|-----------|
-| 16 Core Analyzers | Yes | Yes | Yes | Yes | Yes |
+| 14 Free Analyzers | Yes | Yes | Yes | Yes | Yes |
 | CLI + Markdown/JSON Reports | Yes | Yes | Yes | Yes | Yes |
 | Web App Access | - | 5 scans/mo | Unlimited | Unlimited | Unlimited |
 | Solana Analyzer (35 rules) | - | Yes | Yes | Yes | Yes |
