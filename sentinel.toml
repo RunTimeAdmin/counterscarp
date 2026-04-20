@@ -6,7 +6,7 @@
 [engine]
 # Engine-wide settings
 name = "Sentinel Security Engine"
-version = "3.1.0"
+version = "3.1.1"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 fail_on_severity = "HIGH"
