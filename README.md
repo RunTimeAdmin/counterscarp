@@ -32,6 +32,16 @@ pip install sentinel-engine[dev]
 sentinel-engine --help
 ```
 
+**Required Dependencies:**
+```powershell
+# Foundry (forge) — Required for Slither static analysis on Foundry/Hardhat projects
+# Install (macOS/Linux):
+curl -L https://foundry.paradigm.xyz | bash && foundryup
+# Windows: Download from https://github.com/foundry-rs/foundry/releases
+# Verify:
+forge --version
+```
+
 **Optional External Tools (for full functionality):**
 ```powershell
 # Slither (static analysis)
@@ -119,7 +129,7 @@ python orchestrator.py --target ./contracts --config sentinel-pr.toml
 ## 🎯 **What You Get**
 
 ### **21 Integrated Analyzers**
-1. **Heuristic Scanner** - 31 vulnerability patterns (reentrancy, oracle issues, access control)
+1. **Heuristic Scanner** - 34 vulnerability patterns (reentrancy, oracle issues, access control)
 2. **Slither** - Trail of Bits static analyzer
 3. **Aderyn** - Cyfrin Rust-based analyzer (complementary to Slither)
 4. **Liar Detector** - NatSpec comment vs implementation mismatch detection
@@ -941,7 +951,7 @@ sentinel-engine/
 ├── knowledge_fetcher.py        # EVM threat intel (C4 + Immunefi + Solodit)
 ├── solana_intel.py             # Solana threat intel (Neodyme + Sec3 + OtterSec)
 │
-├── heuristic_scanner.py        # Pattern-based vulnerability detection (31 rules)
+├── heuristic_scanner.py        # Pattern-based vulnerability detection (34 rules)
 ├── access_matrix.py            # Function permission analyzer
 ├── intent_check.py             # 🤥 Liar Detector (NatSpec vs. code mismatch)
 │
@@ -1353,7 +1363,7 @@ python exploit_generator.py --finding-json findings.json
 **License:** MIT  
 **Chains:** EVM, Solana  
 **Analyzers:** 21  
-**Patterns:** 31 EVM + 35 Solana  
+**Patterns:** 34 EVM + 35 Solana  
 **Profiles:** 3  
 **Innovative Features:** 7  
 

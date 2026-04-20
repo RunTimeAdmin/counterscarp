@@ -204,9 +204,16 @@ def run_slither(target: str) -> Dict[str, Any]:
         project_root
         and (Path(project_root) / "foundry.toml").exists()
     )
-    if is_foundry and forge_available:
-        cmd.append("--compile-force-framework")
-        cmd.append("foundry")
+    if is_foundry:
+        if forge_available:
+            cmd.append("--compile-force-framework")
+            cmd.append("foundry")
+        else:
+            # Force solc to prevent crytic-compile from
+            # auto-detecting foundry.toml and invoking forge
+            # (which would crash if forge is unavailable)
+            cmd.append("--compile-force-framework")
+            cmd.append("solc")
 
     # Read remappings.txt and pass via --solc-remaps
     # whether forge is available or not — Slither needs

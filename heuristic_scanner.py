@@ -47,6 +47,7 @@ RULE_CATEGORIES: dict[str, list[str]] = {
     "Reentrancy & External Calls": [
         "UNCHECKED_EXTERNAL_CALL", "LOWLEVEL_CALL_USAGE",
         "FLASH_LOAN_REENTRANCY", "ARBITRARY_EXTERNAL_CALL",
+        "TRANSFER_DOSABLE_FALLBACK",
     ],
     "DeFi & Oracle Security": [
         "ORACLE_STALENESS_CHECK", "MISSING_SLIPPAGE_PROTECTION",
@@ -63,6 +64,10 @@ RULE_CATEGORIES: dict[str, list[str]] = {
     ],
     "Cryptographic & Signature": [
         "SIGNATURE_REPLAY", "BLOCK_TIMESTAMP_RANDOMNESS",
+        "BLOCKHASH_RANDOMNESS",
+    ],
+    "Storage & Memory": [
+        "ARRAY_LENGTH_UNDERFLOW",
     ],
     "Other": [
         "HARDCODED_ADDRESS", "BOOLEAN_TRANSFER_CHECK",
@@ -286,6 +291,32 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"function\s+(pause|unpause|setImplementation)\s*\(.*\).*onlyOwner(?!.*timelock)"),
         hint="MEDIUM: Centralization risk. Use multi-sig + timelock for critical admin functions. Common Code4rena Medium finding.",
+    ),
+
+    # ========== STORAGE & MEMORY PATTERNS ==========
+
+    HeuristicRule(
+        id="BLOCKHASH_RANDOMNESS",
+        description="Use of blockhash() for randomness — predictable and manipulable by miners",
+        severity="MEDIUM",
+        pattern=re.compile(r"blockhash\s*\("),
+        hint="Do not use blockhash() for randomness; use Chainlink VRF or commit-reveal schemes.",
+    ),
+
+    HeuristicRule(
+        id="ARRAY_LENGTH_UNDERFLOW",
+        description="Direct array length manipulation may cause storage collision in Solidity < 0.8",
+        severity="HIGH",
+        pattern=re.compile(r"\.length\s*(?:--|=\s*0\s*-|-=)"),
+        hint="Avoid manipulating array.length directly. Use pop() or ensure Solidity >= 0.8 for overflow protection.",
+    ),
+
+    HeuristicRule(
+        id="TRANSFER_DOSABLE_FALLBACK",
+        description="ETH transfer to msg.sender or variable address may be blocked by reverting fallback (King-style DoS)",
+        severity="MEDIUM",
+        pattern=re.compile(r"\.transfer\s*\(|\.send\s*\("),
+        hint="Prefer pull-payment pattern or use call() with reentrancy guards instead of transfer()/send().",
     ),
 ]
 
