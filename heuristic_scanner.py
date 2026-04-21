@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 # Import logger
@@ -683,10 +685,52 @@ def scan_file(
     return findings
 
 
+def should_exclude(file_path: str, exclude_patterns: List[str], base_dir: str = "") -> bool:
+    """Check if a file path matches any exclusion glob pattern.
+
+    Args:
+        file_path: Path to check (absolute or relative).
+        exclude_patterns: List of glob patterns to match against (e.g. ``test/**``).
+        base_dir: Optional base directory to make ``file_path`` relative to before
+            pattern matching.  When empty, ``file_path`` is used as-is.
+
+    Returns:
+        True if the path matches at least one exclusion pattern.
+    """
+    if not exclude_patterns:
+        return False
+
+    if base_dir:
+        try:
+            rel_path = str(Path(file_path).relative_to(base_dir))
+        except ValueError:
+            rel_path = file_path
+    else:
+        rel_path = file_path
+
+    # Normalise to forward slashes for consistent cross-platform matching
+    rel_path = rel_path.replace("\\", "/")
+
+    for pattern in exclude_patterns:
+        if fnmatch.fnmatch(rel_path, pattern):
+            return True
+        # Also match each path component against the bare pattern stem
+        # so that ``node_modules/**`` can prune a bare directory name
+        # ``node_modules`` as well.
+        bare = pattern.rstrip("/").rstrip("*").rstrip("/")
+        if bare:
+            parts = rel_path.split("/")
+            for part in parts:
+                if fnmatch.fnmatch(part, bare):
+                    return True
+    return False
+
+
 def scan_target(
     target: str,
     config: Optional[GarrisonConfig] = None,
-    plugin_mgr: Optional[PluginManager] = None
+    plugin_mgr: Optional[PluginManager] = None,
+    exclude_paths: Optional[List[str]] = None,
 ) -> List[HeuristicFinding]:
     """Scan a .sol file or all .sol files under a directory.
 
@@ -694,19 +738,49 @@ def scan_target(
         target: Path to a .sol file or directory containing Solidity files.
         config: Optional configuration object for rule enablement and suppressions.
         plugin_mgr: Optional PluginManager to load plugin rules from.
+        exclude_paths: Optional list of glob patterns (e.g. ``test/**``) for paths
+            that should be skipped.  Patterns are matched against relative paths
+            normalised to forward slashes.
 
     Returns:
         List of all heuristic findings.
     """
+    exclude_patterns: List[str] = exclude_paths or []
+
+    if exclude_patterns:
+        logger.info("Path exclusions active: %s", exclude_patterns)
+
     all_findings: List[HeuristicFinding] = []
 
     if os.path.isfile(target) and target.endswith(".sol"):
-        all_findings.extend(scan_file(target, config, plugin_mgr))
+        # Single-file scan: check whether the file itself is excluded
+        rel_single = os.path.basename(target)
+        if exclude_patterns and should_exclude(rel_single, exclude_patterns, ""):
+            logger.debug("Excluded: %s", target)
+        else:
+            all_findings.extend(scan_file(target, config, plugin_mgr))
     elif os.path.isdir(target):
-        for root, _, files in os.walk(target):
+        for root, dirs, files in os.walk(target):
+            # Prune excluded directories in-place to avoid descending into them
+            if exclude_patterns:
+                rel_root = os.path.relpath(root, target).replace("\\", "/")
+                dirs[:] = [
+                    d for d in dirs
+                    if not should_exclude(
+                        f"{rel_root}/{d}" if rel_root != "." else d,
+                        exclude_patterns,
+                        "",
+                    )
+                ]
+
             for name in files:
                 if name.endswith(".sol"):
                     path = os.path.join(root, name)
+                    if exclude_patterns:
+                        rel_path = os.path.relpath(path, target).replace("\\", "/")
+                        if should_exclude(rel_path, exclude_patterns, ""):
+                            logger.debug("Excluded: %s", rel_path)
+                            continue
                     all_findings.extend(scan_file(path, config, plugin_mgr))
     else:
         # Not a file or directory; nothing to do

@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("garrison-engine")
 except Exception:
-    _ENGINE_VERSION = "4.2.0"
+    _ENGINE_VERSION = "4.3.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
@@ -106,6 +106,7 @@ try:
         aggregate_findings_from_orchestrator,
         create_audit_report,
         generate_html_report,
+        generate_pdf_report,
         generate_markdown_report as generate_audit_markdown_report
     )
     REPORT_GENERATOR_AVAILABLE = True
@@ -853,6 +854,12 @@ def main() -> None:
             )
             logger.info("Continuing with default settings...")
 
+    # Extract exclude_paths from config for use across scanning phases
+    exclude_paths: List[str] = []
+    if config and config.ci and config.ci.exclude_paths:
+        exclude_paths = config.ci.exclude_paths
+        logger.info("Path exclusions active: %s", exclude_paths)
+
     # Initialize plugin manager
     plugin_mgr = None
     if PLUGIN_MANAGER_AVAILABLE and config and config.plugins.enabled:
@@ -1006,7 +1013,11 @@ def main() -> None:
     if state_mgr.is_phase_pending("slither"):
         _t0 = _time.time()
         try:
-            raw_slither = red_team_scan.run_slither(args.target, stderr_log=stderr_log)
+            raw_slither = red_team_scan.run_slither(
+                args.target,
+                stderr_log=stderr_log,
+                exclude_paths=exclude_paths,
+            )
             static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
             logger.info("Slither analysis complete: %d issues found", len(static_issues))
         except GarrisonAnalysisError as e:
@@ -1113,7 +1124,7 @@ def main() -> None:
         _t0 = _time.time()
         try:
             heuristic_findings = heuristic_scanner.scan_target(
-                args.target, config, plugin_mgr
+                args.target, config, plugin_mgr, exclude_paths=exclude_paths
             )
             for hf in heuristic_findings:
                 # Only include non-suppressed findings in report
@@ -1784,6 +1795,17 @@ def main() -> None:
                 html_path = generate_html_report(audit_report, html_file)
                 print(f"   HTML: {os.path.abspath(html_path)}")
                 logger.info("Professional HTML report: %s", os.path.abspath(html_path))
+
+                # PDF report (Pro feature, requires xhtml2pdf)
+                pdf_file = f"audit_report_{datetime.date.today()}.pdf"
+                pdf_path = generate_pdf_report(audit_report, pdf_file)
+                if pdf_path:
+                    print(f"   PDF:  {os.path.abspath(pdf_path)}")
+                    logger.info("Professional PDF report: %s", os.path.abspath(pdf_path))
+                else:
+                    logger.info(
+                        "PDF report skipped (install xhtml2pdf: pip install garrison-engine[pdf])"
+                    )
             else:
                 print(_license.get_upgrade_message(BRANDED_REPORTS))
             print(f"\n   Risk Score: {audit_report.risk_score}/100")

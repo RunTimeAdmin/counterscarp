@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "garrison-engine"
-version = "4.2.0"
+version = "4.3.0"
 description = "Smart contract security auditing platform with Pro features"
 requires-python = ">=3.10"
 license = "MIT"
@@ -54,6 +54,10 @@ web = [
     "jinja2>=3.1.0",
     "aiofiles>=23.0",
     "stripe>=5.0.0",
+]
+pdf = [
+    # PDF report generation (pure Python, no system dependencies)
+    "xhtml2pdf>=0.2.11",
 ]
 dev = [
     # Development/testing dependencies

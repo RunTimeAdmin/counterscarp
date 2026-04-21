@@ -160,6 +160,21 @@
                 <span class="icon">&#128196;</span> HTML Report <span class="pro-badge">DEV</span>
             </a>
             {% endif %}
+            {% if license_tier == 'pro' or license_tier == 'enterprise' %}
+            {% if pdf_report_exists %}
+            <a href="/results/{{ audit_id }}/report/pdf" class="btn-download">
+                <span class="icon">&#128209;</span> PDF Report
+            </a>
+            {% else %}
+            <a href="/results/{{ audit_id }}/report/pdf" class="btn-download btn-pro-locked" title="Install xhtml2pdf to enable PDF export">
+                <span class="icon">&#128209;</span> PDF Report <span class="pro-badge" style="background:#888;">N/A</span>
+            </a>
+            {% endif %}
+            {% else %}
+            <a href="/pricing" class="btn-download btn-pro-locked">
+                <span class="icon">&#128209;</span> PDF Report <span class="pro-badge">DEV</span>
+            </a>
+            {% endif %}
             <a href="/results/{{ audit_id }}/report/md" class="btn-download">
                 <span class="icon">&#128220;</span> Markdown
             </a>

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Dict, List, Optional, Any
+from typing import ClassVar, Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Garrison Security Engine"
-    version: str = "4.2.0"
+    version: str = "4.3.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -300,7 +300,7 @@ class ReportingConfig:
     """Reporting settings.
 
     Attributes:
-        format: Output format (markdown, json, html, sarif).
+        format: Output format (markdown, json, html, sarif, pdf).
         executive_summary: Whether to include executive summary.
         supply_chain: Whether to include supply chain analysis.
         static_analysis: Whether to include static analysis results.
@@ -321,6 +321,9 @@ class ReportingConfig:
     access_matrix: bool = True
     verbosity: str = "standard"
     group_by: str = "severity"
+
+    # Valid output formats (used for validation)
+    VALID_FORMATS: ClassVar[List[str]] = ["markdown", "json", "html", "sarif", "pdf"]
 
 
 @dataclass
@@ -711,7 +714,7 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Garrison Security Engine'),
-            version=eng.get('version', '4.2.0'),
+            version=eng.get('version', '4.3.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )
@@ -1182,7 +1185,7 @@ def validate_config(config: dict) -> list[str]:
         if not isinstance(rep, dict):
             warnings.append("'reporting' must be a dictionary")
         else:
-            valid_formats = ['markdown', 'json', 'html', 'sarif']
+            valid_formats = ['markdown', 'json', 'html', 'sarif', 'pdf']
             fmt = rep.get('format')
             if fmt and fmt not in valid_formats:
                 warnings.append(

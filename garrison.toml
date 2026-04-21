@@ -6,7 +6,7 @@
 [engine]
 # Engine-wide settings
 name = "Garrison Security Engine"
-version = "4.2.0"
+version = "4.3.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 fail_on_severity = "HIGH"
@@ -257,7 +257,14 @@ ignore_comment_changes = true
 # ============================================================================
 
 [reporting]
-# Output format (markdown, json, sarif, html)
+# Output format (markdown, json, sarif, html, pdf)
+# Notes:
+#   - markdown : Always free; GitHub-friendly Markdown output
+#   - json     : Always free; raw findings in JSON format
+#   - sarif    : Pro feature; SARIF 2.1.0 for GitHub Code Scanning
+#   - html     : Pro feature; professional branded HTML report
+#   - pdf      : Pro feature; PDF export of the HTML report
+#                Requires: pip install garrison-engine[pdf]
 format = "markdown"
 
 # Include sections in report

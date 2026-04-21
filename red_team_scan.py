@@ -317,7 +317,11 @@ def _slither_per_file_fallback(
     }
 
 
-def run_slither(target: str, stderr_log: Optional[str] = None) -> Dict[str, Any]:
+def run_slither(
+    target: str,
+    stderr_log: Optional[str] = None,
+    exclude_paths: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """Runs Slither via subprocess and captures JSON output.
 
     Detects Foundry/Hardhat project root so Slither can resolve
@@ -325,6 +329,9 @@ def run_slither(target: str, stderr_log: Optional[str] = None) -> Dict[str, Any]
 
     Args:
         target: Path to the Solidity file or directory to analyze.
+        stderr_log: Optional path for Slither stderr log.
+        exclude_paths: Optional list of glob patterns to pass to Slither
+            via ``--filter-paths`` (e.g. ``test/**``).
 
     Returns:
         Parsed JSON output from Slither.
@@ -450,6 +457,20 @@ def run_slither(target: str, stderr_log: Optional[str] = None) -> Dict[str, Any]
                 logger.warning(
                     f"Could not read remappings.txt: {e}"
                 )
+
+    # Pass exclusion patterns to Slither via --filter-paths (comma-separated regex)
+    if exclude_paths:
+        # Slither's --filter-paths accepts a comma-separated list of path substrings /
+        # regex patterns.  Strip trailing glob wildcards so they work as substring
+        # filters (e.g. "node_modules/**" → "node_modules").
+        filter_parts = []
+        for p in exclude_paths:
+            bare = p.rstrip("/").rstrip("*").rstrip("/")
+            if bare:
+                filter_parts.append(bare)
+        if filter_parts:
+            cmd.extend(["--filter-paths", ",".join(filter_parts)])
+            logger.info("Slither filter-paths: %s", ",".join(filter_parts))
 
     print(f"[*] Slither command: {' '.join(cmd)}")
     print(f"[*] Working directory: {cwd}")

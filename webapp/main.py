@@ -17,6 +17,7 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     RedirectResponse,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -67,6 +68,7 @@ from report_generator import (
     create_audit_report,
     generate_html_report,
     generate_markdown_report,
+    generate_pdf_report,
     save_sarif_report,
 )
 from attack_graph import build_graph, export_graph_json
@@ -398,6 +400,17 @@ async def audit(
             report, str(html_path),
             logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
         )
+        # Generate PDF report (PRO feature, requires xhtml2pdf)
+        pdf_path = results_dir / "report.pdf"
+        try:
+            generate_pdf_report(
+                report,
+                str(pdf_path),
+                logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
+            )
+        except Exception:
+            # PDF is optional; don't fail the whole audit if xhtml2pdf is missing
+            pass
     else:
         html_path = None
 
@@ -565,6 +578,9 @@ async def results(request: Request, audit_id: str):
     # Check for attack graph
     attack_graph_exists = (results_dir / "attack_graph.html").exists()
 
+    # Check for PDF report
+    pdf_report_exists = (results_dir / "report.pdf").exists()
+
     # Load scan metadata
     meta_path = results_dir / "scan_meta.json"
     scan_meta = {}
@@ -591,6 +607,7 @@ async def results(request: Request, audit_id: str):
             "risk_score": risk_score,
             "pass_fail": pass_fail,
             "attack_graph_exists": attack_graph_exists,
+            "pdf_report_exists": pdf_report_exists,
             "scan_meta": scan_meta,
             "ai_summary": ai_summary,
             "license_tier": license_tier,
@@ -1051,6 +1068,7 @@ async def download_report(audit_id: str, format: str):
         "md": ("report.md", "text/markdown"),
         "sarif": ("report.sarif", "application/json"),
         "json": ("findings.json", "application/json"),
+        "pdf": ("report.pdf", "application/pdf"),
     }
 
     if format not in format_map:

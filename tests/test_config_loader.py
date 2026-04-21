@@ -337,7 +337,7 @@ class TestConfigValidation:
         """Test validation catches invalid reporting format."""
         config = {
             "reporting": {
-                "format": "pdf"
+                "format": "xml"
             }
         }
         warnings = validate_config(config)
@@ -566,7 +566,7 @@ class TestDataclassDefaults:
         """Test EngineConfig default values."""
         config = EngineConfig()
         assert config.name == "Garrison Security Engine"
-        assert config.version == "4.2.0"
+        assert config.version == "4.3.0"
         assert config.fail_on_severity == "HIGH"
         assert config.max_findings == 0
 

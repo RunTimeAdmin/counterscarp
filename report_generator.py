@@ -550,6 +550,137 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
     return output_path
 
 
+def generate_pdf_report(
+    report: AuditReport,
+    output_path: Optional[str] = None,
+    logo_path: Optional[str] = None,
+) -> Optional[Any]:
+    """Generate a PDF audit report by converting the HTML report to PDF.
+
+    Requires xhtml2pdf: ``pip install xhtml2pdf`` (or ``pip install garrison-engine[pdf]``).
+
+    This is a Pro feature — the caller must hold a valid ``BRANDED_REPORTS`` license.
+
+    Args:
+        report: AuditReport object to generate the report from.
+        output_path: File path to write the PDF to. When provided the function
+            writes the file and returns the path string. When *None* the raw
+            PDF bytes are returned so callers can stream it directly.
+        logo_path: Optional path to a logo image to embed (forwarded to the
+            underlying HTML generator).
+
+    Returns:
+        * ``str`` — the *output_path* when a path was provided and the file was
+          written successfully.
+        * ``bytes`` — raw PDF bytes when *output_path* is ``None``.
+        * ``None`` — when the feature is unavailable (missing license or missing
+          ``xhtml2pdf`` dependency) or when generation fails.
+    """
+    _license = LicenseManager()
+    if not _license.check_pro_feature(BRANDED_REPORTS):
+        print(_license.get_upgrade_message(BRANDED_REPORTS))
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Step 1 – Produce the HTML source via the existing HTML generator.   #
+    # We write to a temp file, read it back, then delete it.              #
+    # ------------------------------------------------------------------ #
+    import io
+    import tempfile
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".html", mode="w", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp_path = tmp.name
+
+        html_result = generate_html_report(report, tmp_path, logo_path=logo_path)
+        if not html_result:
+            logger.error("PDF generation failed: HTML generation returned None")
+            return None
+
+        with open(tmp_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+
+        try:
+            import os as _os
+            _os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    except Exception as e:
+        logger.error(f"PDF generation failed during HTML phase: {e}")
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Step 2 – Inject PDF-specific CSS (page size, pagination, breaks).   #
+    # ------------------------------------------------------------------ #
+    pdf_css = """
+<style>
+@page {
+    size: A4;
+    margin: 2cm;
+}
+body { font-size: 10pt; background: #fff !important; color: #333 !important; }
+.container { max-width: 100% !important; padding: 0 !important; }
+.header {
+    background: #667eea !important;
+    color: #fff !important;
+    padding: 20px !important;
+    border-radius: 6px !important;
+    margin-bottom: 20px !important;
+    page-break-inside: avoid;
+}
+.finding { page-break-inside: avoid; }
+.section { page-break-inside: avoid; }
+h1, h2, h3 { page-break-after: avoid; }
+pre { white-space: pre-wrap !important; word-wrap: break-word !important; font-size: 8pt !important; }
+a { color: #667eea !important; }
+.code-block { font-size: 8pt !important; }
+</style>
+"""
+
+    if "</head>" in html_content:
+        pdf_html = html_content.replace("</head>", pdf_css + "</head>", 1)
+    else:
+        pdf_html = pdf_css + html_content
+
+    # ------------------------------------------------------------------ #
+    # Step 3 – Convert HTML to PDF via xhtml2pdf (pisa).                  #
+    # ------------------------------------------------------------------ #
+    try:
+        from xhtml2pdf import pisa  # type: ignore[import]
+
+        result_buffer = io.BytesIO()
+        pisa_status = pisa.CreatePDF(pdf_html, dest=result_buffer)
+
+        if pisa_status.err:
+            logger.error(
+                f"PDF generation failed: xhtml2pdf reported {pisa_status.err} error(s)"
+            )
+            return None
+
+        pdf_bytes = result_buffer.getvalue()
+
+        if output_path:
+            with open(output_path, "wb") as fout:
+                fout.write(pdf_bytes)
+            logger.info(f"PDF report saved: {output_path}")
+            return output_path
+
+        return pdf_bytes
+
+    except ImportError:
+        logger.warning(
+            "PDF generation requires xhtml2pdf: pip install xhtml2pdf  "
+            "(or: pip install garrison-engine[pdf])"
+        )
+        return None
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        return None
+
+
 def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Generate a SARIF 2.1.0 compliant report from findings.
 
@@ -1200,7 +1331,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate professional audit report")
     parser.add_argument("--project", default="Test Project", help="Project name")
     parser.add_argument("--target", default="./contracts", help="Target path")
-    parser.add_argument("--format", choices=["html", "markdown", "sarif", "attack-graph", "all"], default="all")
+    parser.add_argument("--format", choices=["html", "markdown", "sarif", "pdf", "attack-graph", "all"], default="all")
     parser.add_argument("--output", default="audit_report", help="Output filename (without extension)")
     args = parser.parse_args()
     
@@ -1246,6 +1377,13 @@ if __name__ == "__main__":
         sarif_path = save_sarif_report(demo_findings, f"{args.output}.sarif", metadata)
         print(f"[+] SARIF report: {sarif_path}")
     
+    if args.format in ["pdf", "all"]:
+        pdf_result = generate_pdf_report(report, f"{args.output}.pdf")
+        if pdf_result:
+            print(f"[+] PDF report: {pdf_result}")
+        else:
+            print("[!] PDF report not generated (check license or install xhtml2pdf)")
+
     if args.format in ["attack-graph", "all"]:
         if ATTACK_GRAPH_AVAILABLE:
             try:
