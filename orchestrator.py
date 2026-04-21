@@ -12,11 +12,11 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("sentinel-engine")
 except Exception:
-    _ENGINE_VERSION = "3.1.3"
+    _ENGINE_VERSION = "3.2.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
-    SOLANA, BRANDED_REPORTS
+    SOLANA, BRANDED_REPORTS, EXPLOIT_GEN
 )
 
 logger = get_logger(__name__)
@@ -179,6 +179,7 @@ def generate_markdown_report(
     solana_results: Optional[Dict[str, Any]] = None,
     upgrade_results: Optional[Dict[str, Any]] = None,
     fingerprint_results: Optional[List[Dict[str, Any]]] = None,
+    exploit_results: Optional[List] = None,
 ) -> str:
     """Generates a report focused on REMEDIATION (Fixing the bugs).
 
@@ -194,6 +195,7 @@ def generate_markdown_report(
         solana_results: Optional results from Solana analysis.
         upgrade_results: Optional results from upgrade diff analysis.
         fingerprint_results: Optional results from protocol fingerprint scan.
+        exploit_results: Optional list of ExploitResult objects from PoC generation.
 
     Returns:
         Path to the generated markdown report file.
@@ -217,6 +219,119 @@ def generate_markdown_report(
         f.write(f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
 
         f.write("> **Objective:** This document lists specific, actionable steps to patch identified vulnerabilities. Prioritize 'Critical' items immediately.\n\n")
+
+        f.write("---\n\n")
+
+        # ---------------------------------------------------------
+        # EXECUTIVE SUMMARY: Aggregate all findings, count by severity, top 10
+        # ---------------------------------------------------------
+        all_findings: List[Dict[str, Any]] = []
+
+        # static_results
+        for item in static_results:
+            all_findings.append({
+                "severity": item.get("impact", "MEDIUM").upper(),
+                "rule_id": item.get("check") or item.get("rule_id") or item.get("title", "unknown"),
+                "location": f"{item.get('file', item.get('location', 'unknown'))}:{item.get('line_no', item.get('line', '?'))}",
+                "message": (item.get("message") or item.get("description", ""))[:80],
+            })
+
+        # heuristic_results
+        for item in heuristic_results:
+            all_findings.append({
+                "severity": item.get("severity", "MEDIUM").upper(),
+                "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "unknown"),
+                "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+                "message": (item.get("message") or item.get("description", ""))[:80],
+            })
+
+        # fuzz_results — all CRITICAL
+        for item in fuzz_results:
+            all_findings.append({
+                "severity": "CRITICAL",
+                "rule_id": item.get("test_name") or item.get("rule_id") or item.get("title", "fuzz_violation"),
+                "location": item.get("file", item.get("location", "unknown")),
+                "message": (item.get("message") or item.get("description", ""))[:80],
+            })
+
+        # symbolic_results
+        for item in symbolic_results:
+            all_findings.append({
+                "severity": item.get("severity", "MEDIUM").upper(),
+                "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "symbolic_issue"),
+                "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+                "message": (item.get("message") or item.get("description", ""))[:80],
+            })
+
+        # aderyn_results
+        if aderyn_results and isinstance(aderyn_results, dict):
+            for item in aderyn_results.get("issues", []):
+                all_findings.append({
+                    "severity": item.get("severity", "MEDIUM").upper(),
+                    "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "aderyn_issue"),
+                    "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+                    "message": (item.get("message") or item.get("description", ""))[:80],
+                })
+
+        # medusa_results
+        if medusa_results and isinstance(medusa_results, dict):
+            for item in medusa_results.get("findings", []):
+                all_findings.append({
+                    "severity": item.get("severity", "HIGH").upper(),
+                    "rule_id": item.get("test") or item.get("rule_id") or item.get("title", "medusa_violation"),
+                    "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+                    "message": (item.get("message") or item.get("description", ""))[:80],
+                })
+
+        # solana_results
+        if solana_results and isinstance(solana_results, dict):
+            for item in solana_results.get("pattern_findings", []):
+                sev = getattr(item, "severity", None) or item.get("severity", "MEDIUM") if isinstance(item, dict) else getattr(item, "severity", "MEDIUM")
+                rid = getattr(item, "rule_id", None) or (item.get("rule_id") if isinstance(item, dict) else None) or "solana_issue"
+                loc_file = getattr(item, "file", None) or (item.get("file") if isinstance(item, dict) else "unknown") or "unknown"
+                loc_line = getattr(item, "line_no", None) or (item.get("line_no") if isinstance(item, dict) else "?") or "?"
+                msg = getattr(item, "description", None) or (item.get("description") if isinstance(item, dict) else "") or ""
+                all_findings.append({
+                    "severity": str(sev).upper(),
+                    "rule_id": str(rid),
+                    "location": f"{loc_file}:{loc_line}",
+                    "message": str(msg)[:80],
+                })
+
+        # Count by severity
+        _severity_counts: Dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+        for _f in all_findings:
+            _sev = _f.get("severity", "MEDIUM").upper()
+            if _sev in _severity_counts:
+                _severity_counts[_sev] += 1
+
+        # Sort: CRITICAL first
+        _severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+        all_findings.sort(key=lambda _x: _severity_order.get(_x.get("severity", "MEDIUM").upper(), 5))
+
+        _total_findings = sum(_severity_counts.values())
+        f.write("## Executive Summary\n\n")
+        f.write("| Severity | Count |\n")
+        f.write("|----------|-------|\n")
+        f.write(f"| CRITICAL | {_severity_counts['CRITICAL']} |\n")
+        f.write(f"| HIGH | {_severity_counts['HIGH']} |\n")
+        f.write(f"| MEDIUM | {_severity_counts['MEDIUM']} |\n")
+        f.write(f"| LOW | {_severity_counts['LOW']} |\n")
+        f.write(f"| INFO | {_severity_counts['INFO']} |\n")
+        f.write(f"| **Total** | **{_total_findings}** |\n\n")
+
+        top10 = all_findings[:10]
+        if top10:
+            f.write("### Top 10 Priority Issues\n\n")
+            f.write("| # | Severity | Issue | Location | Description |\n")
+            f.write("|---|----------|-------|----------|-------------|\n")
+            for _idx, _finding in enumerate(top10, 1):
+                _sev = _finding.get("severity", "MEDIUM")
+                _issue = _finding.get("rule_id", "unknown")
+                _loc = _finding.get("location", "unknown")
+                _desc = _finding.get("message", "").replace("|", "\\|")
+                f.write(f"| {_idx} | {_sev} | {_issue} | {_loc} | {_desc} |\n")
+            f.write("\n")
 
         f.write("---\n\n")
 
@@ -462,6 +577,26 @@ def generate_markdown_report(
                     for rec in risk.get('recommendations', [])[:3]:
                         f.write(f"- {rec}\n")
                     f.write("\n")
+
+        # ---------------------------------------------------------
+        # SECTION 11: EXPLOIT PROOF-OF-CONCEPT TESTS (PRO TIER)
+        # ---------------------------------------------------------
+        if exploit_results:
+            f.write("---\n\n")
+            f.write("## 11. Exploit Proof-of-Concept Tests\n\n")
+            successful_exploits = [r for r in exploit_results if r.status == "success"]
+            if successful_exploits:
+                f.write(f"Generated **{len(successful_exploits)}** exploit PoC test(s) for critical findings.\n\n")
+                f.write("| Finding | Severity | Output File | Status |\n")
+                f.write("|---------|----------|-------------|--------|\n")
+                for r in exploit_results:
+                    finding_name = r.finding.get("rule_id", r.finding.get("check", "unknown"))
+                    severity = r.finding.get("severity", "N/A")
+                    output_path = r.output_path or "\u2014"
+                    f.write(f"| {finding_name} | {severity} | `{output_path}` | {r.status} |\n")
+                f.write("\n> **Run:** `forge test --match-path exploits/` to validate generated PoCs\n\n")
+            else:
+                f.write("No exploit PoCs were successfully generated for the detected findings.\n\n")
 
     return filename
 
@@ -1064,6 +1199,71 @@ def main() -> None:
     # [PHASE 8] Action Report
     print("\n>>> Writing Action Plan...")
     logger.info("[PHASE 8] Writing Action Plan")
+    # --- Exploit PoC Generation (Pro tier) ---
+    exploit_results: Optional[List] = None
+    try:
+        from exploit_generator import ExploitGenerator, ExploitResult as _ExploitResult
+
+        if _license.check_pro_feature(EXPLOIT_GEN):
+            exploit_config: Dict[str, Any] = {}
+            if hasattr(config, 'exploit_generation'):
+                eg = config.exploit_generation
+                exploit_config = {
+                    'min_severity': getattr(eg, 'min_severity', 'HIGH'),
+                    'validate_compilation': getattr(eg, 'validate_compilation', True),
+                    'output_dir': getattr(eg, 'output_dir', 'exploits/'),
+                    'llm_backend': getattr(eg, 'llm_backend', 'none'),
+                    'template_dir': getattr(eg, 'template_dir', 'exploit_templates/'),
+                }
+
+            generator = ExploitGenerator(
+                config=exploit_config,
+                template_dir=exploit_config.get('template_dir', 'exploit_templates/'),
+                output_dir=exploit_config.get('output_dir', 'exploits/'),
+                llm_backend=exploit_config.get('llm_backend', 'none'),
+            )
+
+            # Filter to CRITICAL + HIGH findings only
+            critical_findings: List[Dict[str, Any]] = []
+            for h in heuristic_results:
+                sev = h.get("severity", "").upper()
+                if sev in ("CRITICAL", "HIGH"):
+                    critical_findings.append(h)
+            for s in static_issues:
+                impact = s.get("impact", "").lower()
+                if impact in ("high", "critical"):
+                    critical_findings.append({
+                        "rule_id": s.get("check", s.get("title", "unknown")),
+                        "severity": impact.upper(),
+                        "description": s.get("description", ""),
+                        "file": s.get("location", ""),
+                        "line_no": 0,
+                        "message": s.get("description", ""),
+                    })
+
+            if critical_findings:
+                logger.info("Generating exploit PoCs for %d critical/high findings...", len(critical_findings))
+                print(f"\n>>> Generating exploit PoCs for {len(critical_findings)} critical/high findings...")
+                exploit_results = generator.batch_generate(
+                    critical_findings,
+                    output_dir=exploit_config.get('output_dir', 'exploits/'),
+                )
+                successful = [r for r in exploit_results if r.status == "success"]
+                logger.info("Generated %d exploit PoCs out of %d findings", len(successful), len(critical_findings))
+                print(f"    [+] Generated {len(successful)} exploit PoCs out of {len(critical_findings)} findings")
+            else:
+                exploit_results = []
+                logger.info("No CRITICAL/HIGH findings for exploit generation")
+                print("    [i] No CRITICAL/HIGH findings for exploit generation")
+        else:
+            logger.info("Exploit PoC generation requires Pro tier license")
+            print(f"\n{_license.get_upgrade_message(EXPLOIT_GEN)}")
+    except ImportError:
+        logger.warning("Exploit generator module not available")
+    except Exception as _eg_exc:
+        logger.warning("Exploit generation failed: %s", _eg_exc)
+        print(f"    [!] Exploit generation failed: {_eg_exc}")
+
     report_file = generate_markdown_report(
         "Target Protocol",
         static_issues,
@@ -1076,6 +1276,7 @@ def main() -> None:
         solana_results,
         upgrade_results,
         fingerprint_results if args.fingerprint else None,
+        exploit_results=exploit_results,
     )
 
     print("\n" + "=" * 60)

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-04-20
+
+### Added
+- Executive Summary section in all reports with severity breakdown and Top 10 priority issues
+- Duplicate finding consolidation — groups similar findings across network-variant contracts with "Also found in" references
+- Automatic exploit PoC generation for CRITICAL/HIGH findings (Pro tier, uses existing ExploitGenerator + 8 Foundry templates)
+- New Section 11 in ACTION_PLAN: "Exploit Proof-of-Concept Tests" with forge test instructions
+
+### Changed
+- Finding dataclass extended with similar_locations and duplicate_count fields
+- Report generator now deduplicates before grouping into sections
+
 ## [3.1.3] - 2026-04-20
 
 ### Fixed

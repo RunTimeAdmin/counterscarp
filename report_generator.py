@@ -21,7 +21,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("sentinel-engine")
 except Exception:
-    _ENGINE_VERSION = "3.1.3"
+    _ENGINE_VERSION = "3.2.0"
 from license_manager import LicenseManager, BRANDED_REPORTS
 
 logger = get_logger(__name__)
@@ -69,6 +69,8 @@ class Finding:
     references: List[str] = field(default_factory=list)
     cwe: Optional[str] = None
     owasp: Optional[str] = None
+    similar_locations: List[str] = field(default_factory=list)
+    duplicate_count: int = 0
 
 
 @dataclass
@@ -128,8 +130,8 @@ SARIF_LEVEL_MAP = {
 }
 
 # Sentinel Engine version for SARIF reports
-SENTINEL_ENGINE_VERSION = "3.1.3"
-SENTINEL_ENGINE_SEMANTIC_VERSION = "3.1.3"
+SENTINEL_ENGINE_VERSION = "3.2.0"
+SENTINEL_ENGINE_SEMANTIC_VERSION = "3.2.0"
 SENTINEL_INFORMATION_URI = "https://github.com/RunTimeAdmin/sentinel-engine"
 
 # Remediation knowledge base
@@ -453,6 +455,12 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
                     html += f'                    <a href="{ref}" target="_blank">{ref}</a><br>\n'
                 html += "                </div>\n"
             
+            if finding.duplicate_count > 0:
+                locations_text = ", ".join(finding.similar_locations[:5])
+                if finding.duplicate_count > 5:
+                    locations_text += f" ... and {finding.duplicate_count - 5} more"
+                html += f'<div class="duplicate-note" style="color:#666;font-size:0.85em;margin-top:4px;">Also found in {finding.duplicate_count} other location(s): {locations_text}</div>'
+            
             html += "            </div>\n"
         
         html += "        </div>\n"
@@ -718,9 +726,30 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
 | 🟡 MEDIUM | {report.executive_summary.get("MEDIUM", 0)} |
 | 🔵 LOW | {report.executive_summary.get("LOW", 0)} |
 
----
-
 """
+
+    # Collect top 10 findings across all sections (already sorted by severity)
+    _top_findings = []
+    for _section in report.sections:
+        for _finding in _section.findings:
+            if len(_top_findings) < 10:
+                _top_findings.append(_finding)
+
+    if _top_findings:
+        _severity_emoji_map = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵", "INFO": "ℹ️"}
+        md += "### Top 10 Priority Issues\n\n"
+        md += "| # | Severity | Issue | Location | Description |\n"
+        md += "|---|----------|-------|----------|-------------|\n"
+        for _i, _f in enumerate(_top_findings, 1):
+            _sev = _f.severity
+            _sev_em = _severity_emoji_map.get(_sev, "❓")
+            _issue = (_f.rule_id or _f.title or "unknown")
+            _loc = f"{_f.file}:{_f.line_no}" if _f.file else "unknown"
+            _desc = (_f.title or _f.description or "")[:80].replace("|", "\\|")
+            md += f"| {_i} | {_sev_em} {_sev} | {_issue} | {_loc} | {_desc} |\n"
+        md += "\n"
+
+    md += "---\n\n"
 
     for section in report.sections:
         if not section.findings:
@@ -755,6 +784,13 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
                 md += "**References:**\n"
                 for ref in finding.references:
                     md += f"- {ref}\n"
+                md += "\n"
+            
+            if finding.duplicate_count > 0:
+                md += f"\n> **Also found in {finding.duplicate_count} other location(s):** "
+                md += ", ".join(finding.similar_locations[:5])
+                if finding.duplicate_count > 5:
+                    md += f" ... and {finding.duplicate_count - 5} more"
                 md += "\n"
             
             md += "---\n\n"
@@ -893,6 +929,64 @@ def aggregate_findings_from_orchestrator(
     return findings
 
 
+def deduplicate_findings(findings: List[Finding]) -> List[Finding]:
+    """Group similar findings across network-variant contract files.
+
+    Creates a fingerprint from rule_id + severity + normalized description,
+    keeping one primary finding per group with 'also found in' references.
+    """
+    import re
+
+    def _normalize_desc(desc: str) -> str:
+        """Strip file-specific paths and line numbers from description."""
+        normalized = re.sub(r'[\w/\\]+\.sol', '<file>', desc)
+        normalized = re.sub(r'(?:line|L|:)\s*\d+', '', normalized)
+        normalized = re.sub(r'0x[0-9a-fA-F]+', '<addr>', normalized)
+        return normalized.strip().lower()
+
+    def _normalize_filename(filepath: str) -> str:
+        """Strip network suffixes from filenames for grouping.
+        E.g., Token_Sepolia.sol -> Token, TokenBSC.sol -> Token"""
+        basename = os.path.splitext(os.path.basename(filepath))[0]
+        suffixes = [
+            '_Sepolia', '_sepolia', '_BSC', '_bsc', '_Polygon', '_polygon',
+            '_Base', '_base', '_Mainnet', '_mainnet', '_Goerli', '_goerli',
+            '_Arbitrum', '_arbitrum', '_Optimism', '_optimism',
+            'Sepolia', 'BSC', 'Polygon', 'Base', 'Mainnet', 'Goerli',
+            'Arbitrum', 'Optimism',
+            '_testnet', '_Testnet',
+        ]
+        for suffix in suffixes:
+            if basename.endswith(suffix):
+                basename = basename[:-len(suffix)]
+                break
+        return basename
+
+    # Build fingerprints and group
+    groups: Dict[str, List[Finding]] = {}
+    for finding in findings:
+        normalized_file = _normalize_filename(finding.file)
+        normalized_desc = _normalize_desc(finding.description or finding.title)
+        fingerprint = f"{finding.rule_id}|{finding.severity}|{normalized_file}|{normalized_desc}"
+
+        if fingerprint not in groups:
+            groups[fingerprint] = []
+        groups[fingerprint].append(finding)
+
+    # Deduplicate: keep first, annotate with similar locations
+    deduplicated = []
+    for fingerprint, group in groups.items():
+        primary = group[0]
+        if len(group) > 1:
+            primary.duplicate_count = len(group) - 1
+            primary.similar_locations = [
+                f"{f.file}:{f.line_no}" for f in group[1:]
+            ]
+        deduplicated.append(primary)
+
+    return deduplicated
+
+
 def create_audit_report(
     project_name: str,
     target_path: str,
@@ -911,6 +1005,9 @@ def create_audit_report(
         Complete AuditReport object.
     """
     
+    # Consolidate duplicate findings across network variants
+    findings = deduplicate_findings(findings)
+
     # Group by category
     sections = {}
     for finding in findings:

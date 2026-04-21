@@ -279,7 +279,7 @@ def sample_config():
     return {
         "engine": {
             "name": "Sentinel Security Engine",
-            "version": "3.1.3",
+            "version": "3.2.0",
             "fail_on_severity": "HIGH",
             "max_findings": 100
         },
@@ -641,7 +641,7 @@ def sample_sentinel_toml():
     return """
 [engine]
 name = "Sentinel Security Engine"
-version = "3.1.3"
+version = "3.2.0"
 fail_on_severity = "HIGH"
 max_findings = 100
 
