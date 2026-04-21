@@ -92,7 +92,7 @@ ln -sf /etc/nginx/sites-available/garrison /etc/nginx/sites-enabled/garrison
 nginx -t && systemctl reload nginx
 
 # 6. SSL certificate
-certbot certonly --nginx -d garrisonsec.io --non-interactive --agree-tos -m your@email.com
+certbot certonly --nginx -d garrisonsec.com --non-interactive --agree-tos -m your@email.com
 
 # 7. Start service
 cp deploy/garrison-engine.service /etc/systemd/system/
@@ -111,17 +111,17 @@ The nginx configuration is located at `deploy/nginx-garrison.conf`:
 server {
     listen 80;
     listen [::]:80;
-    server_name garrisonsec.io;
+    server_name garrisonsec.com;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name garrisonsec.io;
+    server_name garrisonsec.com;
 
-    ssl_certificate /etc/letsencrypt/live/garrisonsec.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/garrisonsec.io/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/garrisonsec.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/garrisonsec.com/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -168,7 +168,7 @@ server {
 ### Initial Certificate
 
 ```bash
-sudo certbot certonly --nginx -d garrisonsec.io --non-interactive --agree-tos -m your@email.com
+sudo certbot certonly --nginx -d garrisonsec.com --non-interactive --agree-tos -m your@email.com
 ```
 
 ### Certificate Renewal
@@ -189,8 +189,8 @@ sudo certbot renew --dry-run
 
 | File | Path |
 |------|------|
-| Full chain | `/etc/letsencrypt/live/garrisonsec.io/fullchain.pem` |
-| Private key | `/etc/letsencrypt/live/garrisonsec.io/privkey.pem` |
+| Full chain | `/etc/letsencrypt/live/garrisonsec.com/fullchain.pem` |
+| Private key | `/etc/letsencrypt/live/garrisonsec.com/privkey.pem` |
 | SSL options | `/etc/letsencrypt/options-ssl-nginx.conf` |
 | DH params | `/etc/letsencrypt/ssl-dhparams.pem` |
 
@@ -427,4 +427,4 @@ Nginx logs are rotated by `logrotate` (installed by default on Ubuntu).
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*

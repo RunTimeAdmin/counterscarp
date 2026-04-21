@@ -1,6 +1,6 @@
 # Getting Started with Garrison Engine
 
-> **Try it online:** [https://garrisonsec.io](https://garrisonsec.io) — Run audits in your browser, no installation required.
+> **Try it online:** [https://garrisonsec.com](https://garrisonsec.com) — Run audits in your browser, no installation required.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ Whether you're running a quick PR check, a full audit, or a bug bounty sweep, Ga
 
 The fastest way to try Garrison Engine is via the live web app:
 
-**[https://garrisonsec.io](https://garrisonsec.io)**
+**[https://garrisonsec.com](https://garrisonsec.com)**
 
 The online demo allows you to:
 - Upload and audit `.sol` or `.rs` files
@@ -187,7 +187,7 @@ Garrison Engine offers five license tiers:
 
 **Developer tier** unlocks:
 
-- **Web App** — Full web-based audit interface at garrisonsec.io
+- **Web App** — Full web-based audit interface at garrisonsec.com
 - **Solana Analyzer** — 35 Rust/Anchor security patterns with IDL validation
 - **Branded HTML/SARIF Reports** — Professional branded audit report output
 
@@ -207,7 +207,7 @@ Garrison Engine offers five license tiers:
 
 ### Getting a License
 
-Visit [garrisonsec.io/pricing](https://garrisonsec.io/pricing) to purchase a Developer, Pro, Team, or Enterprise license.
+Visit [garrisonsec.com/pricing](https://garrisonsec.com/pricing) to purchase a Developer, Pro, Team, or Enterprise license.
 
 ---
 
@@ -225,4 +225,4 @@ Visit [garrisonsec.io/pricing](https://garrisonsec.io/pricing) to purchase a Dev
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*

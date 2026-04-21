@@ -77,7 +77,7 @@ Garrison Engine includes both free and pro features in a single package. Pro fea
 | Machine Activations | - | 1 | 3 | 10 | Unlimited |
 | Support | GitHub | Email | Priority (24hr) | Dedicated | CSM |
 
-See full pricing at https://garrisonsec.io/pricing
+See full pricing at https://garrisonsec.com/pricing
 
 ### Activating Pro
 
@@ -92,7 +92,7 @@ Or add to `garrison.toml`:
 key = "your-key-here"
 ```
 
-Get your license at [garrisonsec.io/pricing](https://garrisonsec.io/pricing).
+Get your license at [garrisonsec.com/pricing](https://garrisonsec.com/pricing).
 
 ---
 
@@ -544,7 +544,7 @@ Detects dangerous proxy upgrade patterns:
 
 ## 🌐 **Web Application**
 
-Try Garrison Engine online at **https://garrisonsec.io** — no installation required.
+Try Garrison Engine online at **https://garrisonsec.com** — no installation required.
 
 The web app provides:
 - Upload and audit `.sol` or `.rs` files via browser
@@ -1351,7 +1351,7 @@ python exploit_generator.py --finding-json findings.json
 **Professional Audits:**
 - CyberShield Austin
 - Twitter: [@defiauditccie](https://twitter.com/defiauditccie)
-- Website: [garrisonsec.io](https://garrisonsec.io)
+- Website: [garrisonsec.com](https://garrisonsec.com)
 
 **GitHub:**
 - Issues: [github.com/RunTimeAdmin/garrison-engine/issues](https://github.com/RunTimeAdmin/garrison-engine/issues)

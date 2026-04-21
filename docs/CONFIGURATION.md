@@ -680,4 +680,4 @@ max_path_depth = 0  # Unlimited
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*

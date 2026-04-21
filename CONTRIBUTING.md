@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to Garrison Engine! This guide will help you get started with adding new features, fixing bugs, and improving the codebase.
 
-> **Website:** [garrisonsec.io](https://garrisonsec.io)  
+> **Website:** [garrisonsec.com](https://garrisonsec.com)  
 > **Issues:** [GitHub Issues](https://github.com/RunTimeAdmin/garrison-engine/issues)
 
 ---
@@ -640,7 +640,7 @@ python exploit_generator.py --finding-json findings.json
 ## Questions?
 
 - Open an issue on GitHub
-- Visit [garrisonsec.io](https://garrisonsec.io)
+- Visit [garrisonsec.com](https://garrisonsec.com)
 - Contact: [@defiauditccie](https://twitter.com/defiauditccie)
 
 Thank you for contributing to Garrison Engine!

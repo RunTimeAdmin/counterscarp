@@ -2,7 +2,7 @@
 
 > Get started with security scanning in 5 minutes
 > 
-> Website: [garrisonsec.io](https://garrisonsec.io)
+> Website: [garrisonsec.com](https://garrisonsec.com)
 
 ## Zero-to-Audit in 3 Commands
 
@@ -53,7 +53,7 @@ Garrison Engine includes three pre-built configuration profiles:
 - `garrison-audit.toml` - Full audit mode (10-30 min)
 - `garrison-bounty.toml` - Bug bounty hunting (1-2 hours)
 
-**Try it online:** [https://garrisonsec.io](https://garrisonsec.io) — No installation required
+**Try it online:** [https://garrisonsec.com](https://garrisonsec.com) — No installation required
 
 ---
 
@@ -236,7 +236,7 @@ RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
    - Convert your invariant tests to runtime monitors
 
 4. **Learn More:**
-   - Visit [garrisonsec.io](https://garrisonsec.io) for full documentation
+   - Visit [garrisonsec.com](https://garrisonsec.com) for full documentation
    - See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines
    - Add new heuristic patterns or threat intelligence sources
 
@@ -248,5 +248,5 @@ RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
 
 **Questions?** 
 - Open an issue on [GitHub](https://github.com/RunTimeAdmin/garrison-engine/issues)
-- Visit [garrisonsec.io](https://garrisonsec.io)
+- Visit [garrisonsec.com](https://garrisonsec.com)
 - Contact: [@defiauditccie](https://twitter.com/defiauditccie)

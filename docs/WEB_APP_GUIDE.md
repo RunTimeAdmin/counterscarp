@@ -1,6 +1,6 @@
 # Web Application Guide
 
-> **Live Demo:** [https://garrisonsec.io](https://garrisonsec.io) — Official beta instance
+> **Live Demo:** [https://garrisonsec.com](https://garrisonsec.com) — Official beta instance
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Open **http://localhost:8001** in your browser.
 
 ### Production (Official Beta)
 
-The official beta instance is available at **https://garrisonsec.io**.
+The official beta instance is available at **https://garrisonsec.com**.
 
 This is the live production deployment where you can:
 - Upload and audit smart contracts without any local installation
@@ -231,4 +231,4 @@ Health check endpoint.
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*

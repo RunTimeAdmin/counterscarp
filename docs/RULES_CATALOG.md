@@ -226,4 +226,4 @@ ignore_checks = ["solc-version", "naming-convention", "assembly"]
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*

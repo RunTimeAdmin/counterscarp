@@ -85,7 +85,7 @@ require a valid License Key for activation:
 
   Developer Tier:
   (a) Web Application — Access to the hosted web application at
-      garrisonsec.io for up to 5 scans per month.
+      garrisonsec.com for up to 5 scans per month.
 
   (b) Solana Analyzer — 35 Rust/Anchor security pattern detectors, IDL
       constraint validation, and CPI flow tracing for Solana programs.
@@ -198,7 +198,7 @@ SECTION 5. SUBSCRIPTION AND PAYMENT
 5.2  Auto-Renewal. Subscriptions auto-renew at the end of each billing
      period (monthly or annual) unless Licensee cancels before the renewal
      date. Cancellation may be performed through the Licensor's website or
-     by contacting support@garrisonsec.io.
+     by contacting support@garrisonsec.com.
 
 5.3  Refund Policy. Licensee is entitled to a full refund within fourteen
      (14) calendar days of the initial purchase of a Pro subscription. This
@@ -233,7 +233,7 @@ SECTION 6. MACHINE ACTIVATION
      activation limit.
 
 6.3  Deactivation. Licensee may deactivate a Machine by contacting
-     support@garrisonsec.io or through the Licensor's website. Deactivation
+     support@garrisonsec.com or through the Licensor's website. Deactivation
      frees an activation slot for use on another Machine.
 
 6.4  Abuse Detection. Licensor reserves the right to revoke activations
@@ -432,7 +432,7 @@ SECTION 13. MODIFICATIONS
 13.3 Rejection of Modifications. If Licensee does not agree with a modified
      EULA, Licensee may terminate this EULA by discontinuing use of the
      Software and requesting a pro-rata refund for the unused portion of the
-     current subscription period by contacting support@garrisonsec.io within
+     current subscription period by contacting support@garrisonsec.com within
      thirty (30) calendar days of the modification notice.
 
 
@@ -478,8 +478,8 @@ SECTION 14. GENERAL PROVISIONS
      this EULA, please contact:
 
      Garrison Engine
-     Email: support@garrisonsec.io
-     Website: https://garrisonsec.io
+     Email: support@garrisonsec.com
+     Website: https://garrisonsec.com
 
 
 ------------------------------------------------------------------------

@@ -43,8 +43,8 @@ systemctl reload nginx
 
 # Obtain SSL certificate (nginx must be running first for challenge)
 echo "[7/8] Obtaining SSL certificate..."
-if [ ! -d "/etc/letsencrypt/live/app.sentinel-engine.io" ]; then
-    certbot certonly --nginx -d app.sentinel-engine.io --non-interactive --agree-tos -m support@sentinel-engine.io
+if [ ! -d "/etc/letsencrypt/live/app.garrisonsec.com" ]; then
+    certbot certonly --nginx -d app.garrisonsec.com --non-interactive --agree-tos -m support@garrisonsec.com
     systemctl reload nginx
 else
     echo "   SSL certificate already exists, skipping..."
@@ -59,7 +59,7 @@ systemctl restart garrison-engine
 
 echo ""
 echo "=== Deployment Complete ==="
-echo "   URL: https://app.sentinel-engine.io"
+echo "   URL: https://app.garrisonsec.com"
 echo "   Status: systemctl status garrison-engine"
 echo "   Logs: journalctl -u garrison-engine -f"
 echo ""

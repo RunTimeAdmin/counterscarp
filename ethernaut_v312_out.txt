@@ -18,7 +18,7 @@ Plugin discovery complete: 0 plugins loaded (0 analyzers, 0 rule sets)
 Target: z:\Sentinal Engine\ethernaut\contracts\src\levels
 >>> Assessing Supply Chain...
 [PHASE 1] Assessing Supply Chain
-No package.json found — skipping supply chain check
+No package.json found ï¿½ skipping supply chain check
 
 >>> Analyzing Code Patterns...
 [PHASE 2] Running Static Analysis (Slither)
@@ -62,7 +62,7 @@ Professional Markdown report: z:\Sentinal Engine\sentinel-engine\audit_report_20
 |  Upgrade to Developer ($49/mo) to unlock:
 |  * Branded HTML/SARIF Reports
 |
-|  -> https://app.sentinel-engine.io/pricing
+|  -> https://app.garrisonsec.com/pricing
 |  Set SENTINEL_PRO_LICENSE=your-key to activate
 +--------------------------------------------------------------+
 
@@ -70,7 +70,7 @@ Professional Markdown report: z:\Sentinal Engine\sentinel-engine\audit_report_20
    Risk Score: 40.8/100
    Status: FAIL
    Findings: 246 total
-Audit Summary — Risk Score: 40/100, Status: FAIL, Findings: 246
+Audit Summary ï¿½ Risk Score: 40/100, Status: FAIL, Findings: 246
 Findings by severity: {'HIGH': 85, 'CRITICAL': 35, 'MEDIUM': 114, 'INFO': 12}
 Scan complete. Log file: z:\Sentinal Engine\sentinel-engine\sentinel_scan_20260420_153907.log
 

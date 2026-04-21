@@ -8,7 +8,7 @@
           "name": "Sentinel Engine",
           "version": "2.2.0",
           "semanticVersion": "2.2.0",
-          "informationUri": "https://sentinel-engine.io",
+          "informationUri": "https://garrisonsec.com",
           "rules": [
             {
               "id": "DIVIDE_BEFORE_MULTIPLY",

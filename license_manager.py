@@ -96,7 +96,7 @@ FEATURE_NAMES = {
     WEB_APP: "Web Application",
 }
 
-LICENSE_SERVER_URL = "https://api.garrisonsec.io/license/validate"
+LICENSE_SERVER_URL = "https://api.garrisonsec.com/license/validate"
 CACHE_TTL_HOURS = 24
 GRACE_PERIOD_DAYS = 7
 try:
@@ -594,7 +594,7 @@ class LicenseManager:
             f"|  Upgrade to {tier_label} ({price}) to unlock:\n"
             f"|  * {name}\n"
             f"|\n"
-            f"|  -> https://garrisonsec.io/pricing\n"
+            f"|  -> https://garrisonsec.com/pricing\n"
             f"|  Set GARRISON_PRO_LICENSE=your-key to activate\n"
             f"+{line}+\n"
         )

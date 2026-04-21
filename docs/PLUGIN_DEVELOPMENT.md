@@ -403,4 +403,4 @@ Save as `.garrison/plugins/security_todo_scanner.py`.
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*

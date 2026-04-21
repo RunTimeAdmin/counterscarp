@@ -446,7 +446,7 @@ dirs = [".garrison/plugins"]
 
 [license]
 # Pro license key. Can also be set via GARRISON_PRO_LICENSE env var.
-# Get your key at https://garrisonsec.io/pricing
+# Get your key at https://garrisonsec.com/pricing
 key = ""
 
 

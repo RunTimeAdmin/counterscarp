@@ -13,7 +13,7 @@ If you discover a security vulnerability in Garrison Engine, please report it re
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email us at: **support@garrisonsec.io**
+Instead, please email us at: **support@garrisonsec.com**
 
 ### What to Include
 
@@ -36,7 +36,7 @@ Instead, please email us at: **support@garrisonsec.io**
 The following are in scope:
 - Garrison Engine core analyzers and scanning logic
 - License validation and key management
-- Web application (app.garrisonsec.io)
+- Web application (app.garrisonsec.com)
 - CLI tools and report generation
 
 The following are out of scope:

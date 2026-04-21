@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://garrisonsec.io"
+Homepage = "https://garrisonsec.com"
 Repository = "https://github.com/RunTimeAdmin/garrison-engine"
 Documentation = "https://github.com/RunTimeAdmin/garrison-engine/tree/main/docs"
 "Bug Tracker" = "https://github.com/RunTimeAdmin/garrison-engine/issues"

@@ -235,4 +235,4 @@ Uses local sentence-transformers embeddings (no API key needed) to enrich findin
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*

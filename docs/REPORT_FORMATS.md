@@ -174,7 +174,7 @@ SARIF (Static Analysis Results Interchange Format) is an OASIS standard for exch
           "name": "Garrison Engine",
           "version": "3.1.3",
           "semanticVersion": "3.1.3",
-          "informationUri": "https://garrisonsec.io",
+          "informationUri": "https://garrisonsec.com",
           "rules": [
             {
               "id": "UNCHECKED_EXTERNAL_CALL",
@@ -382,4 +382,4 @@ LOGO_PATH = BASE_DIR / "assets" / "logo_small.png"
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.io*
+*Garrison Security Engine &bull; garrisonsec.com*
