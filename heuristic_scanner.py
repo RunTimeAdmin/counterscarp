@@ -259,7 +259,7 @@ RULES: List[HeuristicRule] = [
         id="UNCHECKED_EXTERNAL_CALL",
         description="Low-level call/transfer without return value check (funds may be lost)",
         severity="CRITICAL",
-        pattern=re.compile(r"(\w+(?:\([^)]*\))?)\.\(call\{|transfer\(|transferFrom\("),
+        pattern=re.compile(r"(\w+(?:\([^)]*\))?)\.(call[{(]|transfer\(|transferFrom\()"),
         hint="CRITICAL: Always check return values of external calls. Unchecked calls are top bug bounty targets ($10K-$100K).",
         confidence=9,
     ),

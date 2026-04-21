@@ -594,7 +594,7 @@ class LicenseManager:
             f"|  Upgrade to {tier_label} ({price}) to unlock:\n"
             f"|  * {name}\n"
             f"|\n"
-            f"|  -> https://garrisonsec.com/pricing\n"
+            f"|  -> https://app.garrisonsec.com/pricing\n"
             f"|  Set GARRISON_PRO_LICENSE=your-key to activate\n"
             f"+{line}+\n"
         )

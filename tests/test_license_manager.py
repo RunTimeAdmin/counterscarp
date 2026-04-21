@@ -128,7 +128,7 @@ class TestUpgradeMessage:
 
     def test_upgrade_message_contains_pricing_url(self):
         msg = LicenseManager.get_upgrade_message(ATTACK_GRAPH)
-        assert "app.garrison-engine.io/pricing" in msg
+        assert "app.garrisonsec.com/pricing" in msg
 
     def test_upgrade_message_for_all_features(self):
         for feature in ALL_PRO_FEATURES:
