@@ -10,7 +10,7 @@ from logger import get_logger, setup_logging
 
 try:
     from importlib.metadata import version as _pkg_version
-    _ENGINE_VERSION = _pkg_version("garrison-engine")
+    _ENGINE_VERSION = _pkg_version("counterscarp-engine")
 except Exception:
     _ENGINE_VERSION = "4.4.0"
 
@@ -25,7 +25,7 @@ _license = LicenseManager()
 # Import your specialists
 try:
     import red_team_scan
-    from exceptions import GarrisonAnalysisError
+    from exceptions import CounterscarpAnalysisError
     import supply_chain_check
     import fuzz_wrapper
     import heuristic_scanner
@@ -83,13 +83,13 @@ except ImportError as e:
     history_scanner = None
 
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
     logger.debug("Config loader imported successfully")
 except ImportError as e:
     logger.info(f"Config loader not available: {e}")
     CONFIG_AVAILABLE = False
-    GarrisonConfig = None
+    CounterscarpConfig = None
 
 # Optional plugin manager
 try:
@@ -624,7 +624,7 @@ def _safe_line_no(location_str: str) -> int:
 
 
 def main() -> None:
-    """Main entry point for the Garrison orchestrator.
+    """Main entry point for the Counterscarp orchestrator.
 
     Parses command-line arguments, runs all configured security checks,
     and generates comprehensive remediation reports.
@@ -634,10 +634,10 @@ def main() -> None:
     # persisted to a log file regardless of shell piping or redirection.
     _log_file = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        f"garrison_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        f"counterscarp_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     )
     setup_logging(log_file=_log_file)
-    logger.info("Garrison Engine scan initializing...")
+    logger.info("Counterscarp Engine scan initializing...")
     logger.info("Log file: %s", _log_file)
 
     parser = argparse.ArgumentParser(description="Action-Oriented Security Engine")
@@ -675,7 +675,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        help="Path to garrison.toml config file",
+        help="Path to counterscarp.toml config file",
         default=None,
     )
     parser.add_argument(
@@ -827,7 +827,7 @@ def main() -> None:
         session_id = state_mgr.start_session(str(args.target), cli_args)
         logger.info(f"New scan session: {session_id}")
 
-    stderr_log = str(Path(".garrison") / f"scan_stderr_{state_mgr._session_id}.log")
+    stderr_log = str(Path(".counterscarp") / f"scan_stderr_{state_mgr._session_id}.log")
 
     # --- Path validation (fast-fail before any scan work) ---
     if not os.path.exists(args.target):
@@ -868,12 +868,12 @@ def main() -> None:
             logger.error("Config file not found: %s", args.config)
             logger.info("Continuing with default settings...")
         except PermissionError as e:
-            logger.error("Permission denied reading config '%s': %s", args.config or "garrison.toml", e)
+            logger.error("Permission denied reading config '%s': %s", args.config or "counterscarp.toml", e)
             logger.info("Continuing with default settings...")
         except Exception as e:
             logger.error(
                 "Error loading config '%s' (%s): %s",
-                args.config or "garrison.toml",
+                args.config or "counterscarp.toml",
                 type(e).__name__,
                 e,
             )
@@ -1045,7 +1045,7 @@ def main() -> None:
             )
             static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
             logger.info("Slither analysis complete: %d issues found", len(static_issues))
-        except GarrisonAnalysisError as e:
+        except CounterscarpAnalysisError as e:
             logger.error("Slither analysis failed: %s", e)
             static_issues = []
             raw_slither = None
@@ -1829,7 +1829,7 @@ def main() -> None:
                     logger.info("Professional PDF report: %s", os.path.abspath(pdf_path))
                 else:
                     logger.info(
-                        "PDF report skipped (install xhtml2pdf: pip install garrison-engine[pdf])"
+                        "PDF report skipped (install xhtml2pdf: pip install counterscarp-engine[pdf])"
                     )
             else:
                 print(_license.get_upgrade_message(BRANDED_REPORTS))

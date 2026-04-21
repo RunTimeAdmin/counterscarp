@@ -1,1 +1,1 @@
-"""Garrison Engine Web Application."""
+"""Counterscarp Engine Web Application."""

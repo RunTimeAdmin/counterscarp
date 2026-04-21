@@ -1,5 +1,5 @@
 """
-License Management Module for Garrison Engine.
+License Management Module for Counterscarp Engine.
 
 Handles Pro feature gating, license validation, and machine fingerprinting.
 """
@@ -96,12 +96,12 @@ FEATURE_NAMES = {
     WEB_APP: "Web Application",
 }
 
-LICENSE_SERVER_URL = "https://api.garrisonsec.com/license/validate"
+LICENSE_SERVER_URL = "https://api.counterscarp.io/license/validate"
 CACHE_TTL_HOURS = 24
 GRACE_PERIOD_DAYS = 7
 try:
     from importlib.metadata import version as _get_version
-    PRODUCT_VERSION = _get_version("garrison-engine")
+    PRODUCT_VERSION = _get_version("counterscarp-engine")
 except Exception:
     PRODUCT_VERSION = "3.0.0"  # Fallback for dev installs
 
@@ -140,7 +140,7 @@ def get_machine_fingerprint() -> str:
 
 def _get_cache_dir() -> Path:
     """Get the cache directory path."""
-    cache_dir = Path.home() / ".garrison"
+    cache_dir = Path.home() / ".counterscarp"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
@@ -151,10 +151,10 @@ def _get_cache_path() -> Path:
 
 
 def _load_toml_license_key() -> str:
-    """Load license key from garrison.toml config file."""
+    """Load license key from counterscarp.toml config file."""
     config_paths = [
-        Path.cwd() / "garrison.toml",
-        Path.home() / ".garrison" / "garrison.toml",
+        Path.cwd() / "counterscarp.toml",
+        Path.home() / ".counterscarp" / "counterscarp.toml",
     ]
 
     for config_path in config_paths:
@@ -185,7 +185,7 @@ def _load_toml_license_key() -> str:
 def _get_license_key() -> str:
     """Get license key from environment or config file."""
     # Priority 1: Environment variable
-    env_key = os.environ.get("GARRISON_PRO_LICENSE", "").strip()
+    env_key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "").strip()
     if env_key:
         return env_key
 
@@ -194,7 +194,7 @@ def _get_license_key() -> str:
 
 
 class LicenseManager:
-    """Singleton license manager for Garrison Engine."""
+    """Singleton license manager for Counterscarp Engine."""
 
     _instance = None
     _lock = threading.Lock()
@@ -679,13 +679,13 @@ class LicenseManager:
         line = "-" * 62
         return (
             f"\n+{line}+\n"
-            f"|  [PRO] {name} requires Garrison Engine {tier_label}\n"
+            f"|  [PRO] {name} requires Counterscarp Engine {tier_label}\n"
             f"|\n"
             f"|  Upgrade to {tier_label} ({price}) to unlock:\n"
             f"|  * {name}\n"
             f"|\n"
-            f"|  -> https://app.garrisonsec.com/pricing\n"
-            f"|  Set GARRISON_PRO_LICENSE=your-key to activate\n"
+            f"|  -> https://app.counterscarp.io/pricing\n"
+            f"|  Set COUNTERSCARP_PRO_LICENSE=your-key to activate\n"
             f"+{line}+\n"
         )
 

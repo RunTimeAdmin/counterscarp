@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Configuration Loader for Garrison Engine
-Parses garrison.toml and provides typed config access
+Configuration Loader for Counterscarp Engine
+Parses counterscarp.toml and provides typed config access
 """
 
 from __future__ import annotations
@@ -15,13 +15,13 @@ from pathlib import Path
 # Import logger and exceptions
 try:
     from logger import get_logger
-    from exceptions import GarrisonValidationError, GarrisonConfigError
+    from exceptions import CounterscarpValidationError, CounterscarpConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    GarrisonValidationError = None
-    GarrisonConfigError = None
+    CounterscarpValidationError = None
+    CounterscarpConfigError = None
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -56,7 +56,7 @@ class EngineConfig:
         fail_on_severity: Minimum severity level to fail on.
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
-    name: str = "Garrison Security Engine"
+    name: str = "Counterscarp Security Engine"
     version: str = "4.4.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
@@ -541,7 +541,7 @@ class AIConfig:
     llm_model: str = "gpt-4o-mini"
     ollama_url: str = "http://localhost:11434"
     openai_model: str = "gpt-4-turbo-preview"  # kept for backward compat
-    rag_index_path: str = ".garrison/rag_index.json"
+    rag_index_path: str = ".counterscarp/rag_index.json"
     top_k: int = 5
     auto_enrich: bool = False
     llm_enrichment: bool = False
@@ -556,7 +556,7 @@ class PluginsConfig:
         dirs: List of directories to scan for plugins.
     """
     enabled: bool = True
-    dirs: List[str] = field(default_factory=lambda: [".garrison/plugins"])
+    dirs: List[str] = field(default_factory=lambda: [".counterscarp/plugins"])
 
 
 @dataclass
@@ -570,7 +570,7 @@ class LicenseConfig:
 
 
 @dataclass
-class GarrisonConfig:
+class CounterscarpConfig:
     """Root configuration object.
 
     Attributes:
@@ -640,28 +640,28 @@ class GarrisonConfig:
         return None
 
 
-def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
+def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
     """
-    Load configuration from garrison.toml.
+    Load configuration from counterscarp.toml.
 
     Args:
         config_path: Path to config file. If None, searches current dir and
             parent directories.
 
     Returns:
-        GarrisonConfig object with loaded settings.
+        CounterscarpConfig object with loaded settings.
     """
     if toml is None:
         logger.error("TOML parser not available, using default config")
-        return GarrisonConfig()
+        return CounterscarpConfig()
 
     # Find config file
     if config_path is None:
         config_path = find_config_file()
 
     if not config_path or not os.path.exists(config_path):
-        logger.info("No garrison.toml found, using default configuration")
-        return GarrisonConfig()
+        logger.info("No counterscarp.toml found, using default configuration")
+        return CounterscarpConfig()
 
     logger.info(f"Loading configuration from: {config_path}")
 
@@ -680,30 +680,30 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
             data = toml.load(f)
     except FileNotFoundError:
         logger.warning("Config file not found (skipping): %s", config_path)
-        return GarrisonConfig()
+        return CounterscarpConfig()
     except (PermissionError, IOError) as e:
         logger.error("Cannot read config file '%s': %s", config_path, e)
-        return GarrisonConfig()
+        return CounterscarpConfig()
     except _toml_decode_error as e:
         logger.error(
             "TOML syntax error in config file '%s': %s",
             config_path,
             e,
         )
-        if GarrisonConfigError:
-            raise GarrisonConfigError(
+        if CounterscarpConfigError:
+            raise CounterscarpConfigError(
                 "Failed to parse configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
-        return GarrisonConfig()
+        return CounterscarpConfig()
     except Exception as e:
         logger.error("Unexpected error reading config '%s' (%s): %s", config_path, type(e).__name__, e)
-        if GarrisonConfigError:
-            raise GarrisonConfigError(
+        if CounterscarpConfigError:
+            raise CounterscarpConfigError(
                 "Failed to read configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
-        return GarrisonConfig()
+        return CounterscarpConfig()
 
     # Validate config schema and log warnings
     validation_warnings = validate_config(data)
@@ -712,13 +712,13 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
         for warning in validation_warnings:
             logger.warning(f"  - {warning}")
 
-    config = GarrisonConfig()
+    config = CounterscarpConfig()
 
     # Parse engine config
     if 'engine' in data:
         eng = data['engine']
         config.engine = EngineConfig(
-            name=eng.get('name', 'Garrison Security Engine'),
+            name=eng.get('name', 'Counterscarp Security Engine'),
             version=eng.get('version', '4.4.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
@@ -977,7 +977,7 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
             ollama_url=ai.get('ollama_url', 'http://localhost:11434'),
             openai_model=ai.get('openai_model', 'gpt-4-turbo-preview'),
             rag_index_path=ai.get(
-                'rag_index_path', '.garrison/rag_index.json'
+                'rag_index_path', '.counterscarp/rag_index.json'
             ),
             top_k=ai.get('top_k', 5),
             auto_enrich=ai.get('auto_enrich', False),
@@ -989,7 +989,7 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
         plug = data['plugins']
         config.plugins = PluginsConfig(
             enabled=plug.get('enabled', True),
-            dirs=plug.get('dirs', ['.garrison/plugins'])
+            dirs=plug.get('dirs', ['.counterscarp/plugins'])
         )
 
     # Parse license config
@@ -1013,13 +1013,13 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
 
 def find_config_file() -> Optional[str]:
     """
-    Search for garrison.toml in current directory and parent directories.
+    Search for counterscarp.toml in current directory and parent directories.
     """
     current_dir = Path.cwd()
 
     # Search up to 5 levels up
     for _ in range(5):
-        config_path = current_dir / "garrison.toml"
+        config_path = current_dir / "counterscarp.toml"
         if config_path.exists():
             return str(config_path)
         current_dir = current_dir.parent
@@ -1219,7 +1219,7 @@ def validate_config(config: dict) -> list[str]:
     return warnings
 
 
-def print_config_summary(config: GarrisonConfig) -> None:
+def print_config_summary(config: CounterscarpConfig) -> None:
     """Pretty-print configuration summary."""
     logger.debug("Printing configuration summary")
     print("\n" + "="*60)
@@ -1263,9 +1263,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Test Garrison configuration loader"
+        description="Test Counterscarp configuration loader"
     )
-    parser.add_argument("--config", help="Path to garrison.toml")
+    parser.add_argument("--config", help="Path to counterscarp.toml")
     args = parser.parse_args()
 
     config = load_config(args.config)

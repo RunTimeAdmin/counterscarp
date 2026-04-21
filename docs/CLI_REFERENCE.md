@@ -1,6 +1,6 @@
 # CLI Reference
 
-> **Installation:** `pip install garrison-engine` — See [Getting Started](GETTING_STARTED.md) for details.
+> **Installation:** `pip install counterscarp-engine` — See [Getting Started](GETTING_STARTED.md) for details.
 
 ## Table of Contents
 
@@ -15,13 +15,13 @@
 
 ## Command Entry Points
 
-Garrison Engine provides three CLI commands:
+Counterscarp Engine provides three CLI commands:
 
 | Command | Entry Point | Description |
 |---------|-------------|-------------|
-| `garrison-engine` | `orchestrator:main` | Primary audit orchestrator |
-| `garrison` | `orchestrator:main` | Short alias (identical) |
-| `garrison-generate-pipeline` | `pipeline_generator:main` | CI/CD pipeline generator |
+| `counterscarp-engine` | `orchestrator:main` | Primary audit orchestrator |
+| `counterscarp` | `orchestrator:main` | Short alias (identical) |
+| `counterscarp-generate-pipeline` | `pipeline_generator:main` | CI/CD pipeline generator |
 
 ---
 
@@ -32,7 +32,7 @@ Garrison Engine provides three CLI commands:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--target` | PATH | **(required)** | Path to project root or `.sol` file |
-| `--config` | FILE | Auto-detect | Path to `garrison.toml` config file |
+| `--config` | FILE | Auto-detect | Path to `counterscarp.toml` config file |
 | `--report` | flag | `false` | Generate professional HTML/Markdown audit report |
 | `--project-name` | NAME | From path | Project name for report headers |
 
@@ -90,11 +90,11 @@ Garrison Engine provides three CLI commands:
 
 ## Execution Profiles
 
-Garrison Engine ships with three pre-configured profiles via TOML config files:
+Counterscarp Engine ships with three pre-configured profiles via TOML config files:
 
 | Feature | PR Profile | Audit Profile | Bounty Profile |
 |---------|-----------|---------------|----------------|
-| Config file | `garrison-pr.toml` | `garrison.toml` | `garrison-bounty.toml` |
+| Config file | `counterscarp-pr.toml` | `counterscarp.toml` | `counterscarp-bounty.toml` |
 | Heuristic scan | Yes | Yes | Yes |
 | Slither | High/Medium | High/Medium | All impacts |
 | Aderyn | No | Optional | Yes |
@@ -111,7 +111,7 @@ Garrison Engine ships with three pre-configured profiles via TOML config files:
 Designed for CI/CD gates on pull requests. Fast, focused, actionable.
 
 ```bash
-garrison --target ./contracts --config garrison-pr.toml
+counterscarp --target ./contracts --config counterscarp-pr.toml
 ```
 
 ### Audit Profile — Full Audit
@@ -119,7 +119,7 @@ garrison --target ./contracts --config garrison-pr.toml
 For professional security audits. Comprehensive analysis with professional reporting.
 
 ```bash
-garrison --target ./contracts --config garrison.toml --report --project-name "ProtocolName"
+counterscarp --target ./contracts --config counterscarp.toml --report --project-name "ProtocolName"
 ```
 
 ### Bounty Profile — Bug Bounty Mode
@@ -127,7 +127,7 @@ garrison --target ./contracts --config garrison.toml --report --project-name "Pr
 Maximum depth for bug bounty hunters. All analyzers, all rules, exploit generation.
 
 ```bash
-garrison --target ./contracts --config garrison-bounty.toml --report --fuzz-contract InvariantTest --medusa --symbolic --rag --project-name "BountyTarget"
+counterscarp --target ./contracts --config counterscarp-bounty.toml --report --fuzz-contract InvariantTest --medusa --symbolic --rag --project-name "BountyTarget"
 ```
 
 ---
@@ -137,7 +137,7 @@ garrison --target ./contracts --config garrison-bounty.toml --report --fuzz-cont
 ### Fast PR Check
 
 ```bash
-garrison --target ./contracts --config garrison-pr.toml
+counterscarp --target ./contracts --config counterscarp-pr.toml
 ```
 
 Runs heuristics + Slither (High/Medium only). Fails CI on HIGH+ findings.
@@ -145,7 +145,7 @@ Runs heuristics + Slither (High/Medium only). Fails CI on HIGH+ findings.
 ### Full Audit with HTML Report
 
 ```bash
-garrison --target ./contracts --report --project-name "UniswapV4"
+counterscarp --target ./contracts --report --project-name "UniswapV4"
 ```
 
 Full pipeline with professional HTML + Markdown report generation.
@@ -153,8 +153,8 @@ Full pipeline with professional HTML + Markdown report generation.
 ### Bug Bounty Mode
 
 ```bash
-garrison --target ./contracts \
-  --config garrison-bounty.toml \
+counterscarp --target ./contracts \
+  --config counterscarp-bounty.toml \
   --fuzz-contract InvariantTest \
   --medusa \
   --aderyn \
@@ -169,7 +169,7 @@ All analyzers, RAG enrichment, protocol fingerprinting, exploit generation.
 ### Upgrade Safety Check
 
 ```bash
-garrison --target ./contracts \
+counterscarp --target ./contracts \
   --upgrade-old ./contracts/ImplementationV1.sol \
   --upgrade-new ./contracts/ImplementationV2.sol \
   --report
@@ -181,10 +181,10 @@ Compares old and new implementations for storage collisions, removed auth, and o
 
 ```bash
 # Scan last 100 commits on develop branch
-garrison --target ./my-project --history --commits 100 --branch develop
+counterscarp --target ./my-project --history --commits 100 --branch develop
 
 # Scan commits since a specific date
-garrison --target ./my-project --history --since 2024-06-01 --branch main
+counterscarp --target ./my-project --history --since 2024-06-01 --branch main
 ```
 
 Traces vulnerability patterns across git history, identifying active vs. fixed issues.
@@ -192,7 +192,7 @@ Traces vulnerability patterns across git history, identifying active vs. fixed i
 ### Solana Audit
 
 ```bash
-garrison --target ./evm-contracts --solana-root ./programs --report
+counterscarp --target ./evm-contracts --solana-root ./programs --report
 ```
 
 Runs EVM analysis on the first target and Solana/Anchor static analysis on the programs directory.
@@ -201,10 +201,10 @@ Runs EVM analysis on the first target and Solana/Anchor static analysis on the p
 
 ```bash
 # Build the knowledge base index first
-garrison --target ./contracts --build-rag-index
+counterscarp --target ./contracts --build-rag-index
 
 # Then enrich findings
-garrison --target ./contracts --rag --report
+counterscarp --target ./contracts --rag --report
 ```
 
 Uses local sentence-transformers embeddings (no API key needed) to enrich findings with historical context and remediation guidance.
@@ -216,8 +216,8 @@ Uses local sentence-transformers embeddings (no API key needed) to enrich findin
 | Variable | Description |
 |----------|-------------|
 | `PYTHONUNBUFFERED` | Set to `1` for real-time log output in production |
-| `GARRISON_UPLOAD_DIR` | Override upload directory for web app |
-| `GARRISON_RESULTS_DIR` | Override results directory for web app |
+| `COUNTERSCARP_UPLOAD_DIR` | Override upload directory for web app |
+| `COUNTERSCARP_RESULTS_DIR` | Override results directory for web app |
 | `OPENAI_API_KEY` | Required when using `llm_backend = "openai"` in `[ai]` config |
 | `ANTHROPIC_API_KEY` | Required when using `llm_backend = "anthropic"` in `[ai]` config |
 
@@ -235,4 +235,4 @@ Uses local sentence-transformers embeddings (no API key needed) to enrich findin
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.com*
+*Counterscarp Security Engine &bull; counterscarp.io*

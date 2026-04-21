@@ -1,0 +1,113 @@
+=== COMPREHENSIVE GARRISON ENGINE REBRANDING AUDIT ===
+
+TARGET DIRECTORY: z:\Sentinal Engine\sentinel-engine
+SEARCH PATTERNS: garrison (case-insensitive), garrisonsec, garrison_engine, garrison.toml, GARRISON
+
+=== FILE CATEGORIES WITH GARRISON REFERENCES ===
+
+CONFIGURATION FILES (*.toml, *.yml):
+- garrison.toml (main config file - rename to counterscarp.toml)
+- garrison-audit.toml (profile - rename to counterscarp-audit.toml)
+- garrison-pr.toml (profile - rename to counterscarp-pr.toml)  
+- garrison-bounty.toml (profile - rename to counterscarp-bounty.toml)
+- pyproject.toml (package metadata)
+- docker-compose.yml (container config)
+- Dockerfile (container image)
+
+BUILD/CI FILES:
+- .github/workflows/garrison-audit.yml (GitHub Actions)
+- .github/workflows/publish.yml (PyPI publishing)
+- .github/PYPI_TRUSTED_PUBLISHER.md (PyPI setup docs)
+
+DOCUMENTATION (*.md):
+- README.md
+- QUICKSTART.md
+- docs/CLI_REFERENCE.md
+- docs/CONFIGURATION.md
+- docs/CONTRIBUTING_SIGNATURES.md
+- docs/DEPLOYMENT.md
+- docs/GETTING_STARTED.md
+- docs/PLUGIN_DEVELOPMENT.md
+- docs/REPORT_FORMATS.md
+- docs/RULES_CATALOG.md
+- docs/WEB_APP_GUIDE.md
+- ARCHITECTURE.md
+- CONTRIBUTING.md
+- ACTION_PLAN_2026-04-21.md (internal docs)
+- audit_report_2026-04-21.md (internal docs)
+- CHANGELOG.md
+- SECURITY.md
+- test_contracts/README.md
+
+PYTHON SOURCE FILES (*.py) - CORE ENGINE:
+- orchestrator.py (main entry point)
+- config_loader.py (config parsing)
+- exceptions.py (error hierarchy)
+- license_manager.py (licensing)
+- report_generator.py (report generation)
+- heuristic_scanner.py
+- attack_graph.py
+- pipeline_generator.py
+- fingerprint_scanner.py
+- aderyn_wrapper.py
+- medusa_wrapper.py
+- symbolic_wrapper.py
+- fuzz_wrapper.py
+- history_scanner.py
+- supply_chain_check.py
+- fork_logic_checks.py
+- exploit_generator.py
+- red_team_scan.py
+- intent_check.py
+- upgrade_diff.py
+- solana_analyzer.py
+- knowledge_fetcher.py
+- threat_intel.py
+- embeddings.py
+- rag_engine.py
+- visualizer.py
+- idl_validator.py
+- protocol_db.py
+- plugin_manager.py
+- http_utils.py
+- logger.py
+- gui.py
+- signature_updater.py
+- solana_intel.py
+- healthcheck.py
+- access_matrix.py
+
+WEB APPLICATION (webapp/):
+- webapp/__init__.py
+- webapp/config.py
+- webapp/main.py (FastAPI app)
+- webapp/license_api.py
+- webapp/stripe_integration.py
+- webapp/templates/base.html
+- webapp/templates/checkout_success.html
+- webapp/templates/pricing.html
+- webapp/templates/privacy.html
+- webapp/templates/results.html
+- webapp/templates/settings.html
+- webapp/templates/terms.html
+- webapp/templates/upload.html
+
+TEST FILES (tests/*.py):
+- tests/__init__.py
+- tests/conftest.py
+- tests/test_benchmarks.py
+- tests/test_config_loader.py
+- tests/test_exceptions.py
+- tests/test_history_scanner.py
+- tests/test_idl_validator.py
+- tests/test_license_manager.py
+- tests/test_orchestrator.py
+- tests/test_pipeline_generator.py
+- tests/test_rag_engine.py
+- tests/test_red_team_scan.py
+- tests/test_report_generator.py
+- tests/test_state_manager.py (42 garrison_dir references)
+- tests/test_supply_chain_check.py
+
+RESULTS/ARTIFACTS:
+- results/*/report.html (generated output)

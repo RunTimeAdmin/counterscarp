@@ -8,12 +8,12 @@ import re
 from typing import Dict, List, Any
 
 from logger import get_logger
-from exceptions import GarrisonAPIError, GarrisonValidationError
+from exceptions import CounterscarpAPIError, CounterscarpValidationError
 from http_utils import resilient_post, RateLimiter
 
 # Import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -25,7 +25,7 @@ _config = None
 _osv_rate_limiter = None
 
 
-def get_config() -> GarrisonConfig:
+def get_config() -> CounterscarpConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -33,9 +33,9 @@ def get_config() -> GarrisonConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = GarrisonConfig()
+                _config = CounterscarpConfig()
         else:
-            _config = GarrisonConfig()
+            _config = CounterscarpConfig()
     return _config
 
 
@@ -124,7 +124,7 @@ def check_osv_api(package_name: str, version: str) -> List[Dict[str, Any]]:
         data = response.json()
         return data.get("vulns", [])
 
-    except GarrisonAPIError as e:
+    except CounterscarpAPIError as e:
         # Log the failure but don't abort the entire scan
         logger.warning(
             f"OSV API error checking {package_name}@{version}: {e}",
@@ -150,7 +150,7 @@ def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
         List of vulnerability findings for dependencies.
 
     Raises:
-        GarrisonValidationError: If the file cannot be read.
+        CounterscarpValidationError: If the file cannot be read.
     """
     print(f"[*] Parsing manifest: {file_path}")
     print(f"[*] Querying OSV.dev database (Live)...")
@@ -176,7 +176,7 @@ def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
         return []
     except (IOError, OSError) as e:
         logger.error(f"Could not read package.json: {e}")
-        raise GarrisonValidationError(
+        raise CounterscarpValidationError(
             "Failed to read package.json",
             details={"path": file_path, "error": str(e)}
         ) from e

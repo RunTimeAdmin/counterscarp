@@ -45,11 +45,11 @@ sudo bash deploy/setup.sh
 
 | Step | Action |
 |------|--------|
-| 1/8 | Creates service user `garrison` (no login shell) |
-| 2/8 | Clones/updates repository to `/opt/garrison-engine` |
-| 3/8 | Creates Python venv and installs `garrison-engine[web]` |
+| 1/8 | Creates service user `counterscarp` (no login shell) |
+| 2/8 | Clones/updates repository to `/opt/counterscarp-engine` |
+| 3/8 | Creates Python venv and installs `counterscarp-engine[web]` |
 | 4/8 | Creates `uploads/` and `results/` directories |
-| 5/8 | Sets ownership to `garrison:garrison` |
+| 5/8 | Sets ownership to `counterscarp:counterscarp` |
 | 6/8 | Installs nginx config and reloads nginx |
 | 7/8 | Obtains SSL certificate via certbot (if not already present) |
 | 8/8 | Installs systemd service and starts it |
@@ -60,68 +60,68 @@ If you prefer to deploy manually:
 
 ```bash
 # 1. Create service user
-useradd -r -s /bin/false garrison
+useradd -r -s /bin/false counterscarp
 
 # 2. Setup directory (choose one method)
 
 # Method A: Install from PyPI (recommended for production)
-mkdir -p /opt/garrison-engine
-cd /opt/garrison-engine
+mkdir -p /opt/counterscarp-engine
+cd /opt/counterscarp-engine
 python3 -m venv venv
 ./venv/bin/pip install --upgrade pip
-./venv/bin/pip install "garrison-engine[web]"
+./venv/bin/pip install "counterscarp-engine[web]"
 
 # Method B: Clone from GitHub (for development/customization)
-# mkdir -p /opt/garrison-engine
-# cd /opt/garrison-engine
-# git clone https://github.com/RunTimeAdmin/garrison-engine.git .
+# mkdir -p /opt/counterscarp-engine
+# cd /opt/counterscarp-engine
+# git clone https://github.com/RunTimeAdmin/counterscarp-engine.git .
 # python3 -m venv venv
 # ./venv/bin/pip install --upgrade pip
 # ./venv/bin/pip install -e ".[web]"
 
 # 3. Create directories
-mkdir -p /opt/garrison-engine/uploads
-mkdir -p /opt/garrison-engine/results
+mkdir -p /opt/counterscarp-engine/uploads
+mkdir -p /opt/counterscarp-engine/results
 
 # 4. Set ownership
-chown -R garrison:garrison /opt/garrison-engine
+chown -R counterscarp:counterscarp /opt/counterscarp-engine
 
 # 5. Configure nginx
-cp deploy/nginx-garrison.conf /etc/nginx/sites-available/garrison
-ln -sf /etc/nginx/sites-available/garrison /etc/nginx/sites-enabled/garrison
+cp deploy/nginx-counterscarp.conf /etc/nginx/sites-available/counterscarp
+ln -sf /etc/nginx/sites-available/counterscarp /etc/nginx/sites-enabled/counterscarp
 nginx -t && systemctl reload nginx
 
 # 6. SSL certificate
-certbot certonly --nginx -d garrisonsec.com --non-interactive --agree-tos -m your@email.com
+certbot certonly --nginx -d counterscarp.io --non-interactive --agree-tos -m your@email.com
 
 # 7. Start service
-cp deploy/garrison-engine.service /etc/systemd/system/
+cp deploy/counterscarp-engine.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable garrison-engine
-systemctl start garrison-engine
+systemctl enable counterscarp-engine
+systemctl start counterscarp-engine
 ```
 
 ---
 
 ## Nginx Reverse Proxy Configuration
 
-The nginx configuration is located at `deploy/nginx-garrison.conf`:
+The nginx configuration is located at `deploy/nginx-counterscarp.conf`:
 
 ```nginx
 server {
     listen 80;
     listen [::]:80;
-    server_name garrisonsec.com;
+    server_name counterscarp.io;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name garrisonsec.com;
+    server_name counterscarp.io;
 
-    ssl_certificate /etc/letsencrypt/live/garrisonsec.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/garrisonsec.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/counterscarp.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/counterscarp.io/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -144,7 +144,7 @@ server {
     }
 
     location /static/ {
-        alias /opt/garrison-engine/webapp/static/;
+        alias /opt/counterscarp-engine/webapp/static/;
         expires 7d;
         add_header Cache-Control "public, immutable";
     }
@@ -168,7 +168,7 @@ server {
 ### Initial Certificate
 
 ```bash
-sudo certbot certonly --nginx -d garrisonsec.com --non-interactive --agree-tos -m your@email.com
+sudo certbot certonly --nginx -d counterscarp.io --non-interactive --agree-tos -m your@email.com
 ```
 
 ### Certificate Renewal
@@ -189,8 +189,8 @@ sudo certbot renew --dry-run
 
 | File | Path |
 |------|------|
-| Full chain | `/etc/letsencrypt/live/garrisonsec.com/fullchain.pem` |
-| Private key | `/etc/letsencrypt/live/garrisonsec.com/privkey.pem` |
+| Full chain | `/etc/letsencrypt/live/counterscarp.io/fullchain.pem` |
+| Private key | `/etc/letsencrypt/live/counterscarp.io/privkey.pem` |
 | SSL options | `/etc/letsencrypt/options-ssl-nginx.conf` |
 | DH params | `/etc/letsencrypt/ssl-dhparams.pem` |
 
@@ -198,24 +198,24 @@ sudo certbot renew --dry-run
 
 ## Systemd Service Management
 
-The service unit file is at `deploy/garrison-engine.service`:
+The service unit file is at `deploy/counterscarp-engine.service`:
 
 ```ini
 [Unit]
-Description=Garrison Engine Web Application
+Description=Counterscarp Engine Web Application
 After=network.target
 
 [Service]
 Type=exec
-User=garrison
-Group=garrison
-WorkingDirectory=/opt/garrison-engine
-ExecStart=/opt/garrison-engine/venv/bin/uvicorn webapp.main:app --host 127.0.0.1 --port 8001 --workers 4
+User=counterscarp
+Group=counterscarp
+WorkingDirectory=/opt/counterscarp-engine
+ExecStart=/opt/counterscarp-engine/venv/bin/uvicorn webapp.main:app --host 127.0.0.1 --port 8001 --workers 4
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-Environment=GARRISON_UPLOAD_DIR=/opt/garrison-engine/uploads
-Environment=GARRISON_RESULTS_DIR=/opt/garrison-engine/results
+Environment=COUNTERSCARP_UPLOAD_DIR=/opt/counterscarp-engine/uploads
+Environment=COUNTERSCARP_RESULTS_DIR=/opt/counterscarp-engine/results
 
 [Install]
 WantedBy=multi-user.target
@@ -225,25 +225,25 @@ WantedBy=multi-user.target
 
 ```bash
 # Start the service
-sudo systemctl start garrison-engine
+sudo systemctl start counterscarp-engine
 
 # Stop the service
-sudo systemctl stop garrison-engine
+sudo systemctl stop counterscarp-engine
 
 # Restart the service
-sudo systemctl restart garrison-engine
+sudo systemctl restart counterscarp-engine
 
 # Check status
-sudo systemctl status garrison-engine
+sudo systemctl status counterscarp-engine
 
 # Enable auto-start on boot
-sudo systemctl enable garrison-engine
+sudo systemctl enable counterscarp-engine
 
 # View live logs
-sudo journalctl -u garrison-engine -f
+sudo journalctl -u counterscarp-engine -f
 
 # View recent logs
-sudo journalctl -u garrison-engine -n 50
+sudo journalctl -u counterscarp-engine -n 50
 ```
 
 **Note:** After modifying the unit file, always run `systemctl daemon-reload` before restarting.
@@ -319,17 +319,17 @@ This script:
 ### Manual Update
 
 ```bash
-cd /opt/garrison-engine
+cd /opt/counterscarp-engine
 
 # Method A: Update from PyPI (if installed via pip)
-./venv/bin/pip install --upgrade "garrison-engine[web]"
+./venv/bin/pip install --upgrade "counterscarp-engine[web]"
 
 # Method B: Update from Git (if cloned)
 # git pull origin main
 # ./venv/bin/pip install -e ".[web]" --quiet
 
-chown -R garrison:garrison /opt/garrison-engine
-sudo systemctl restart garrison-engine
+chown -R counterscarp:counterscarp /opt/counterscarp-engine
+sudo systemctl restart counterscarp-engine
 ```
 
 ### Verify Update
@@ -357,24 +357,24 @@ Expected response:
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| 502 Bad Gateway | App not running | `systemctl restart garrison-engine` |
+| 502 Bad Gateway | App not running | `systemctl restart counterscarp-engine` |
 | 413 Request Entity Too Large | File exceeds 10 MB | Increase `client_max_body_size` in nginx config |
 | SSL errors | Certificate expired | `certbot renew && systemctl reload nginx` |
 | Slow responses | Analysis taking long | Increase `proxy_read_timeout` in nginx |
-| Upload fails | Permissions wrong | `chown -R garrison:garrison /opt/garrison-engine/uploads` |
+| Upload fails | Permissions wrong | `chown -R counterscarp:counterscarp /opt/counterscarp-engine/uploads` |
 
 ### Check Disk Space
 
 ```bash
-df -h /opt/garrison-engine
+df -h /opt/counterscarp-engine
 ```
 
 Uploads and results accumulate over time. Consider setting up a cron job to clean old audit data:
 
 ```bash
 # Remove results older than 30 days
-find /opt/garrison-engine/results -type d -mtime +30 -exec rm -rf {} +
-find /opt/garrison-engine/uploads -type d -mtime +30 -exec rm -rf {} +
+find /opt/counterscarp-engine/results -type d -mtime +30 -exec rm -rf {} +
+find /opt/counterscarp-engine/uploads -type d -mtime +30 -exec rm -rf {} +
 ```
 
 ### Check Running Processes
@@ -392,16 +392,16 @@ ss -tlnp | grep 8001
 
 ```bash
 # Follow live logs
-sudo journalctl -u garrison-engine -f
+sudo journalctl -u counterscarp-engine -f
 
 # Last 100 lines
-sudo journalctl -u garrison-engine -n 100
+sudo journalctl -u counterscarp-engine -n 100
 
 # Logs since yesterday
-sudo journalctl -u garrison-engine --since yesterday
+sudo journalctl -u counterscarp-engine --since yesterday
 
 # Logs with specific severity
-sudo journalctl -u garrison-engine -p err
+sudo journalctl -u counterscarp-engine -p err
 ```
 
 ### Nginx Logs
@@ -427,4 +427,4 @@ Nginx logs are rotated by `logrotate` (installed by default on Ubuntu).
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.com*
+*Counterscarp Security Engine &bull; counterscarp.io*

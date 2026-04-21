@@ -1,5 +1,5 @@
 # ============================================================================
-# GARRISON ENGINE - AUDIT MODE CONFIGURATION
+# COUNTERSCARP ENGINE - AUDIT MODE CONFIGURATION
 # ============================================================================
 # Profile: Maximum thoroughness for comprehensive client audits
 # Speed: Slow (deep analysis, full coverage)
@@ -7,7 +7,7 @@
 # ============================================================================
 
 [engine]
-name = "Garrison Security Engine"
+name = "Counterscarp Security Engine"
 version = "3.4.0"
 profile = "audit"
 

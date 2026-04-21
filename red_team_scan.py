@@ -13,20 +13,20 @@ from typing import List, Dict, Any, Optional
 try:
     from logger import get_logger, append_stderr_log
     from exceptions import (
-        GarrisonAnalysisError,
-        GarrisonToolNotFoundError,
+        CounterscarpAnalysisError,
+        CounterscarpToolNotFoundError,
     )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
     append_stderr_log = None
-    GarrisonAnalysisError = None
-    GarrisonToolNotFoundError = None
+    CounterscarpAnalysisError = None
+    CounterscarpToolNotFoundError = None
 
 # Import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -42,7 +42,7 @@ else:
 _config = None
 
 
-def get_config() -> GarrisonConfig:
+def get_config() -> CounterscarpConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -50,9 +50,9 @@ def get_config() -> GarrisonConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = GarrisonConfig()
+                _config = CounterscarpConfig()
         else:
-            _config = GarrisonConfig()
+            _config = CounterscarpConfig()
     return _config
 
 
@@ -337,8 +337,8 @@ def run_slither(
         Parsed JSON output from Slither.
 
     Raises:
-        GarrisonToolNotFoundError: If Slither is not installed.
-        GarrisonAnalysisError: If Slither analysis fails or
+        CounterscarpToolNotFoundError: If Slither is not installed.
+        CounterscarpAnalysisError: If Slither analysis fails or
             output cannot be parsed.
     """
     print(f"[*] Spawning Slither process for target: {target}...")
@@ -520,7 +520,7 @@ def run_slither(
                     return fallback
             print("[!] CRITICAL: Slither failed to generate JSON. Raw output:")
             print(result.stderr)
-            raise GarrisonAnalysisError(
+            raise CounterscarpAnalysisError(
                 "Slither failed to produce JSON output",
                 details={
                     "tool": "slither",
@@ -572,7 +572,7 @@ def run_slither(
 
     except FileNotFoundError as e:
         logger.error("Slither command not found")
-        raise GarrisonToolNotFoundError(
+        raise CounterscarpToolNotFoundError(
             "Slither not found in PATH",
             details={
                 "tool": "slither",
@@ -592,25 +592,25 @@ def run_slither(
                 else (result.stdout if result else "")
             )
         }
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Could not parse Slither output - tool may have crashed",
             details=error_data
         ) from e
     except subprocess.CalledProcessError as e:
         logger.error(f"Slither process failed: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Slither analysis failed",
             details={"returncode": e.returncode, "stderr": e.stderr}
         ) from e
     except subprocess.TimeoutExpired:
         logger.error("Slither analysis timed out (300s)")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Slither analysis timed out after 300 seconds",
             details={"tool": "slither", "timeout": 300}
         )
     except PermissionError as e:
         logger.error(f"Permission denied running Slither: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Permission denied running Slither",
             details={"error": str(e)}
         ) from e
@@ -784,7 +784,7 @@ if __name__ == "__main__":
         raw_data = run_slither(args.target)
         critical_intel = filter_vulnerabilities(raw_data)
         print_report(critical_intel)
-    except GarrisonAnalysisError:
+    except CounterscarpAnalysisError:
         raise
     except Exception as e:
         logger.error(f"Red team scan failed: {e}")

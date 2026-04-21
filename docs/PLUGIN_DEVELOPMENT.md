@@ -16,7 +16,7 @@
 
 ## Plugin Architecture Overview
 
-Garrison Engine supports community-contributed analyzers and heuristic rules through a simple plugin discovery mechanism. Plugins are Python modules placed in configured directories that expose a `register()` function.
+Counterscarp Engine supports community-contributed analyzers and heuristic rules through a simple plugin discovery mechanism. Plugins are Python modules placed in configured directories that expose a `register()` function.
 
 ### How It Works
 
@@ -30,7 +30,7 @@ Garrison Engine supports community-contributed analyzers and heuristic rules thr
 ### Directory Structure
 
 ```
-.garrison/
+.counterscarp/
 └── plugins/
     ├── my_analyzer.py      # Custom analyzer plugin
     ├── my_rules.py         # Custom rule plugin
@@ -126,15 +126,15 @@ Each `HeuristicRule` has:
 ### Step 1: Create the Plugin Directory
 
 ```bash
-mkdir -p .garrison/plugins
+mkdir -p .counterscarp/plugins
 ```
 
 ### Step 2: Write the Plugin Module
 
-Create `.garrison/plugins/my_first_plugin.py`:
+Create `.counterscarp/plugins/my_first_plugin.py`:
 
 ```python
-"""My first Garrison Engine plugin."""
+"""My first Counterscarp Engine plugin."""
 import re
 from typing import Any, Dict, List
 
@@ -162,18 +162,18 @@ def register(manager):
 
 ### Step 3: Configure the Plugin Directory
 
-In `garrison.toml`:
+In `counterscarp.toml`:
 
 ```toml
 [plugins]
 enabled = true
-dirs = [".garrison/plugins"]
+dirs = [".counterscarp/plugins"]
 ```
 
 ### Step 4: Run with Plugins
 
 ```bash
-garrison --target ./contracts --config garrison.toml
+counterscarp --target ./contracts --config counterscarp.toml
 ```
 
 The orchestrator will log plugin discovery:
@@ -265,7 +265,7 @@ from plugin_manager import PluginManager
 
 def test_plugin_discovery():
     manager = PluginManager()
-    count = manager.discover_plugins([".garrison/plugins"])
+    count = manager.discover_plugins([".counterscarp/plugins"])
     assert count > 0
     assert manager.get_analyzer_count() >= 1
 ```
@@ -309,7 +309,7 @@ def register(manager):
     manager.register_rules(GasGriefingRules())
 ```
 
-Save as `.garrison/plugins/gas_griefing_rules.py`.
+Save as `.counterscarp/plugins/gas_griefing_rules.py`.
 
 ---
 
@@ -399,8 +399,8 @@ def register(manager):
     manager.register_analyzer(SecurityTodoScanner())
 ```
 
-Save as `.garrison/plugins/security_todo_scanner.py`.
+Save as `.counterscarp/plugins/security_todo_scanner.py`.
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.com*
+*Counterscarp Security Engine &bull; counterscarp.io*

@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# THE GARRISON ENGINE - DOCKERFILE
+# THE COUNTERSCARP ENGINE - DOCKERFILE
 # Multi-Chain Smart Contract Security Auditing Toolkit
 # ------------------------------------------------------------------------------
 # Stage 1: Build stage for Rust/Go tools
@@ -59,7 +59,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. INSTALL PYTHON TOOLS
-# Install core dependencies for the Garrison Engine
+# Install core dependencies for the Counterscarp Engine
 RUN pip install --no-cache-dir \
     slither-analyzer==0.11.5 \
     mythril==0.24.8 \
@@ -143,7 +143,7 @@ RUN python3 --version && \
     pip list | grep slither-analyzer && \
     aderyn --version && \
     medusa --version && \
-    echo "✓ Garrison Engine core dependencies installed"
+    echo "Counterscarp Engine core dependencies installed"
 
 RUN python3 -c "from xhtml2pdf import pisa; print('xhtml2pdf OK')"
 
@@ -160,16 +160,16 @@ CMD ["--help"]
 # USAGE EXAMPLES:
 #
 # Build:
-#   docker build -t garrison-engine .
+#   docker build -t counterscarp-engine .
 #
 # Scan EVM contract:
-#   docker run --rm -v $(pwd):/scan garrison-engine --target /scan
+#   docker run --rm -v $(pwd):/scan counterscarp-engine --target /scan
 #
 # Threat intel (EVM):
-#   docker run --rm -v $(pwd):/scan garrison-engine python3 threat_intel.py /scan/contracts/Vault.sol
+#   docker run --rm -v $(pwd):/scan counterscarp-engine python3 threat_intel.py /scan/contracts/Vault.sol
 #
 # Threat intel (Solana):
-#   docker run --rm -v $(pwd):/scan garrison-engine python3 solana_intel.py /scan/programs/lib.rs
+#   docker run --rm -v $(pwd):/scan counterscarp-engine python3 solana_intel.py /scan/programs/lib.rs
 #
 # Interactive shell:
 #   docker run --rm -it -v $(pwd):/scan garrison-engine /bin/bash

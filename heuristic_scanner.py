@@ -25,11 +25,11 @@ else:
 
 # Optional config loader (graceful fallback if not available)
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
-    GarrisonConfig = None
+    CounterscarpConfig = None
 
 # Optional plugin manager (graceful fallback if not available)
 try:
@@ -40,11 +40,11 @@ except ImportError:
     PluginManager = None
 
 
-# Compiled regex for inline suppression pragmas (garrison-suppress).
-# Matches: // garrison-suppress: RULE_ID [optional reason]
-#          /* garrison-suppress: RULE_ID */
-#          // garrison-suppress: ALL
-SUPPRESS_PATTERN = re.compile(r'garrison-suppress:\s*(\w+)(?:\s+(.*))?')
+# Compiled regex for inline suppression pragmas (counterscarp-suppress).
+# Matches: // counterscarp-suppress: RULE_ID [optional reason]
+#          /* counterscarp-suppress: RULE_ID */
+#          // counterscarp-suppress: ALL
+SUPPRESS_PATTERN = re.compile(r'counterscarp-suppress:\s*(\w+)(?:\s+(.*))?')
 
 
 # Rule categories: groups rule IDs by security domain for coverage reporting.
@@ -403,7 +403,7 @@ def get_all_rules(plugin_mgr: Optional[PluginManager] = None) -> List[HeuristicR
 def _check_inline_suppression(
     lines: List[str], line_idx: int, rule_id: str
 ) -> Tuple[bool, str]:
-    """Check current line and line above for a garrison-suppress pragma.
+    """Check current line and line above for a counterscarp-suppress pragma.
 
     Args:
         lines: All lines of the file (0-based list).
@@ -527,7 +527,7 @@ def is_in_multiline_comment(
 
 def scan_file(
     path: str,
-    config: Optional[GarrisonConfig] = None,
+    config: Optional[CounterscarpConfig] = None,
     plugin_mgr: Optional[PluginManager] = None
 ) -> List[HeuristicFinding]:
     """Scan a single .sol file and return heuristic findings.
@@ -728,7 +728,7 @@ def should_exclude(file_path: str, exclude_patterns: List[str], base_dir: str = 
 
 def scan_target(
     target: str,
-    config: Optional[GarrisonConfig] = None,
+    config: Optional[CounterscarpConfig] = None,
     plugin_mgr: Optional[PluginManager] = None,
     exclude_paths: Optional[List[str]] = None,
 ) -> List[HeuristicFinding]:
@@ -845,7 +845,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        help="Path to garrison.toml config file",
+        help="Path to counterscarp.toml config file",
         default=None,
     )
     parser.add_argument(

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-CI/CD Pipeline Generator for Garrison Engine.
+CI/CD Pipeline Generator for Counterscarp Engine.
 
-Generates platform-specific CI/CD pipeline configurations based on garrison.toml
+Generates platform-specific CI/CD pipeline configurations based on counterscarp.toml
 settings. Supports GitHub Actions, GitLab CI, Azure DevOps, and Jenkins.
 
 Example:
     >>> from pipeline_generator import generate_pipeline
-    >>> yaml_content = generate_pipeline("garrison.toml", "github")
+    >>> yaml_content = generate_pipeline("counterscarp.toml", "github")
     >>> print(yaml_content)
 
 CLI Usage:
-    $ garrison-generate-pipeline --platform github --config garrison.toml
+    $ counterscarp-generate-pipeline --platform github --config counterscarp.toml
     $ python pipeline_generator.py --platform gitlab --output .gitlab-ci.yml
 """
 
@@ -27,17 +27,17 @@ from pathlib import Path
 try:
     from logger import get_logger
     from exceptions import (
-        GarrisonConfigError,
-        GarrisonValidationError,
-        GarrisonError,
+        CounterscarpConfigError,
+        CounterscarpValidationError,
+        CounterscarpError,
     )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    GarrisonConfigError = Exception
-    GarrisonValidationError = ValueError
-    GarrisonError = Exception
+    CounterscarpConfigError = Exception
+    CounterscarpValidationError = ValueError
+    CounterscarpError = Exception
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -48,12 +48,12 @@ else:
 
 # Try to import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_LOADER_AVAILABLE = True
 except ImportError:
     CONFIG_LOADER_AVAILABLE = False
     load_config = None
-    GarrisonConfig = None
+    CounterscarpConfig = None
 
 
 # =============================================================================
@@ -61,7 +61,7 @@ except ImportError:
 # =============================================================================
 
 # GitHub Actions Template
-GITHUB_ACTIONS_TEMPLATE = '''name: Garrison Security Audit
+GITHUB_ACTIONS_TEMPLATE = '''name: Counterscarp Security Audit
 
 on:
 {triggers}
@@ -72,13 +72,13 @@ permissions:
   security-events: write
 
 env:
-  GARRISON_FAIL_ON_SEVERITY: "{fail_on_severity}"
-  GARRISON_REPORT_FORMAT: "{report_format}"
+  COUNTERSCARP_FAIL_ON_SEVERITY: "{fail_on_severity}"
+  COUNTERSCARP_REPORT_FORMAT: "{report_format}"
 
 jobs:
-  garrison-security-scan:
+  counterscarp-security-scan:
     runs-on: ubuntu-latest
-    name: Garrison Security Analysis
+    name: Counterscarp Security Analysis
     
     steps:
       - name: Checkout code
@@ -91,18 +91,18 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Install Garrison Engine dependencies
+      - name: Install Counterscarp Engine dependencies
         run: |
           pip install slither-analyzer requests packaging tomli
           pip install solc-select
           solc-select install 0.8.19
           solc-select use 0.8.19
       
-      - name: Run Garrison Engine Scan
-        id: garrison_scan
+      - name: Run Counterscarp Engine Scan
+        id: counterscarp_scan
         run: |
-          python -m garrison-engine --target {target_path} --config {config_path} --report > garrison_output.txt 2>&1 || true
-          cat garrison_output.txt
+          python -m counterscarp-engine --target {target_path} --config {config_path} --report > counterscarp_output.txt 2>&1 || true
+          cat counterscarp_output.txt
       
 {analyzer_steps}
       
@@ -113,7 +113,7 @@ import sys
 sys.path.insert(0, '.')
 try:
     from report_generator import save_sarif_report
-    save_sarif_report([], 'garrison-report.sarif', {{'project_name': 'garrison-scan'}})
+    save_sarif_report([], 'counterscarp-report.sarif', {{'project_name': 'counterscarp-scan'}})
     print('SARIF report generated')
 except Exception as e:
     print(f'SARIF generation skipped: {{e}}')
@@ -123,14 +123,14 @@ except Exception as e:
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: garrison-report.sarif
-          category: garrison-engine
+          sarif_file: counterscarp-report.sarif
+          category: counterscarp-engine
       
       - name: Check for Critical/High Issues
         id: check_severity
         run: |
-          CRITICAL=$(grep -c '\\[CRITICAL\\]' garrison_output.txt || echo 0)
-          HIGH=$(grep -c '\\[HIGH\\]' garrison_output.txt || echo 0)
+          CRITICAL=$(grep -c '\\[CRITICAL\\]' counterscarp_output.txt || echo 0)
+          HIGH=$(grep -c '\\[HIGH\\]' counterscarp_output.txt || echo 0)
           echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
           echo "high_count=$HIGH" >> $GITHUB_OUTPUT
           
@@ -143,25 +143,25 @@ except Exception as e:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: garrison-security-report
+          name: counterscarp-security-report
           path: |
-            garrison_output.txt
-            garrison-report.sarif
+            counterscarp_output.txt
+            counterscarp-report.sarif
             ACTION_PLAN_*.md
             audit_report_*.html
 {notification_steps}
 '''
 
 # GitLab CI Template
-GITLAB_CI_TEMPLATE = '''# Garrison Security Engine - GitLab CI Pipeline
-# Generated by Garrison Pipeline Generator
+GITLAB_CI_TEMPLATE = '''# Counterscarp Security Engine - GitLab CI Pipeline
+# Generated by Counterscarp Pipeline Generator
 
 stages:
   - security
 
 variables:
-  GARRISON_FAIL_ON_SEVERITY: "{fail_on_severity}"
-  GARRISON_REPORT_FORMAT: "{report_format}"
+  COUNTERSCARP_FAIL_ON_SEVERITY: "{fail_on_severity}"
+  COUNTERSCARP_REPORT_FORMAT: "{report_format}"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 cache:
@@ -169,7 +169,7 @@ cache:
     - .cache/pip
     - solc-versions/
 
-garrison-security-scan:
+counterscarp-security-scan:
   stage: security
   image: python:3.10-slim
   
@@ -181,11 +181,11 @@ garrison-security-scan:
     - solc-select use 0.8.19
   
   script:
-    - echo "Running Garrison Security Scan..."
-    - python -m garrison-engine --target {target_path} --config {config_path} --report || true
+    - echo "Running Counterscarp Security Scan..."
+    - python -m counterscarp-engine --target {target_path} --config {config_path} --report || true
     - |
-      CRITICAL=$(grep -c '\\[CRITICAL\\]' garrison_output.txt 2>/dev/null || echo 0)
-      HIGH=$(grep -c '\\[HIGH\\]' garrison_output.txt 2>/dev/null || echo 0)
+      CRITICAL=$(grep -c '\\[CRITICAL\\]' counterscarp_output.txt 2>/dev/null || echo 0)
+      HIGH=$(grep -c '\\[HIGH\\]' counterscarp_output.txt 2>/dev/null || echo 0)
       echo "Found $CRITICAL critical and $HIGH high severity issues"
       
       if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
@@ -198,7 +198,7 @@ garrison-security-scan:
   artifacts:
     when: always
     paths:
-      - garrison_output.txt
+      - counterscarp_output.txt
       - ACTION_PLAN_*.md
       - audit_report_*.html
     expire_in: 30 days
@@ -209,8 +209,8 @@ garrison-security-scan:
 '''
 
 # Azure DevOps Template
-AZURE_DEVOPS_TEMPLATE = '''# Garrison Security Engine - Azure DevOps Pipeline
-# Generated by Garrison Pipeline Generator
+AZURE_DEVOPS_TEMPLATE = '''# Counterscarp Security Engine - Azure DevOps Pipeline
+# Generated by Counterscarp Pipeline Generator
 
 trigger:
 {triggers}
@@ -219,8 +219,8 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  GARRISON_FAIL_ON_SEVERITY: '{fail_on_severity}'
-  GARRISON_REPORT_FORMAT: '{report_format}'
+  COUNTERSCARP_FAIL_ON_SEVERITY: '{fail_on_severity}'
+  COUNTERSCARP_REPORT_FORMAT: '{report_format}'
 
 steps:
 - task: UsePythonVersion@0
@@ -233,18 +233,18 @@ steps:
     pip install solc-select
     solc-select install 0.8.19
     solc-select use 0.8.19
-  displayName: 'Install Garrison Dependencies'
+  displayName: 'Install Counterscarp Dependencies'
 
 - script: |
-    python -m garrison-engine --target {target_path} --config {config_path} --report > garrison_output.txt 2>&1 || true
-    cat garrison_output.txt
-  displayName: 'Run Garrison Security Scan'
+    python -m counterscarp-engine --target {target_path} --config {config_path} --report > counterscarp_output.txt 2>&1 || true
+    cat counterscarp_output.txt
+  displayName: 'Run Counterscarp Security Scan'
 
 {analyzer_steps}
 
 - script: |
-    CRITICAL=$(grep -c '\\[CRITICAL\\]' garrison_output.txt || echo 0)
-    HIGH=$(grep -c '\\[HIGH\\]' garrison_output.txt || echo 0)
+    CRITICAL=$(grep -c '\\[CRITICAL\\]' counterscarp_output.txt || echo 0)
+    HIGH=$(grep -c '\\[HIGH\\]' counterscarp_output.txt || echo 0)
     echo "Found $CRITICAL critical and $HIGH high severity issues"
     
     if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
@@ -257,22 +257,22 @@ steps:
 - task: PublishBuildArtifacts@1
   inputs:
     pathToPublish: '$(Build.SourcesDirectory)'
-    artifactName: 'garrison-reports'
+    artifactName: 'counterscarp-reports'
     publishLocation: 'Container'
   condition: always()
 {notification_steps}
 '''
 
 # Jenkinsfile Template
-JENKINSFILE_TEMPLATE = '''// Garrison Security Engine - Jenkins Pipeline
-// Generated by Garrison Pipeline Generator
+JENKINSFILE_TEMPLATE = '''// Counterscarp Security Engine - Jenkins Pipeline
+// Generated by Counterscarp Pipeline Generator
 
 pipeline {{
     agent any
     
     environment {{
-        GARRISON_FAIL_ON_SEVERITY = '{fail_on_severity}'
-        GARRISON_REPORT_FORMAT = '{report_format}'
+        COUNTERSCARP_FAIL_ON_SEVERITY = '{fail_on_severity}'
+        COUNTERSCARP_REPORT_FORMAT = '{report_format}'
     }}
     
     options {{
@@ -295,8 +295,8 @@ pipeline {{
         stage('Security Scan') {{
             steps {{
                 sh """
-                    python -m garrison-engine --target {target_path} --config {config_path} --report > garrison_output.txt 2>&1 || true
-                    cat garrison_output.txt
+                    python -m counterscarp-engine --target {target_path} --config {config_path} --report > counterscarp_output.txt 2>&1 || true
+                    cat counterscarp_output.txt
                 """
             }}
         }}
@@ -307,11 +307,11 @@ pipeline {{
             steps {{
                 script {{
                     def critical = sh(
-                        script: "grep -c '\\\\[CRITICAL\\\\]' garrison_output.txt || echo 0",
+                        script: "grep -c '\\\\[CRITICAL\\\\]' counterscarp_output.txt || echo 0",
                         returnStdout: true
                     ).trim()
                     def high = sh(
-                        script: "grep -c '\\\\[HIGH\\\\]' garrison_output.txt || echo 0",
+                        script: "grep -c '\\\\[HIGH\\\\]' counterscarp_output.txt || echo 0",
                         returnStdout: true
                     ).trim()
                     
@@ -327,7 +327,7 @@ pipeline {{
     
     post {{
         always {{
-            archiveArtifacts artifacts: 'garrison_output.txt, ACTION_PLAN_*.md, audit_report_*.html', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'counterscarp_output.txt, ACTION_PLAN_*.md, audit_report_*.html', allowEmptyArchive: true
         }}
 {notification_post}
     }}
@@ -336,12 +336,12 @@ pipeline {{
 
 # Docker-based execution template (can be embedded in any platform)
 DOCKER_EXECUTION_TEMPLATE = '''
-      - name: Run Garrison via Docker
+      - name: Run Counterscarp via Docker
         run: |
           docker run --rm \\
             -v $(pwd):/workspace \\
             -w /workspace \\
-            garrison-engine:latest \\
+            counterscarp-engine:latest \\
             --target {target_path} --config {config_path} --report
 '''
 
@@ -382,13 +382,13 @@ SLACK_NOTIFICATION_STEP = '''
         with:
           payload: |
             {{
-              "text": "Garrison Security Scan ${{ job.status }}",
+              "text": "Counterscarp Security Scan ${{ job.status }}",
               "blocks": [
                 {{
                   "type": "section",
                   "text": {{
                     "type": "mrkdwn",
-                    "text": "*Garrison Security Scan*\\nStatus: ${{ job.status }}"
+                    "text": "*Counterscarp Security Scan*\\nStatus: ${{ job.status }}"
                   }}
                 }}
               ]
@@ -402,7 +402,7 @@ DISCORD_NOTIFICATION_STEP = '''
         if: always()
         uses: Ilshidur/action-discord@master
         with:
-          args: "Garrison Security Scan ${{ job.status }}"
+          args: "Counterscarp Security Scan ${{ job.status }}"
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 '''
@@ -412,11 +412,11 @@ DISCORD_NOTIFICATION_STEP = '''
 # Core Functions
 # =============================================================================
 
-def _get_triggers(config: Optional[GarrisonConfig], platform: str) -> str:
+def _get_triggers(config: Optional[CounterscarpConfig], platform: str) -> str:
     """Generate trigger configuration for the specified platform.
     
     Args:
-        config: Garrison configuration object.
+        config: Counterscarp configuration object.
         platform: CI/CD platform (github, gitlab, azure, jenkins).
     
     Returns:
@@ -472,14 +472,14 @@ def _get_triggers(config: Optional[GarrisonConfig], platform: str) -> str:
     return ""
 
 
-def _get_analyzer_steps(config: Optional[GarrisonConfig], platform: str, target_path: str, config_path: str) -> str:
+def _get_analyzer_steps(config: Optional[CounterscarpConfig], platform: str, target_path: str, config_path: str) -> str:
     """Generate analyzer execution steps based on configuration.
     
     Args:
-        config: Garrison configuration object.
+        config: Counterscarp configuration object.
         platform: CI/CD platform.
         target_path: Path to target contracts.
-        config_path: Path to garrison config file.
+        config_path: Path to counterscarp config file.
     
     Returns:
         Platform-specific analyzer steps string.
@@ -556,11 +556,11 @@ def _get_analyzer_steps(config: Optional[GarrisonConfig], platform: str, target_
     return "\n".join(steps) if steps else ""
 
 
-def _get_notification_steps(config: Optional[GarrisonConfig], platform: str) -> str:
+def _get_notification_steps(config: Optional[CounterscarpConfig], platform: str) -> str:
     """Generate notification steps based on configuration.
     
     Args:
-        config: Garrison configuration object.
+        config: Counterscarp configuration object.
         platform: CI/CD platform.
     
     Returns:
@@ -599,10 +599,10 @@ def _get_notification_steps(config: Optional[GarrisonConfig], platform: str) -> 
         post_blocks = []
         if "slack" in notifications:
             post_blocks.append('''        success {
-            slackSend(color: 'good', message: "Garrison Scan Passed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+            slackSend(color: 'good', message: "Counterscarp Scan Passed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }}
         failure {{
-            slackSend(color: 'danger', message: "Garrison Scan Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+            slackSend(color: 'danger', message: "Counterscarp Scan Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }''')
         if not post_blocks:
             post_blocks.append("        always {\n            echo 'Pipeline completed'\n        }")
@@ -611,13 +611,13 @@ def _get_notification_steps(config: Optional[GarrisonConfig], platform: str) -> 
     return ""
 
 
-def _get_analyzer_stages_jenkins(config: Optional[GarrisonConfig], target_path: str, config_path: str) -> str:
+def _get_analyzer_stages_jenkins(config: Optional[CounterscarpConfig], target_path: str, config_path: str) -> str:
     """Generate Jenkins-specific analyzer stages.
     
     Args:
-        config: Garrison configuration object.
+        config: Counterscarp configuration object.
         target_path: Path to target contracts.
-        config_path: Path to garrison config file.
+        config_path: Path to counterscarp config file.
     
     Returns:
         Jenkins stages string.
@@ -633,12 +633,12 @@ def generate_pipeline(
 ) -> str:
     """Generate a CI/CD pipeline configuration for the specified platform.
     
-    Reads the garrison.toml configuration to determine which analyzers are
+    Reads the counterscarp.toml configuration to determine which analyzers are
     enabled, fail thresholds, and report formats. Generates a platform-specific
     CI/CD pipeline file.
     
     Args:
-        config_path: Path to the garrison.toml configuration file.
+        config_path: Path to the counterscarp.toml configuration file.
         platform: CI/CD platform to generate for. One of: github, gitlab, azure, jenkins.
         output_path: Optional path to write the generated pipeline file.
         target_path: Path to the target contracts directory.
@@ -647,18 +647,18 @@ def generate_pipeline(
         The generated pipeline content as a string.
     
     Raises:
-        GarrisonValidationError: If the platform is not supported.
-        GarrisonConfigError: If the configuration file cannot be loaded.
+        CounterscarpValidationError: If the platform is not supported.
+        CounterscarpConfigError: If the configuration file cannot be loaded.
     
     Example:
-        >>> content = generate_pipeline("garrison.toml", "github")
+        >>> content = generate_pipeline("counterscarp.toml", "github")
         >>> print(content)
-        'name: Garrison Security Audit\\n...'
+        'name: Counterscarp Security Audit\\n...'
     """
     # Validate platform
     supported_platforms = ["github", "gitlab", "azure", "jenkins"]
     if platform.lower() not in supported_platforms:
-        raise GarrisonValidationError(
+        raise CounterscarpValidationError(
             f"Unsupported platform: {platform}",
             details={"supported": supported_platforms, "provided": platform}
         )
@@ -673,7 +673,7 @@ def generate_pipeline(
             logger.info(f"Loaded configuration from: {config_path}")
         except Exception as e:
             logger.warning(f"Could not load config from {config_path}: {e}")
-            raise GarrisonConfigError(
+            raise CounterscarpConfigError(
                 "Failed to load configuration",
                 details={"path": config_path, "error": str(e)}
             ) from e
@@ -743,7 +743,7 @@ def generate_pipeline(
         )
     
     else:
-        raise GarrisonValidationError(f"Unexpected platform: {platform}")
+        raise CounterscarpValidationError(f"Unexpected platform: {platform}")
     
     # Write to file if output path provided
     if output_path:
@@ -756,7 +756,7 @@ def generate_pipeline(
                 f.write(content)
             logger.info(f"Pipeline written to: {output_path}")
         except IOError as e:
-            raise GarrisonConfigError(
+            raise CounterscarpConfigError(
                 "Failed to write pipeline file",
                 details={"path": output_path, "error": str(e)}
             ) from e
@@ -770,14 +770,14 @@ def main() -> None:
     Parses command-line arguments and generates the requested pipeline.
     """
     parser = argparse.ArgumentParser(
-        description="Generate CI/CD pipeline configurations for Garrison Engine",
+        description="Generate CI/CD pipeline configurations for Counterscarp Engine",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --platform github --config garrison.toml --output .github/workflows/garrison.yml
-  %(prog)s --platform gitlab --config garrison.toml --output .gitlab-ci.yml
-  %(prog)s --platform azure --config garrison.toml --output azure-pipelines.yml
-  %(prog)s --platform jenkins --config garrison.toml --output Jenkinsfile
+  %(prog)s --platform github --config counterscarp.toml --output .github/workflows/counterscarp.yml
+  %(prog)s --platform gitlab --config counterscarp.toml --output .gitlab-ci.yml
+  %(prog)s --platform azure --config counterscarp.toml --output azure-pipelines.yml
+  %(prog)s --platform jenkins --config counterscarp.toml --output Jenkinsfile
         """
     )
     
@@ -789,8 +789,8 @@ Examples:
     )
     parser.add_argument(
         "--config",
-        default="garrison.toml",
-        help="Path to garrison.toml configuration file (default: garrison.toml)"
+        default="counterscarp.toml",
+        help="Path to counterscarp.toml configuration file (default: counterscarp.toml)"
     )
     parser.add_argument(
         "--output",
@@ -818,11 +818,11 @@ Examples:
         else:
             print(f"✅ Generated {args.platform} pipeline: {args.output}")
             
-    except GarrisonValidationError as e:
+    except CounterscarpValidationError as e:
         logger.error(f"Validation error: {e}")
         print(f"❌ Error: {e}", file=sys.stderr)
         sys.exit(1)
-    except GarrisonConfigError as e:
+    except CounterscarpConfigError as e:
         logger.error(f"Configuration error: {e}")
         print(f"❌ Error: {e}", file=sys.stderr)
         sys.exit(1)

@@ -9,7 +9,7 @@ from http_utils import resilient_get, RateLimiter
 
 # Import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -21,7 +21,7 @@ _config = None
 _rate_limiter = None
 
 
-def get_config() -> GarrisonConfig:
+def get_config() -> CounterscarpConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -29,9 +29,9 @@ def get_config() -> GarrisonConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = GarrisonConfig()
+                _config = CounterscarpConfig()
         else:
-            _config = GarrisonConfig()
+            _config = CounterscarpConfig()
     return _config
 
 

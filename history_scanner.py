@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Time-Travel Historical Vulnerability Scanner for Garrison Engine.
+Time-Travel Historical Vulnerability Scanner for Counterscarp Engine.
 
 Scans Git history to track when vulnerabilities were introduced and fixed,
 providing a timeline view of security issues across the codebase evolution.
@@ -26,16 +26,16 @@ from dataclasses import dataclass, field, asdict
 try:
     from logger import get_logger, append_stderr_log
     from exceptions import (
-        GarrisonError, GarrisonAnalysisError, GarrisonValidationError
+        CounterscarpError, CounterscarpAnalysisError, CounterscarpValidationError
     )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
     append_stderr_log = None
-    GarrisonError = Exception
-    GarrisonAnalysisError = Exception
-    GarrisonValidationError = Exception
+    CounterscarpError = Exception
+    CounterscarpAnalysisError = Exception
+    CounterscarpValidationError = Exception
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -47,13 +47,13 @@ else:
 # Import heuristic scanner
 try:
     from heuristic_scanner import scan_file, HeuristicFinding
-    from config_loader import GarrisonConfig, load_config
+    from config_loader import CounterscarpConfig, load_config
     HEURISTIC_AVAILABLE = True
 except ImportError:
     HEURISTIC_AVAILABLE = False
     scan_file = None
     HeuristicFinding = None
-    GarrisonConfig = None
+    CounterscarpConfig = None
     load_config = None
 
 
@@ -151,15 +151,15 @@ def parse_git_history(
         List of CommitInfo objects with metadata and changed files.
     
     Raises:
-        GarrisonValidationError: If repo_path is not a valid git repository.
-        GarrisonAnalysisError: If git command fails.
+        CounterscarpValidationError: If repo_path is not a valid git repository.
+        CounterscarpAnalysisError: If git command fails.
     """
     repo_path = os.path.abspath(repo_path)
     
     # Validate repository
     git_dir = os.path.join(repo_path, ".git")
     if not os.path.isdir(git_dir):
-        raise GarrisonValidationError(
+        raise CounterscarpValidationError(
             "Not a valid Git repository",
             details={"path": repo_path}
         )
@@ -197,7 +197,7 @@ def parse_git_history(
             append_stderr_log(result.stderr, "git-log", stderr_log)
 
         if result.returncode != 0:
-            raise GarrisonAnalysisError(
+            raise CounterscarpAnalysisError(
                 "Git log command failed",
                 details={"error": result.stderr, "path": repo_path}
             )
@@ -209,12 +209,12 @@ def parse_git_history(
         )
         return []
     except FileNotFoundError:
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Git command not found",
             details={"install_hint": "Install Git and ensure it's in PATH"}
         )
     except subprocess.SubprocessError as e:
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Failed to execute git command",
             details={"error": str(e)}
         )
@@ -268,7 +268,7 @@ def scan_commit(
     repo_path: str,
     commit_hash: str,
     files: List[str],
-    config: Optional[GarrisonConfig] = None,
+    config: Optional[CounterscarpConfig] = None,
     stderr_log: Optional[str] = None
 ) -> CommitFinding:
     """Scan files at a specific commit for vulnerabilities.
@@ -286,10 +286,10 @@ def scan_commit(
         CommitFinding with all findings from this commit.
     
     Raises:
-        GarrisonAnalysisError: If git show or scanning fails.
+        CounterscarpAnalysisError: If git show or scanning fails.
     """
     if not HEURISTIC_AVAILABLE or scan_file is None:
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Heuristic scanner not available",
             details={"hint": "Ensure heuristic_scanner.py is accessible"}
         )
@@ -298,7 +298,7 @@ def scan_commit(
     all_findings = []
     
     # Create temporary directory for extracted files
-    temp_dir = tempfile.mkdtemp(prefix="garrison_history_")
+    temp_dir = tempfile.mkdtemp(prefix="counterscarp_history_")
     
     try:
         for file_path in files:
@@ -639,7 +639,7 @@ def generate_history_report(
         Tuple of (json_path, markdown_path).
     
     Raises:
-        GarrisonAnalysisError: If report generation fails.
+        CounterscarpAnalysisError: If report generation fails.
     """
     output_dir = os.path.abspath(output_dir)
     os.makedirs(output_dir, exist_ok=True)
@@ -660,7 +660,7 @@ def generate_history_report(
         logger.info(f"Timeline JSON written to: {json_path}")
     
     except (IOError, OSError) as e:
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Failed to write timeline JSON",
             details={"path": json_path, "error": str(e)}
         )
@@ -756,7 +756,7 @@ def generate_history_report(
         logger.info(f"Trends Markdown written to: {md_path}")
     
     except (IOError, OSError) as e:
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Failed to write trends Markdown",
             details={"path": md_path, "error": str(e)}
         )
@@ -770,7 +770,7 @@ def scan_history(
     since: Optional[str] = None,
     branch: str = "main",
     output_dir: str = ".",
-    config: Optional[GarrisonConfig] = None,
+    config: Optional[CounterscarpConfig] = None,
     stderr_log: Optional[str] = None
 ) -> Dict[str, Any]:
     """Main entry point for historical vulnerability scanning.
@@ -784,7 +784,7 @@ def scan_history(
         since: Optional date filter (ISO format).
         branch: Branch to scan (default: "main").
         output_dir: Directory to write reports.
-        config: Optional GarrisonConfig for heuristic scanning.
+        config: Optional CounterscarpConfig for heuristic scanning.
     
     Returns:
         Summary dictionary with counts and report paths.
@@ -911,7 +911,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        help="Path to garrison.toml config file"
+        help="Path to counterscarp.toml config file"
     )
     
     args = parser.parse_args()

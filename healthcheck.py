@@ -1,5 +1,5 @@
 """
-healthcheck.py — Garrison Engine tool version verification
+healthcheck.py — Counterscarp Engine tool version verification
 Loads tool-versions.json and checks each tool's installed version.
 
 Usage:

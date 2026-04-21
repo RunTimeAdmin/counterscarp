@@ -17,14 +17,14 @@ from pathlib import Path
 
 from logger import get_logger, append_stderr_log
 from exceptions import (
-    GarrisonAnalysisError,
-    GarrisonToolNotFoundError,
-    GarrisonTimeoutError,
+    CounterscarpAnalysisError,
+    CounterscarpToolNotFoundError,
+    CounterscarpTimeoutError,
 )
 
 # Import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 _config = None
 
 
-def get_config() -> GarrisonConfig:
+def get_config() -> CounterscarpConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -43,9 +43,9 @@ def get_config() -> GarrisonConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = GarrisonConfig()
+                _config = CounterscarpConfig()
         else:
-            _config = GarrisonConfig()
+            _config = CounterscarpConfig()
     return _config
 
 
@@ -99,9 +99,9 @@ def run_aderyn(
         Dict with findings categorized by severity.
 
     Raises:
-        GarrisonToolNotFoundError: If Aderyn is not installed.
-        GarrisonTimeoutError: If analysis times out.
-        GarrisonAnalysisError: If analysis fails.
+        CounterscarpToolNotFoundError: If Aderyn is not installed.
+        CounterscarpTimeoutError: If analysis times out.
+        CounterscarpAnalysisError: If analysis fails.
     """
     if not check_aderyn_installed():
         logger.error("Aderyn not installed")
@@ -109,7 +109,7 @@ def run_aderyn(
         print("    Install: cargo install aderyn")
         print("    Or via Foundry: foundryup")
         print("    Docs: https://cyfrin.gitbook.io/cyfrin-docs/aderyn-cli")
-        raise GarrisonToolNotFoundError(
+        raise CounterscarpToolNotFoundError(
             "Aderyn not found in PATH",
             details={
                 "tool": "aderyn",
@@ -160,25 +160,25 @@ def run_aderyn(
         
     except subprocess.TimeoutExpired as e:
         logger.error(f"Aderyn timed out after {timeout}s")
-        raise GarrisonTimeoutError(
+        raise CounterscarpTimeoutError(
             "Aderyn analysis timed out",
             details={"operation": "aderyn_analysis", "timeout_seconds": timeout}
         ) from e
     except FileNotFoundError as e:
         logger.error(f"Aderyn not found during execution: {e}")
-        raise GarrisonToolNotFoundError(
+        raise CounterscarpToolNotFoundError(
             "Aderyn not found in PATH",
             details={"tool": "aderyn"}
         ) from e
     except PermissionError as e:
         logger.error(f"Permission denied running Aderyn: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Permission denied running Aderyn",
             details={"error": str(e)}
         ) from e
     except Exception as e:
         logger.error(f"Error running Aderyn: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Aderyn analysis failed",
             details={"error": str(e)}
         ) from e

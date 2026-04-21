@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Interactive D3.js Attack Graph Visualizer for Garrison Engine.
+Interactive D3.js Attack Graph Visualizer for Counterscarp Engine.
 
 Generates self-contained HTML files with interactive force-directed
 graph visualizations of attack paths and vulnerabilities.
@@ -22,7 +22,7 @@ import os
 from typing import Dict, Any, Optional, List
 
 from logger import get_logger
-from exceptions import GarrisonReportError
+from exceptions import CounterscarpReportError
 
 logger = get_logger(__name__)
 
@@ -530,7 +530,7 @@ def _generate_html_template(
             <h1>🔍 {title}</h1>
         </div>
         <div style="color: #888; font-size: 0.9em;">
-            Garrison Engine Attack Path Visualizer
+            Counterscarp Engine Attack Path Visualizer
         </div>
     </div>
     
@@ -825,7 +825,7 @@ def generate_attack_graph_html(
         Path to the generated HTML file.
 
     Raises:
-        GarrisonReportError: If HTML generation fails.
+        CounterscarpReportError: If HTML generation fails.
 
     Example:
         >>> from attack_graph import build_graph, export_graph_json
@@ -849,7 +849,7 @@ def generate_attack_graph_html(
             logo_b64 = base64.b64encode(logo_data).decode('utf-8')
             ext = Path(logo_path).suffix.lower().lstrip('.')
             mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'svg': 'image/svg+xml'}.get(ext, 'image/png')
-            logo_html = f'<img src="data:{mime};base64,{logo_b64}" alt="Garrison Engine" style="height: 40px; margin-right: 12px; vertical-align: middle;">'
+            logo_html = f'<img src="data:{mime};base64,{logo_b64}" alt="Counterscarp Engine" style="height: 40px; margin-right: 12px; vertical-align: middle;">'
         
         # Generate D3.js code
         d3_js = _generate_d3_js(graph_json)
@@ -866,13 +866,13 @@ def generate_attack_graph_html(
         
     except (IOError, OSError) as e:
         logger.error(f"Failed to write HTML file: {e}")
-        raise GarrisonReportError(
+        raise CounterscarpReportError(
             "Failed to generate attack graph HTML",
             details={"output_path": output_path, "error": str(e)}
         ) from e
     except Exception as e:
         logger.error(f"Unexpected error generating HTML: {e}")
-        raise GarrisonReportError(
+        raise CounterscarpReportError(
             "Failed to generate attack graph visualization",
             details={"error": str(e)}
         ) from e

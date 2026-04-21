@@ -1,6 +1,6 @@
-# Garrison Engine Architecture
+# Counterscarp Engine Architecture
 
-A comprehensive visual documentation of the Garrison Security Engine's architecture, data flows, and component relationships.
+A comprehensive visual documentation of the Counterscarp Security Engine's architecture, data flows, and component relationships.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ A comprehensive visual documentation of the Garrison Security Engine's architect
 
 ## 1. System Architecture Overview
 
-The Garrison Engine follows a modular, pipeline-based architecture with a central orchestrator coordinating multiple specialized security analyzers. The system is designed to be extensible, allowing optional analyzers to be integrated based on project requirements.
+The Counterscarp Engine follows a modular, pipeline-based architecture with a central orchestrator coordinating multiple specialized security analyzers. The system is designed to be extensible, allowing optional analyzers to be integrated based on project requirements.
 
 ```mermaid
 flowchart TD
@@ -384,11 +384,11 @@ flowchart LR
 
 ## 4. Exception Hierarchy
 
-Garrison Engine uses a custom exception hierarchy for structured error handling. All exceptions inherit from `GarrisonError` and support optional details dictionaries for structured context.
+Counterscarp Engine uses a custom exception hierarchy for structured error handling. All exceptions inherit from `CounterscarfError` and support optional details dictionaries for structured context.
 
 ```mermaid
 classDiagram
-    class GarrisonError {
+    class CounterscarfError {
         +str message
         +dict details
         +__init__(message, details)
@@ -396,54 +396,54 @@ classDiagram
         +to_dict() dict
     }
 
-    class GarrisonConfigError {
+    class CounterscarfConfigError {
         +Configuration loading/validation errors
     }
 
-    class GarrisonAnalysisError {
+    class CounterscarfAnalysisError {
         +Security analyzer failures
     }
 
-    class GarrisonAPIError {
+    class CounterscarfAPIError {
         +External API call failures
     }
 
-    class GarrisonReportError {
+    class CounterscarfReportError {
         +Report generation failures
     }
 
-    class GarrisonToolNotFoundError {
+    class CounterscarfToolNotFoundError {
         +Required external tool not found
     }
 
-    class GarrisonValidationError {
+    class CounterscarfValidationError {
         +Input validation failures
     }
 
-    class GarrisonTimeoutError {
+    class CounterscarfTimeoutError {
         +Operation timeout errors
     }
 
-    GarrisonError <|-- GarrisonConfigError
-    GarrisonError <|-- GarrisonAnalysisError
-    GarrisonError <|-- GarrisonAPIError
-    GarrisonError <|-- GarrisonReportError
-    GarrisonError <|-- GarrisonToolNotFoundError
-    GarrisonError <|-- GarrisonValidationError
-    GarrisonError <|-- GarrisonTimeoutError
+    CounterscarfError <|-- CounterscarfConfigError
+    CounterscarfError <|-- CounterscarfAnalysisError
+    CounterscarfError <|-- CounterscarfAPIError
+    CounterscarfError <|-- CounterscarfReportError
+    CounterscarfError <|-- CounterscarfToolNotFoundError
+    CounterscarfError <|-- CounterscarfValidationError
+    CounterscarfError <|-- CounterscarfTimeoutError
 ```
 
 ### Exception Usage Examples
 
 | Exception | Usage Context | Example Details |
 |-----------|---------------|------------------|
-| `GarrisonConfigError` | Invalid TOML syntax, missing required keys | `{"path": "config.toml", "line": 42}` |
-| `GarrisonAnalysisError` | Slither/Aderyn/Mythril execution failure | `{"tool": "slither", "contract": "Token.sol"}` |
-| `GarrisonAPIError` | OSV.dev, threat intel API failures | `{"api": "osv", "status_code": 503}` |
-| `GarrisonReportError` | HTML/MD/SARIF generation failure | `{"format": "html", "output_path": "/reports"}` |
-| `GarrisonToolNotFoundError` | Missing external tool in PATH | `{"tool": "mythril", "install_cmd": "pip install mythril"}` |
-| `GarrisonValidationError` | Invalid input parameters | `{"field": "address", "value": "0x123"}` |
-| `GarrisonTimeoutError` | Analysis exceeding time limits | `{"operation": "symbolic_analysis", "timeout_seconds": 300}` |
+| `CounterscarfConfigError` | Invalid TOML syntax, missing required keys | `{"path": "config.toml", "line": 42}` |
+| `CounterscarfAnalysisError` | Slither/Aderyn/Mythril execution failure | `{"tool": "slither", "contract": "Token.sol"}` |
+| `CounterscarfAPIError` | OSV.dev, threat intel API failures | `{"api": "osv", "status_code": 503}` |
+| `CounterscarfReportError` | HTML/MD/SARIF generation failure | `{"format": "html", "output_path": "/reports"}` |
+| `CounterscarfToolNotFoundError` | Missing external tool in PATH | `{"tool": "mythril", "install_cmd": "pip install mythril"}` |
+| `CounterscarfValidationError` | Invalid input parameters | `{"field": "address", "value": "0x123"}` |
+| `CounterscarfTimeoutError` | Analysis exceeding time limits | `{"operation": "symbolic_analysis", "timeout_seconds": 300}` |
 
 ---
 
@@ -454,10 +454,10 @@ The configuration system uses a layered approach with base configuration and pro
 ```mermaid
 flowchart LR
     subgraph ConfigFiles["Config Files"]
-        BASE["garrison.toml"]
-        PR["garrison-pr.toml"]
-        AUDIT["garrison-audit.toml"]
-        BOUNTY["garrison-bounty.toml"]
+        BASE["counterscarp.toml"]
+        PR["counterscarp-pr.toml"]
+        AUDIT["counterscarp-audit.toml"]
+        BOUNTY["counterscarp-bounty.toml"]
     end
 
     subgraph Loader["Config Loader"]
@@ -466,7 +466,7 @@ flowchart LR
     end
 
     subgraph DataClasses["Dataclasses"]
-        ROOT["GarrisonConfig"]
+        ROOT["CounterscarfConfig"]
 
         subgraph Sections["Config Sections"]
             ENGINE["Engine"]
@@ -534,11 +534,11 @@ flowchart LR
 
 ## 6. Execution Profiles Comparison
 
-Garrison Engine provides three pre-configured execution profiles optimized for different use cases.
+Counterscarp Engine provides three pre-configured execution profiles optimized for different use cases.
 
 | Feature | PR Mode | Audit Mode | Bounty Mode |
 |---------|---------|------------|-------------|
-| **Config file** | `garrison-pr.toml` | `garrison-audit.toml` | `garrison-bounty.toml` |
+| **Config file** | `counterscarp-pr.toml` | `counterscarp-audit.toml` | `counterscarp-bounty.toml` |
 | **Target time** | < 2 min | 10-30 min | 1-2 hours |
 | **Slither** | Yes | Yes | Yes |
 | **Aderyn** | No | Yes | Yes |
@@ -637,7 +637,7 @@ class Finding:
 
 ## 8. Innovative Features Architecture
 
-This section details how the 7 innovative features integrate with the core Garrison Engine architecture.
+This section details how the 7 innovative features integrate with the core Counterscarp Engine architecture.
 
 ### 8.1 AI Audit Copilot (RAG System)
 
@@ -802,7 +802,7 @@ Multi-platform pipeline generation for security automation.
 ```mermaid
 flowchart LR
     subgraph Config["Config"]
-        TOML["garrison.toml"]
+        TOML["counterscarp.toml"]
         PROFILES["Profiles"]
     end
 
@@ -947,9 +947,9 @@ flowchart LR
 | `knowledge_fetcher.py` | Threat intelligence | Fetch from C4, Immunefi, Solodit |
 | `solana_intel.py` | Solana-specific intel | Fetch from Neodyme, OtterSec, Sec3 |
 | `report_generator.py` | Professional reports | `create_audit_report()`, `Finding` |
-| `config_loader.py` | Configuration management | `load_config()`, `GarrisonConfig` |
+| `config_loader.py` | Configuration management | `load_config()`, `CounterscarfConfig` |
 | `logger.py` | Structured logging | `get_logger()` |
-| `exceptions.py` | Custom exceptions | `GarrisonError` hierarchy |
+| `exceptions.py` | Custom exceptions | `CounterscarfError` hierarchy |
 | `http_utils.py` | Resilient HTTP client | Retry, backoff, rate limiting |
 | `gui.py` | Tkinter GUI interface | GUI application |
 | `intent_check.py` | Liar Detector | NatSpec validation |

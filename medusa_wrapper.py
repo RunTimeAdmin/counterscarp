@@ -16,14 +16,14 @@ from typing import Dict, Any, List, Optional
 
 from logger import get_logger, append_stderr_log
 from exceptions import (
-    GarrisonAnalysisError,
-    GarrisonToolNotFoundError,
-    GarrisonTimeoutError,
+    CounterscarpAnalysisError,
+    CounterscarpToolNotFoundError,
+    CounterscarpTimeoutError,
 )
 
 # Import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 _config = None
 
 
-def get_config() -> GarrisonConfig:
+def get_config() -> CounterscarpConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -42,9 +42,9 @@ def get_config() -> GarrisonConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = GarrisonConfig()
+                _config = CounterscarpConfig()
         else:
-            _config = GarrisonConfig()
+            _config = CounterscarpConfig()
     return _config
 
 
@@ -111,9 +111,9 @@ def run_medusa_fuzz(
         Dict with findings, coverage data, and statistics.
 
     Raises:
-        GarrisonToolNotFoundError: If Medusa is not installed.
-        GarrisonTimeoutError: If fuzzing times out.
-        GarrisonAnalysisError: If fuzzing fails.
+        CounterscarpToolNotFoundError: If Medusa is not installed.
+        CounterscarpTimeoutError: If fuzzing times out.
+        CounterscarpAnalysisError: If fuzzing fails.
     """
     # Use config values if not provided
     if test_limit is None:
@@ -124,7 +124,7 @@ def run_medusa_fuzz(
         logger.error("Medusa not installed")
         print("[!] Medusa not installed. Install: https://github.com/crytic/medusa")
         print("    Quick install: go install github.com/crytic/medusa/cmd/medusa@latest")
-        raise GarrisonToolNotFoundError(
+        raise CounterscarpToolNotFoundError(
             "Medusa not found in PATH",
             details={
                 "tool": "medusa",
@@ -166,7 +166,7 @@ def run_medusa_fuzz(
         
     except subprocess.TimeoutExpired as e:
         logger.error(f"Medusa timed out after {timeout}s")
-        raise GarrisonTimeoutError(
+        raise CounterscarpTimeoutError(
             "Medusa fuzzing timed out",
             details={
                 "operation": "medusa_fuzzing",
@@ -175,19 +175,19 @@ def run_medusa_fuzz(
         ) from e
     except FileNotFoundError as e:
         logger.error(f"Medusa not found during execution: {e}")
-        raise GarrisonToolNotFoundError(
+        raise CounterscarpToolNotFoundError(
             "Medusa not found in PATH",
             details={"tool": "medusa"}
         ) from e
     except PermissionError as e:
         logger.error(f"Permission denied running Medusa: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Permission denied running Medusa",
             details={"error": str(e)}
         ) from e
     except Exception as e:
         logger.error(f"Error running Medusa: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Medusa fuzzing failed",
             details={"error": str(e)}
         ) from e

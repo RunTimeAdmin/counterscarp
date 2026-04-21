@@ -2,13 +2,13 @@ version: '3.8'
 
 services:
   # =============================================================================
-  # THE GARRISON ENGINE - DOCKER COMPOSE CONFIGURATION
+  # THE COUNTERSCARP ENGINE - DOCKER COMPOSE CONFIGURATION
   # =============================================================================
   
   audit:
     build: .
-    image: tokenaudit/garrison-engine:4.3.0
-    container_name: garrison-engine
+    image: tokenaudit/counterscarp-engine:4.3.0
+    container_name: counterscarp-engine
     
     volumes:
       # Mount current directory to /scan inside container
@@ -53,8 +53,8 @@ services:
   # Heuristic Scanner Only
   heuristic-scan:
     build: .
-    image: tokenaudit/garrison-engine:4.3.0
-    container_name: garrison-heuristic
+    image: tokenaudit/counterscarp-engine:4.3.0
+    container_name: counterscarp-heuristic
     volumes:
       - .:/scan
     command: ["python3", "heuristic_scanner.py", "/scan"]
@@ -62,8 +62,8 @@ services:
   # Threat Intelligence (Auto-detects EVM vs Solana)
   threat-intel:
     build: .
-    image: tokenaudit/garrison-engine:4.3.0
-    container_name: garrison-intel
+    image: tokenaudit/counterscarp-engine:4.3.0
+    container_name: counterscarp-intel
     volumes:
       - .:/scan
     entrypoint: ["python3", "threat_intel.py"]
@@ -72,8 +72,8 @@ services:
   # Liar Detector (Intent Checker)
   liar-detector:
     build: .
-    image: tokenaudit/garrison-engine:4.3.0
-    container_name: garrison-intent
+    image: tokenaudit/counterscarp-engine:4.3.0
+    container_name: counterscarp-intent
     volumes:
       - .:/scan
     entrypoint: ["python3", "intent_check.py"]
@@ -82,8 +82,8 @@ services:
   # Access Matrix (God Mode Detector)
   access-matrix:
     build: .
-    image: tokenaudit/garrison-engine:4.3.0
-    container_name: garrison-access
+    image: tokenaudit/counterscarp-engine:4.3.0
+    container_name: counterscarp-access
     volumes:
       - .:/scan
     entrypoint: ["python3", "access_matrix.py"]

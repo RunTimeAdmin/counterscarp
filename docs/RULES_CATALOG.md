@@ -27,7 +27,7 @@
 
 ## Overview
 
-Garrison Engine detects vulnerabilities through two complementary rule sets:
+Counterscarp Engine detects vulnerabilities through two complementary rule sets:
 
 - **31 EVM heuristic rules** — pattern-based checks for Solidity smart contracts
 - **35 Solana rules** — pattern-based checks for Rust/Anchor Solana programs
@@ -180,7 +180,7 @@ These rules complement deeper analysis tools (Slither, Mythril, Aderyn) by catch
 
 ## Bug Bounty Payout Reference
 
-The following table shows typical bounty ranges for high-value vulnerability patterns that Garrison Engine detects. Based on Immunefi and Code4rena payout data.
+The following table shows typical bounty ranges for high-value vulnerability patterns that Counterscarp Engine detects. Based on Immunefi and Code4rena payout data.
 
 | Pattern | Rule ID | Typical Bounty Range |
 |---------|---------|---------------------|
@@ -199,7 +199,7 @@ The following table shows typical bounty ranges for high-value vulnerability pat
 
 ## Slither Detector Categories
 
-Slither detectors are organized by category. Garrison Engine filters Slither results based on the `[static_analysis.slither]` and `[red_team]` config sections.
+Slither detectors are organized by category. Counterscarp Engine filters Slither results based on the `[static_analysis.slither]` and `[red_team]` config sections.
 
 | Category | Description | Example Detectors |
 |----------|-------------|-------------------|
@@ -213,7 +213,7 @@ Slither detectors are organized by category. Garrison Engine filters Slither res
 | Optimization | Gas optimization opportunities | Various |
 | Informational | Code quality / best practices | `naming-convention`, `redundant-statements` |
 
-Configure Slither filtering in `garrison.toml`:
+Configure Slither filtering in `counterscarp.toml`:
 
 ```toml
 [static_analysis.slither]
@@ -226,4 +226,4 @@ ignore_checks = ["solc-version", "naming-convention", "assembly"]
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.com*
+*Counterscarp Security Engine &bull; counterscarp.io*

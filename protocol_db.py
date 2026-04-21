@@ -15,13 +15,13 @@ from typing import List, Dict, Any, Optional
 # Import logger and exceptions
 try:
     from logger import get_logger
-    from exceptions import GarrisonConfigError, GarrisonValidationError
+    from exceptions import CounterscarpConfigError, CounterscarpValidationError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    GarrisonConfigError = None
-    GarrisonValidationError = None
+    CounterscarpConfigError = None
+    CounterscarpValidationError = None
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -674,7 +674,7 @@ def save_fingerprint_db(fingerprints: List[ProtocolFingerprint], path: str) -> N
         path: Path to the output JSON file.
 
     Raises:
-        GarrisonConfigError: If file cannot be written.
+        CounterscarpConfigError: If file cannot be written.
     """
     try:
         data = [fp.to_dict() for fp in fingerprints]
@@ -685,8 +685,8 @@ def save_fingerprint_db(fingerprints: List[ProtocolFingerprint], path: str) -> N
     except (IOError, OSError) as e:
         error_msg = f"Failed to save fingerprint database to {path}"
         logger.error(error_msg)
-        if GarrisonConfigError:
-            raise GarrisonConfigError(error_msg, details={"path": path, "error": str(e)})
+        if CounterscarpConfigError:
+            raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
         raise
 
 
@@ -700,7 +700,7 @@ def load_fingerprint_db(path: str) -> List[ProtocolFingerprint]:
         List of ProtocolFingerprint instances.
 
     Raises:
-        GarrisonConfigError: If file cannot be read or parsed.
+        CounterscarpConfigError: If file cannot be read or parsed.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -711,14 +711,14 @@ def load_fingerprint_db(path: str) -> List[ProtocolFingerprint]:
     except (IOError, OSError) as e:
         error_msg = f"Failed to load fingerprint database from {path}"
         logger.error(error_msg)
-        if GarrisonConfigError:
-            raise GarrisonConfigError(error_msg, details={"path": path, "error": str(e)})
+        if CounterscarpConfigError:
+            raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
         raise
     except json.JSONDecodeError as e:
         error_msg = f"Invalid JSON in fingerprint database: {path}"
         logger.error(error_msg)
-        if GarrisonConfigError:
-            raise GarrisonConfigError(error_msg, details={"path": path, "error": str(e)})
+        if CounterscarpConfigError:
+            raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
         raise
 
 

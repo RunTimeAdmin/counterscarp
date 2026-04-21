@@ -1,4 +1,4 @@
-"""Plugin architecture for Garrison Engine.
+"""Plugin architecture for Counterscarp Engine.
 
 Supports community-contributed analyzers and heuristic rules via a
 simple plugin discovery mechanism. Plugins are Python modules placed
@@ -97,7 +97,7 @@ class PluginManager:
     
     def _load_module(self, path: Path) -> Any:
         """Dynamically load a Python module from a file path."""
-        module_name = f"garrison_plugin_{path.stem}"
+        module_name = f"counterscarp_plugin_{path.stem}"
         if module_name in self._loaded_modules:
             return self._loaded_modules[module_name]
         

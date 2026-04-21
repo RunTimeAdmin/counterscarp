@@ -9,11 +9,11 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Garrison Engine, please report it responsibly.
+If you discover a security vulnerability in Counterscarp Engine, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email us at: **support@garrisonsec.com**
+Instead, please email us at: **support@counterscarp.io**
 
 ### What to Include
 
@@ -34,9 +34,9 @@ Instead, please email us at: **support@garrisonsec.com**
 ### Scope
 
 The following are in scope:
-- Garrison Engine core analyzers and scanning logic
+- Counterscarp Engine core analyzers and scanning logic
 - License validation and key management
-- Web application (app.garrisonsec.com)
+- Web application (app.counterscarp.io)
 - CLI tools and report generation
 
 The following are out of scope:

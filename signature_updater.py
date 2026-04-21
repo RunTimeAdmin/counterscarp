@@ -1,4 +1,4 @@
-"""Signature and threat intelligence database updater for Garrison Engine."""
+"""Signature and threat intelligence database updater for Counterscarp Engine."""
 
 import json
 import os
@@ -12,7 +12,7 @@ try:
 except ImportError:  # pragma: no cover
     _requests = None  # type: ignore
 
-logger = logging.getLogger("garrison.signature_updater")
+logger = logging.getLogger("counterscarp.signature_updater")
 
 
 def update_all_signatures(config=None) -> Dict[str, int]:
@@ -170,7 +170,7 @@ def _refresh_protocol_db(db_path: str) -> int:
 # ---------------------------------------------------------------------------
 
 GITHUB_RAW_BASE = (
-    "https://raw.githubusercontent.com/RunTimeAdmin/garrison-engine/main/data"
+    "https://raw.githubusercontent.com/RunTimeAdmin/counterscarp-engine/main/data"
 )
 
 _FILES_TO_UPDATE = {

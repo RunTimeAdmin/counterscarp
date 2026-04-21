@@ -16,13 +16,13 @@ from dataclasses import dataclass, field
 # Import logger and exceptions
 try:
     from logger import get_logger
-    from exceptions import GarrisonAnalysisError, GarrisonValidationError
+    from exceptions import CounterscarpAnalysisError, CounterscarpValidationError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    GarrisonAnalysisError = None
-    GarrisonValidationError = None
+    CounterscarpAnalysisError = None
+    CounterscarpValidationError = None
 
 # Import protocol database
 try:
@@ -38,11 +38,11 @@ except ImportError:
 
 # Import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
-    GarrisonConfig = None
+    CounterscarpConfig = None
 
 # Import fork-specific logic checks
 try:
@@ -205,7 +205,7 @@ def extract_contract_features(source_path: str) -> ContractFeatures:
         ContractFeatures object with extracted features.
 
     Raises:
-        GarrisonValidationError: If file cannot be read.
+        CounterscarpValidationError: If file cannot be read.
     """
     features = ContractFeatures(file_path=source_path)
 
@@ -216,8 +216,8 @@ def extract_contract_features(source_path: str) -> ContractFeatures:
     except (IOError, OSError) as e:
         error_msg = f"Failed to read contract file: {source_path}"
         logger.error(error_msg)
-        if GarrisonValidationError:
-            raise GarrisonValidationError(error_msg, details={"path": source_path})
+        if CounterscarpValidationError:
+            raise CounterscarpValidationError(error_msg, details={"path": source_path})
         raise
 
     # Track contract scope
@@ -901,7 +901,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        help="Path to garrison.toml config file"
+        help="Path to counterscarp.toml config file"
     )
     args = parser.parse_args()
 

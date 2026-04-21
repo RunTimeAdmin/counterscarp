@@ -8,14 +8,14 @@ from typing import List, Dict, Any, Optional
 
 from logger import get_logger, append_stderr_log
 from exceptions import (
-    GarrisonAnalysisError,
-    GarrisonToolNotFoundError,
-    GarrisonTimeoutError,
+    CounterscarpAnalysisError,
+    CounterscarpToolNotFoundError,
+    CounterscarpTimeoutError,
 )
 
 # Import config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 _config = None
 
 
-def get_config() -> GarrisonConfig:
+def get_config() -> CounterscarpConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -34,9 +34,9 @@ def get_config() -> GarrisonConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = GarrisonConfig()
+                _config = CounterscarpConfig()
         else:
-            _config = GarrisonConfig()
+            _config = CounterscarpConfig()
     return _config
 
 
@@ -78,9 +78,9 @@ def run_foundry_fuzz(
         Raw stdout from the fuzzing run.
 
     Raises:
-        GarrisonToolNotFoundError: If Foundry is not installed.
-        GarrisonTimeoutError: If fuzzing times out.
-        GarrisonAnalysisError: If fuzzing fails.
+        CounterscarpToolNotFoundError: If Foundry is not installed.
+        CounterscarpTimeoutError: If fuzzing times out.
+        CounterscarpAnalysisError: If fuzzing fails.
     """
     # Use config value if not provided
     if fuzz_runs is None:
@@ -116,7 +116,7 @@ def run_foundry_fuzz(
         return result.stdout
     except FileNotFoundError as e:
         logger.error("Foundry (forge) not found")
-        raise GarrisonToolNotFoundError(
+        raise CounterscarpToolNotFoundError(
             "Foundry not found in PATH",
             details={
                 "tool": "forge",
@@ -125,13 +125,13 @@ def run_foundry_fuzz(
         ) from e
     except PermissionError as e:
         logger.error(f"Permission denied running Foundry: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Permission denied running Foundry",
             details={"error": str(e)}
         ) from e
     except subprocess.TimeoutExpired as e:
         logger.error("Foundry fuzzing timed out")
-        raise GarrisonTimeoutError(
+        raise CounterscarpTimeoutError(
             "Foundry fuzzing timed out",
             details={"operation": "foundry_fuzzing"}
         ) from e

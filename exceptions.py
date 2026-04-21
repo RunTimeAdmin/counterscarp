@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Custom Exception Hierarchy for Garrison Engine.
+Custom Exception Hierarchy for Counterscarp Engine.
 
-Provides a clean, structured exception hierarchy for all Garrison Engine
+Provides a clean, structured exception hierarchy for all Counterscarp Engine
 errors. Each exception supports optional details dict for structured error
 context and preserves original exception chaining.
 
 Example:
-    >>> from exceptions import GarrisonConfigError
+    >>> from exceptions import CounterscarpConfigError
     >>> try:
     ...     load_config("invalid.toml")
     ... except Exception as e:
-    ...     raise GarrisonConfigError(
+    ...     raise CounterscarpConfigError(
     ...         "Failed to load config", details={"path": "invalid.toml"}
     ...     ) from e
 """
@@ -19,10 +19,10 @@ Example:
 from typing import Optional, Dict, Any
 
 
-class GarrisonError(Exception):
-    """Base exception for all Garrison Engine errors.
+class CounterscarpError(Exception):
+    """Base exception for all Counterscarp Engine errors.
     
-    All custom exceptions in the Garrison Engine should inherit from this
+    All custom exceptions in the Counterscarp Engine should inherit from this
     class to allow for unified error handling.
     
     Attributes:
@@ -30,8 +30,8 @@ class GarrisonError(Exception):
         details: Optional dictionary containing structured error context.
     
     Example:
-        >>> raise GarrisonError("Generic error occurred")
-        >>> raise GarrisonError("Generic error", details={"code": 500})
+        >>> raise CounterscarpError("Generic error occurred")
+        >>> raise CounterscarpError("Generic error", details={"code": 500})
     """
     
     def __init__(
@@ -79,14 +79,14 @@ class GarrisonError(Exception):
         return result
 
 
-class GarrisonConfigError(GarrisonError):
+class CounterscarpConfigError(CounterscarpError):
     """Raised for configuration loading/validation errors.
     
     This exception is raised when there's a problem with loading or
-    validating the Garrison configuration file (garrison.toml).
+    validating the Counterscarp configuration file (counterscarp.toml).
     
     Example:
-        >>> raise GarrisonConfigError(
+        >>> raise CounterscarpConfigError(
         ...     "Invalid TOML syntax",
         ...     details={"path": "/path/to/config.toml", "line": 42}
         ... )
@@ -106,14 +106,14 @@ class GarrisonConfigError(GarrisonError):
         super().__init__(message, details)
 
 
-class GarrisonAnalysisError(GarrisonError):
+class CounterscarpAnalysisError(CounterscarpError):
     """Raised when a security analyzer fails.
     
     This exception is raised when static analysis, fuzzing, or other
     security analysis tools fail to execute properly.
     
     Example:
-        >>> raise GarrisonAnalysisError(
+        >>> raise CounterscarpAnalysisError(
         ...     "Slither analysis failed",
         ...     details={"tool": "slither", "contract": "Token.sol"}
         ... )
@@ -133,7 +133,7 @@ class GarrisonAnalysisError(GarrisonError):
         super().__init__(message, details)
 
 
-class GarrisonAPIError(GarrisonError):
+class CounterscarpAPIError(CounterscarpError):
     """Raised for external API call failures.
     
     This exception is raised when external API calls fail, such as
@@ -141,7 +141,7 @@ class GarrisonAPIError(GarrisonError):
     external service interactions.
     
     Example:
-        >>> raise GarrisonAPIError(
+        >>> raise CounterscarpAPIError(
         ...     "OSV API request failed",
         ...     details={
         ...         "api": "osv", "status_code": 503, "endpoint": "/v1/query"
@@ -164,14 +164,14 @@ class GarrisonAPIError(GarrisonError):
         super().__init__(message, details)
 
 
-class GarrisonReportError(GarrisonError):
+class CounterscarpReportError(CounterscarpError):
     """Raised for report generation failures.
     
     This exception is raised when the report generator fails to create
     output files or format findings properly.
     
     Example:
-        >>> raise GarrisonReportError(
+        >>> raise CounterscarpReportError(
         ...     "Failed to write HTML report",
         ...     details={"format": "html", "output_path": "/reports/out.html"}
         ... )
@@ -192,14 +192,14 @@ class GarrisonReportError(GarrisonError):
         super().__init__(message, details)
 
 
-class GarrisonToolNotFoundError(GarrisonError):
+class CounterscarpToolNotFoundError(CounterscarpError):
     """Raised when a required external tool is not found.
     
     This exception is raised when external tools like Slither, Aderyn,
     Medusa, or Mythril are not installed or not available in PATH.
     
     Example:
-        >>> raise GarrisonToolNotFoundError(
+        >>> raise CounterscarpToolNotFoundError(
         ...     "Slither not found in PATH",
         ...     details={
         ...         "tool": "slither",
@@ -223,14 +223,14 @@ class GarrisonToolNotFoundError(GarrisonError):
         super().__init__(message, details)
 
 
-class GarrisonValidationError(GarrisonError):
+class CounterscarpValidationError(CounterscarpError):
     """Raised for input validation failures.
     
     This exception is raised when user input or scanned code fails
     validation checks.
     
     Example:
-        >>> raise GarrisonValidationError(
+        >>> raise CounterscarpValidationError(
         ...     "Invalid contract address format",
         ...     details={"field": "address", "value": "0x123"}
         ... )
@@ -250,14 +250,14 @@ class GarrisonValidationError(GarrisonError):
         super().__init__(message, details)
 
 
-class GarrisonTimeoutError(GarrisonError):
+class CounterscarpTimeoutError(CounterscarpError):
     """Raised when an operation times out.
     
     This exception is raised when analysis operations exceed their
     configured timeout limits.
     
     Example:
-        >>> raise GarrisonTimeoutError(
+        >>> raise CounterscarpTimeoutError(
         ...     "Mythril analysis timed out",
         ...     details={
         ...         "operation": "symbolic_analysis", "timeout_seconds": 300
@@ -306,26 +306,26 @@ def format_exception_chain(exc: Exception) -> str:
     return "\n".join(lines)
 
 
-def is_garrison_error(exc: Exception) -> bool:
-    """Check if an exception is a Garrison Engine error.
+def is_counterscarp_error(exc: Exception) -> bool:
+    """Check if an exception is a Counterscarp Engine error.
     
     Args:
         exc: The exception to check.
         
     Returns:
-        True if the exception is a GarrisonError or subclass.
+        True if the exception is a CounterscarpError or subclass.
     """
-    return isinstance(exc, GarrisonError)
+    return isinstance(exc, CounterscarpError)
 
 
 if __name__ == "__main__":
     # Demo/test code
-    print("Testing Garrison Exception Hierarchy\n")
+    print("Testing Counterscarp Exception Hierarchy\n")
     
     # Test basic exception
     try:
-        raise GarrisonError("Generic error", details={"code": 500})
-    except GarrisonError as e:
+        raise CounterscarpError("Generic error", details={"code": 500})
+    except CounterscarpError as e:
         print(f"1. Basic error: {e}")
         print(f"   Dict: {e.to_dict()}\n")
     
@@ -334,24 +334,24 @@ if __name__ == "__main__":
         try:
             raise ValueError("Original error")
         except ValueError as original:
-            raise GarrisonConfigError(
+            raise CounterscarpConfigError(
                 "Config load failed",
                 details={"path": "config.toml"}
             ) from original
-    except GarrisonError as e:
+    except CounterscarpError as e:
         print(f"2. Chained error: {e}")
         print(f"   Cause: {e.__cause__}")
         print(f"   Formatted chain:\n   {format_exception_chain(e)}\n")
     
     # Test all exception types
     exceptions_to_test = [
-        GarrisonConfigError("Config error", {"file": "test.toml"}),
-        GarrisonAnalysisError("Analysis failed", {"tool": "slither"}),
-        GarrisonAPIError("API error", {"status": 500}),
-        GarrisonReportError("Report failed", {"format": "html"}),
-        GarrisonToolNotFoundError("Tool missing", {"tool": "mythril"}),
-        GarrisonValidationError("Invalid input", {"field": "address"}),
-        GarrisonTimeoutError("Timeout", {"seconds": 30}),
+        CounterscarpConfigError("Config error", {"file": "test.toml"}),
+        CounterscarpAnalysisError("Analysis failed", {"tool": "slither"}),
+        CounterscarpAPIError("API error", {"status": 500}),
+        CounterscarpReportError("Report failed", {"format": "html"}),
+        CounterscarpToolNotFoundError("Tool missing", {"tool": "mythril"}),
+        CounterscarpValidationError("Invalid input", {"field": "address"}),
+        CounterscarpTimeoutError("Timeout", {"seconds": 30}),
     ]
     
     print("3. All exception types:")
@@ -359,7 +359,7 @@ if __name__ == "__main__":
         print(f"   - {exc.__class__.__name__}: {exc}")
     
     print("\n4. Exception hierarchy check:")
-    print(f"   GarrisonConfigError is GarrisonError: "
-          f"{is_garrison_error(GarrisonConfigError('test'))}")
-    print(f"   ValueError is GarrisonError: "
-          f"{is_garrison_error(ValueError('test'))}")
+    print(f"   CounterscarpConfigError is CounterscarpError: "
+          f"{is_counterscarp_error(CounterscarpConfigError('test'))}")
+    print(f"   ValueError is CounterscarpError: "
+          f"{is_counterscarp_error(ValueError('test'))}")

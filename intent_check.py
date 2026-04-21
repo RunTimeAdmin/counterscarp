@@ -27,7 +27,7 @@ from pathlib import Path
 # Import project logging and exceptions
 try:
     from logger import get_logger
-    from exceptions import GarrisonAnalysisError, GarrisonValidationError
+    from exceptions import CounterscarpAnalysisError, CounterscarpValidationError
     HAS_DEPENDENCIES = True
 except ImportError:
     HAS_DEPENDENCIES = False
@@ -37,13 +37,13 @@ except ImportError:
     def get_logger(name: str) -> logging.Logger:
         return logging.getLogger(name)
 
-    class GarrisonAnalysisError(Exception):
+    class CounterscarpAnalysisError(Exception):
         def __init__(self, message: str, details: Optional[Dict] = None):
             super().__init__(message)
             self.message = message
             self.details = details or {}
 
-    class GarrisonValidationError(Exception):
+    class CounterscarpValidationError(Exception):
         def __init__(self, message: str, details: Optional[Dict] = None):
             super().__init__(message)
             self.message = message
@@ -711,7 +711,7 @@ class NatSpecAnalyzer:
         """Analyze a Solidity file for intent/implementation mismatches."""
         path = Path(filepath)
         if not path.exists():
-            raise GarrisonValidationError(
+            raise CounterscarpValidationError(
                 f"File not found: {filepath}",
                 details={"path": filepath}
             )
@@ -720,7 +720,7 @@ class NatSpecAnalyzer:
             with open(filepath, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
         except Exception as e:
-            raise GarrisonAnalysisError(
+            raise CounterscarpAnalysisError(
                 f"Failed to read file: {filepath}",
                 details={"path": filepath, "error": str(e)}
             ) from e
@@ -778,7 +778,7 @@ class NatSpecAnalyzer:
         """Analyze all .sol files in a directory."""
         path = Path(dirpath)
         if not path.is_dir():
-            raise GarrisonValidationError(
+            raise CounterscarpValidationError(
                 f"Not a directory: {dirpath}",
                 details={"path": dirpath}
             )

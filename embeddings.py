@@ -28,13 +28,13 @@ from collections import Counter
 # Import logger and exceptions
 try:
     from logger import get_logger
-    from exceptions import GarrisonError, GarrisonConfigError
+    from exceptions import CounterscarpError, CounterscarpConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    GarrisonError = Exception
-    GarrisonConfigError = Exception
+    CounterscarpError = Exception
+    CounterscarpConfigError = Exception
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -83,7 +83,7 @@ DEFAULT_VOYAGE_MODEL = "voyage-3-lite"
 EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 dimension
 
 
-class EmbeddingError(GarrisonError):
+class EmbeddingError(CounterscarpError):
     """Raised when embedding generation fails."""
     pass
 

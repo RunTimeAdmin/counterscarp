@@ -14,7 +14,7 @@
 
 ## Overview
 
-Garrison Engine generates audit reports in four formats, each serving a different audience and use case:
+Counterscarp Engine generates audit reports in four formats, each serving a different audience and use case:
 
 | Format | Extension | Best For | Audience |
 |--------|-----------|----------|----------|
@@ -57,7 +57,7 @@ The HTML report is a self-contained, styled document with:
 
 ```bash
 # Via CLI
-garrison --target ./contracts --report
+counterscarp --target ./contracts --report
 
 # Via Python API
 from report_generator import create_audit_report, generate_html_report
@@ -154,7 +154,7 @@ generate_markdown_report(report, "audit_report.md")
 
 ### Overview
 
-SARIF (Static Analysis Results Interchange Format) is an OASIS standard for exchanging static analysis results. Garrison Engine generates SARIF 2.1.0 compliant output that integrates with:
+SARIF (Static Analysis Results Interchange Format) is an OASIS standard for exchanging static analysis results. Counterscarp Engine generates SARIF 2.1.0 compliant output that integrates with:
 
 - **GitHub Advanced Security** — Upload via `github/codeql-action/upload-sarif`
 - **Azure DevOps** — native SARIF support
@@ -171,10 +171,10 @@ SARIF (Static Analysis Results Interchange Format) is an OASIS standard for exch
     {
       "tool": {
         "driver": {
-          "name": "Garrison Engine",
+          "name": "Counterscarp Engine",
           "version": "3.1.3",
           "semanticVersion": "3.1.3",
-          "informationUri": "https://garrisonsec.com",
+          "informationUri": "https://counterscarp.io",
           "rules": [
             {
               "id": "UNCHECKED_EXTERNAL_CALL",
@@ -217,7 +217,7 @@ SARIF (Static Analysis Results Interchange Format) is an OASIS standard for exch
 
 ### Severity Mapping
 
-| Garrison Severity | SARIF Level |
+| Counterscarp Severity | SARIF Level |
 |-------------------|-------------|
 | CRITICAL | `error` |
 | HIGH | `error` |
@@ -228,8 +228,8 @@ SARIF (Static Analysis Results Interchange Format) is an OASIS standard for exch
 ### GitHub Actions Integration
 
 ```yaml
-- name: Run Garrison Engine
-  run: garrison --target ./contracts --config garrison.toml
+- name: Run Counterscarp Engine
+  run: counterscarp --target ./contracts --config counterscarp.toml
 
 - name: Upload SARIF to GitHub Security
   uses: github/codeql-action/upload-sarif@v3
@@ -304,7 +304,7 @@ Download from the results page at `/results/{audit_id}/report/json`.
 
 ## Customizing Reports via Configuration
 
-Control report generation in `garrison.toml`:
+Control report generation in `counterscarp.toml`:
 
 ```toml
 [reporting]
@@ -382,4 +382,4 @@ LOGO_PATH = BASE_DIR / "assets" / "logo_small.png"
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.com*
+*Counterscarp Security Engine &bull; counterscarp.io*

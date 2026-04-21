@@ -1,11 +1,11 @@
 # ============================================================================
-# Garrison Engine Configuration
+# Counterscarp Engine Configuration
 # Per-project security analysis settings
 # ============================================================================
 
 [engine]
 # Engine-wide settings
-name = "Garrison Security Engine"
+name = "Counterscarp Security Engine"
 version = "4.4.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
@@ -264,7 +264,7 @@ ignore_comment_changes = true
 #   - sarif    : Pro feature; SARIF 2.1.0 for GitHub Code Scanning
 #   - html     : Pro feature; professional branded HTML report
 #   - pdf      : Pro feature; PDF export of the HTML report
-#                Requires: pip install garrison-engine[pdf]
+#                Requires: pip install counterscarp-engine[pdf]
 format = "markdown"
 
 # Include sections in report
@@ -433,7 +433,7 @@ ollama_url = "http://localhost:11434"
 openai_model = "gpt-4-turbo-preview"
 
 # Path to the RAG vector index
-rag_index_path = ".garrison/rag_index.json"
+rag_index_path = ".counterscarp/rag_index.json"
 
 # Number of similar findings to retrieve for enrichment
 top_k = 5
@@ -455,7 +455,7 @@ llm_enrichment = false
 enabled = true
 
 # Directories to scan for plugin modules (relative to project root)
-dirs = [".garrison/plugins"]
+dirs = [".counterscarp/plugins"]
 
 
 # ============================================================================
@@ -463,8 +463,8 @@ dirs = [".garrison/plugins"]
 # ============================================================================
 
 [license]
-# Pro license key. Can also be set via GARRISON_PRO_LICENSE env var.
-# Get your key at https://garrisonsec.com/pricing
+# Pro license key. Can also be set via COUNTERSCARP_PRO_LICENSE env var.
+# Get your key at https://counterscarp.io/pricing
 key = ""
 
 

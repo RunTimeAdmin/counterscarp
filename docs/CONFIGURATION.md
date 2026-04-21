@@ -31,7 +31,7 @@
 
 ## Overview
 
-Garrison Engine is configured via a `garrison.toml` file in TOML format. The configuration controls all aspects of the analysis pipeline: which rules are active, what severity thresholds apply, how reports are generated, and which external tools are used.
+Counterscarp Engine is configured via a `counterscarp.toml` file in TOML format. The configuration controls all aspects of the analysis pipeline: which rules are active, what severity thresholds apply, how reports are generated, and which external tools are used.
 
 All settings have sensible defaults — a minimal config with zero customisation works out of the box.
 
@@ -39,7 +39,7 @@ All settings have sensible defaults — a minimal config with zero customisation
 
 ## Config File Discovery
 
-If `--config` is not specified, Garrison Engine searches for `garrison.toml` in the current directory and up to 5 parent directories. If no file is found, built-in defaults are used.
+If `--config` is not specified, Counterscarp Engine searches for `counterscarp.toml` in the current directory and up to 5 parent directories. If no file is found, built-in defaults are used.
 
 ---
 
@@ -51,7 +51,7 @@ Engine-wide settings that control the overall analysis behavior.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `name` | string | `"Garrison Security Engine"` | Display name for reports |
+| `name` | string | `"Counterscarp Security Engine"` | Display name for reports |
 | `version` | string | `"3.1.3"` | Engine version string |
 | `fail_on_severity` | string | `"HIGH"` | Minimum severity to fail CI: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO` |
 | `max_findings` | int | `0` | Maximum findings before stopping scan (`0` = unlimited) |
@@ -532,7 +532,7 @@ AI and RAG (Retrieval-Augmented Generation) configuration.
 | `embedding_backend` | string | `"local"` | Embedding backend: `local`, `openai`, `anthropic` |
 | `llm_backend` | string | `"none"` | LLM backend: `none`, `openai`, `anthropic` |
 | `openai_model` | string | `"gpt-4-turbo-preview"` | OpenAI model for LLM features |
-| `rag_index_path` | string | `".garrison/rag_index.json"` | Path to RAG vector index |
+| `rag_index_path` | string | `".counterscarp/rag_index.json"` | Path to RAG vector index |
 | `top_k` | int | `5` | Number of similar findings to retrieve |
 | `auto_enrich` | bool | `false` | Automatically enrich findings with RAG |
 
@@ -544,7 +544,7 @@ top_k = 5
 auto_enrich = false
 ```
 
-**Note:** The `local` embedding backend uses `sentence-transformers` and works offline with no API keys required. Install with `pip install "garrison-engine[ai]"`.
+**Note:** The `local` embedding backend uses `sentence-transformers` and works offline with no API keys required. Install with `pip install "counterscarp-engine[ai]"`.
 
 ---
 
@@ -555,12 +555,12 @@ Plugin system for community-contributed analyzers and rules.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Enable plugin system |
-| `dirs` | list | `[".garrison/plugins"]` | Directories to scan for plugin modules |
+| `dirs` | list | `[".counterscarp/plugins"]` | Directories to scan for plugin modules |
 
 ```toml
 [plugins]
 enabled = true
-dirs = [".garrison/plugins", "/opt/garrison-plugins"]
+dirs = [".counterscarp/plugins", "/opt/counterscarp-plugins"]
 ```
 
 See the [Plugin Development Guide](PLUGIN_DEVELOPMENT.md) for writing custom plugins.
@@ -680,4 +680,4 @@ max_path_depth = 0  # Unlimited
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.com*
+*Counterscarp Security Engine &bull; counterscarp.io*

@@ -1,4 +1,4 @@
-"""Configuration for the Garrison Engine web application."""
+"""Configuration for the Counterscarp Engine web application."""
 
 from pathlib import Path
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Garrison Engine — Scan state persistence for resume capability.
+Counterscarp Engine — Scan state persistence for resume capability.
 
 Provides the ScanStateManager class for writing and reading scan state
 files that enable the --resume flag to restart a scan from the last
@@ -17,16 +17,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
-from exceptions import GarrisonError
+from exceptions import CounterscarpError
 
-logger = logging.getLogger("garrison.state_manager")
+logger = logging.getLogger("counterscarp.state_manager")
 
 
 # ---------------------------------------------------------------------------
 # Custom exceptions
 # ---------------------------------------------------------------------------
 
-class StateError(GarrisonError):
+class StateError(CounterscarpError):
     """Raised for state persistence or session management errors.
 
     Example:
@@ -45,7 +45,7 @@ class StateError(GarrisonError):
 # JSON encoder
 # ---------------------------------------------------------------------------
 
-class _GarrisonJSONEncoder(json.JSONEncoder):
+class _CounterscarpJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles dataclasses, datetime, and Path."""
 
     def default(self, obj: Any) -> Any:  # type: ignore[override]
@@ -67,19 +67,19 @@ class _GarrisonJSONEncoder(json.JSONEncoder):
 class ScanStateManager:
     """Manages per-session scan state files for resume capability.
 
-    State files are stored as JSON inside *garrison_dir* (default
-    ``.garrison/``).  Each session produces:
+    State files are stored as JSON inside *counterscarp_dir* (default
+    ``.counterscarp/``).  Each session produces:
 
     * ``scan_state_{session_id}.json``  — top-level session record
     * ``phase_{phase_name}_{session_id}.json``  — per-phase result blobs
 
     Args:
-        garrison_dir: Directory path where state files are stored.
+        counterscarp_dir: Directory path where state files are stored.
             Created automatically if it does not exist.
     """
 
-    def __init__(self, garrison_dir: str = ".garrison") -> None:
-        self._dir = Path(garrison_dir)
+    def __init__(self, counterscarp_dir: str = ".counterscarp") -> None:
+        self._dir = Path(counterscarp_dir)
         self._dir.mkdir(parents=True, exist_ok=True)
         self._session_id: Optional[str] = None
         self._state_file: Optional[Path] = None
@@ -345,7 +345,7 @@ class ScanStateManager:
         tmp_path = path.with_suffix(".tmp")
         try:
             with tmp_path.open("w", encoding="utf-8") as fh:
-                json.dump(data, fh, indent=2, cls=_GarrisonJSONEncoder)
+                json.dump(data, fh, indent=2, cls=_CounterscarpJSONEncoder)
                 fh.write("\n")
             tmp_path.replace(path)
         except OSError as exc:

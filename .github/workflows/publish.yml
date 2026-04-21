@@ -67,7 +67,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          python -c "import importlib.metadata; v = importlib.metadata.version('garrison-engine'); print(f'garrison-engine {v}')"
+          python -c "import importlib.metadata; v = importlib.metadata.version('counterscarp-engine'); print(f'counterscarp-engine {v}')"
           python -c "from config_loader import load_config; print('config_loader OK')"
           python -c "from heuristic_scanner import scan_target; print('heuristic_scanner OK')"
           python -c "from report_generator import generate_markdown_report; print('report_generator OK')"
@@ -79,7 +79,7 @@ jobs:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
     environment:
       name: pypi
-      url: https://pypi.org/project/garrison-engine/
+      url: https://pypi.org/project/counterscarp-engine/
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -96,7 +96,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/garrison-engine/
+      url: https://test.pypi.org/project/counterscarp-engine/
     steps:
       - uses: actions/download-artifact@v4
         with:

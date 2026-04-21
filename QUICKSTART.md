@@ -1,4 +1,4 @@
-# Garrison Engine — Quick Start Guide
+# Counterscarp Engine — Quick Start Guide
 
 > **Version 4.4.0** | Smart contract security auditing for EVM + Solana
 
@@ -26,7 +26,7 @@
 ### Basic (CLI scanner — no extra dependencies)
 
 ```bash
-pip install garrison-engine
+pip install counterscarp-engine
 ```
 
 Requires Python 3.10+. Includes heuristic scanning, Markdown/JSON reports, and CLI usage.
@@ -34,7 +34,7 @@ Requires Python 3.10+. Includes heuristic scanning, Markdown/JSON reports, and C
 ### With web interface
 
 ```bash
-pip install "garrison-engine[web]"
+pip install "counterscarp-engine[web]"
 ```
 
 Adds FastAPI + Uvicorn server, Jinja2 templates, Stripe integration, and file upload support.
@@ -42,7 +42,7 @@ Adds FastAPI + Uvicorn server, Jinja2 templates, Stripe integration, and file up
 ### With PDF reports (Pro)
 
 ```bash
-pip install "garrison-engine[pdf]"
+pip install "counterscarp-engine[pdf]"
 ```
 
 Adds `xhtml2pdf` for printable PDF audit documents (pure Python, no system deps).
@@ -50,7 +50,7 @@ Adds `xhtml2pdf` for printable PDF audit documents (pure Python, no system deps)
 ### With AI / RAG features
 
 ```bash
-pip install "garrison-engine[ai,advanced]"
+pip install "counterscarp-engine[ai,advanced]"
 ```
 
 Adds `sentence-transformers`, `numpy`, and `openai` for local vector embeddings and LLM analysis.
@@ -58,13 +58,13 @@ Adds `sentence-transformers`, `numpy`, and `openai` for local vector embeddings 
 ### Full installation
 
 ```bash
-pip install "garrison-engine[web,pdf,ai,advanced]"
+pip install "counterscarp-engine[web,pdf,ai,advanced]"
 ```
 
 ### Development / testing
 
 ```bash
-pip install "garrison-engine[dev]"
+pip install "counterscarp-engine[dev]"
 ```
 
 Adds `pytest`, `pytest-cov`, `mypy`, `pytest-benchmark`.
@@ -73,14 +73,14 @@ Adds `pytest`, `pytest-cov`, `mypy`, `pytest-benchmark`.
 
 ```bash
 # Pull official image
-docker pull tokenaudit/garrison-engine:4.4.0
+docker pull tokenaudit/counterscarp-engine:4.4.0
 
 # Run scan (bind-mount your project)
-docker run --rm -v $(pwd):/scan tokenaudit/garrison-engine:4.4.0 \
+docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:4.4.0 \
   --target /scan --report
 
 # With docker-compose
-docker-compose run --rm audit --target /scan --config /scan/garrison-audit.toml --report
+docker-compose run --rm audit --target /scan --config /scan/counterscarp-audit.toml --report
 ```
 
 The Docker image includes Python 3.10, Slither, Mythril, and `solc` 0.8.19/0.8.20/0.8.23 (~600 MB).
@@ -112,8 +112,8 @@ forge --version
 ### Verify installation
 
 ```bash
-garrison-engine --help
-garrison --help          # short alias
+counterscarp-engine --help
+counterscarp --help          # short alias
 ```
 
 ---
@@ -123,49 +123,49 @@ garrison --help          # short alias
 ### CLI — scan a contracts directory
 
 ```bash
-garrison-engine --target ./contracts --report
+counterscarp-engine --target ./contracts --report
 ```
 
 ### Scan a single Solidity file
 
 ```bash
-garrison-engine --target ./contracts/Vault.sol --report
+counterscarp-engine --target ./contracts/Vault.sol --report
 ```
 
 ### With a specific output format
 
 ```bash
-garrison-engine --target ./contracts --report --format html
-garrison-engine --target ./contracts --report --format sarif
-garrison-engine --target ./contracts --report --format json
+counterscarp-engine --target ./contracts --report --format html
+counterscarp-engine --target ./contracts --report --format sarif
+counterscarp-engine --target ./contracts --report --format json
 ```
 
 ### With a named project
 
 ```bash
-garrison-engine --target ./contracts --report --project-name "MyDeFi Protocol"
+counterscarp-engine --target ./contracts --report --project-name "MyDeFi Protocol"
 ```
 
 ### With a custom config profile
 
 ```bash
-garrison-engine --target ./contracts --config garrison-pr.toml      # fast PR check
-garrison-engine --target ./contracts --config garrison-audit.toml   # full audit
-garrison-engine --target ./contracts --config garrison-bounty.toml  # bug bounty
+counterscarp-engine --target ./contracts --config counterscarp-pr.toml      # fast PR check
+counterscarp-engine --target ./contracts --config counterscarp-audit.toml   # full audit
+counterscarp-engine --target ./contracts --config counterscarp-bounty.toml  # bug bounty
 ```
 
 ### Resume an interrupted scan
 
 ```bash
-garrison-engine --resume <SESSION_ID>
+counterscarp-engine --resume <SESSION_ID>
 ```
 
-Session IDs are printed at scan start and stored in `.garrison/`.
+Session IDs are printed at scan start and stored in `.counterscarp/`.
 
 ### Run preflight tool check
 
 ```bash
-garrison-engine --preflight --target ./contracts
+counterscarp-engine --preflight --target ./contracts
 ```
 
 Verifies that Slither, Foundry, Mythril, and Medusa are available before scanning.
@@ -173,8 +173,8 @@ Verifies that Slither, Foundry, Mythril, and Medusa are available before scannin
 ### Filter by severity or confidence
 
 ```bash
-garrison-engine --target ./contracts --min-severity HIGH
-garrison-engine --target ./contracts --min-confidence 7
+counterscarp-engine --target ./contracts --min-severity HIGH
+counterscarp-engine --target ./contracts --min-confidence 7
 ```
 
 ---
@@ -183,14 +183,14 @@ garrison-engine --target ./contracts --min-confidence 7
 
 ### Auto-discovery
 
-Garrison Engine automatically searches for `garrison.toml` starting from the target directory, walking up to 5 parent directories. If no config is found, safe defaults are used.
+Counterscarp Engine automatically searches for `counterscarp.toml` starting from the target directory, walking up to 5 parent directories. If no config is found, safe defaults are used.
 
 ```bash
 # Explicit config path
-garrison-engine --target ./contracts --config /path/to/garrison.toml
+counterscarp-engine --target ./contracts --config /path/to/counterscarp.toml
 ```
 
-### garrison.toml Reference
+### counterscarp.toml Reference
 
 Below are all supported sections. Copy and paste the sections you need.
 
@@ -198,7 +198,7 @@ Below are all supported sections. Copy and paste the sections you need.
 
 ```toml
 [engine]
-name = "Garrison Security Engine"
+name = "Counterscarp Security Engine"
 version = "4.4.0"
 
 # Minimum severity that causes a non-zero exit code (CI gate)
@@ -337,7 +337,7 @@ llm_model = "gpt-4o-mini"
 # Ollama (local LLM)
 ollama_url = "http://localhost:11434"
 
-rag_index_path = ".garrison/rag_index.json"
+rag_index_path = ".counterscarp/rag_index.json"
 top_k = 5
 auto_enrich = false
 llm_enrichment = false
@@ -347,7 +347,7 @@ llm_enrichment = false
 
 ```toml
 [license]
-# Set here or via GARRISON_PRO_LICENSE environment variable
+# Set here or via COUNTERSCARP_PRO_LICENSE environment variable
 key = "your-license-key-here"
 ```
 
@@ -451,16 +451,16 @@ threat_intel = true
 |--------|------|-------|
 | **HTML** | `--format html` | Styled report with severity badges, code snippets |
 | **SARIF** | `--format sarif` | SARIF 2.1.0 for GitHub Advanced Security |
-| **PDF** | `--format pdf` | Printable document; requires `pip install "garrison-engine[pdf]"` |
+| **PDF** | `--format pdf` | Printable document; requires `pip install "counterscarp-engine[pdf]"` |
 
 ### Generating multiple formats
 
 ```bash
 # HTML + Markdown
-garrison-engine --target ./contracts --report --format html
+counterscarp-engine --target ./contracts --report --format html
 
 # SARIF for GitHub Code Scanning
-garrison-engine --target ./contracts --report --format sarif
+counterscarp-engine --target ./contracts --report --format sarif
 ```
 
 Report output files are created in the working directory with timestamped filenames:
@@ -475,8 +475,8 @@ Report output files are created in the working directory with timestamped filena
 ### GitHub Actions — minimal workflow
 
 ```yaml
-# .github/workflows/garrison.yml
-name: Garrison Security Audit
+# .github/workflows/counterscarp.yml
+name: Counterscarp Security Audit
 
 on:
   pull_request:
@@ -490,7 +490,7 @@ permissions:
   security-events: write
 
 jobs:
-  garrison-scan:
+  counterscarp-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -500,8 +500,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Garrison Engine
-        run: pip install garrison-engine
+      - name: Install Counterscarp Engine
+        run: pip install counterscarp-engine
 
       - name: Install Slither
         run: |
@@ -509,19 +509,19 @@ jobs:
           pip install solc-select
           solc-select install 0.8.19 && solc-select use 0.8.19
 
-      - name: Run Garrison PR Check
-        run: garrison-engine --target ./contracts --config garrison-pr.toml
+      - name: Run Counterscarp PR Check
+        run: counterscarp-engine --target ./contracts --config counterscarp-pr.toml
         env:
-          GARRISON_PRO_LICENSE: ${{ secrets.GARRISON_PRO_LICENSE }}
+          COUNTERSCARP_PRO_LICENSE: ${{ secrets.COUNTERSCARP_PRO_LICENSE }}
 ```
 
 ### GitHub Actions — with SARIF upload
 
 ```yaml
-      - name: Run Garrison Scan (SARIF)
-        run: garrison-engine --target ./contracts --report --format sarif
+      - name: Run Counterscarp Scan (SARIF)
+        run: counterscarp-engine --target ./contracts --report --format sarif
         env:
-          GARRISON_PRO_LICENSE: ${{ secrets.GARRISON_PRO_LICENSE }}
+          COUNTERSCARP_PRO_LICENSE: ${{ secrets.COUNTERSCARP_PRO_LICENSE }}
 
       - name: Upload SARIF to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
@@ -534,25 +534,25 @@ jobs:
 
 ```bash
 # GitHub Actions
-garrison-generate-pipeline --platform github --output .github/workflows/
+counterscarp-generate-pipeline --platform github --output .github/workflows/
 
 # GitLab CI
-garrison-generate-pipeline --platform gitlab --output .gitlab-ci.yml
+counterscarp-generate-pipeline --platform gitlab --output .gitlab-ci.yml
 
 # Azure DevOps
-garrison-generate-pipeline --platform azure --output azure-pipelines.yml
+counterscarp-generate-pipeline --platform azure --output azure-pipelines.yml
 
 # Jenkins
-garrison-generate-pipeline --platform jenkins --output Jenkinsfile
+counterscarp-generate-pipeline --platform jenkins --output Jenkinsfile
 ```
 
 Or via the main CLI:
 
 ```bash
-garrison-engine --generate-pipeline github
+counterscarp-engine --generate-pipeline github
 ```
 
-Configure the generator in `garrison.toml`:
+Configure the generator in `counterscarp.toml`:
 
 ```toml
 [ci.generator]
@@ -565,13 +565,13 @@ notifications = []           # "slack", "discord"
 
 ```yaml
 # .gitlab-ci.yml
-garrison-security:
+counterscarp-security:
   image: python:3.11
   stage: test
   script:
-    - pip install garrison-engine slither-analyzer
+    - pip install counterscarp-engine slither-analyzer
     - solc-select install 0.8.19 && solc-select use 0.8.19
-    - garrison-engine --target ./contracts --config garrison-pr.toml
+    - counterscarp-engine --target ./contracts --config counterscarp-pr.toml
   only:
     - merge_requests
     - main
@@ -581,7 +581,7 @@ garrison-security:
 
 To surface findings directly in the GitHub Security tab:
 
-1. Generate SARIF: `garrison-engine --target ./contracts --report --format sarif`
+1. Generate SARIF: `counterscarp-engine --target ./contracts --report --format sarif`
 2. Upload via `github/codeql-action/upload-sarif@v3` (see workflow above)
 3. View findings under **Security → Code scanning alerts**
 
@@ -591,18 +591,18 @@ Requires a Pro license key for SARIF output.
 
 ## Execution Profiles
 
-Three pre-built `*.toml` profiles ship with Garrison Engine:
+Three pre-built `*.toml` profiles ship with Counterscarp Engine:
 
 | Profile | Config File | Scan Time | Fail Threshold | Use Case |
 |---------|-------------|-----------|----------------|----------|
-| **PR Mode** | `garrison-pr.toml` | < 2 min | HIGH+ | Block bad PRs fast |
-| **Audit Mode** | `garrison-audit.toml` | 10–30 min | MEDIUM+ | Client deliverables |
-| **Bounty Mode** | `garrison-bounty.toml` | 1–2 hours | Never fails | Max exploit coverage |
+| **PR Mode** | `counterscarp-pr.toml` | < 2 min | HIGH+ | Block bad PRs fast |
+| **Audit Mode** | `counterscarp-audit.toml` | 10–30 min | MEDIUM+ | Client deliverables |
+| **Bounty Mode** | `counterscarp-bounty.toml` | 1–2 hours | Never fails | Max exploit coverage |
 
 ```bash
-garrison-engine --target ./contracts --config garrison-pr.toml
-garrison-engine --target ./contracts --config garrison-audit.toml --report
-garrison-engine --target ./contracts --config garrison-bounty.toml --medusa --aderyn --report
+counterscarp-engine --target ./contracts --config counterscarp-pr.toml
+counterscarp-engine --target ./contracts --config counterscarp-audit.toml --report
+counterscarp-engine --target ./contracts --config counterscarp-bounty.toml --medusa --aderyn --report
 ```
 
 ---
@@ -615,16 +615,16 @@ Scans commit history to find when vulnerabilities were introduced or fixed.
 
 ```bash
 # Scan last 50 commits on main
-garrison-engine --target ./contracts --history --commits 50 --branch main
+counterscarp-engine --target ./contracts --history --commits 50 --branch main
 
 # Scan since a specific date
-garrison-engine --target ./contracts --history --since 2025-01-01
+counterscarp-engine --target ./contracts --history --since 2025-01-01
 
 # Alias
-garrison-engine --target ./contracts --time-travel
+counterscarp-engine --target ./contracts --time-travel
 ```
 
-Configure in `garrison.toml`:
+Configure in `counterscarp.toml`:
 
 ```toml
 [history]
@@ -640,20 +640,20 @@ RAG-based knowledge retrieval enriches findings with context from past audits.
 
 ```bash
 # Enable RAG enrichment
-garrison-engine --target ./contracts --rag
+counterscarp-engine --target ./contracts --rag
 
 # Enable RAG + LLM analysis
-garrison-engine --target ./contracts --rag --llm
+counterscarp-engine --target ./contracts --rag --llm
 
 # Rebuild the RAG knowledge base from historical reports
-garrison-engine --build-rag-index
+counterscarp-engine --build-rag-index
 
 # Use OpenAI as LLM backend
 export OPENAI_API_KEY="sk-..."
-garrison-engine --target ./contracts --rag --llm
+counterscarp-engine --target ./contracts --rag --llm
 ```
 
-Configure in `garrison.toml`:
+Configure in `counterscarp.toml`:
 
 ```toml
 [ai]
@@ -669,11 +669,11 @@ llm_enrichment = false
 Identifies which known protocol (Uniswap, Compound, Aave, etc.) a contract resembles and flags inherited vulnerabilities.
 
 ```bash
-garrison-engine --target ./contracts --fingerprint
-garrison-engine --target ./contracts --fingerprint --verbose
+counterscarp-engine --target ./contracts --fingerprint
+counterscarp-engine --target ./contracts --fingerprint --verbose
 ```
 
-Configure in `garrison.toml`:
+Configure in `counterscarp.toml`:
 
 ```toml
 [fingerprint]
@@ -688,10 +688,10 @@ include_risk_assessment = true
 Detects storage collisions and removed access control in proxy upgrades.
 
 ```bash
-garrison-engine --upgrade-old ./VaultV1.sol --upgrade-new ./VaultV2.sol
+counterscarp-engine --upgrade-old ./VaultV1.sol --upgrade-new ./VaultV2.sol
 ```
 
-Configure in `garrison.toml`:
+Configure in `counterscarp.toml`:
 
 ```toml
 [upgrade_diff]
@@ -712,7 +712,7 @@ Generates Foundry test exploits for detected findings using local templates (+ o
 #                     access_control, integer_overflow, front_running
 ```
 
-Configure in `garrison.toml`:
+Configure in `counterscarp.toml`:
 
 ```toml
 [exploit_generation]
@@ -729,10 +729,10 @@ template_dir = "exploit_templates/"
 35 security rules for Rust/Anchor programs, plus IDL constraint validation and CPI flow tracing.
 
 ```bash
-garrison-engine --solana-root ./programs
+counterscarp-engine --solana-root ./programs
 ```
 
-Configure in `garrison.toml`:
+Configure in `counterscarp.toml`:
 
 ```toml
 [chains.solana]
@@ -760,12 +760,12 @@ max_path_depth = 10
 
 ### Plugin System
 
-Drop custom analyzer plugins into `.garrison/plugins/`:
+Drop custom analyzer plugins into `.counterscarp/plugins/`:
 
 ```toml
 [plugins]
 enabled = true
-dirs = [".garrison/plugins"]
+dirs = [".counterscarp/plugins"]
 ```
 
 ---
@@ -775,7 +775,7 @@ dirs = [".garrison/plugins"]
 ### Step 1 — Update signatures before going offline
 
 ```bash
-garrison-engine --update-signatures
+counterscarp-engine --update-signatures
 ```
 
 Downloads the latest threat intel databases from GitHub and stores them in `data/`.
@@ -783,7 +783,7 @@ Downloads the latest threat intel databases from GitHub and stores them in `data
 ### Step 2 — Or import from a pre-downloaded file
 
 ```bash
-garrison-engine --update-from-file /path/to/threat_intel_db.json
+counterscarp-engine --update-from-file /path/to/threat_intel_db.json
 ```
 
 ### Step 3 — Configure for air-gapped use
@@ -809,7 +809,7 @@ ollama_url = "http://localhost:11434"
    # or
    ollama pull codellama
    ```
-3. Update `garrison.toml`:
+3. Update `counterscarp.toml`:
    ```toml
    [ai]
    llm_backend = "ollama"
@@ -818,14 +818,14 @@ ollama_url = "http://localhost:11434"
    ```
 4. Run with LLM enrichment:
    ```bash
-   garrison-engine --target ./contracts --rag --llm
+   counterscarp-engine --target ./contracts --rag --llm
    ```
 
 ---
 
 ## License Tiers
 
-Garrison Engine ships as a single package. Pro features are gated by a license key.
+Counterscarp Engine ships as a single package. Pro features are gated by a license key.
 
 | Feature | Community (Free) | Developer ($49/mo) | Professional ($149/mo) | Team ($399/mo) |
 |---------|:---:|:---:|:---:|:---:|
@@ -845,18 +845,18 @@ Garrison Engine ships as a single package. Pro features are gated by a license k
 | Machine activations | — | 1 | 3 | 10 |
 | Support | GitHub | Email | Priority (24 hr) | Dedicated |
 
-Get your license at **https://garrisonsec.com/pricing**
+Get your license at **https://counterscarp.io/pricing**
 
 ### Activating a Pro license
 
 **Option A — environment variable (recommended for CI):**
 
 ```bash
-export GARRISON_PRO_LICENSE=your-license-key-here
-garrison-engine --target ./contracts --report --format html
+export COUNTERSCARP_PRO_LICENSE=your-license-key-here
+counterscarp-engine --target ./contracts --report --format html
 ```
 
-**Option B — `garrison.toml`:**
+**Option B — `counterscarp.toml`:**
 
 ```toml
 [license]
@@ -867,7 +867,7 @@ key = "your-license-key-here"
 
 ```yaml
 env:
-  GARRISON_PRO_LICENSE: ${{ secrets.GARRISON_PRO_LICENSE }}
+  COUNTERSCARP_PRO_LICENSE: ${{ secrets.COUNTERSCARP_PRO_LICENSE }}
 ```
 
 ---
@@ -876,10 +876,10 @@ env:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GARRISON_PRO_LICENSE` | Pro license key | — |
-| `GARRISON_LOG_LEVEL` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO` |
-| `GARRISON_LOG_FORMAT` | Output format: `text` or `json` | `text` |
-| `GARRISON_LOG_FILE` | File path for log output | — |
+| `COUNTERSCARP_PRO_LICENSE` | Pro license key | — |
+| `COUNTERSCARP_LOG_LEVEL` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO` |
+| `COUNTERSCARP_LOG_FORMAT` | Output format: `text` or `json` | `text` |
+| `COUNTERSCARP_LOG_FILE` | File path for log output | — |
 | `OPENAI_API_KEY` | OpenAI API key for GPT-based LLM analysis | — |
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude-based analysis | — |
 
@@ -887,17 +887,17 @@ env:
 
 ```bash
 # Debug logging to a file
-export GARRISON_LOG_LEVEL=DEBUG
-export GARRISON_LOG_FILE=/var/log/garrison.log
-garrison-engine --target ./contracts
+export COUNTERSCARP_LOG_LEVEL=DEBUG
+export COUNTERSCARP_LOG_FILE=/var/log/counterscarp.log
+counterscarp-engine --target ./contracts
 
 # Structured JSON logs (pipe to jq)
-export GARRISON_LOG_FORMAT=json
-garrison-engine --target ./contracts 2>&1 | jq
+export COUNTERSCARP_LOG_FORMAT=json
+counterscarp-engine --target ./contracts 2>&1 | jq
 
 # OpenAI for LLM-enriched findings
 export OPENAI_API_KEY="sk-..."
-garrison-engine --target ./contracts --rag --llm
+counterscarp-engine --target ./contracts --rag --llm
 ```
 
 ---
@@ -907,7 +907,7 @@ garrison-engine --target ./contracts --rag --llm
 ### Update threat intelligence signatures
 
 ```bash
-garrison-engine --update-signatures
+counterscarp-engine --update-signatures
 ```
 
 Fetches the latest vulnerability databases from GitHub. Safe to run in CI pre-scan.
@@ -915,14 +915,14 @@ Fetches the latest vulnerability databases from GitHub. Safe to run in CI pre-sc
 ### Update the engine
 
 ```bash
-pip install --upgrade garrison-engine
+pip install --upgrade counterscarp-engine
 ```
 
 ### Check current version
 
 ```bash
-garrison-engine --help   # version shown in header
-python -c "import importlib.metadata; print(importlib.metadata.version('garrison-engine'))"
+counterscarp-engine --help   # version shown in header
+python -c "import importlib.metadata; print(importlib.metadata.version('counterscarp-engine'))"
 ```
 
 ---
@@ -975,7 +975,7 @@ sudo usermod -aG docker $USER
 
 # Or run with --user flag
 docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan \
-  tokenaudit/garrison-engine:4.4.0 --target /scan --report
+  tokenaudit/counterscarp-engine:4.4.0 --target /scan --report
 ```
 
 ### OpenAI API key not set
@@ -990,26 +990,26 @@ $env:OPENAI_API_KEY = "sk-..."
 ### RAG dependencies missing
 
 ```bash
-pip install "garrison-engine[ai,advanced]"
+pip install "counterscarp-engine[ai,advanced]"
 ```
 
 ### Web server fails to start
 
 ```bash
-pip install "garrison-engine[web]"
+pip install "counterscarp-engine[web]"
 ```
 
 ### Config not found
 
-Garrison Engine searches up to 5 parent directories for `garrison.toml`. To specify an explicit path:
+Counterscarp Engine searches up to 5 parent directories for `counterscarp.toml`. To specify an explicit path:
 
 ```bash
-garrison-engine --target ./contracts --config /path/to/garrison.toml
+counterscarp-engine --target ./contracts --config /path/to/counterscarp.toml
 ```
 
 ### Scan fails immediately with "target does not exist"
 
-- Use an absolute path: `garrison-engine --target /full/path/to/contracts`
+- Use an absolute path: `counterscarp-engine --target /full/path/to/contracts`
 - If targeting a single file, it must end in `.sol`
 - Check that the path exists: `ls ./contracts`
 
@@ -1036,11 +1036,11 @@ BLOCK_TIMESTAMP_RANDOMNESS = "LOW"
 ## Complete CLI Reference
 
 ```
-garrison-engine [OPTIONS]
+counterscarp-engine [OPTIONS]
 
 Scan options:
   --target PATH            Path to project root or .sol file (required for scanning)
-  --config PATH            Path to garrison.toml (auto-discovered if not set)
+  --config PATH            Path to counterscarp.toml (auto-discovered if not set)
   --report                 Generate audit report
   --format FORMAT          Report format: markdown, json, sarif, html, pdf
   --project-name NAME      Project name for report header
@@ -1082,15 +1082,15 @@ Operations:
 
 ## Further Reading
 
-- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — Complete `garrison.toml` reference
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — Complete `counterscarp.toml` reference
 - **[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)** — All flags with examples
 - **[docs/WEB_APP_GUIDE.md](docs/WEB_APP_GUIDE.md)** — Self-hosted web interface
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Production server setup
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — Adding rules and integrations
-- **Web app:** https://garrisonsec.com
-- **Pricing:** https://garrisonsec.com/pricing
-- **Issues:** https://github.com/RunTimeAdmin/garrison-engine/issues
+- **Web app:** https://counterscarp.io
+- **Pricing:** https://counterscarp.io/pricing
+- **Issues:** https://github.com/RunTimeAdmin/counterscarp-engine/issues
 
 ---
 
-*Garrison Engine v4.4.0 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*
+*Counterscarp Engine v4.4.0 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*

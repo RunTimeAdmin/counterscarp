@@ -1,4 +1,4 @@
-"""FastAPI web application for Garrison Engine."""
+"""FastAPI web application for Counterscarp Engine."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ logger = get_logger(__name__)
 
 _license = LicenseManager()
 
-# Import Garrison Engine modules
+# Import Counterscarp Engine modules
 from heuristic_scanner import (
     HeuristicFinding,
     RULE_CATEGORIES,
@@ -75,7 +75,7 @@ from attack_graph import build_graph, export_graph_json
 from visualizer import generate_attack_graph_html
 
 app = FastAPI(
-    title="Garrison Engine",
+    title="Counterscarp Engine",
     description="Smart Contract Security Audit Platform",
     version="4.4.0",
 )
@@ -846,7 +846,7 @@ async def settings_page(request: Request):
 
     # License context for the template
     license_tier = _license.get_tier()
-    license_key = os.environ.get("GARRISON_PRO_LICENSE", "")
+    license_key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
     license_key_set = bool(license_key)
     license_masked_key = _mask_license_key(license_key) if license_key else ""
     license_features = _get_tier_features(license_tier)
@@ -969,7 +969,7 @@ async def save_license_key(request: Request):
         )
 
     # Set environment variable
-    os.environ["GARRISON_PRO_LICENSE"] = license_key
+    os.environ["COUNTERSCARP_PRO_LICENSE"] = license_key
 
     # Persist to data/.env.local
     env_file = Path(__file__).parent.parent / "data" / ".env.local"
@@ -983,7 +983,7 @@ async def save_license_key(request: Request):
                 k, v = line.split("=", 1)
                 env_vars[k.strip()] = v.strip()
 
-    env_vars["GARRISON_PRO_LICENSE"] = license_key
+    env_vars["COUNTERSCARP_PRO_LICENSE"] = license_key
     env_file.write_text(
         "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n"
     )
@@ -1008,8 +1008,8 @@ async def save_license_key(request: Request):
 async def remove_license(request: Request):
     """Remove the license key from env and persistence."""
     # Remove from environment
-    if "GARRISON_PRO_LICENSE" in os.environ:
-        del os.environ["GARRISON_PRO_LICENSE"]
+    if "COUNTERSCARP_PRO_LICENSE" in os.environ:
+        del os.environ["COUNTERSCARP_PRO_LICENSE"]
 
     # Remove from data/.env.local
     env_file = Path(__file__).parent.parent / "data" / ".env.local"
@@ -1018,7 +1018,7 @@ async def remove_license(request: Request):
         for line in env_file.read_text().splitlines():
             if "=" in line and not line.startswith("#"):
                 k, v = line.split("=", 1)
-                if k.strip() != "GARRISON_PRO_LICENSE":
+                if k.strip() != "COUNTERSCARP_PRO_LICENSE":
                     env_vars[k.strip()] = v.strip()
 
         if env_vars:
@@ -1044,7 +1044,7 @@ async def remove_license(request: Request):
 async def get_license_status(request: Request):
     """Return current license status for the settings page."""
     tier = _license.get_tier()
-    key = os.environ.get("GARRISON_PRO_LICENSE", "")
+    key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
 
     masked_key = _mask_license_key(key) if key else ""
     features = _get_tier_features(tier)
@@ -1083,7 +1083,7 @@ async def download_report(audit_id: str, format: str):
     return FileResponse(
         path=str(file_path),
         media_type=content_type,
-        filename=f"garrison_audit_{audit_id}_{filename}",
+        filename=f"counterscarp_audit_{audit_id}_{filename}",
     )
 
 

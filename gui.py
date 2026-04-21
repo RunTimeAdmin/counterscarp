@@ -9,11 +9,11 @@ from typing import Any
 
 from logger import get_logger
 from exceptions import (
-    GarrisonError,
-    GarrisonConfigError,
-    GarrisonAnalysisError,
-    GarrisonToolNotFoundError,
-    GarrisonValidationError,
+    CounterscarpError,
+    CounterscarpConfigError,
+    CounterscarpAnalysisError,
+    CounterscarpToolNotFoundError,
+    CounterscarpValidationError,
 )
 
 logger = get_logger(__name__)
@@ -33,13 +33,13 @@ import upgrade_diff
 
 # Optional config loader
 try:
-    from config_loader import load_config, GarrisonConfig
+    from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
     logger.debug("Config loader available")
 except ImportError as e:
     logger.warning(f"Config loader not available: {e}")
     CONFIG_AVAILABLE = False
-    GarrisonConfig = None
+    CounterscarpConfig = None
 
 
 def append_output(widget: scrolledtext.ScrolledText, text: str) -> None:
@@ -54,7 +54,7 @@ def append_output(widget: scrolledtext.ScrolledText, text: str) -> None:
 
 
 def create_gui() -> None:
-    """Create and run the Garrison Security Engine GUI.
+    """Create and run the Counterscarp Security Engine GUI.
 
     Initializes the main application window with controls for running
     various security checks on smart contracts.
@@ -510,7 +510,7 @@ def create_gui() -> None:
                                     f"[*] Config loaded: {len(config.heuristics.disabled_rules)} rules disabled, "
                                     f"{len(config.suppressions)} suppressions active",
                                 )
-                        except (GarrisonConfigError, IOError) as e:
+                        except (CounterscarpConfigError, IOError) as e:
                             logger.warning(f"Could not load config for heuristic scan: {e}")
                         except Exception as e:
                             logger.warning(f"Unexpected error loading config: {e}")

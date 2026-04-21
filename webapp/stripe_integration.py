@@ -1,4 +1,4 @@
-"""Stripe Checkout integration for Garrison Engine Pro licensing."""
+﻿"""Stripe Checkout integration for Counterscarp Engine Pro licensing."""
 
 import json
 import os
@@ -20,7 +20,7 @@ stripe.api_key = STRIPE_SECRET_KEY
 # Product definitions (prices created via Stripe API on first use)
 PRODUCTS = {
     "dev_monthly": {
-        "name": "Garrison Engine Developer - Monthly",
+        "name": "Counterscarp Engine Developer - Monthly",
         "description": "Web app, Solana Analyzer, branded HTML/SARIF reports. 1 machine activation.",
         "price_cents": 4900,
         "interval": "month",
@@ -28,7 +28,7 @@ PRODUCTS = {
         "max_activations": 1,
     },
     "dev_annual": {
-        "name": "Garrison Engine Developer - Annual",
+        "name": "Counterscarp Engine Developer - Annual",
         "description": "Web app, Solana Analyzer, branded HTML/SARIF reports. 1 machine activation. Save $98/year!",
         "price_cents": 49000,
         "interval": "year",
@@ -36,7 +36,7 @@ PRODUCTS = {
         "max_activations": 1,
     },
     "pro_monthly": {
-        "name": "Garrison Engine Pro - Monthly",
+        "name": "Counterscarp Engine Pro - Monthly",
         "description": "Full access: AI Copilot, Attack Graphs, Exploit PoC, Time-Travel, Fingerprinting. 3 machine activations.",
         "price_cents": 14900,
         "interval": "month",
@@ -44,7 +44,7 @@ PRODUCTS = {
         "max_activations": 3,
     },
     "pro_annual": {
-        "name": "Garrison Engine Pro - Annual",
+        "name": "Counterscarp Engine Pro - Annual",
         "description": "Full access: AI Copilot, Attack Graphs, Exploit PoC, Time-Travel, Fingerprinting. 3 machine activations. Save $298/year!",
         "price_cents": 149000,
         "interval": "year",
@@ -52,7 +52,7 @@ PRODUCTS = {
         "max_activations": 3,
     },
     "team_monthly": {
-        "name": "Garrison Engine Team - Monthly",
+        "name": "Counterscarp Engine Team - Monthly",
         "description": "Everything in Pro + 10 seats, shared workspace, API access. 10 machine activations.",
         "price_cents": 39900,
         "interval": "month",
@@ -60,7 +60,7 @@ PRODUCTS = {
         "max_activations": 10,
     },
     "team_annual": {
-        "name": "Garrison Engine Team - Annual",
+        "name": "Counterscarp Engine Team - Annual",
         "description": "Everything in Pro + 10 seats, shared workspace, API access. 10 machine activations. Save $798/year!",
         "price_cents": 399000,
         "interval": "year",

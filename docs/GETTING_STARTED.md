@@ -1,10 +1,10 @@
-# Getting Started with Garrison Engine
+# Getting Started with Counterscarp Engine
 
-> **Try it online:** [https://garrisonsec.com](https://garrisonsec.com) — Run audits in your browser, no installation required.
+> **Try it online:** [https://counterscarp.io](https://counterscarp.io) — Run audits in your browser, no installation required.
 
 ## Table of Contents
 
-- [What is Garrison Engine?](#what-is-garrison-engine)
+- [What is Counterscarp Engine?](#what-is-counterscarp-engine)
 - [Try It Online](#try-it-online)
 - [Installation](#installation)
 - [Your First Audit in 60 Seconds](#your-first-audit-in-60-seconds)
@@ -14,19 +14,19 @@
 
 ---
 
-## What is Garrison Engine?
+## What is Counterscarp Engine?
 
-Garrison Engine is a production-ready smart contract security auditing platform that combines static analysis, heuristic pattern scanning, fuzzing, symbolic execution, and AI-powered RAG enrichment into a single pipeline. It supports both EVM (Solidity) and Solana (Rust/Anchor) smart contracts, providing 31 EVM heuristic rules, 35 Solana vulnerability patterns, and integration with industry-standard tools like Slither, Aderyn, Medusa, and Mythril.
+Counterscarp Engine is a production-ready smart contract security auditing platform that combines static analysis, heuristic pattern scanning, fuzzing, symbolic execution, and AI-powered RAG enrichment into a single pipeline. It supports both EVM (Solidity) and Solana (Rust/Anchor) smart contracts, providing 31 EVM heuristic rules, 35 Solana vulnerability patterns, and integration with industry-standard tools like Slither, Aderyn, Medusa, and Mythril.
 
-Whether you're running a quick PR check, a full audit, or a bug bounty sweep, Garrison Engine adapts to your workflow through configurable execution profiles and a composable analysis pipeline.
+Whether you're running a quick PR check, a full audit, or a bug bounty sweep, Counterscarp Engine adapts to your workflow through configurable execution profiles and a composable analysis pipeline.
 
 ---
 
 ## Try It Online
 
-The fastest way to try Garrison Engine is via the live web app:
+The fastest way to try Counterscarp Engine is via the live web app:
 
-**[https://garrisonsec.com](https://garrisonsec.com)**
+**[https://counterscarp.io](https://counterscarp.io)**
 
 The online demo allows you to:
 - Upload and audit `.sol` or `.rs` files
@@ -40,7 +40,7 @@ The online demo allows you to:
 
 ### PyPI Package
 
-Garrison Engine is available on PyPI: [https://pypi.org/project/garrison-engine/](https://pypi.org/project/garrison-engine/)
+Counterscarp Engine is available on PyPI: [https://pypi.org/project/counterscarp-engine/](https://pypi.org/project/counterscarp-engine/)
 
 ### Requirements
 
@@ -50,34 +50,34 @@ Garrison Engine is available on PyPI: [https://pypi.org/project/garrison-engine/
 ### Core Installation
 
 ```bash
-pip install garrison-engine
+pip install counterscarp-engine
 ```
 
 ### Installation with Optional Features
 
 ```bash
 # Web UI (FastAPI + uvicorn)
-pip install "garrison-engine[web]"
+pip install "counterscarp-engine[web]"
 
 # AI/RAG enrichment (local embeddings, no API needed)
-pip install "garrison-engine[ai]"
+pip install "counterscarp-engine[ai]"
 
 # Everything at once
-pip install "garrison-engine[web,ai]"
+pip install "counterscarp-engine[web,ai]"
 
 # Development dependencies (pytest, mypy, benchmarks)
-pip install "garrison-engine[dev]"
+pip install "counterscarp-engine[dev]"
 ```
 
 ### Verify Installation
 
 ```bash
-garrison --help
+counterscarp --help
 # or
-garrison-engine --help
+counterscarp-engine --help
 ```
 
-**Tip:** The `garrison` and `garrison-engine` commands are interchangeable aliases.
+**Tip:** The `counterscarp` and `counterscarp-engine` commands are interchangeable aliases.
 
 ---
 
@@ -86,7 +86,7 @@ garrison-engine --help
 ### 1. Scan a Solidity project
 
 ```bash
-garrison --target ./contracts
+counterscarp --target ./contracts
 ```
 
 This runs the default pipeline: heuristic pattern scan + Slither static analysis + supply chain check.
@@ -94,7 +94,7 @@ This runs the default pipeline: heuristic pattern scan + Slither static analysis
 ### 2. Generate a professional report
 
 ```bash
-garrison --target ./contracts --report --project-name "MyProtocol"
+counterscarp --target ./contracts --report --project-name "MyProtocol"
 ```
 
 This produces both an HTML and Markdown audit report with risk scoring.
@@ -102,10 +102,10 @@ This produces both an HTML and Markdown audit report with risk scoring.
 ### 3. Use a config file
 
 ```bash
-garrison --target ./contracts --config garrison.toml
+counterscarp --target ./contracts --config counterscarp.toml
 ```
 
-Create a `garrison.toml` in your project root to customize rules, suppressions, and analysis behavior. See the [Configuration Guide](CONFIGURATION.md) for the full reference.
+Create a `counterscarp.toml` in your project root to customize rules, suppressions, and analysis behavior. See the [Configuration Guide](CONFIGURATION.md) for the full reference.
 
 ### Minimal Config Example
 
@@ -125,8 +125,8 @@ enabled = true
 ### Start the Development Server
 
 ```bash
-pip install "garrison-engine[web]"
-cd garrison-engine
+pip install "counterscarp-engine[web]"
+cd counterscarp-engine
 uvicorn webapp.main:app --reload --port 8001
 ```
 
@@ -148,21 +148,21 @@ For production deployment with nginx + SSL, see the [Deployment Guide](DEPLOYMEN
 
 ## Pro License Activation
 
-Garrison Engine ships with both free and pro features in a single package. Pro features require a valid license key to unlock.
+Counterscarp Engine ships with both free and pro features in a single package. Pro features require a valid license key to unlock.
 
 ### Setting Your License Key
 
 **Option 1: Environment variable**
 
 ```bash
-export GARRISON_PRO_LICENSE=SE-PRO-XXXXXXXXXXXX
+export COUNTERSCARP_PRO_LICENSE=SE-PRO-XXXXXXXXXXXX
 ```
 
 Replace the prefix based on your tier: `SE-DEV-xxx`, `SE-PRO-xxx`, `SE-TEAM-xxx`, or `SE-ENT-xxx`.
 
 **Option 2: Configuration file**
 
-Add a `[license]` section to your `garrison.toml`:
+Add a `[license]` section to your `counterscarp.toml`:
 
 ```toml
 [license]
@@ -173,7 +173,7 @@ The environment variable takes priority over the config file.
 
 ### License Tiers
 
-Garrison Engine offers five license tiers:
+Counterscarp Engine offers five license tiers:
 
 | Tier | Price | Key Prefix | Features |
 |------|-------|------------|----------|
@@ -187,7 +187,7 @@ Garrison Engine offers five license tiers:
 
 **Developer tier** unlocks:
 
-- **Web App** — Full web-based audit interface at garrisonsec.com
+- **Web App** — Full web-based audit interface at counterscarp.io
 - **Solana Analyzer** — 35 Rust/Anchor security patterns with IDL validation
 - **Branded HTML/SARIF Reports** — Professional branded audit report output
 
@@ -207,7 +207,7 @@ Garrison Engine offers five license tiers:
 
 ### Getting a License
 
-Visit [garrisonsec.com/pricing](https://garrisonsec.com/pricing) to purchase a Developer, Pro, Team, or Enterprise license.
+Visit [counterscarp.io/pricing](https://counterscarp.io/pricing) to purchase a Developer, Pro, Team, or Enterprise license.
 
 ---
 
@@ -216,7 +216,7 @@ Visit [garrisonsec.com/pricing](https://garrisonsec.com/pricing) to purchase a D
 | Guide | Description |
 |-------|-------------|
 | [CLI Reference](CLI_REFERENCE.md) | All commands, flags, profiles, and exit codes |
-| [Configuration](CONFIGURATION.md) | Full garrison.toml reference with examples |
+| [Configuration](CONFIGURATION.md) | Full counterscarp.toml reference with examples |
 | [Rules Catalog](RULES_CATALOG.md) | All 31 EVM and 35 Solana security rules |
 | [Web App Guide](WEB_APP_GUIDE.md) | Web UI features and API endpoints |
 | [Deployment](DEPLOYMENT.md) | Production server setup with nginx + SSL |
@@ -225,4 +225,4 @@ Visit [garrisonsec.com/pricing](https://garrisonsec.com/pricing) to purchase a D
 
 ---
 
-*Garrison Security Engine &bull; garrisonsec.com*
+*Counterscarp Security Engine &bull; counterscarp.io*

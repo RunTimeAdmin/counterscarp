@@ -1,12 +1,12 @@
-# Garrison Security Engine
+# Counterscarp Security Engine
 
 **Production-ready smart contract security platform — 21 integrated analyzers, configurable rules, and professional audit reports.**
 
 > One command. Zero false positives. Client-ready deliverables.
 
-[![PyPI](https://img.shields.io/pypi/v/garrison-engine)](https://pypi.org/project/garrison-engine/)
-[![Python](https://img.shields.io/pypi/pyversions/garrison-engine)](https://pypi.org/project/garrison-engine/)
-[![License](https://img.shields.io/pypi/l/garrison-engine)](https://pypi.org/project/garrison-engine/)
+[![PyPI](https://img.shields.io/pypi/v/counterscarp-engine)](https://pypi.org/project/counterscarp-engine/)
+[![Python](https://img.shields.io/pypi/pyversions/counterscarp-engine)](https://pypi.org/project/counterscarp-engine/)
+[![License](https://img.shields.io/pypi/l/counterscarp-engine)](https://pypi.org/project/counterscarp-engine/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 ---
@@ -14,16 +14,16 @@
 ## Installation
 
 ```bash
-pip install garrison-engine
+pip install counterscarp-engine
 ```
 
 For optional extras:
 
 ```bash
-pip install "garrison-engine[web]"          # Web interface
-pip install "garrison-engine[pdf]"          # PDF report export
-pip install "garrison-engine[ai,advanced]"  # RAG + LLM analysis
-pip install "garrison-engine[web,pdf,ai,advanced]"  # Full install
+pip install "counterscarp-engine[web]"          # Web interface
+pip install "counterscarp-engine[pdf]"          # PDF report export
+pip install "counterscarp-engine[ai,advanced]"  # RAG + LLM analysis
+pip install "counterscarp-engine[web,pdf,ai,advanced]"  # Full install
 ```
 
 See **[QUICKSTART.md](QUICKSTART.md)** for Docker setup, optional external tools (Slither, Aderyn, Medusa), and full installation details.
@@ -34,12 +34,12 @@ See **[QUICKSTART.md](QUICKSTART.md)** for Docker setup, optional external tools
 
 ```bash
 # Scan a contracts directory and generate a report
-garrison-engine --target ./contracts --report
+counterscarp-engine --target ./contracts --report
 
 # Use a pre-built execution profile
-garrison-engine --target ./contracts --config garrison-pr.toml      # fast PR check
-garrison-engine --target ./contracts --config garrison-audit.toml   # full audit
-garrison-engine --target ./contracts --config garrison-bounty.toml  # bug bounty
+counterscarp-engine --target ./contracts --config counterscarp-pr.toml      # fast PR check
+counterscarp-engine --target ./contracts --config counterscarp-audit.toml   # full audit
+counterscarp-engine --target ./contracts --config counterscarp-bounty.toml  # bug bounty
 ```
 
 ---
@@ -62,11 +62,11 @@ garrison-engine --target ./contracts --config garrison-bounty.toml  # bug bounty
 
 ## Security & Privacy (Data Sovereignty)
 
-Garrison Engine is built for environments where source-code confidentiality is non-negotiable — bank compliance teams, Web3 audit firms, and air-gapped infrastructure.
+Counterscarp Engine is built for environments where source-code confidentiality is non-negotiable — bank compliance teams, Web3 audit firms, and air-gapped infrastructure.
 
 - **Zero code exfiltration** — No source code, bytecode, or contract artifacts ever leave the host machine during a scan. All analysis is performed locally.
-- **Local-first AI inference** — The AI Copilot defaults to local inference via [Ollama](https://ollama.com) when configured (`garrison.toml → [ai] provider = "ollama"`). If OpenAI is selected, only a one-paragraph natural-language summary of each finding is sent to the OpenAI API — never raw source code.
-- **Bundled threat intelligence** — Vulnerability databases and protocol signatures ship with the package and are queried locally. Network access only occurs if you explicitly run `garrison --update-signatures`. For fully air-gapped environments, use `garrison --update-from-file <path>` to import pre-downloaded signature packs.
+- **Local-first AI inference** — The AI Copilot defaults to local inference via [Ollama](https://ollama.com) when configured (`counterscarp.toml → [ai] provider = "ollama"`). If OpenAI is selected, only a one-paragraph natural-language summary of each finding is sent to the OpenAI API — never raw source code.
+- **Bundled threat intelligence** — Vulnerability databases and protocol signatures ship with the package and are queried locally. Network access only occurs if you explicitly run `counterscarp --update-signatures`. For fully air-gapped environments, use `counterscarp --update-from-file <path>` to import pre-downloaded signature packs.
 - **No telemetry** — The CLI contains zero usage telemetry, analytics callbacks, tracking pixels, or phone-home behavior. Period.
 
 ---
@@ -83,11 +83,11 @@ Garrison Engine is built for environments where source-code confidentiality is n
 | Time-travel + Attack graph | — | — | ✅ | ✅ |
 | Machine activations | — | 1 | 3 | 10 |
 
-Get your license: **https://garrisonsec.com/pricing**
+Get your license: **https://counterscarp.io/pricing**
 
 ```bash
-export GARRISON_PRO_LICENSE=your-key-here
-garrison-engine --target ./contracts --report --format html
+export COUNTERSCARP_PRO_LICENSE=your-key-here
+counterscarp-engine --target ./contracts --report --format html
 ```
 
 ---
@@ -97,7 +97,7 @@ garrison-engine --target ./contracts --report --format html
 | Document | Description |
 |----------|-------------|
 | **[QUICKSTART.md](QUICKSTART.md)** | Full install, config reference, CI/CD, offline setup, troubleshooting |
-| **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** | Complete `garrison.toml` reference |
+| **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** | Complete `counterscarp.toml` reference |
 | **[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)** | All CLI flags and examples |
 | **[docs/WEB_APP_GUIDE.md](docs/WEB_APP_GUIDE.md)** | Self-hosted web interface |
 | **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** | Production server setup |
@@ -114,7 +114,7 @@ garrison-engine --target ./contracts --report --format html
 
 ## Credits
 
-**Built by CyberShield Austin** · [@defiauditccie](https://twitter.com/defiauditccie) · [garrisonsec.com](https://garrisonsec.com)
+**Built by CyberShield Austin** · [@defiauditccie](https://twitter.com/defiauditccie) · [counterscarp.io](https://counterscarp.io)
 
 Powered by [Slither](https://github.com/crytic/slither) · [Aderyn](https://github.com/Cyfrin/aderyn) · [Medusa](https://github.com/crytic/medusa) · [Mythril](https://github.com/ConsenSys/mythril) · [Foundry](https://github.com/foundry-rs/foundry) · [OSV.dev](https://osv.dev)
 

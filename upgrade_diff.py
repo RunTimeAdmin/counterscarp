@@ -17,12 +17,12 @@ from pathlib import Path
 # Import logger and exceptions
 try:
     from logger import get_logger
-    from exceptions import GarrisonValidationError
+    from exceptions import CounterscarpValidationError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    GarrisonValidationError = None
+    CounterscarpValidationError = None
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:

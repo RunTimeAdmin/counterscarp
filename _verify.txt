@@ -1,0 +1,42 @@
+Traceback (most recent call last):
+  File "<string>", line 14, in <module>
+  File "D:\Python\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 54: character maps to <undefined>
+rebrand_docs.py:1: """Rebrand all documentation from Garrison to Counterscarp."""
+rebrand_docs.py:6:     ('app.garrisonsec.com', 'app.counterscarp.io'),
+rebrand_docs.py:7:     ('garrisonsec.com', 'counterscarp.io'),
+rebrand_docs.py:8:     ('support@garrisonsec.com', 'contact@counterscarp.io'),
+rebrand_docs.py:10:     ('github.com/RunTimeAdmin/garrison-engine', 'github.com/RunTimeAdmin/counterscarp'),
+rebrand_docs.py:11:     ('pypi.org/project/garrison-engine', 'pypi.org/project/counterscarp-engine'),
+rebrand_docs.py:12:     ('GARRISON_PRO_LICENSE', 'COUNTERSCARP_PRO_LICENSE'),
+rebrand_docs.py:13:     ('GARRISON_LOG_LEVEL', 'COUNTERSCARP_LOG_LEVEL'),
+rebrand_docs.py:14:     ('GARRISON_LOG_FORMAT', 'COUNTERSCARP_LOG_FORMAT'),
+rebrand_docs.py:15:     ('GARRISON_LOG_FILE', 'COUNTERSCARP_LOG_FILE'),
+rebrand_docs.py:16:     ('GARRISON_UPLOAD_DIR', 'COUNTERSCARP_UPLOAD_DIR'),
+rebrand_docs.py:17:     ('GARRISON_RESULTS_DIR', 'COUNTERSCARP_RESULTS_DIR'),
+rebrand_docs.py:18:     ('garrison_engine', 'counterscarp_engine'),
+rebrand_docs.py:19:     ('Garrison Security Engine', 'Counterscarp Security Engine'),
+rebrand_docs.py:20:     ('Garrison Engine', 'Counterscarp Engine'),
+rebrand_docs.py:21:     ('garrison-engine', 'counterscarp-engine'),
+rebrand_docs.py:22:     ('garrison-pr.toml', 'counterscarp-pr.toml'),
+rebrand_docs.py:23:     ('garrison-audit.toml', 'counterscarp-audit.toml'),
+rebrand_docs.py:24:     ('garrison-bounty.toml', 'counterscarp-bounty.toml'),
+rebrand_docs.py:25:     ('garrison.toml', 'counterscarp.toml'),
+rebrand_docs.py:26:     ('.garrison/', '.counterscarp/'),
+rebrand_docs.py:27:     ('garrison-generate-pipeline', 'counterscarp-generate-pipeline'),
+rebrand_docs.py:28:     ('garrison-security', 'counterscarp-security'),
+rebrand_docs.py:29:     ('garrison-scan', 'counterscarp-scan'),
+rebrand_docs.py:30:     ('GarrisonConfig', 'CounterscarfConfig'),
+rebrand_docs.py:31:     ('GarrisonError', 'CounterscarfError'),
+rebrand_docs.py:32:     ('GarrisonConfigError', 'CounterscarfConfigError'),
+rebrand_docs.py:33:     ('GarrisonAnalysisError', 'CounterscarfAnalysisError'),
+rebrand_docs.py:34:     ('GarrisonAPIError', 'CounterscarfAPIError'),
+rebrand_docs.py:35:     ('GarrisonReportError', 'CounterscarfReportError'),
+rebrand_docs.py:36:     ('GarrisonToolNotFoundError', 'CounterscarfToolNotFoundError'),
+rebrand_docs.py:37:     ('GarrisonValidationError', 'CounterscarfValidationError'),
+rebrand_docs.py:38:     ('GarrisonTimeoutError', 'CounterscarfTimeoutError'),
+rebrand_docs.py:39:     # Generic garrison -> counterscarp (must be last)
+rebrand_docs.py:40:     ('garrison', 'counterscarp'),
+rebrand_docs.py:41:     ('Garrison', 'Counterscarp'),

@@ -3,12 +3,12 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "garrison-engine"
+name = "counterscarp-engine"
 version = "4.4.0"
 description = "Smart contract security auditing platform with Pro features"
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{name = "Garrison Engine Team"}]
+authors = [{name = "Counterscarp Engine Team"}]
 readme = "README.md"
 keywords = ["security", "audit", "smart-contracts", "solidity", "solana", "blockchain"]
 classifiers = [
@@ -32,10 +32,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://garrisonsec.com"
-Repository = "https://github.com/RunTimeAdmin/garrison-engine"
-Documentation = "https://github.com/RunTimeAdmin/garrison-engine/tree/main/docs"
-"Bug Tracker" = "https://github.com/RunTimeAdmin/garrison-engine/issues"
+Homepage = "https://counterscarp.io"
+Repository = "https://github.com/RunTimeAdmin/counterscarp"
+Documentation = "https://github.com/RunTimeAdmin/counterscarp/tree/main/docs"
+"Bug Tracker" = "https://github.com/RunTimeAdmin/counterscarp/issues"
 
 [project.optional-dependencies]
 ai = [
@@ -69,9 +69,9 @@ dev = [
 ]
 
 [project.scripts]
-garrison-engine = "orchestrator:main"
-garrison = "orchestrator:main"
-garrison-generate-pipeline = "pipeline_generator:main"
+counterscarp-engine = "orchestrator:main"
+counterscarp = "orchestrator:main"
+counterscarp-generate-pipeline = "pipeline_generator:main"
 
 [tool.pytest.ini_options]
 # Migrated from pytest.ini - this file can now be removed

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Attack Graph Construction Engine for Garrison Engine.
+Attack Graph Construction Engine for Counterscarp Engine.
 
 Provides graph-based analysis of smart contract vulnerabilities, enabling
 visualization of attack paths across contracts and functions.
@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Any, Set
 from pathlib import Path
 
 from logger import get_logger
-from exceptions import GarrisonAnalysisError
+from exceptions import CounterscarpAnalysisError
 
 logger = get_logger(__name__)
 
@@ -425,7 +425,7 @@ def build_graph(
         Constructed AttackGraph with nodes and edges.
 
     Raises:
-        GarrisonAnalysisError: If graph construction fails.
+        CounterscarpAnalysisError: If graph construction fails.
 
     Example:
         >>> findings = [
@@ -496,7 +496,7 @@ def build_graph(
 
     except Exception as e:
         logger.error(f"Failed to build attack graph: {e}")
-        raise GarrisonAnalysisError(
+        raise CounterscarpAnalysisError(
             "Failed to build attack graph",
             details={"error": str(e), "finding_count": len(findings)}
         ) from e
