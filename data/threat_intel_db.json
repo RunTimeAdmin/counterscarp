@@ -766,6 +766,78 @@
       ],
       "cve": null,
       "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-084",
+      "title": "PoolManager Access Control Bypass in Hook Functions",
+      "category": "Hook Vulnerabilities",
+      "severity": "CRITICAL",
+      "description": "Uniswap V4 hook callback functions (beforeSwap, afterSwap, beforeAddLiquidity, afterAddLiquidity, beforeRemoveLiquidity, afterRemoveLiquidity, beforeDonate, afterDonate) must restrict callers exclusively to the official PoolManager contract. Developers frequently omit this access control check, allowing attackers to invoke hook callbacks directly without executing a real swap or liquidity operation. By calling hook functions directly, an attacker can manipulate the hook's internal state — updating accumulators, claiming rewards, modifying fee parameters, or corrupting bookkeeping variables — without any corresponding pool-level token movement. This is especially dangerous when hooks maintain accounting state (e.g., cumulative fees, LP reward points, or governance votes) that downstream contracts rely on for correctness.",
+      "affected_patterns": [
+        "hook callback function missing msg.sender == poolManager check",
+        "beforeSwap() or afterSwap() callable by any external address",
+        "hook using onlyOwner instead of onlyPoolManager modifier",
+        "hook with public/external callback functions lacking caller validation",
+        "hook inheriting BaseHook but overriding without calling super access check",
+        "hook accepting arbitrary PoolKey parameter without verifying pool registration",
+        "hook functions missing require(msg.sender == address(poolManager)) guard"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/v4/concepts/hooks",
+        "https://github.com/Uniswap/v4-core/blob/main/src/interfaces/IHooks.sol",
+        "https://github.com/Uniswap/v4-periphery/blob/main/src/base/hooks/BaseHook.sol",
+        "https://docs.openzeppelin.com/contracts/5.x/access-control"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-085",
+      "title": "Flash Accounting Delta Settlement Failure via Malicious Hook",
+      "category": "Hook Vulnerabilities",
+      "severity": "CRITICAL",
+      "description": "Uniswap V4's singleton PoolManager architecture uses EIP-1153 transient storage for flash accounting, requiring all token deltas to settle to zero by the end of each transaction. A malicious or buggy hook can manipulate these deltas during callback execution — claiming fees, minting liquidity credits, or modifying currency balances without properly burning the corresponding transient debt. If a hook increments its own balance delta (e.g., via take()) without a matching settle(), or if it manipulates the PoolManager's internal accounting through crafted return values, it can drain tokens from the pool while leaving the settlement check satisfied through offsetting manipulations across multiple currency pairs. This attack vector is unique to V4's singleton architecture where all pools share a single contract's transient storage.",
+      "affected_patterns": [
+        "hook calling poolManager.take() without corresponding settle()",
+        "hook modifying BalanceDelta return values in beforeSwap/afterSwap",
+        "hook using transient storage (tstore/tload) to manipulate settlement state",
+        "afterSwap() hook claiming fees without burning transient debt",
+        "hook exploiting cross-pool delta netting in singleton PoolManager",
+        "hook returning manipulated toBeforeSwapDelta or toAfterSwapDelta values",
+        "hook calling mint() or donate() during callback without proper delta accounting"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/v4/concepts/flash-accounting",
+        "https://eips.ethereum.org/EIPS/eip-1153",
+        "https://github.com/Uniswap/v4-core/blob/main/src/PoolManager.sol",
+        "https://github.com/Uniswap/v4-core/blob/main/src/libraries/TransientStateLibrary.sol"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-086",
+      "title": "Custom Oracle Manipulation via Hook State Update Ordering",
+      "category": "Hook Vulnerabilities",
+      "severity": "HIGH",
+      "description": "Hooks frequently serve as custom pricing oracles for external protocols — providing TWAP calculations, spot price feeds, or volatility metrics. When a hook updates its internal price state in beforeSwap() (before the swap executes) or in afterSwap() without time-weighted protections, a flash loan attacker can skew the price ratio within a single transaction and force the hook to record a manipulated price. The attack sequence is: (1) flash loan large token amount, (2) execute a swap that triggers the hook's price update, (3) use the now-corrupted oracle price in an external protocol (lending, options, liquidations), (4) reverse the swap and repay the flash loan. Without TWAP smoothing, minimum observation windows, slippage bounds, or multi-block price validation, the hook's oracle becomes a single-transaction manipulation vector that downstream DeFi protocols blindly trust.",
+      "affected_patterns": [
+        "hook updating price oracle state in beforeSwap() before swap execution",
+        "afterSwap() hook recording spot price without TWAP or EMA smoothing",
+        "hook oracle lacking minimum time interval between price updates",
+        "hook exposing price feed without multi-block validation or delay",
+        "hook price update using instantaneous reserves instead of cumulative values",
+        "hook oracle readable by external contracts without staleness check",
+        "hook price state modifiable by single large swap without slippage circuit breaker"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/v4/concepts/hooks",
+        "https://docs.uniswap.org/contracts/v2/concepts/core-concepts/oracles",
+        "https://blog.openzeppelin.com/secure-smart-contract-guidelines-the-dangers-of-price-oracles",
+        "https://www.euler.finance/blog/euler-notes-2-price-oracles"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
     }
   ]
 }
