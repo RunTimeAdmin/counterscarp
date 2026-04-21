@@ -1144,5 +1144,674 @@
         "reference_url": "https://docs.vela.exchange/vela-token/staking"
       }
     ]
+  },
+  {
+    "name": "Uniswap V4",
+    "category": "AMM",
+    "version": "4.0",
+    "function_signatures": [
+      "swap(PoolKey,SwapParams,bytes)",
+      "modifyLiquidity(PoolKey,ModifyLiquidityParams,bytes)",
+      "initialize(PoolKey,uint160,bytes)",
+      "donate(PoolKey,uint256,uint256,bytes)",
+      "settle(address)",
+      "take(address,address,uint256)",
+      "lock(bytes)",
+      "unlockCallback(bytes)"
+    ],
+    "event_signatures": [
+      "Initialize(PoolId indexed id,Currency indexed currency0,Currency indexed currency1,uint24 fee,int24 tickSpacing,IHooks hooks)",
+      "Swap(PoolId indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)",
+      "ModifyLiquidity(PoolId indexed id,address indexed sender,int24 tickLower,int24 tickUpper,int256 liquidityDelta)",
+      "Donate(PoolId indexed id,address indexed sender,uint256 amount0,uint256 amount1)"
+    ],
+    "storage_patterns": [
+      "pools",
+      "transientStorage",
+      "hookData",
+      "poolKey",
+      "deltaOf",
+      "lockedBy"
+    ],
+    "inheritance_markers": [
+      "IPoolManager",
+      "IHooks",
+      "ILockCallback",
+      "PoolKey",
+      "BalanceDelta",
+      "Currency"
+    ],
+    "constants": {
+      "TRANSIENT_STORAGE_SLOT": "0x1",
+      "MAX_TICK_SPACING": "32767",
+      "HOOK_BEFORE_SWAP_FLAG": "0x80"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "UNI-V4-001",
+        "title": "Hook Re-entrancy via Callback",
+        "severity": "CRITICAL",
+        "description": "Malicious hooks can re-enter the PoolManager during beforeSwap/afterSwap callbacks, manipulating pool state before delta settlement is finalized",
+        "reference_url": "https://docs.uniswap.org/contracts/v4/overview"
+      },
+      {
+        "id": "UNI-V4-002",
+        "title": "Delta Settlement Manipulation",
+        "severity": "CRITICAL",
+        "description": "Hooks that fail to properly resolve EIP-1153 transient storage deltas can leave the pool in an inconsistent state, enabling pool drain through flash accounting abuse",
+        "reference_url": "https://eips.ethereum.org/EIPS/eip-1153"
+      },
+      {
+        "id": "UNI-V4-003",
+        "title": "Access Control Bypass in Hooks",
+        "severity": "HIGH",
+        "description": "Hook functions (beforeSwap, afterSwap, beforeInitialize, etc.) callable outside the official PoolManager context allow unauthorized state manipulation bypassing intended access controls",
+        "reference_url": "https://github.com/Uniswap/v4-core/blob/main/src/interfaces/IHooks.sol"
+      },
+      {
+        "id": "UNI-V4-004",
+        "title": "Custom Oracle Manipulation in Hooks",
+        "severity": "HIGH",
+        "description": "Hook-based custom oracles updating state without time-weighted protections or slippage checks are vulnerable to single-block price manipulation",
+        "reference_url": "https://docs.uniswap.org/contracts/v4/concepts/hooks"
+      }
+    ]
+  },
+  {
+    "name": "Lido",
+    "category": "LiquidStaking",
+    "version": "2.0",
+    "function_signatures": [
+      "submit(address)",
+      "withdraw(uint256,bytes32)",
+      "requestWithdrawals(uint256[],address)",
+      "claimWithdrawals(uint256[],uint256[])",
+      "wrap(uint256)",
+      "unwrap(uint256)",
+      "getPooledEthByShares(uint256)",
+      "getSharesByPooledEth(uint256)",
+      "handleOracleReport(uint256,uint256,uint256,uint256,uint256[],uint256[],uint256[])"
+    ],
+    "event_signatures": [
+      "Submitted(address indexed sender,uint256 amount,address referral)",
+      "Unbuffered(uint256 amount)",
+      "Transfer(address indexed from,address indexed to,uint256 value)",
+      "TransferShares(address indexed from,address indexed to,uint256 sharesValue)",
+      "WithdrawalRequested(uint256 indexed requestId,address indexed requestor,address indexed owner,uint256 amountOfStETH,uint256 amountOfShares)",
+      "WithdrawalClaimed(uint256 indexed requestId,address indexed owner,address indexed receiver,uint256 amountOfETH)",
+      "TokenRebased(uint256 indexed reportTimestamp,uint256 timeElapsed,uint256 preTotalShares,uint256 preTotalEther,uint256 postTotalShares,uint256 postTotalEther,uint256 sharesMintedAsFees)"
+    ],
+    "storage_patterns": [
+      "totalPooledEther",
+      "totalShares",
+      "shares",
+      "withdrawalQueue",
+      "oracleCommittee",
+      "bufferedEther"
+    ],
+    "inheritance_markers": [
+      "IStETH",
+      "IWstETH",
+      "IWithdrawalQueue",
+      "ILidoOracle",
+      "INodeOperatorsRegistry"
+    ],
+    "constants": {
+      "TOTAL_BASIS_POINTS": "10000",
+      "MAX_STETH_WITHDRAWAL_AMOUNT": "1000000000000000000000",
+      "MIN_STETH_WITHDRAWAL_AMOUNT": "100"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "LIDO-001",
+        "title": "stETH/ETH Depeg During Withdrawals",
+        "severity": "HIGH",
+        "description": "stETH can trade at a discount to ETH during periods of high withdrawal demand or validator slashing events; protocols using stETH as 1:1 ETH collateral are vulnerable to undercollateralization",
+        "reference_url": "https://docs.lido.fi/guides/steth-integration-guide"
+      },
+      {
+        "id": "LIDO-002",
+        "title": "Oracle Committee Manipulation",
+        "severity": "CRITICAL",
+        "description": "Lido's oracle committee of validators reports balances; compromise of quorum members allows manipulated rebase reports, enabling artificial yield inflation or slashing misreporting",
+        "reference_url": "https://docs.lido.fi/contracts/accounting-oracle"
+      },
+      {
+        "id": "LIDO-003",
+        "title": "Rebasing Integration Errors in DeFi",
+        "severity": "HIGH",
+        "description": "stETH rebasing mechanics cause balance changes without Transfer events; DeFi protocols that snapshot stETH balances (e.g., AMMs, lending markets) can accumulate accounting errors over time",
+        "reference_url": "https://docs.lido.fi/guides/steth-integration-guide#accounting-for-rebases"
+      },
+      {
+        "id": "LIDO-004",
+        "title": "Withdrawal Queue Delay Exploitation",
+        "severity": "MEDIUM",
+        "description": "The withdrawal queue delay exposes users to stETH price volatility between request and claim; integrated protocols may misjudge collateral value during the waiting period",
+        "reference_url": "https://docs.lido.fi/contracts/withdrawal-queue-erc721"
+      }
+    ]
+  },
+  {
+    "name": "EigenLayer",
+    "category": "Restaking",
+    "version": "1.0",
+    "function_signatures": [
+      "depositIntoStrategy(address,address,uint256)",
+      "queueWithdrawals((address[],uint256[],address)[])",
+      "completeQueuedWithdrawal((address,address,address,uint256,uint32,address[],uint256[]),address[],uint256,bool)",
+      "delegateTo(address,SignatureWithExpiry,bytes32)",
+      "undelegate(address)",
+      "registerAsOperator(OperatorDetails,string)",
+      "optIntoSlashing(address)",
+      "freezeOperator(address)"
+    ],
+    "event_signatures": [
+      "Deposit(address staker,address token,address strategy,uint256 shares)",
+      "WithdrawalQueued(bytes32 withdrawalRoot,(address,address,address,uint256,uint32,address[],uint256[]) withdrawal)",
+      "WithdrawalCompleted(bytes32 withdrawalRoot)",
+      "StakerDelegated(address indexed staker,address indexed operator)",
+      "StakerUndelegated(address indexed staker,address indexed operator)",
+      "OperatorRegistered(address indexed operator,OperatorDetails operatorDetails)",
+      "OperatorSlashed(address indexed operator,address indexed avs,uint32 operatorSetId,uint256 wadSlashed,string description)"
+    ],
+    "storage_patterns": [
+      "stakerStrategyShares",
+      "operatorDetails",
+      "delegatedTo",
+      "withdrawalRoots",
+      "slashingFactor",
+      "avsOperatorStatus"
+    ],
+    "inheritance_markers": [
+      "IDelegationManager",
+      "IStrategyManager",
+      "IEigenPodManager",
+      "ISlasher",
+      "IAVSDirectory",
+      "IServiceManager"
+    ],
+    "constants": {
+      "MAX_WITHDRAWAL_DELAY_BLOCKS": "216000",
+      "WAD": "1000000000000000000",
+      "PAUSED_NEW_DELEGATION": "0"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "EIGEN-001",
+        "title": "Slashing Cascade Risk",
+        "severity": "CRITICAL",
+        "description": "An operator validating multiple AVS simultaneously faces correlated slashing across all restaked positions; a single AVS bug or attack can trigger cascading slashes draining restaked collateral",
+        "reference_url": "https://docs.eigenlayer.xyz/eigenlayer/slashing/overview"
+      },
+      {
+        "id": "EIGEN-002",
+        "title": "Operator Collusion",
+        "severity": "HIGH",
+        "description": "Operators controlling large restaked pools can collude to selectively misbehave on low-value AVS while maintaining reputation, asymmetrically extracting AVS rewards without full slashing exposure",
+        "reference_url": "https://docs.eigenlayer.xyz/eigenlayer/operator-guides/operator-introduction"
+      },
+      {
+        "id": "EIGEN-003",
+        "title": "Withdrawal Delay Exploitation",
+        "severity": "HIGH",
+        "description": "The mandatory withdrawal delay (up to 7 days) exposes queued withdrawals to slashing events occurring after the queue was initiated; users may receive less than expected",
+        "reference_url": "https://docs.eigenlayer.xyz/eigenlayer/restaking-guides/restaking-developer-guide"
+      },
+      {
+        "id": "EIGEN-004",
+        "title": "Restaked Asset Double-Counting",
+        "severity": "MEDIUM",
+        "description": "Protocols that accept EigenLayer shares as collateral may double-count security: the same ETH secures both Ethereum and AVS simultaneously, creating illusory capital efficiency",
+        "reference_url": "https://docs.eigenlayer.xyz/eigenlayer/overview/whitepaper"
+      }
+    ]
+  },
+  {
+    "name": "Blast",
+    "category": "L2",
+    "version": "1.0",
+    "function_signatures": [
+      "configure(YieldMode)",
+      "configureClaimableYield()",
+      "configureAutomaticYield()",
+      "claimYield(address,address,uint256)",
+      "claimAllYield(address,address)",
+      "configureGasMode(GasMode)",
+      "claimGas(address,address,uint256,uint256)",
+      "claimMaxGas(address,address)",
+      "readClaimableYield(address)",
+      "readGasParams(address)"
+    ],
+    "event_signatures": [
+      "YieldConfigured(address indexed contractAddress,uint8 flags)",
+      "YieldClaimed(address indexed contractAddress,address indexed recipientOfYield,uint256 amount)",
+      "GasClaimed(address indexed contractAddress,address indexed recipientOfGas,uint256 etherSeconds,uint256 etherBalance,uint256 lastUpdated,uint8 mode)"
+    ],
+    "storage_patterns": [
+      "yieldMode",
+      "gasMode",
+      "etherBalance",
+      "sharesETH",
+      "sharesUSDB",
+      "USDB",
+      "yieldIndex"
+    ],
+    "inheritance_markers": [
+      "IBlast",
+      "IERC20Rebasing",
+      "IBlastPoints",
+      "IYieldManager"
+    ],
+    "constants": {
+      "YIELD_DENOMINATOR": "1000000000000000000",
+      "GAS_CLAIM_RATE": "10000",
+      "USDB_TOKEN": "0x4300000000000000000000000000000000000003"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "BLAST-001",
+        "title": "Rebasing Yield Manipulation",
+        "severity": "HIGH",
+        "description": "Auto-rebasing ETH and USDB balances can be manipulated by timing yield claims around DeFi protocol snapshots, extracting yield that should accrue to other users",
+        "reference_url": "https://docs.blast.io/building/guides/eth-yield"
+      },
+      {
+        "id": "BLAST-002",
+        "title": "Yield Source Trust Assumptions",
+        "severity": "CRITICAL",
+        "description": "Blast's native yield relies on external yield sources (stETH for ETH, T-bill protocol for USDB); failure or compromise of these sources directly impacts all Blast contract balances",
+        "reference_url": "https://docs.blast.io/about-blast"
+      },
+      {
+        "id": "BLAST-003",
+        "title": "Auto-Rebasing Breaking DeFi Accounting",
+        "severity": "HIGH",
+        "description": "Protocols deployed on Blast that use VOID yield mode or fail to handle auto-rebasing correctly will have balance discrepancies; lending markets using auto-rebasing tokens as collateral undercount actual collateral value",
+        "reference_url": "https://docs.blast.io/building/guides/weth-yield"
+      },
+      {
+        "id": "BLAST-004",
+        "title": "Gas Return Mechanism Griefing",
+        "severity": "MEDIUM",
+        "description": "The gas return mechanism can be gamed by deploying contracts that artificially inflate etherSeconds (gas accrual) without proportional utility, claiming disproportionate gas rewards",
+        "reference_url": "https://docs.blast.io/building/guides/gas-fees"
+      }
+    ]
+  },
+  {
+    "name": "Pendle",
+    "category": "YieldTokenization",
+    "version": "2.0",
+    "function_signatures": [
+      "mintPyFromSy(address,uint256)",
+      "redeemPyToSy(address,uint256)",
+      "swapExactPtForSy(address,address,uint256,uint256,address)",
+      "swapExactYtForSy(address,address,uint256,uint256,address)",
+      "addLiquidityDualSyAndPt(address,uint256,uint256,uint256,address)",
+      "removeLiquidityDualSyAndPt(address,uint256,uint256,uint256,address)",
+      "deposit(address,uint256)",
+      "redeem(address,uint256,address,uint256,bool)"
+    ],
+    "event_signatures": [
+      "Mint(address indexed caller,address indexed receiverPT,address indexed receiverYT,uint256 amountSyToMint,uint256 amountPYOut)",
+      "Redeem(address indexed caller,address indexed receiver,address indexed SY,uint256 amountPYIn,uint256 amountSyOut)",
+      "Swap(address indexed caller,address indexed receiver,int256 netPtOut,int256 netSyOut,uint256 netSyFee,uint256 netSyToReserve)",
+      "UpdateImpliedRate(uint256 indexed timestamp,uint256 lnLastImpliedRate)"
+    ],
+    "storage_patterns": [
+      "activeBalance",
+      "lastImpliedRate",
+      "pyIndex",
+      "reserveFeePercent",
+      "maturity",
+      "SY",
+      "PT",
+      "YT"
+    ],
+    "inheritance_markers": [
+      "IPMarket",
+      "IPYieldToken",
+      "IPPrincipalToken",
+      "IStandardizedYield",
+      "IPendleRouter",
+      "IPMarketFactory"
+    ],
+    "constants": {
+      "DAY": "86400",
+      "IMPLIED_RATE_TIME": "31536000",
+      "PERCENTAGE_DECIMALS": "100"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "PENDLE-001",
+        "title": "Yield Token Mispricing Near Maturity",
+        "severity": "HIGH",
+        "description": "YT value approaches zero as maturity nears while PT approaches par; protocols using Pendle AMM spot price for YT valuation near expiry are vulnerable to extreme pricing volatility and liquidation manipulation",
+        "reference_url": "https://docs.pendle.finance/ProtocolMechanics/AMM"
+      },
+      {
+        "id": "PENDLE-002",
+        "title": "PT/YT Recombination Frontrunning",
+        "severity": "HIGH",
+        "description": "When a user attempts to recombine PT+YT into the underlying SY, frontrunners can sandwich the transaction by manipulating the implied rate, extracting value from the recombination",
+        "reference_url": "https://docs.pendle.finance/ProtocolMechanics/PrincipalToken"
+      },
+      {
+        "id": "PENDLE-003",
+        "title": "SY Wrapper Integration Errors",
+        "severity": "CRITICAL",
+        "description": "Standardized Yield (SY) wrappers that incorrectly account for underlying protocol mechanics (e.g., rebasing, fee-on-transfer tokens) propagate errors into PT/YT pricing, enabling arbitrage attacks on mispriced yield",
+        "reference_url": "https://docs.pendle.finance/Developers/StandardizedYield"
+      },
+      {
+        "id": "PENDLE-004",
+        "title": "Implied Rate Oracle Manipulation",
+        "severity": "MEDIUM",
+        "description": "The AMM's lnLastImpliedRate used as an oracle for yield pricing can be manipulated via large swaps, affecting protocols that depend on Pendle for yield rate discovery",
+        "reference_url": "https://github.com/pendle-finance/pendle-core-v2-public"
+      }
+    ]
+  },
+  {
+    "name": "Balancer",
+    "category": "AMM",
+    "version": "2.0",
+    "function_signatures": [
+      "swap(SingleSwap,FundManagement,uint256,uint256)",
+      "batchSwap(uint8,BatchSwapStep[],address[],FundManagement,int256[],uint256)",
+      "joinPool(bytes32,address,address,JoinPoolRequest)",
+      "exitPool(bytes32,address,address,ExitPoolRequest)",
+      "flashLoan(address,address[],uint256[],bytes)",
+      "manageUserBalance(UserBalanceOp[])",
+      "getPoolTokens(bytes32)",
+      "getPool(bytes32)"
+    ],
+    "event_signatures": [
+      "Swap(bytes32 indexed poolId,address indexed tokenIn,address indexed tokenOut,uint256 amountIn,uint256 amountOut)",
+      "PoolBalanceChanged(bytes32 indexed poolId,address indexed liquidityProvider,address[] tokens,int256[] deltas,uint256[] protocolFeeAmounts)",
+      "FlashLoan(address indexed recipient,address indexed token,uint256 amount,uint256 feeAmount)",
+      "InternalBalanceChanged(address indexed user,address indexed token,int256 delta)"
+    ],
+    "storage_patterns": [
+      "_poolTokens",
+      "_poolBalances",
+      "_minimalSwapInfoPools",
+      "_generalPools",
+      "_internalTokenBalance",
+      "rateProviders",
+      "amplificationParameter"
+    ],
+    "inheritance_markers": [
+      "IVault",
+      "IBasePool",
+      "IWeightedPool",
+      "IStablePool",
+      "IComposableStablePool",
+      "IRateProvider",
+      "IFlashLoanRecipient"
+    ],
+    "constants": {
+      "_FEE_DENOMINATOR": "1000000000000000000",
+      "FixedPoint.ONE": "1000000000000000000",
+      "MAX_SWAP_FEE_PERCENTAGE": "100000000000000000"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "BAL-001",
+        "title": "Rate Provider Manipulation",
+        "severity": "CRITICAL",
+        "description": "Composable stable pools and weighted pools using external rate providers can be drained if the rate provider is compromised or returns a manipulable value; the pool uses the rate to price tokens during join/exit/swap",
+        "reference_url": "https://docs.balancer.fi/concepts/pools/composable-stable.html"
+      },
+      {
+        "id": "BAL-002",
+        "title": "Read-Only Reentrancy in Vault Queries",
+        "severity": "CRITICAL",
+        "description": "During ETH transfers in join/exit, external protocols querying Balancer vault balances (getPoolTokens) receive stale/mid-transaction data; exploited to manipulate collateral valuations in lending protocols that use Balancer LP tokens",
+        "reference_url": "https://medium.com/balancer-protocol/balancer-reentrancy-vulnerability-found-by-veridise-9e5e23e7d3a7"
+      },
+      {
+        "id": "BAL-003",
+        "title": "Join/Exit Imbalance Exploitation",
+        "severity": "HIGH",
+        "description": "Proportional join/exit operations in stable pools can be manipulated through large imbalanced joins followed by immediate exits, extracting value from the amplification parameter differential",
+        "reference_url": "https://docs.balancer.fi/concepts/pools/stable.html"
+      },
+      {
+        "id": "BAL-004",
+        "title": "Boosted Pool Nested Vulnerability",
+        "severity": "HIGH",
+        "description": "Composable stable pools containing boosted (yield-bearing) tokens have nested pricing dependencies; a vulnerability in any inner pool propagates to the outer pool pricing",
+        "reference_url": "https://docs.balancer.fi/concepts/pools/boosted.html"
+      }
+    ]
+  },
+  {
+    "name": "Yearn Finance",
+    "category": "YieldAggregator",
+    "version": "3.0",
+    "function_signatures": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address,uint256)",
+      "redeem(uint256,address,address,uint256)",
+      "report(int256,uint256,uint256)",
+      "harvest()",
+      "migrate(address)",
+      "updateDebt(address,uint256)",
+      "processReport(address)",
+      "addStrategy(address)",
+      "revokeStrategy(address)"
+    ],
+    "event_signatures": [
+      "Deposit(address indexed sender,address indexed owner,uint256 assets,uint256 shares)",
+      "Withdraw(address indexed sender,address indexed receiver,address indexed owner,uint256 assets,uint256 shares)",
+      "StrategyChanged(address indexed strategy,uint8 indexed changeType)",
+      "StrategyReported(address indexed strategy,uint256 gain,uint256 loss,uint256 currentDebt,uint256 totalFees,uint256 totalRefunds)",
+      "DebtUpdated(address indexed strategy,uint256 currentDebt,uint256 newDebt)"
+    ],
+    "storage_patterns": [
+      "strategies",
+      "totalDebt",
+      "totalAssets",
+      "totalIdle",
+      "profitMaxUnlockTime",
+      "fullProfitUnlockDate",
+      "pricePerShare",
+      "debtRatio"
+    ],
+    "inheritance_markers": [
+      "IVault",
+      "IStrategy",
+      "IBaseStrategy",
+      "IVaultFactory",
+      "ERC4626"
+    ],
+    "constants": {
+      "MAX_BPS": "10000",
+      "PROTOCOL_FEE_BPS": "1000",
+      "MAX_QUEUE": "10"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "YEARN-001",
+        "title": "Strategy Migration Rug",
+        "severity": "CRITICAL",
+        "description": "The migrate(address) function moves all strategy assets to a new address with minimal validation; a governance-controlled malicious migration contract can drain all vault funds",
+        "reference_url": "https://docs.yearn.fi/developers/v3/overview"
+      },
+      {
+        "id": "YEARN-002",
+        "title": "Harvest Sandwiching",
+        "severity": "HIGH",
+        "description": "Profitable harvest() calls are predictable and can be frontrun; attackers deposit before harvest and withdraw after, capturing yield that should accrue to existing depositors over the profit unlock period",
+        "reference_url": "https://docs.yearn.fi/developers/v3/integrating_v3"
+      },
+      {
+        "id": "YEARN-003",
+        "title": "Loss Socialization Unfairness",
+        "severity": "HIGH",
+        "description": "When a strategy reports a loss, it is immediately socialized across all vault share holders; an attacker who frontrans a known loss report with a large deposit and backruns with withdrawal avoids bearing proportional loss",
+        "reference_url": "https://github.com/yearn/yearn-vaults-v3"
+      },
+      {
+        "id": "YEARN-004",
+        "title": "Strategy-Level Flash Loan Attack",
+        "severity": "HIGH",
+        "description": "Individual strategies that report inflated gains via flash loan price manipulation cause the vault to mint excess shares; subsequent withdrawals drain underlying assets from legitimate depositors",
+        "reference_url": "https://docs.yearn.fi/security/security"
+      }
+    ]
+  },
+  {
+    "name": "Convex Finance",
+    "category": "YieldAggregator",
+    "version": "1.0",
+    "function_signatures": [
+      "deposit(uint256,uint256,bool)",
+      "withdraw(uint256,uint256)",
+      "withdrawAll(uint256)",
+      "lock(uint256,uint256)",
+      "processExpiredLocks(bool)",
+      "getReward(address,bool)",
+      "vote(uint256,address[],uint256[])",
+      "voteGaugeWeight(address[],uint256[])",
+      "claimRewards(address,address)"
+    ],
+    "event_signatures": [
+      "Deposited(address indexed user,uint256 indexed poolid,uint256 amount)",
+      "Withdrawn(address indexed user,uint256 indexed poolid,uint256 amount)",
+      "Locked(address indexed _user,uint256 indexed _epoch,uint256 _paidAmount,uint256 _lockedAmount,uint256 _boostedAmount)",
+      "RewardPaid(address indexed _user,address indexed _rewardsToken,uint256 _reward)",
+      "GaugeVote(uint256 indexed vote_id,address indexed token,uint256 weight)"
+    ],
+    "storage_patterns": [
+      "userLocks",
+      "lockedSupply",
+      "epochs",
+      "poolInfo",
+      "gaugeMap",
+      "vlCVX",
+      "crvRewards"
+    ],
+    "inheritance_markers": [
+      "IBooster",
+      "ICvxLockerV2",
+      "IBaseRewardPool",
+      "IConvexToken",
+      "ICurveGauge",
+      "IVoteProxy"
+    ],
+    "constants": {
+      "DENOMINATOR": "10000",
+      "LOCK_DURATION": "16",
+      "CVX_TOKEN": "0x4e3FBD56CD56c3e72c1403e103b45Db9da5B9D2B"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "CONVEX-001",
+        "title": "Gauge Weight Manipulation",
+        "severity": "CRITICAL",
+        "description": "Convex controls a large share of veCRV voting power; coordinated vlCVX holders can vote to direct CRV emissions to malicious or low-value gauges, extracting CRV rewards while diluting legitimate pools",
+        "reference_url": "https://docs.convexfinance.com/convexfinance/general-information/voting-and-gauge-weights"
+      },
+      {
+        "id": "CONVEX-002",
+        "title": "Reward Distribution Timing Attack",
+        "severity": "HIGH",
+        "description": "The epoch-based reward distribution allows an attacker with large vlCVX to time lock/unlock cycles to maximize reward capture per epoch, effectively front-running reward snapshots at epoch boundaries",
+        "reference_url": "https://docs.convexfinance.com/convexfinance/general-information/cvx-tokenomics"
+      },
+      {
+        "id": "CONVEX-003",
+        "title": "Curve Pool Parameter Manipulation via Voting Power",
+        "severity": "HIGH",
+        "description": "Convex's dominant veCRV position grants effective control over Curve DAO governance; an attacker who borrows or accumulates vlCVX can vote to change Curve pool fees, amplification parameters, or add malicious gauges",
+        "reference_url": "https://curve.readthedocs.io/dao-gauges.html"
+      },
+      {
+        "id": "CONVEX-004",
+        "title": "vlCVX Lock Bypass via Token Transfer",
+        "severity": "MEDIUM",
+        "description": "Expired locks that are not explicitly re-locked lose voting power but users can exit unexpectedly; protocols assuming persistent vlCVX voting power may miscalculate quorum in snapshot-based governance",
+        "reference_url": "https://github.com/convex-eth/platform/blob/main/contracts/contracts/CvxLockerV2.sol"
+      }
+    ]
+  },
+  {
+    "name": "Arbitrum/Optimism Sequencer",
+    "category": "L2Infrastructure",
+    "version": "1.0",
+    "function_signatures": [
+      "sendL2Message(bytes)",
+      "sendUnsignedTransaction(uint256,uint256,uint256,address,uint256,bytes)",
+      "addSequencerL2BatchFromOrigin(uint256,bytes,uint256,address)",
+      "forceInclusion(uint256,uint8,uint64,uint64,uint256,address,uint256,address,bytes32)",
+      "submitL2Block(bytes32,bytes32,bytes)",
+      "depositTransaction(address,uint256,uint64,bool,bytes)",
+      "proveWithdrawalTransaction((uint256,address,address,uint256,uint256,bytes),uint256,(bytes32,bytes32[]))",
+      "finalizeWithdrawalTransaction((uint256,address,address,uint256,uint256,bytes))"
+    ],
+    "event_signatures": [
+      "MessageDelivered(uint256 indexed messageIndex,bytes32 indexed beforeInboxAcc,address inbox,uint8 kind,address sender,bytes32 messageDataHash,uint256 baseFeeL1,uint64 timestamp)",
+      "InboxMessageDelivered(uint256 indexed messageNum,bytes data)",
+      "SequencerBatchDelivered(uint256 indexed batchSequenceNumber,bytes32 indexed beforeAcc,bytes32 indexed afterAcc,bytes32 delayedAcc,uint256 afterDelayedMessagesRead,TimeBounds timeBounds,uint8 dataLocation)",
+      "TransactionDeposited(address indexed from,address indexed to,uint256 indexed version,bytes opaqueData)",
+      "OutputProposed(bytes32 indexed outputRoot,uint256 indexed l2OutputIndex,uint256 indexed l2BlockNumber,uint256 l1Timestamp)",
+      "WithdrawalProven(bytes32 indexed withdrawalHash,address indexed from,address indexed to)"
+    ],
+    "storage_patterns": [
+      "sequencerInbox",
+      "delayedInbox",
+      "rollupEventBridge",
+      "l2Oracle",
+      "l2Outputs",
+      "finalizationPeriod",
+      "disputeGame"
+    ],
+    "inheritance_markers": [
+      "ISequencerInbox",
+      "IDelayedMessageProvider",
+      "IRollupCore",
+      "IL1CrossDomainMessenger",
+      "IL2OutputOracle",
+      "IOptimismPortal",
+      "IDisputeGameFactory"
+    ],
+    "constants": {
+      "FINALIZATION_PERIOD_SECONDS": "604800",
+      "MAX_DATA_SIZE": "117964",
+      "L2_BLOCK_TIME": "2"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "L2SEQ-001",
+        "title": "Sequencer Censorship",
+        "severity": "HIGH",
+        "description": "The centralized sequencer can selectively exclude transactions, enabling MEV extraction, front-running, and denial-of-service against specific addresses; currently no cryptographic enforcement of inclusion",
+        "reference_url": "https://docs.arbitrum.io/sequencer"
+      },
+      {
+        "id": "L2SEQ-002",
+        "title": "Forced Inclusion Delay Exploitation",
+        "severity": "HIGH",
+        "description": "L1 forced inclusion (delayed inbox) has a mandatory delay window (24h on Arbitrum); attackers can exploit the delay to perform L1 actions that affect L2 state after the forced transaction is known but before it is included",
+        "reference_url": "https://docs.arbitrum.io/arb-os-releases/arbitrum-nitro"
+      },
+      {
+        "id": "L2SEQ-003",
+        "title": "State Root Challenge Period Attacks",
+        "severity": "CRITICAL",
+        "description": "During the 7-day (Optimism) or variable (Arbitrum) challenge period, the state root is provisional; protocols that finalize L2→L1 messages before the challenge period expires are vulnerable to state root fraud proofs reverting assumed-final transactions",
+        "reference_url": "https://docs.optimism.io/stack/protocol/outages"
+      },
+      {
+        "id": "L2SEQ-004",
+        "title": "Gas Price Oracle Manipulation",
+        "severity": "MEDIUM",
+        "description": "L2 gas price oracles derive from L1 base fee and L2 congestion; during L1 fee spikes the gas oracle may be temporarily manipulated, causing mispriced transactions and MEV opportunities for sequencer-adjacent actors",
+        "reference_url": "https://community.optimism.io/t/l1-gas-oracle-manipulation"
+      }
+    ]
   }
 ]
