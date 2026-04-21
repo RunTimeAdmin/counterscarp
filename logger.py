@@ -312,6 +312,25 @@ def configure(
     setup_logging(level=level, format=format, log_file=log_file)
 
 
+def append_stderr_log(stderr_text: str, tool_name: str, stderr_log_path: str) -> None:
+    """Append tool stderr to the dedicated stderr log file.
+
+    Args:
+        stderr_text: The stderr output captured from the tool subprocess.
+        tool_name: Human-readable name of the tool (e.g. "slither").
+        stderr_log_path: Path to the file to append stderr output to.
+    """
+    if not stderr_text or not stderr_log_path:
+        return
+    try:
+        with open(stderr_log_path, 'a', encoding='utf-8') as f:
+            f.write(f"\n[{datetime.now().isoformat()}] {tool_name}:\n")
+            f.write(stderr_text)
+            f.write("\n" + "=" * 60 + "\n")
+    except OSError:
+        pass  # Don't crash the scan over a log write failure
+
+
 if __name__ == "__main__":
     # Demo/test code
     configure(level="DEBUG", format="text")

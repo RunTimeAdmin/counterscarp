@@ -1,0 +1,17 @@
+{
+  "session_id": "20260421_091446_c1666967",
+  "target": "/tmp/test",
+  "cli_args": {
+    "report": true
+  },
+  "started_at": "2026-04-21T14:14:46.135934+00:00",
+  "phases_completed": [
+    {
+      "name": "slither",
+      "completed_at": "2026-04-21T14:14:46.136935+00:00",
+      "findings_count": 5,
+      "duration_secs": 12.3
+    }
+  ],
+  "status": "in_progress"
+}

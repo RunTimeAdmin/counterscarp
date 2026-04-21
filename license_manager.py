@@ -402,7 +402,88 @@ class LicenseManager:
             self._cache_valid = False
             self._license_key = _get_license_key()
 
-    def _validate_license(self) -> Optional[LicenseInfo]:
+    def _check_expiry_grace_period(self, server_data: dict) -> Optional["LicenseInfo"]:
+        """Return a grace-period LicenseInfo if the license is expired but within 7 days.
+
+        Also respects ``payment_failed_at``: if a payment failure was recorded,
+        the 7-day grace window starts from that timestamp instead of the
+        expiry date stored on the server response.
+
+        Returns ``None`` if outside the grace window (hard-expired).
+        """
+        # First, try to read expiry from the cache so we have the original date
+        cache_path = _get_cache_path()
+        expires_at_dt: Optional[datetime] = None
+        cached: dict = {}
+
+        if cache_path.exists():
+            try:
+                with open(cache_path, "r") as f:
+                    cached = json.load(f)
+                expires_str = cached.get("validation_result", {}).get("expires_at")
+                if expires_str:
+                    expires_at_dt = datetime.fromisoformat(expires_str)
+            except Exception:
+                pass
+
+        now = datetime.now(timezone.utc)
+
+        # Check payment_failed_at — grace window from failure date
+        payment_failed_at_str = server_data.get("payment_failed_at") or (
+            cached.get("validation_result", {}).get("payment_failed_at")
+        )
+        if payment_failed_at_str:
+            try:
+                failed_at = datetime.fromisoformat(
+                    payment_failed_at_str.replace("Z", "+00:00")
+                )
+                grace_end = failed_at + timedelta(days=GRACE_PERIOD_DAYS)
+                if now < grace_end:
+                    days_left = (grace_end - now).days
+                    _logger.warning(
+                        "License payment failed; grace period active — %d day(s) remaining (ends %s)",
+                        days_left,
+                        grace_end.strftime("%Y-%m-%d"),
+                    )
+                    return self._build_grace_period_license(expires_at_dt)
+            except (ValueError, TypeError):
+                pass
+
+        # Standard expiry grace period
+        if expires_at_dt is not None:
+            grace_end = expires_at_dt + timedelta(days=GRACE_PERIOD_DAYS)
+            if now < grace_end:
+                days_left = (grace_end - now).days
+                _logger.warning(
+                    "License expired but within %d-day grace period — %d day(s) remaining (ends %s)",
+                    GRACE_PERIOD_DAYS,
+                    days_left,
+                    grace_end.strftime("%Y-%m-%d"),
+                )
+                return self._build_grace_period_license(expires_at_dt)
+
+        # Outside grace window
+        _logger.warning("License expired and past grace period — downgrading to community tier")
+        return None
+
+    def _build_grace_period_license(self, expires_at_dt: Optional[datetime]) -> "LicenseInfo":
+        """Build a LicenseInfo reflecting the current key's tier for grace-period access."""
+        tier = self._tier_from_key_prefix()
+        if tier in (PRO, TEAM, ENTERPRISE):
+            features = list(ALL_PRO_FEATURES)
+        else:
+            features = [f for f, t in FEATURE_TIERS.items()
+                        if TIER_HIERARCHY.index(t) <= TIER_HIERARCHY.index(tier)]
+        return LicenseInfo(
+            valid=True,
+            tier=tier,
+            expires_at=expires_at_dt,
+            features=features,
+            max_activations=TIER_DEFAULT_ACTIVATIONS.get(tier, 1),
+            current_activations=0,
+        )
+
+    def _validate_license(self) -> Optional["LicenseInfo"]:
         """Validate license with server or cache."""
         if not self._license_key:
             return None
@@ -438,6 +519,15 @@ class LicenseManager:
                 data = response.json()
 
                 if not data.get("valid", False):
+                    # Check if expired but within grace period
+                    if data.get("error") == "License expired":
+                        result = self._check_expiry_grace_period(data)
+                        if result:
+                            self._save_cached_result(result)
+                            with self._cache_lock:
+                                self._cached_result = result
+                                self._cache_valid = True
+                            return result
                     self._clear_cache()
                     return None
 

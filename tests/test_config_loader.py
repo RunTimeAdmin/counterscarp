@@ -566,7 +566,7 @@ class TestDataclassDefaults:
         """Test EngineConfig default values."""
         config = EngineConfig()
         assert config.name == "Garrison Security Engine"
-        assert config.version == "4.1.0"
+        assert config.version == "4.2.0"
         assert config.fail_on_severity == "HIGH"
         assert config.max_findings == 0
 

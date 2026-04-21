@@ -7,7 +7,7 @@ import os
 import shutil
 import subprocess
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List
 
@@ -655,7 +655,14 @@ async def checkout_success(request: Request):
 
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
-    """Handle Stripe webhook events (checkout.session.completed)."""
+    """Handle Stripe webhook events.
+
+    # Stripe webhook events handled:
+    # - checkout.session.completed: Initial purchase, generates license key
+    # - invoice.paid: Subscription renewal, extends license expiry
+    # - customer.subscription.deleted: Cancellation, revokes license
+    # - invoice.payment_failed: Failed payment, flags for grace period
+    """
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
@@ -671,9 +678,67 @@ async def stripe_webhook(request: Request):
     else:
         event = json.loads(payload)
 
-    if event.get("type") == "checkout.session.completed":
+    event_type = event.get("type")
+
+    if event_type == "checkout.session.completed":
         session = event["data"]["object"]
         handle_checkout_completed(session)
+
+    elif event_type == "invoice.paid":
+        # Subscription renewal — extend license expiry
+        invoice = event["data"]["object"]
+        subscription_id = invoice.get("subscription", "")
+        if subscription_id:
+            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
+            license_entry = find_license_by_subscription(subscription_id)
+            if license_entry:
+                # Determine extension period from billing_interval
+                interval = license_entry.get("billing_interval", "month")
+                now = datetime.now(timezone.utc)
+                if interval == "year":
+                    new_expiry = now + timedelta(days=365)
+                else:
+                    new_expiry = now + timedelta(days=30)
+
+                update_license_in_db(license_entry["key"], {
+                    "expires_at": new_expiry.strftime("%Y-%m-%d"),
+                    "payment_failed_at": None,  # Clear any failed payment flag
+                })
+                logger.info(
+                    f"License renewed: {license_entry['key'][:12]}... extended to {new_expiry.strftime('%Y-%m-%d')}"
+                )
+
+    elif event_type == "customer.subscription.deleted":
+        # Subscription cancelled — revoke license
+        subscription = event["data"]["object"]
+        subscription_id = subscription.get("id", "")
+        if subscription_id:
+            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
+            license_entry = find_license_by_subscription(subscription_id)
+            if license_entry:
+                update_license_in_db(license_entry["key"], {
+                    "revoked": True,
+                    "revoked_at": datetime.now(timezone.utc).isoformat(),
+                    "revoke_reason": "subscription_cancelled",
+                })
+                logger.info(
+                    f"License revoked (subscription cancelled): {license_entry['key'][:12]}..."
+                )
+
+    elif event_type == "invoice.payment_failed":
+        # Payment failed — flag but don't revoke immediately (grace period)
+        invoice = event["data"]["object"]
+        subscription_id = invoice.get("subscription", "")
+        if subscription_id:
+            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
+            license_entry = find_license_by_subscription(subscription_id)
+            if license_entry:
+                update_license_in_db(license_entry["key"], {
+                    "payment_failed_at": datetime.now(timezone.utc).isoformat(),
+                })
+                logger.info(
+                    f"Payment failed for license: {license_entry['key'][:12]}... (grace period active)"
+                )
 
     return JSONResponse({"status": "ok"})
 

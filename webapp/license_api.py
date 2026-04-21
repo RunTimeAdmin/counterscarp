@@ -6,8 +6,10 @@ LicenseManager in license_manager.py.
 """
 
 import json
+import logging
+import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -15,6 +17,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from license_manager import ALL_PRO_FEATURES
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -124,19 +128,51 @@ def validate_license(req: ValidateRequest):
         if license_entry.get("revoked", False):
             return ValidateResponse(valid=False, error="License revoked")
 
-        # 3. Key not expired
+        # 3. Key not expired (with Stripe subscription fallback)
         expires_at = license_entry.get("expires_at", "")
+        license_appears_expired = False
         if expires_at:
             try:
                 exp_dt = datetime.fromisoformat(
                     expires_at.replace("Z", "+00:00")
                 )
                 if exp_dt < datetime.now(timezone.utc):
-                    return ValidateResponse(
-                        valid=False, error="License expired"
-                    )
+                    license_appears_expired = True
             except (ValueError, TypeError):
                 pass  # If we can't parse, allow through
+
+        if license_appears_expired and license_entry.get("stripe_subscription_id"):
+            # Missed renewal webhook — check Stripe directly
+            try:
+                import stripe
+                stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+                if stripe.api_key:
+                    sub = stripe.Subscription.retrieve(
+                        license_entry["stripe_subscription_id"]
+                    )
+                    if sub.status == "active":
+                        # Stripe says still active — extend local expiry
+                        interval = license_entry.get("billing_interval", "month")
+                        now = datetime.now(timezone.utc)
+                        new_expiry = now + timedelta(
+                            days=365 if interval == "year" else 30
+                        )
+                        from webapp.stripe_integration import update_license_in_db
+                        update_license_in_db(
+                            license_entry["key"],
+                            {"expires_at": new_expiry.strftime("%Y-%m-%d")},
+                        )
+                        logger.info(
+                            "License %s... renewed via Stripe status check",
+                            license_entry["key"][:12],
+                        )
+                        license_appears_expired = False
+            except Exception as e:
+                logger.warning("Stripe subscription check failed: %s", e)
+                # Fall through to expiry decision below
+
+        if license_appears_expired:
+            return ValidateResponse(valid=False, error="License expired")
 
         # 4. Machine activation
         activated: list = license_entry.get("activated_machines", [])

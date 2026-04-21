@@ -14,7 +14,7 @@ import os
 import argparse
 from typing import Dict, Any, List, Optional
 
-from logger import get_logger
+from logger import get_logger, append_stderr_log
 from exceptions import (
     GarrisonAnalysisError,
     GarrisonToolNotFoundError,
@@ -93,7 +93,8 @@ def run_medusa_fuzz(
     project_root: str,
     target_contract: Optional[str] = None,
     test_limit: Optional[int] = None,
-    timeout: Optional[int] = None
+    timeout: Optional[int] = None,
+    stderr_log: Optional[str] = None
 ) -> Dict[str, Any]:
     """Run Medusa fuzzer on a Foundry/Hardhat project.
 
@@ -159,7 +160,8 @@ def run_medusa_fuzz(
             text=True,
             timeout=timeout + 30
         )
-        
+        if result.stderr:
+            append_stderr_log(result.stderr, "medusa", stderr_log)
         return parse_medusa_output(result.stdout, result.stderr)
         
     except subprocess.TimeoutExpired as e:

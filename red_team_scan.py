@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 
 # Import logger and exceptions
 try:
-    from logger import get_logger
+    from logger import get_logger, append_stderr_log
     from exceptions import (
         GarrisonAnalysisError,
         GarrisonToolNotFoundError,
@@ -20,6 +20,7 @@ try:
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
+    append_stderr_log = None
     GarrisonAnalysisError = None
     GarrisonToolNotFoundError = None
 
@@ -192,6 +193,7 @@ def _slither_per_file_fallback(
     project_root: str,
     slither_bin: str,
     original_cmd: List[str],
+    stderr_log: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Run Slither on individual .sol files using solc.
 
@@ -264,6 +266,8 @@ def _slither_per_file_fallback(
                 timeout=300,
                 env=_env,
             )
+            if result.stderr and stderr_log and append_stderr_log:
+                append_stderr_log(result.stderr, "slither-per-file", stderr_log)
             output = result.stdout
             json_start = output.find("{")
             if json_start == -1:
@@ -313,7 +317,7 @@ def _slither_per_file_fallback(
     }
 
 
-def run_slither(target: str) -> Dict[str, Any]:
+def run_slither(target: str, stderr_log: Optional[str] = None) -> Dict[str, Any]:
     """Runs Slither via subprocess and captures JSON output.
 
     Detects Foundry/Hardhat project root so Slither can resolve
@@ -465,6 +469,9 @@ def run_slither(target: str) -> Dict[str, Any]:
             env=_slither_env,
         )
 
+        if result.stderr and stderr_log and append_stderr_log:
+            append_stderr_log(result.stderr, "slither", stderr_log)
+
         # Slither may mix logs in stdout, but --json -
         # usually dumps pure JSON. Handle setup logs before
         # the JSON payload.
@@ -486,6 +493,7 @@ def run_slither(target: str) -> Dict[str, Any]:
                     str(target_path_obj),  # use target dir as root
                     slither_bin,
                     cmd,
+                    stderr_log,
                 )
                 if fallback is not None:
                     return fallback
@@ -521,7 +529,7 @@ def run_slither(target: str) -> Dict[str, Any]:
                     " analysis for target directory"
                 )
                 fallback = _slither_per_file_fallback(
-                    target, project_root, slither_bin, cmd
+                    target, project_root, slither_bin, cmd, stderr_log
                 )
                 if fallback is not None:
                     return fallback

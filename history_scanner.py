@@ -24,7 +24,7 @@ from dataclasses import dataclass, field, asdict
 
 # Import logger and exceptions
 try:
-    from logger import get_logger
+    from logger import get_logger, append_stderr_log
     from exceptions import (
         GarrisonError, GarrisonAnalysisError, GarrisonValidationError
     )
@@ -32,6 +32,7 @@ try:
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
+    append_stderr_log = None
     GarrisonError = Exception
     GarrisonAnalysisError = Exception
     GarrisonValidationError = Exception
@@ -131,7 +132,8 @@ def parse_git_history(
     repo_path: str,
     max_commits: int = 50,
     since: Optional[str] = None,
-    branch: str = "main"
+    branch: str = "main",
+    stderr_log: Optional[str] = None
 ) -> List[CommitInfo]:
     """Parse Git history to extract commits with changed files.
     
@@ -191,6 +193,9 @@ def parse_git_history(
             timeout=300
         )
         
+        if result.stderr and append_stderr_log:
+            append_stderr_log(result.stderr, "git-log", stderr_log)
+
         if result.returncode != 0:
             raise GarrisonAnalysisError(
                 "Git log command failed",
@@ -263,7 +268,8 @@ def scan_commit(
     repo_path: str,
     commit_hash: str,
     files: List[str],
-    config: Optional[GarrisonConfig] = None
+    config: Optional[GarrisonConfig] = None,
+    stderr_log: Optional[str] = None
 ) -> CommitFinding:
     """Scan files at a specific commit for vulnerabilities.
     
@@ -316,6 +322,8 @@ def scan_commit(
                     errors="replace",
                     timeout=30
                 )
+                if result.stderr and append_stderr_log:
+                    append_stderr_log(result.stderr, "git-show", stderr_log)
                 
                 if result.returncode != 0:
                     # File might not exist at this commit (added later)
@@ -762,7 +770,8 @@ def scan_history(
     since: Optional[str] = None,
     branch: str = "main",
     output_dir: str = ".",
-    config: Optional[GarrisonConfig] = None
+    config: Optional[GarrisonConfig] = None,
+    stderr_log: Optional[str] = None
 ) -> Dict[str, Any]:
     """Main entry point for historical vulnerability scanning.
     
@@ -788,7 +797,7 @@ def scan_history(
     
     # Step 1: Parse Git history
     logger.info(f"[1/4] Parsing Git history from {repo_path}")
-    commits = parse_git_history(repo_path, max_commits, since, branch)
+    commits = parse_git_history(repo_path, max_commits, since, branch, stderr_log)
     
     if not commits:
         logger.warning("No commits with .sol/.rs files found")
@@ -807,7 +816,7 @@ def scan_history(
         logger.info(f"Scanning commit {i}/{len(commits)}: {commit.hash[:8]} - {commit.message[:50]}")
         
         try:
-            finding = scan_commit(repo_path, commit.hash, commit.changed_files, config)
+            finding = scan_commit(repo_path, commit.hash, commit.changed_files, config, stderr_log)
             finding.date = commit.date
             finding.author = commit.author
             

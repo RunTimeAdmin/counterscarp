@@ -15,7 +15,7 @@ import argparse
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
-from logger import get_logger
+from logger import get_logger, append_stderr_log
 from exceptions import (
     GarrisonAnalysisError,
     GarrisonToolNotFoundError,
@@ -85,7 +85,8 @@ def check_aderyn_installed() -> bool:
 def run_aderyn(
     project_root: str,
     output_format: str = "json",
-    scope: Optional[str] = None
+    scope: Optional[str] = None,
+    stderr_log: Optional[str] = None
 ) -> Dict[str, Any]:
     """Run Aderyn static analyzer on a Solidity project.
 
@@ -145,7 +146,8 @@ def run_aderyn(
             text=True,
             timeout=timeout
         )
-        
+        if result.stderr:
+            append_stderr_log(result.stderr, "aderyn", stderr_log)
         # Aderyn writes to file, read it back
         output_file = os.path.join(project_root, f"aderyn-report.{output_format}")
         

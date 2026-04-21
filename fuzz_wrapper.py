@@ -6,7 +6,7 @@ import argparse
 import sys
 from typing import List, Dict, Any, Optional
 
-from logger import get_logger
+from logger import get_logger, append_stderr_log
 from exceptions import (
     GarrisonAnalysisError,
     GarrisonToolNotFoundError,
@@ -64,7 +64,8 @@ def get_fuzz_runs() -> int:
 def run_foundry_fuzz(
     target_contract: str,
     match_test: Optional[str] = None,
-    fuzz_runs: Optional[int] = None
+    fuzz_runs: Optional[int] = None,
+    stderr_log: Optional[str] = None
 ) -> str:
     """Runs `forge test` specifically targeting invariant tests.
 
@@ -110,6 +111,8 @@ def run_foundry_fuzz(
             text=True,
             timeout=3600,
         )
+        if result.stderr:
+            append_stderr_log(result.stderr, "forge-fuzz", stderr_log)
         return result.stdout
     except FileNotFoundError as e:
         logger.error("Foundry (forge) not found")

@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("garrison-engine")
 except Exception:
-    _ENGINE_VERSION = "4.1.0"
+    _ENGINE_VERSION = "4.2.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
@@ -757,6 +757,11 @@ def main() -> None:
         action="store_true",
         help="Update bundled threat intelligence and protocol signature databases",
     )
+    parser.add_argument(
+        "--resume",
+        default=None,
+        help="Resume a previous scan by session ID",
+    )
     args = parser.parse_args()
 
     # --- Update signatures (no --target needed) ---
@@ -765,9 +770,9 @@ def main() -> None:
         update_all_signatures()
         sys.exit(0)
 
-    # Validate --target is provided for scanning operations
-    if not args.target:
-        parser.error("--target is required for scanning operations")
+    # Validate --target is provided for scanning operations (unless resuming)
+    if not args.target and not args.resume:
+        parser.error("--target is required for scanning operations (or use --resume <session_id>)")
 
     # --- Preflight tool version check ---
     if args.preflight:
@@ -776,6 +781,27 @@ def main() -> None:
             logger.error("Preflight check failed. Aborting scan.")
             sys.exit(1)
         logger.info("Preflight check passed — all tools verified.")
+
+    # --- State manager initialization ---
+    import time as _time
+    from pathlib import Path
+    from state_manager import ScanStateManager
+
+    state_mgr = ScanStateManager()
+
+    if args.resume:
+        session = state_mgr.load_session(args.resume)
+        args.target = session["target"]
+        completed = state_mgr.get_completed_phases()
+        logger.info(f"Resuming scan {args.resume} — {len(completed)} phases already done")
+        print(f"[*] Resuming scan {args.resume}")
+        print(f"[*] Completed phases: {completed}")
+    else:
+        cli_args = {k: v for k, v in vars(args).items() if v is not None}
+        session_id = state_mgr.start_session(str(args.target), cli_args)
+        logger.info(f"New scan session: {session_id}")
+
+    stderr_log = str(Path(".garrison") / f"scan_stderr_{state_mgr._session_id}.log")
 
     # --- Path validation (fast-fail before any scan work) ---
     if not os.path.exists(args.target):
@@ -953,35 +979,49 @@ def main() -> None:
     # [PHASE 1] Supply Chain
     print(">>> Assessing Supply Chain...")
     logger.info("[PHASE 1] Assessing Supply Chain")
-    if os.path.isdir(args.target):
-        pkg_json = os.path.join(args.target, "package.json")
-        if os.path.exists(pkg_json):
-            try:
-                supply_issues = supply_chain_check.scan_package_json(pkg_json)
-                logger.info("Supply chain scan complete: %d issues found", len(supply_issues))
-            except Exception as e:
-                logger.warning(f"Supply chain check failed for {pkg_json}: {e}")
-                supply_issues = []
+    if state_mgr.is_phase_pending("supply_chain"):
+        _t0 = _time.time()
+        if os.path.isdir(args.target):
+            pkg_json = os.path.join(args.target, "package.json")
+            if os.path.exists(pkg_json):
+                try:
+                    supply_issues = supply_chain_check.scan_package_json(pkg_json)
+                    logger.info("Supply chain scan complete: %d issues found", len(supply_issues))
+                except Exception as e:
+                    logger.warning(f"Supply chain check failed for {pkg_json}: {e}")
+                    supply_issues = []
+            else:
+                logger.info("No package.json found — skipping supply chain check")
         else:
-            logger.info("No package.json found — skipping supply chain check")
+            logger.info("Target is not a directory — skipping supply chain check")
+        state_mgr.save_phase_results("supply_chain", supply_issues)
+        state_mgr.mark_phase_complete("supply_chain", len(supply_issues), _time.time() - _t0)
     else:
-        logger.info("Target is not a directory — skipping supply chain check")
+        supply_issues = state_mgr.load_phase_results("supply_chain") or []
+        logger.info("[PHASE 1] Supply Chain — loaded from cache (resumed)")
 
     # [PHASE 2] Static Analysis (Slither)
     print("\n>>> Analyzing Code Patterns...")
     logger.info("[PHASE 2] Running Static Analysis (Slither)")
-    try:
-        raw_slither = red_team_scan.run_slither(args.target)
-        static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
-        logger.info("Slither analysis complete: %d issues found", len(static_issues))
-    except GarrisonAnalysisError as e:
-        logger.error("Slither analysis failed: %s", e)
-        static_issues = []
-        raw_slither = None
-    except Exception as e:
-        logger.error("Slither analysis unexpected failure: %s", e)
-        static_issues = []
-        raw_slither = None
+    if state_mgr.is_phase_pending("slither"):
+        _t0 = _time.time()
+        try:
+            raw_slither = red_team_scan.run_slither(args.target, stderr_log=stderr_log)
+            static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
+            logger.info("Slither analysis complete: %d issues found", len(static_issues))
+        except GarrisonAnalysisError as e:
+            logger.error("Slither analysis failed: %s", e)
+            static_issues = []
+            raw_slither = None
+        except Exception as e:
+            logger.error("Slither analysis unexpected failure: %s", e)
+            static_issues = []
+            raw_slither = None
+        state_mgr.save_phase_results("slither", static_issues)
+        state_mgr.mark_phase_complete("slither", len(static_issues) if static_issues else 0, _time.time() - _t0)
+    else:
+        static_issues = state_mgr.load_phase_results("slither") or []
+        logger.info("[PHASE 2] Slither — loaded from cache (resumed)")
 
     # [PHASE 2B] Aderyn Static Analysis (optional)
     if args.aderyn and os.path.isdir(args.target):
@@ -989,13 +1029,14 @@ def main() -> None:
         logger.info("[PHASE 2B] Running Aderyn Static Analysis")
         if aderyn_wrapper is None:
             logger.warning("Aderyn wrapper not available in this environment")
-        else:
+        elif state_mgr.is_phase_pending("aderyn"):
+            _t0 = _time.time()
             try:
                 import sys as _sys
 
                 old_exit = _sys.exit
                 _sys.exit = lambda code=0: None
-                aderyn_results = aderyn_wrapper.run_aderyn(args.target)
+                aderyn_results = aderyn_wrapper.run_aderyn(args.target, stderr_log=stderr_log)
                 logger.info("Aderyn analysis complete")
             except Exception as e:
                 logger.error("Aderyn analysis failed: %s", e)
@@ -1006,18 +1047,31 @@ def main() -> None:
                     _sys.exit = old_exit
                 except Exception:
                     pass
+            state_mgr.save_phase_results("aderyn", aderyn_results)
+            _ac = len(aderyn_results.get("issues", [])) if isinstance(aderyn_results, dict) else 0
+            state_mgr.mark_phase_complete("aderyn", _ac, _time.time() - _t0)
+        else:
+            aderyn_results = state_mgr.load_phase_results("aderyn")
+            logger.info("[PHASE 2B] Aderyn — loaded from cache (resumed)")
 
     # [PHASE 3] Fuzzing (Foundry)
     if args.fuzz_contract:
         print("\n>>> Stress Testing Logic (Foundry)...")
         logger.info("[PHASE 3] Running Foundry Fuzzing on %s", args.fuzz_contract)
-        try:
-            raw_fuzz = fuzz_wrapper.run_foundry_fuzz(args.fuzz_contract)
-            fuzz_issues = fuzz_wrapper.parse_counterexamples(raw_fuzz)
-            logger.info("Foundry fuzzing complete: %d issues found", len(fuzz_issues))
-        except Exception as e:
-            logger.error("Foundry fuzzing failed: %s", e)
-            fuzz_issues = []
+        if state_mgr.is_phase_pending("foundry_fuzz"):
+            _t0 = _time.time()
+            try:
+                raw_fuzz = fuzz_wrapper.run_foundry_fuzz(args.fuzz_contract, stderr_log=stderr_log)
+                fuzz_issues = fuzz_wrapper.parse_counterexamples(raw_fuzz)
+                logger.info("Foundry fuzzing complete: %d issues found", len(fuzz_issues))
+            except Exception as e:
+                logger.error("Foundry fuzzing failed: %s", e)
+                fuzz_issues = []
+            state_mgr.save_phase_results("foundry_fuzz", fuzz_issues)
+            state_mgr.mark_phase_complete("foundry_fuzz", len(fuzz_issues), _time.time() - _t0)
+        else:
+            fuzz_issues = state_mgr.load_phase_results("foundry_fuzz") or []
+            logger.info("[PHASE 3] Foundry Fuzz — loaded from cache (resumed)")
 
     # [PHASE 3B] Medusa Fuzzing (optional)
     if args.medusa:
@@ -1025,7 +1079,8 @@ def main() -> None:
         logger.info("[PHASE 3B] Running Medusa Fuzzing")
         if medusa_wrapper is None:
             logger.warning("Medusa wrapper not available in this environment")
-        else:
+        elif state_mgr.is_phase_pending("medusa_fuzz"):
+            _t0 = _time.time()
             medusa_target = args.target if os.path.isdir(args.target) else os.path.dirname(args.target)
             try:
                 import sys as _sys
@@ -1033,7 +1088,7 @@ def main() -> None:
                 old_exit = _sys.exit
                 _sys.exit = lambda code=0: None
                 medusa_results = medusa_wrapper.run_medusa_fuzz(
-                    medusa_target, target_contract=args.fuzz_contract
+                    medusa_target, target_contract=args.fuzz_contract, stderr_log=stderr_log
                 )
                 logger.info("Medusa fuzzing complete")
             except Exception as e:
@@ -1044,57 +1099,81 @@ def main() -> None:
                     _sys.exit = old_exit
                 except Exception:
                     pass
+            state_mgr.save_phase_results("medusa_fuzz", medusa_results)
+            _mc = len(medusa_results.get("findings", [])) if isinstance(medusa_results, dict) else 0
+            state_mgr.mark_phase_complete("medusa_fuzz", _mc, _time.time() - _t0)
+        else:
+            medusa_results = state_mgr.load_phase_results("medusa_fuzz")
+            logger.info("[PHASE 3B] Medusa Fuzz — loaded from cache (resumed)")
 
     # [PHASE 4] Heuristic Scan
     print("\n>>> Running Heuristic Scan...")
     logger.info("[PHASE 4] Running Heuristic Scan")
-    try:
-        heuristic_findings = heuristic_scanner.scan_target(
-            args.target, config, plugin_mgr
-        )
-        for hf in heuristic_findings:
-            # Only include non-suppressed findings in report
-            if not hf.suppressed:
-                heuristic_results.append(
-                    {
-                        "rule_id": hf.rule_id,
-                        "severity": hf.severity,
-                        "message": hf.message,
-                        "file": hf.file,
-                        "line_no": hf.line_no,
-                        "line_text": hf.line_text,
-                        "confidence": getattr(hf, "confidence", 5),
-                    }
-                )
-        logger.info("Heuristic scan complete: %d findings (total), %d non-suppressed",
-                    len(heuristic_findings), len(heuristic_results))
-    except Exception as e:
-        logger.error("Heuristic scan failed: %s", e)
-        heuristic_results = []
+    if state_mgr.is_phase_pending("heuristic"):
+        _t0 = _time.time()
+        try:
+            heuristic_findings = heuristic_scanner.scan_target(
+                args.target, config, plugin_mgr
+            )
+            for hf in heuristic_findings:
+                # Only include non-suppressed findings in report
+                if not hf.suppressed:
+                    heuristic_results.append(
+                        {
+                            "rule_id": hf.rule_id,
+                            "severity": hf.severity,
+                            "message": hf.message,
+                            "file": hf.file,
+                            "line_no": hf.line_no,
+                            "line_text": hf.line_text,
+                            "confidence": getattr(hf, "confidence", 5),
+                        }
+                    )
+            logger.info("Heuristic scan complete: %d findings (total), %d non-suppressed",
+                        len(heuristic_findings), len(heuristic_results))
+        except Exception as e:
+            logger.error("Heuristic scan failed: %s", e)
+            heuristic_results = []
+        state_mgr.save_phase_results("heuristic", heuristic_results)
+        state_mgr.mark_phase_complete("heuristic", len(heuristic_results), _time.time() - _t0)
+    else:
+        heuristic_results = state_mgr.load_phase_results("heuristic") or []
+        logger.info("[PHASE 4] Heuristic — loaded from cache (resumed)")
 
     # [PHASE 4C] Plugin Analyzers (optional)
     if plugin_mgr and plugin_mgr.get_analyzer_count() > 0:
         print("\n>>> Running Plugin Analyzers...")
         logger.info("[PHASE 4C] Running Plugin Analyzers")
-        for plugin in plugin_mgr.get_analyzers():
-            try:
-                logger.info("Running plugin analyzer: %s", plugin.name)
-                config_dict = {
-                    "target": args.target,
-                    "project_name": args.project_name,
-                } if config else {}
-                plugin_findings = plugin.analyze(args.target, config_dict)
-                for pf in plugin_findings:
-                    heuristic_results.append({
-                        "rule_id": pf.get("rule_id", f"PLUGIN-{plugin.name}"),
-                        "severity": pf.get("severity", "Info"),
-                        "message": pf.get("description", ""),
-                        "file": pf.get("file", ""),
-                        "line_no": pf.get("line_no", 0),
-                        "line_text": pf.get("code_snippet", ""),
-                    })
-            except Exception as exc:
-                logger.warning("Plugin %s failed: %s", plugin.name, exc)
+        if state_mgr.is_phase_pending("plugins"):
+            _t0 = _time.time()
+            _plugin_findings_acc: List[Dict] = []
+            for plugin in plugin_mgr.get_analyzers():
+                try:
+                    logger.info("Running plugin analyzer: %s", plugin.name)
+                    config_dict = {
+                        "target": args.target,
+                        "project_name": args.project_name,
+                    } if config else {}
+                    plugin_findings = plugin.analyze(args.target, config_dict)
+                    for pf in plugin_findings:
+                        _entry = {
+                            "rule_id": pf.get("rule_id", f"PLUGIN-{plugin.name}"),
+                            "severity": pf.get("severity", "Info"),
+                            "message": pf.get("description", ""),
+                            "file": pf.get("file", ""),
+                            "line_no": pf.get("line_no", 0),
+                            "line_text": pf.get("code_snippet", ""),
+                        }
+                        heuristic_results.append(_entry)
+                        _plugin_findings_acc.append(_entry)
+                except Exception as exc:
+                    logger.warning("Plugin %s failed: %s", plugin.name, exc)
+            state_mgr.save_phase_results("plugins", _plugin_findings_acc)
+            state_mgr.mark_phase_complete("plugins", len(_plugin_findings_acc), _time.time() - _t0)
+        else:
+            _cached_plugins = state_mgr.load_phase_results("plugins") or []
+            heuristic_results.extend(_cached_plugins)
+            logger.info("[PHASE 4C] Plugins — loaded from cache (resumed)")
 
     # [PHASE 4B] Protocol Fingerprint Scan (optional)
     fingerprint_results: List[Dict] = []
@@ -1103,7 +1182,10 @@ def main() -> None:
     elif args.fingerprint:
         print("\n>>> Running Protocol Fingerprint Scan...")
         logger.info("[PHASE 4B] Running Protocol Fingerprint Scan")
-        if FINGERPRINT_AVAILABLE:
+        if not FINGERPRINT_AVAILABLE:
+            logger.warning("Fingerprint scanner not available")
+        elif state_mgr.is_phase_pending("fingerprint"):
+            _t0 = _time.time()
             try:
                 # Get config values
                 min_similarity = 0.7
@@ -1144,21 +1226,31 @@ def main() -> None:
 
             except Exception as e:
                 logger.error("Fingerprint scan failed: %s", e)
+            state_mgr.save_phase_results("fingerprint", fingerprint_results)
+            state_mgr.mark_phase_complete("fingerprint", len(fingerprint_results), _time.time() - _t0)
         else:
-            logger.warning("Fingerprint scanner not available")
+            fingerprint_results = state_mgr.load_phase_results("fingerprint") or []
+            logger.info("[PHASE 4B] Fingerprint — loaded from cache (resumed)")
 
     # [PHASE 5] Symbolic Analysis (optional)
     if args.symbolic and os.path.isfile(args.target):
         print("\n>>> Running Symbolic Analysis (Mythril)...")
         logger.info("[PHASE 5] Running Symbolic Analysis (Mythril)")
-        try:
-            raw_symbolic = symbolic_wrapper.run_mythril(args.target)
-            symbolic_results = symbolic_wrapper.parse_issues(raw_symbolic)
-            logger.info("Symbolic analysis complete: %d issues found", len(symbolic_results))
-        except Exception as e:
-            logger.error("Symbolic analysis failed: %s", e)
-            # In case Mythril or the CLI fails, don't crash the whole pipeline
-            symbolic_results = []
+        if state_mgr.is_phase_pending("mythril"):
+            _t0 = _time.time()
+            try:
+                raw_symbolic = symbolic_wrapper.run_mythril(args.target, stderr_log=stderr_log)
+                symbolic_results = symbolic_wrapper.parse_issues(raw_symbolic)
+                logger.info("Symbolic analysis complete: %d issues found", len(symbolic_results))
+            except Exception as e:
+                logger.error("Symbolic analysis failed: %s", e)
+                # In case Mythril or the CLI fails, don't crash the whole pipeline
+                symbolic_results = []
+            state_mgr.save_phase_results("mythril", symbolic_results)
+            state_mgr.mark_phase_complete("mythril", len(symbolic_results), _time.time() - _t0)
+        else:
+            symbolic_results = state_mgr.load_phase_results("mythril") or []
+            logger.info("[PHASE 5] Mythril — loaded from cache (resumed)")
 
     # [PHASE 6] Solana Static Analysis (optional)
     if args.solana_root and not _license.check_pro_feature(SOLANA):
@@ -1168,13 +1260,20 @@ def main() -> None:
         logger.info("[PHASE 6] Running Solana Static Analysis")
         if solana_analyzer is None:
             logger.warning("solana_analyzer module not available")
-        else:
+        elif state_mgr.is_phase_pending("solana"):
+            _t0 = _time.time()
             try:
                 solana_results = solana_analyzer.analyze_solana_program(args.solana_root)
                 logger.info("Solana analysis complete")
             except Exception as e:
                 logger.error("Solana analysis failed: %s", e)
                 solana_results = {"error": "Solana analysis failed"}
+            _sc = len((solana_results or {}).get("pattern_findings", [])) if isinstance(solana_results, dict) else 0
+            state_mgr.save_phase_results("solana", solana_results)
+            state_mgr.mark_phase_complete("solana", _sc, _time.time() - _t0)
+        else:
+            solana_results = state_mgr.load_phase_results("solana")
+            logger.info("[PHASE 6] Solana — loaded from cache (resumed)")
 
     # [PHASE 7] Upgrade Diff Analysis (optional)
     if args.upgrade_old and args.upgrade_new:
@@ -1182,7 +1281,8 @@ def main() -> None:
         logger.info("[PHASE 7] Running Upgrade Diff Analyzer")
         if upgrade_diff is None:
             logger.warning("upgrade_diff module not available")
-        else:
+        elif state_mgr.is_phase_pending("upgrade_diff"):
+            _t0 = _time.time()
             try:
                 upgrade_results = upgrade_diff.analyze_upgrade(
                     args.upgrade_old, args.upgrade_new
@@ -1191,6 +1291,12 @@ def main() -> None:
             except Exception as e:
                 logger.error("Upgrade diff analysis failed: %s", e)
                 upgrade_results = {"error": "Upgrade diff analysis failed"}
+            _uc = len((upgrade_results or {}).get("issues", [])) if isinstance(upgrade_results, dict) else 0
+            state_mgr.save_phase_results("upgrade_diff", upgrade_results)
+            state_mgr.mark_phase_complete("upgrade_diff", _uc, _time.time() - _t0)
+        else:
+            upgrade_results = state_mgr.load_phase_results("upgrade_diff")
+            logger.info("[PHASE 7] Upgrade Diff — loaded from cache (resumed)")
 
     # [PHASE 7.5] RAG Enrichment (optional)
     if args.rag and RAG_AVAILABLE and not _license.check_pro_feature(AI_COPILOT):
@@ -1198,89 +1304,101 @@ def main() -> None:
     elif args.rag and RAG_AVAILABLE:
         print("\n>>> Enriching Findings with RAG Context...")
         logger.info("[PHASE 7.5] Running RAG Enrichment")
-        try:
-            # Get RAG config
-            rag_config = {}
-            if config and hasattr(config, 'ai'):
-                rag_config = {
-                    "embedding_backend": config.ai.embedding_backend,
-                    "rag_index_path": config.ai.rag_index_path,
-                    "top_k": config.ai.top_k,
-                    # llm_enrichment: CLI --llm flag overrides config file
-                    "llm_enrichment": (
-                        args.llm or getattr(config.ai, 'llm_enrichment', False)
-                    ),
-                }
-            elif args.llm:
-                rag_config = {"llm_enrichment": True}
-            
-            copilot = AuditCopilot(rag_config)
-            
-            # Check if index exists
-            if copilot.vector_store.entries:
-                rag_offline = False
-                # Enrich heuristic results
-                if heuristic_results and not rag_offline:
-                    heuristic_results = copilot.enrich_findings_batch(
-                        heuristic_results
-                    )
-                    print(
-                        f"    Enriched {len(heuristic_results)}"
-                        " heuristic findings"
-                    )
-                    logger.info(
-                        "Enriched %d heuristic findings",
-                        len(heuristic_results),
-                    )
-                    # Detect offline signal from batch result
-                    if any(
-                        r.get("rag_status") == "offline"
-                        for r in heuristic_results
-                    ):
-                        print(
-                            "    [INFO] AI Copilot offline — continuing"
-                            " scan without LLM enrichment"
-                        )
-                        rag_offline = True
+        if state_mgr.is_phase_pending("rag_enrichment"):
+            _t0 = _time.time()
+            try:
+                # Get RAG config
+                rag_config = {}
+                if config and hasattr(config, 'ai'):
+                    rag_config = {
+                        "embedding_backend": config.ai.embedding_backend,
+                        "rag_index_path": config.ai.rag_index_path,
+                        "top_k": config.ai.top_k,
+                        # llm_enrichment: CLI --llm flag overrides config file
+                        "llm_enrichment": (
+                            args.llm or getattr(config.ai, 'llm_enrichment', False)
+                        ),
+                    }
+                elif args.llm:
+                    rag_config = {"llm_enrichment": True}
                 
-                # Enrich static issues
-                if static_issues and not rag_offline:
-                    static_issues = copilot.enrich_findings_batch(
-                        static_issues
-                    )
-                    print(
-                        f"    Enriched {len(static_issues)}"
-                        " static analysis findings"
-                    )
-                    logger.info(
-                        "Enriched %d static analysis findings",
-                        len(static_issues),
-                    )
-                    if any(
-                        r.get("rag_status") == "offline"
-                        for r in static_issues
-                    ):
-                        print(
-                            "    [INFO] AI Copilot offline — continuing"
-                            " scan without LLM enrichment"
-                        )
-                        rag_offline = True
+                copilot = AuditCopilot(rag_config)
                 
-                if not rag_offline:
-                    print("    [+] RAG enrichment complete")
-                    logger.info("RAG enrichment complete")
+                # Check if index exists
+                if copilot.vector_store.entries:
+                    rag_offline = False
+                    # Enrich heuristic results
+                    if heuristic_results and not rag_offline:
+                        heuristic_results = copilot.enrich_findings_batch(
+                            heuristic_results
+                        )
+                        print(
+                            f"    Enriched {len(heuristic_results)}"
+                            " heuristic findings"
+                        )
+                        logger.info(
+                            "Enriched %d heuristic findings",
+                            len(heuristic_results),
+                        )
+                        # Detect offline signal from batch result
+                        if any(
+                            r.get("rag_status") == "offline"
+                            for r in heuristic_results
+                        ):
+                            print(
+                                "    [INFO] AI Copilot offline — continuing"
+                                " scan without LLM enrichment"
+                            )
+                            rag_offline = True
+                    
+                    # Enrich static issues
+                    if static_issues and not rag_offline:
+                        static_issues = copilot.enrich_findings_batch(
+                            static_issues
+                        )
+                        print(
+                            f"    Enriched {len(static_issues)}"
+                            " static analysis findings"
+                        )
+                        logger.info(
+                            "Enriched %d static analysis findings",
+                            len(static_issues),
+                        )
+                        if any(
+                            r.get("rag_status") == "offline"
+                            for r in static_issues
+                        ):
+                            print(
+                                "    [INFO] AI Copilot offline — continuing"
+                                " scan without LLM enrichment"
+                            )
+                            rag_offline = True
+                    
+                    if not rag_offline:
+                        print("    [+] RAG enrichment complete")
+                        logger.info("RAG enrichment complete")
+                    else:
+                        print(
+                            "    [!] RAG enrichment skipped (AI Copilot offline)"
+                        )
+                        logger.warning("RAG enrichment aborted — offline mode")
                 else:
-                    print(
-                        "    [!] RAG enrichment skipped (AI Copilot offline)"
-                    )
-                    logger.warning("RAG enrichment aborted — offline mode")
-            else:
-                print("    [!] No RAG index found. Build with: --build-rag-index")
-                logger.warning("No RAG index found — cannot enrich findings")
-                
-        except Exception as e:
-            logger.warning(f"RAG enrichment failed: {e}")
-            print(f"    [!] RAG enrichment failed: {e}")
+                    print("    [!] No RAG index found. Build with: --build-rag-index")
+                    logger.warning("No RAG index found — cannot enrich findings")
+                    
+            except Exception as e:
+                logger.warning(f"RAG enrichment failed: {e}")
+                print(f"    [!] RAG enrichment failed: {e}")
+            # Save enriched results for potential resume
+            state_mgr.save_phase_results("rag_enrichment", {"heuristic": heuristic_results, "static": static_issues})
+            state_mgr.mark_phase_complete("rag_enrichment", len(heuristic_results) + len(static_issues), _time.time() - _t0)
+        else:
+            _rag_cache = state_mgr.load_phase_results("rag_enrichment") or {}
+            if _rag_cache.get("heuristic") is not None:
+                heuristic_results = _rag_cache["heuristic"]
+            if _rag_cache.get("static") is not None:
+                static_issues = _rag_cache["static"]
+            logger.info("[PHASE 7.5] RAG Enrichment — loaded from cache (resumed)")
     elif args.rag and not RAG_AVAILABLE:
         print("\n>>> RAG Enrichment Requested...")
         logger.warning("RAG engine not available — cannot enrich findings")
@@ -1326,68 +1444,81 @@ def main() -> None:
     logger.info("[PHASE 8] Writing Action Plan")
     # --- Exploit PoC Generation (Pro tier) ---
     exploit_results: Optional[List] = None
-    try:
-        from exploit_generator import ExploitGenerator, ExploitResult as _ExploitResult
+    if state_mgr.is_phase_pending("exploit_gen"):
+        _t0 = _time.time()
+        try:
+            from exploit_generator import ExploitGenerator, ExploitResult as _ExploitResult
 
-        if _license.check_pro_feature(EXPLOIT_GEN):
-            exploit_config: Dict[str, Any] = {}
-            if hasattr(config, 'exploit_generation'):
-                eg = config.exploit_generation
-                exploit_config = {
-                    'min_severity': getattr(eg, 'min_severity', 'HIGH'),
-                    'validate_compilation': getattr(eg, 'validate_compilation', True),
-                    'output_dir': getattr(eg, 'output_dir', 'exploits/'),
-                    'llm_backend': getattr(eg, 'llm_backend', 'none'),
-                    'template_dir': getattr(eg, 'template_dir', 'exploit_templates/'),
-                }
+            if _license.check_pro_feature(EXPLOIT_GEN):
+                exploit_config: Dict[str, Any] = {}
+                if hasattr(config, 'exploit_generation'):
+                    eg = config.exploit_generation
+                    exploit_config = {
+                        'min_severity': getattr(eg, 'min_severity', 'HIGH'),
+                        'validate_compilation': getattr(eg, 'validate_compilation', True),
+                        'output_dir': getattr(eg, 'output_dir', 'exploits/'),
+                        'llm_backend': getattr(eg, 'llm_backend', 'none'),
+                        'template_dir': getattr(eg, 'template_dir', 'exploit_templates/'),
+                    }
 
-            generator = ExploitGenerator(
-                config=exploit_config,
-                template_dir=exploit_config.get('template_dir', 'exploit_templates/'),
-                output_dir=exploit_config.get('output_dir', 'exploits/'),
-                llm_backend=exploit_config.get('llm_backend', 'none'),
-            )
-
-            # Filter to CRITICAL + HIGH findings only
-            critical_findings: List[Dict[str, Any]] = []
-            for h in heuristic_results:
-                sev = h.get("severity", "").upper()
-                if sev in ("CRITICAL", "HIGH"):
-                    critical_findings.append(h)
-            for s in static_issues:
-                impact = s.get("impact", "").lower()
-                if impact in ("high", "critical"):
-                    critical_findings.append({
-                        "rule_id": s.get("check", s.get("title", "unknown")),
-                        "severity": impact.upper(),
-                        "description": s.get("description", ""),
-                        "file": s.get("location", ""),
-                        "line_no": 0,
-                        "message": s.get("description", ""),
-                    })
-
-            if critical_findings:
-                logger.info("Generating exploit PoCs for %d critical/high findings...", len(critical_findings))
-                print(f"\n>>> Generating exploit PoCs for {len(critical_findings)} critical/high findings...")
-                exploit_results = generator.batch_generate(
-                    critical_findings,
+                generator = ExploitGenerator(
+                    config=exploit_config,
+                    template_dir=exploit_config.get('template_dir', 'exploit_templates/'),
                     output_dir=exploit_config.get('output_dir', 'exploits/'),
+                    llm_backend=exploit_config.get('llm_backend', 'none'),
                 )
-                successful = [r for r in exploit_results if r.status == "success"]
-                logger.info("Generated %d exploit PoCs out of %d findings", len(successful), len(critical_findings))
-                print(f"    [+] Generated {len(successful)} exploit PoCs out of {len(critical_findings)} findings")
+
+                # Filter to CRITICAL + HIGH findings only
+                critical_findings: List[Dict[str, Any]] = []
+                for h in heuristic_results:
+                    sev = h.get("severity", "").upper()
+                    if sev in ("CRITICAL", "HIGH"):
+                        critical_findings.append(h)
+                for s in static_issues:
+                    impact = s.get("impact", "").lower()
+                    if impact in ("high", "critical"):
+                        critical_findings.append({
+                            "rule_id": s.get("check", s.get("title", "unknown")),
+                            "severity": impact.upper(),
+                            "description": s.get("description", ""),
+                            "file": s.get("location", ""),
+                            "line_no": 0,
+                            "message": s.get("description", ""),
+                        })
+
+                if critical_findings:
+                    logger.info("Generating exploit PoCs for %d critical/high findings...", len(critical_findings))
+                    print(f"\n>>> Generating exploit PoCs for {len(critical_findings)} critical/high findings...")
+                    exploit_results = generator.batch_generate(
+                        critical_findings,
+                        output_dir=exploit_config.get('output_dir', 'exploits/'),
+                    )
+                    successful = [r for r in exploit_results if r.status == "success"]
+                    logger.info("Generated %d exploit PoCs out of %d findings", len(successful), len(critical_findings))
+                    print(f"    [+] Generated {len(successful)} exploit PoCs out of {len(critical_findings)} findings")
+                else:
+                    exploit_results = []
+                    logger.info("No CRITICAL/HIGH findings for exploit generation")
+                    print("    [i] No CRITICAL/HIGH findings for exploit generation")
             else:
-                exploit_results = []
-                logger.info("No CRITICAL/HIGH findings for exploit generation")
-                print("    [i] No CRITICAL/HIGH findings for exploit generation")
-        else:
-            logger.info("Exploit PoC generation requires Pro tier license")
-            print(f"\n{_license.get_upgrade_message(EXPLOIT_GEN)}")
-    except ImportError:
-        logger.warning("Exploit generator module not available")
-    except Exception as _eg_exc:
-        logger.warning("Exploit generation failed: %s", _eg_exc)
-        print(f"    [!] Exploit generation failed: {_eg_exc}")
+                logger.info("Exploit PoC generation requires Pro tier license")
+                print(f"\n{_license.get_upgrade_message(EXPLOIT_GEN)}")
+        except ImportError:
+            logger.warning("Exploit generator module not available")
+        except Exception as _eg_exc:
+            logger.warning("Exploit generation failed: %s", _eg_exc)
+            print(f"    [!] Exploit generation failed: {_eg_exc}")
+        # Save serializable metadata about exploit results (paths, statuses)
+        _exploit_meta = [
+            {"finding": getattr(r, "finding", {}), "status": getattr(r, "status", ""), "output_path": getattr(r, "output_path", "")}
+            for r in (exploit_results or [])
+        ]
+        state_mgr.save_phase_results("exploit_gen", _exploit_meta)
+        state_mgr.mark_phase_complete("exploit_gen", len(_exploit_meta), _time.time() - _t0)
+    else:
+        logger.info("[PHASE 8] Exploit Gen — loaded from cache (resumed) (re-running for object compatibility)")
+        # exploit_results objects not easily re-serialized; re-generate is safest, just skip
+        exploit_results = None
 
     report_file = generate_markdown_report(
         "Target Protocol",
@@ -1421,244 +1552,261 @@ def main() -> None:
     ):
         print("\n>>> Running Time-Travel Historical Scan for unified report...")
         logger.info("[PHASE 8B] Running inline Time-Travel Historical Scan")
-        try:
-            _hist_output_dir = "."
-            if config and hasattr(config, 'history') and config.history:
-                _hist_output_dir = getattr(config.history, 'output_dir', '.')
-            _hist_results = history_scanner.scan_history(
-                repo_path=args.target,
-                max_commits=getattr(args, 'commits', 50),
-                since=getattr(args, 'since', None),
-                branch=getattr(args, 'branch', 'main'),
-                output_dir=_hist_output_dir,
-                config=config,
-            )
-            # Reload the timeline entries from the JSON report for conversion
-            _hist_json_path = (_hist_results.get("reports") or {}).get("json", "")
-            if _hist_json_path and os.path.isfile(_hist_json_path):
-                import json as _json
-                with open(_hist_json_path, "r", encoding="utf-8") as _f:
-                    _hist_data = _json.load(_f)
-                history_timeline = _hist_data.get("timeline", [])
-            logger.info(
-                "Time-Travel scan complete: %d timeline entries",
-                len(history_timeline),
-            )
-            print(
-                f"    [+] Time-Travel scan complete: "
-                f"{_hist_results.get('total_vulnerabilities', 0)} historical vulnerabilities"
-            )
-        except Exception as _hist_exc:
-            logger.warning("Inline Time-Travel scan failed: %s", _hist_exc)
-            print(f"    [!] Time-Travel scan failed (continuing without): {_hist_exc}")
+        if state_mgr.is_phase_pending("time_travel"):
+            _t0 = _time.time()
+            try:
+                _hist_output_dir = "."
+                if config and hasattr(config, 'history') and config.history:
+                    _hist_output_dir = getattr(config.history, 'output_dir', '.')
+                _hist_results = history_scanner.scan_history(
+                    repo_path=args.target,
+                    max_commits=getattr(args, 'commits', 50),
+                    since=getattr(args, 'since', None),
+                    branch=getattr(args, 'branch', 'main'),
+                    output_dir=_hist_output_dir,
+                    config=config,
+                    stderr_log=stderr_log,
+                )
+                # Reload the timeline entries from the JSON report for conversion
+                _hist_json_path = (_hist_results.get("reports") or {}).get("json", "")
+                if _hist_json_path and os.path.isfile(_hist_json_path):
+                    import json as _json
+                    with open(_hist_json_path, "r", encoding="utf-8") as _f:
+                        _hist_data = _json.load(_f)
+                    history_timeline = _hist_data.get("timeline", [])
+                logger.info(
+                    "Time-Travel scan complete: %d timeline entries",
+                    len(history_timeline),
+                )
+                print(
+                    f"    [+] Time-Travel scan complete: "
+                    f"{_hist_results.get('total_vulnerabilities', 0)} historical vulnerabilities"
+                )
+            except Exception as _hist_exc:
+                logger.warning("Inline Time-Travel scan failed: %s", _hist_exc)
+                print(f"    [!] Time-Travel scan failed (continuing without): {_hist_exc}")
+            state_mgr.save_phase_results("time_travel", history_timeline)
+            state_mgr.mark_phase_complete("time_travel", len(history_timeline), _time.time() - _t0)
+        else:
+            history_timeline = state_mgr.load_phase_results("time_travel") or []
+            logger.info("[PHASE 8B] Time-Travel — loaded from cache (resumed)")
 
     # [PHASE 9] Professional Report (Optional)
     if args.report and REPORT_GENERATOR_AVAILABLE:
         print("\n>>> Generating Professional Audit Report...")
         logger.info("[PHASE 9] Generating Professional Audit Report")
-        
-        # Aggregate findings from all sources
-        from report_generator import Finding
-        
-        # Convert results to unified Finding objects
-        all_findings = []
-        
-        # Heuristics
-        for h in heuristic_results:
-            all_findings.append(Finding(
-                rule_id=h["rule_id"],
-                severity=h["severity"],
-                category="Heuristic",
-                title=h["rule_id"].replace("_", " ").title(),
-                description=h["message"],
-                file=h["file"],
-                line_no=h["line_no"],
-                code_snippet=h.get("line_text", ""),
-                rag_similar_findings=h.get("rag_similar_findings", []),
-                rag_remediation=h.get("rag_remediation", ""),
-                rag_references=h.get("rag_references", []),
-            ))
-        
-        # Static (Slither)
-        for s in static_issues:
-            all_findings.append(Finding(
-                rule_id=s.get("check", "slither_finding"),
-                severity=s.get("impact", "MEDIUM").upper(),
-                category="Slither",
-                title=s.get("title", "Slither Finding"),
-                description=s.get("description", ""),
-                file=s.get("location", "").split(":")[0] if ":" in s.get("location", "") else s.get("location", ""),
-                line_no=_safe_line_no(s.get("location", "")),
-                rag_similar_findings=s.get("rag_similar_findings", []),
-                rag_remediation=s.get("rag_remediation", ""),
-                rag_references=s.get("rag_references", []),
-            ))
-        
-        # Aderyn (if available)
-        if aderyn_results and isinstance(aderyn_results, dict):
-            for issue in aderyn_results.get("high", [])[:10]:
+        if state_mgr.is_phase_pending("report"):
+            _t0 = _time.time()
+            
+            # Aggregate findings from all sources
+            from report_generator import Finding
+            
+            # Convert results to unified Finding objects
+            all_findings = []
+            
+            # Heuristics
+            for h in heuristic_results:
                 all_findings.append(Finding(
-                    rule_id=issue.get("detector_name", "aderyn_finding"),
-                    severity="HIGH",
-                    category="Aderyn",
-                    title=issue.get("title", "Aderyn Finding"),
-                    description=issue.get("description", ""),
-                    file="",
-                    line_no=0
+                    rule_id=h["rule_id"],
+                    severity=h["severity"],
+                    category="Heuristic",
+                    title=h["rule_id"].replace("_", " ").title(),
+                    description=h["message"],
+                    file=h["file"],
+                    line_no=h["line_no"],
+                    code_snippet=h.get("line_text", ""),
+                    rag_similar_findings=h.get("rag_similar_findings", []),
+                    rag_remediation=h.get("rag_remediation", ""),
+                    rag_references=h.get("rag_references", []),
                 ))
-        
-        # Upgrade Diff (if available)
-        if upgrade_results and isinstance(upgrade_results, dict):
-            for issue in upgrade_results.get("issues", []):
+            
+            # Static (Slither)
+            for s in static_issues:
                 all_findings.append(Finding(
-                    rule_id=issue.category if hasattr(issue, 'category') else "upgrade_issue",
-                    severity=issue.severity if hasattr(issue, 'severity') else "HIGH",
-                    category="Upgrade Diff",
-                    title=issue.title if hasattr(issue, 'title') else "Upgrade Issue",
-                    description=issue.description if hasattr(issue, 'description') else "",
-                    file="",
-                    line_no=issue.line_no if hasattr(issue, 'line_no') and issue.line_no else 0
+                    rule_id=s.get("check", "slither_finding"),
+                    severity=s.get("impact", "MEDIUM").upper(),
+                    category="Slither",
+                    title=s.get("title", "Slither Finding"),
+                    description=s.get("description", ""),
+                    file=s.get("location", "").split(":")[0] if ":" in s.get("location", "") else s.get("location", ""),
+                    line_no=_safe_line_no(s.get("location", "")),
+                    rag_similar_findings=s.get("rag_similar_findings", []),
+                    rag_remediation=s.get("rag_remediation", ""),
+                    rag_references=s.get("rag_references", []),
                 ))
-        
-        # Solana (if available)
-        if solana_results and isinstance(solana_results, dict):
-            for f in solana_results.get("pattern_findings", []):
-                if hasattr(f, 'severity'):
+            
+            # Aderyn (if available)
+            if aderyn_results and isinstance(aderyn_results, dict):
+                for issue in aderyn_results.get("high", [])[:10]:
                     all_findings.append(Finding(
-                        rule_id=f.category,
-                        severity=f.severity,
-                        category="Solana",
-                        title=f.title,
-                        description=f.description,
-                        file=f.file,
-                        line_no=f.line_no,
-                        remediation=f.fix_suggestion if hasattr(f, 'fix_suggestion') else ""
+                        rule_id=issue.get("detector_name", "aderyn_finding"),
+                        severity="HIGH",
+                        category="Aderyn",
+                        title=issue.get("title", "Aderyn Finding"),
+                        description=issue.get("description", ""),
+                        file="",
+                        line_no=0
                     ))
+            
+            # Upgrade Diff (if available)
+            if upgrade_results and isinstance(upgrade_results, dict):
+                for issue in upgrade_results.get("issues", []):
+                    all_findings.append(Finding(
+                        rule_id=issue.category if hasattr(issue, 'category') else "upgrade_issue",
+                        severity=issue.severity if hasattr(issue, 'severity') else "HIGH",
+                        category="Upgrade Diff",
+                        title=issue.title if hasattr(issue, 'title') else "Upgrade Issue",
+                        description=issue.description if hasattr(issue, 'description') else "",
+                        file="",
+                        line_no=issue.line_no if hasattr(issue, 'line_no') and issue.line_no else 0
+                    ))
+            
+            # Solana (if available)
+            if solana_results and isinstance(solana_results, dict):
+                for f in solana_results.get("pattern_findings", []):
+                    if hasattr(f, 'severity'):
+                        all_findings.append(Finding(
+                            rule_id=f.category,
+                            severity=f.severity,
+                            category="Solana",
+                            title=f.title,
+                            description=f.description,
+                            file=f.file,
+                            line_no=f.line_no,
+                            remediation=f.fix_suggestion if hasattr(f, 'fix_suggestion') else ""
+                        ))
 
-        # Historical Analysis (Time-Travel, Pro tier)
-        # Only include ACTIVE vulnerabilities (not yet fixed) so the report
-        # reflects current risk with historical context.
-        for _ht in history_timeline:
-            _status = _ht.get("status", "active")
-            if _status != "active":
-                continue  # skip already-fixed historical findings
+            # Historical Analysis (Time-Travel, Pro tier)
+            # Only include ACTIVE vulnerabilities (not yet fixed) so the report
+            # reflects current risk with historical context.
+            for _ht in history_timeline:
+                _status = _ht.get("status", "active")
+                if _status != "active":
+                    continue  # skip already-fixed historical findings
 
-            _raw_rule = _ht.get("rule_id", "UNKNOWN")
-            _severity = (_ht.get("severity") or "INFO").upper()
-            _file = _ht.get("file", "")
-            _line_no = int(_ht.get("line_no", 0) or 0)
-            _intro_commit = (_ht.get("introduced_commit") or "")[:8]
-            _intro_date = (_ht.get("introduced_date") or "")[:10]
-            _intro_author = _ht.get("introduced_author") or "unknown"
-            _lifespan = int(_ht.get("lifespan_days", 0) or 0)
-            _vuln_id = _ht.get("vuln_id", "")
+                _raw_rule = _ht.get("rule_id", "UNKNOWN")
+                _severity = (_ht.get("severity") or "INFO").upper()
+                _file = _ht.get("file", "")
+                _line_no = int(_ht.get("line_no", 0) or 0)
+                _intro_commit = (_ht.get("introduced_commit") or "")[:8]
+                _intro_date = (_ht.get("introduced_date") or "")[:10]
+                _intro_author = _ht.get("introduced_author") or "unknown"
+                _lifespan = int(_ht.get("lifespan_days", 0) or 0)
+                _vuln_id = _ht.get("vuln_id", "")
 
-            # Build temporal context for title and description
-            _title = (
-                f"[Historical] {_raw_rule.replace('_', ' ').title()} "
-                f"(introduced {_intro_date})"
-            )
-            _description_parts = [
-                f"This vulnerability was detected by Time-Travel historical scan.",
-                f"Introduced in commit {_intro_commit} on {_intro_date} by {_intro_author}.",
-            ]
-            if _lifespan > 0:
-                _description_parts.append(
-                    f"Has persisted for at least {_lifespan} days without being fixed."
+                # Build temporal context for title and description
+                _title = (
+                    f"[Historical] {_raw_rule.replace('_', ' ').title()} "
+                    f"(introduced {_intro_date})"
                 )
-            _description = " ".join(_description_parts)
+                _description_parts = [
+                    f"This vulnerability was detected by Time-Travel historical scan.",
+                    f"Introduced in commit {_intro_commit} on {_intro_date} by {_intro_author}.",
+                ]
+                if _lifespan > 0:
+                    _description_parts.append(
+                        f"Has persisted for at least {_lifespan} days without being fixed."
+                    )
+                _description = " ".join(_description_parts)
 
-            all_findings.append(Finding(
-                rule_id=f"HIST-{_raw_rule}",
-                severity=_severity,
-                category="Historical Analysis",
-                title=_title,
-                description=_description,
-                file=_file,
-                line_no=_line_no,
-            ))
+                all_findings.append(Finding(
+                    rule_id=f"HIST-{_raw_rule}",
+                    severity=_severity,
+                    category="Historical Analysis",
+                    title=_title,
+                    description=_description,
+                    file=_file,
+                    line_no=_line_no,
+                ))
 
-        if history_timeline:
-            _active_hist = sum(
-                1 for _ht in history_timeline if _ht.get("status") == "active"
+            if history_timeline:
+                _active_hist = sum(
+                    1 for _ht in history_timeline if _ht.get("status") == "active"
+                )
+                logger.info(
+                    "Added %d active historical findings to unified report "
+                    "(%d total in timeline)",
+                    _active_hist,
+                    len(history_timeline),
+                )
+
+            # --- Wire exploit PoC results back into unified findings (Pro tier) ---
+            if exploit_results:
+                _wired = 0
+                for _er in exploit_results:
+                    if _er.status != "success" or not _er.output_path:
+                        continue
+                    _ef = _er.finding  # dict with rule_id, file, severity, …
+                    _er_rule = _ef.get("rule_id", "")
+                    _er_file = _ef.get("file", "")
+                    # Read generated Solidity source once
+                    try:
+                        with open(_er.output_path, "r", encoding="utf-8") as _fp:
+                            _exploit_src = _fp.read()
+                    except Exception:
+                        _exploit_src = ""
+                    # Match against all_findings by rule_id (and optionally file)
+                    for _uf in all_findings:
+                        if getattr(_uf, 'exploit_code', ''):
+                            continue  # already wired
+                        if _uf.rule_id == _er_rule:
+                            # Prefer exact file match; accept any match when file unknown
+                            if _er_file and _uf.file and _er_file not in _uf.file and _uf.file not in _er_file:
+                                continue
+                            _uf.exploit_code = _exploit_src
+                            _uf.exploit_path = _er.output_path
+                            _wired += 1
+                            break  # one result per finding is enough
+                logger.info("Wired %d exploit PoC(s) into unified findings", _wired)
+                if _wired:
+                    print(f"    [+] Exploit PoC code wired into {_wired} finding(s) for HTML/SARIF reports")
+
+            # Create report
+            project_name = args.project_name or os.path.basename(os.path.abspath(args.target))
+            audit_report = create_audit_report(
+                project_name=project_name,
+                target_path=args.target,
+                findings=all_findings,
+                engine_version=_ENGINE_VERSION
             )
-            logger.info(
-                "Added %d active historical findings to unified report "
-                "(%d total in timeline)",
-                _active_hist,
-                len(history_timeline),
-            )
+            
+            # Generate Markdown report (always free)
+            md_file = f"audit_report_{datetime.date.today()}.md"
+            md_path = generate_audit_markdown_report(audit_report, md_file)
 
-        # --- Wire exploit PoC results back into unified findings (Pro tier) ---
-        if exploit_results:
-            _wired = 0
-            for _er in exploit_results:
-                if _er.status != "success" or not _er.output_path:
-                    continue
-                _ef = _er.finding  # dict with rule_id, file, severity, …
-                _er_rule = _ef.get("rule_id", "")
-                _er_file = _ef.get("file", "")
-                # Read generated Solidity source once
-                try:
-                    with open(_er.output_path, "r", encoding="utf-8") as _fp:
-                        _exploit_src = _fp.read()
-                except Exception:
-                    _exploit_src = ""
-                # Match against all_findings by rule_id (and optionally file)
-                for _uf in all_findings:
-                    if getattr(_uf, 'exploit_code', ''):
-                        continue  # already wired
-                    if _uf.rule_id == _er_rule:
-                        # Prefer exact file match; accept any match when file unknown
-                        if _er_file and _uf.file and _er_file not in _uf.file and _uf.file not in _er_file:
-                            continue
-                        _uf.exploit_code = _exploit_src
-                        _uf.exploit_path = _er.output_path
-                        _wired += 1
-                        break  # one result per finding is enough
-            logger.info("Wired %d exploit PoC(s) into unified findings", _wired)
-            if _wired:
-                print(f"    [+] Exploit PoC code wired into {_wired} finding(s) for HTML/SARIF reports")
+            print(f"\n[*] Professional Report Generated:")
+            print(f"   Markdown: {os.path.abspath(md_path)}")
+            logger.info("Professional Markdown report: %s", os.path.abspath(md_path))
 
-        # Create report
-        project_name = args.project_name or os.path.basename(os.path.abspath(args.target))
-        audit_report = create_audit_report(
-            project_name=project_name,
-            target_path=args.target,
-            findings=all_findings,
-            engine_version=_ENGINE_VERSION
-        )
-        
-        # Generate Markdown report (always free)
-        md_file = f"audit_report_{datetime.date.today()}.md"
-        md_path = generate_audit_markdown_report(audit_report, md_file)
+            # HTML/SARIF reports require Pro license
+            if _license.check_pro_feature(BRANDED_REPORTS):
+                html_file = f"audit_report_{datetime.date.today()}.html"
+                html_path = generate_html_report(audit_report, html_file)
+                print(f"   HTML: {os.path.abspath(html_path)}")
+                logger.info("Professional HTML report: %s", os.path.abspath(html_path))
+            else:
+                print(_license.get_upgrade_message(BRANDED_REPORTS))
+            print(f"\n   Risk Score: {audit_report.risk_score}/100")
+            print(f"   Status: {audit_report.pass_fail}")
+            print(f"   Findings: {len(all_findings)} total")
+            logger.info("Audit Summary — Risk Score: %d/100, Status: %s, Findings: %d",
+                        audit_report.risk_score, audit_report.pass_fail, len(all_findings))
 
-        print(f"\n[*] Professional Report Generated:")
-        print(f"   Markdown: {os.path.abspath(md_path)}")
-        logger.info("Professional Markdown report: %s", os.path.abspath(md_path))
-
-        # HTML/SARIF reports require Pro license
-        if _license.check_pro_feature(BRANDED_REPORTS):
-            html_file = f"audit_report_{datetime.date.today()}.html"
-            html_path = generate_html_report(audit_report, html_file)
-            print(f"   HTML: {os.path.abspath(html_path)}")
-            logger.info("Professional HTML report: %s", os.path.abspath(html_path))
+            # Log severity breakdown
+            severity_counts: Dict[str, int] = {}
+            for f in all_findings:
+                sev = f.severity if hasattr(f, 'severity') else 'UNKNOWN'
+                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            logger.info("Findings by severity: %s", severity_counts)
+            state_mgr.mark_phase_complete("report", len(all_findings), _time.time() - _t0)
         else:
-            print(_license.get_upgrade_message(BRANDED_REPORTS))
-        print(f"\n   Risk Score: {audit_report.risk_score}/100")
-        print(f"   Status: {audit_report.pass_fail}")
-        print(f"   Findings: {len(all_findings)} total")
-        logger.info("Audit Summary — Risk Score: %d/100, Status: %s, Findings: %d",
-                    audit_report.risk_score, audit_report.pass_fail, len(all_findings))
-
-        # Log severity breakdown
-        severity_counts: Dict[str, int] = {}
-        for f in all_findings:
-            sev = f.severity if hasattr(f, 'severity') else 'UNKNOWN'
-            severity_counts[sev] = severity_counts.get(sev, 0) + 1
-        logger.info("Findings by severity: %s", severity_counts)
+            logger.info("[PHASE 9] Report — already generated (resumed)")
     elif args.report and not REPORT_GENERATOR_AVAILABLE:
         logger.error("Report generation requested but report_generator.py not available")
+
+    # Mark scan session complete
+    state_mgr.mark_session_complete()
+    logger.info(f"Scan session complete: {state_mgr._session_id}")
 
     # Final log file reference — always printed so users know where to find results
     logger.info("Scan complete. Log file: %s", _log_file)

@@ -195,6 +195,8 @@ def handle_checkout_completed(session: dict) -> dict:
     )
     product_key = session.get("metadata", {}).get("product_key", "pro_monthly")
     product_info = PRODUCTS.get(product_key, PRODUCTS["pro_monthly"])
+    stripe_subscription_id = session.get("subscription", "")
+    stripe_customer_id = session.get("customer", "")
 
     # Compute expiry based on billing interval
     now = datetime.now(timezone.utc)
@@ -210,6 +212,9 @@ def handle_checkout_completed(session: dict) -> dict:
         expires=expires_at,
         max_activations=product_info["max_activations"],
     )
+    license_entry["stripe_subscription_id"] = stripe_subscription_id
+    license_entry["stripe_customer_id"] = stripe_customer_id
+    license_entry["billing_interval"] = product_info.get("interval", "month")
     _save_license_to_db(license_entry)
 
     # Map session_id -> license so the success page can look it up
@@ -219,6 +224,7 @@ def handle_checkout_completed(session: dict) -> dict:
         "tier": license_entry["tier"],
         "customer_email": customer_email,
         "expires_at": license_entry["expires_at"],
+        "stripe_subscription_id": stripe_subscription_id,
     }
     _save_session_map(session_map)
 
@@ -232,3 +238,32 @@ def get_session_license_key(session_id: str) -> Optional[dict]:
     """
     session_map = _load_session_map()
     return session_map.get(session_id)
+
+
+def find_license_by_subscription(subscription_id: str) -> Optional[dict]:
+    """Find a license entry by its Stripe subscription ID."""
+    db_path = Path(__file__).parent.parent / "data" / "licenses.json"
+    if not db_path.exists():
+        return None
+    with open(db_path, 'r', encoding='utf-8') as f:
+        db = json.load(f)
+    for lic in db.get("licenses", []):
+        if lic.get("stripe_subscription_id") == subscription_id:
+            return lic
+    return None
+
+
+def update_license_in_db(license_key: str, updates: dict) -> bool:
+    """Update fields on an existing license entry by key."""
+    db_path = Path(__file__).parent.parent / "data" / "licenses.json"
+    if not db_path.exists():
+        return False
+    with open(db_path, 'r', encoding='utf-8') as f:
+        db = json.load(f)
+    for lic in db.get("licenses", []):
+        if lic.get("key") == license_key:
+            lic.update(updates)
+            with open(db_path, 'w', encoding='utf-8') as f:
+                json.dump(db, f, indent=2)
+            return True
+    return False

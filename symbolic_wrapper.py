@@ -6,7 +6,7 @@ import argparse
 import sys
 from typing import List, Dict, Any, Optional
 
-from logger import get_logger
+from logger import get_logger, append_stderr_log
 from exceptions import (
     GarrisonAnalysisError,
     GarrisonToolNotFoundError,
@@ -51,7 +51,8 @@ def get_mythril_timeout() -> int:
 def run_mythril(
     target: str,
     function: Optional[str] = None,
-    timeout: Optional[int] = None
+    timeout: Optional[int] = None,
+    stderr_log: Optional[str] = None
 ) -> str:
     """Run Mythril against a contract and return raw JSON output.
 
@@ -120,6 +121,8 @@ def run_mythril(
         ) from e
 
     # Mythril may return non-zero when issues are found; we still care about stdout
+    if result and result.stderr:
+        append_stderr_log(result.stderr, "mythril", stderr_log)
     return result.stdout if result else ""
 
 
