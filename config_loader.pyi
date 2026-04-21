@@ -207,10 +207,13 @@ class AIConfig:
     """AI and RAG configuration."""
     embedding_backend: str
     llm_backend: str
+    llm_model: str
+    ollama_url: str
     openai_model: str
     rag_index_path: str
     top_k: int
     auto_enrich: bool
+    llm_enrichment: bool
 
 
 @dataclass

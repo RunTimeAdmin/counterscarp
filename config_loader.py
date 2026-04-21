@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Garrison Security Engine"
-    version: str = "4.3.0"
+    version: str = "4.4.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -527,15 +527,20 @@ class AIConfig:
 
     Attributes:
         embedding_backend: Backend for embeddings (local, openai, anthropic).
-        llm_backend: LLM backend for generation (none, openai, anthropic).
-        openai_model: OpenAI model for LLM features.
+        llm_backend: LLM provider for generation ("none", "openai", "ollama").
+        llm_model: Model name used for both OpenAI and Ollama.
+        ollama_url: Ollama API base URL (only used when llm_backend="ollama").
+        openai_model: Deprecated alias kept for backward compatibility.
         rag_index_path: Path to the RAG vector index.
         top_k: Number of similar findings to retrieve.
         auto_enrich: Whether to auto-enrich findings with RAG.
+        llm_enrichment: Whether to enable LLM-powered finding analysis.
     """
     embedding_backend: str = "local"
     llm_backend: str = "none"
-    openai_model: str = "gpt-4-turbo-preview"
+    llm_model: str = "gpt-4o-mini"
+    ollama_url: str = "http://localhost:11434"
+    openai_model: str = "gpt-4-turbo-preview"  # kept for backward compat
     rag_index_path: str = ".garrison/rag_index.json"
     top_k: int = 5
     auto_enrich: bool = False
@@ -714,7 +719,7 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Garrison Security Engine'),
-            version=eng.get('version', '4.3.0'),
+            version=eng.get('version', '4.4.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )
@@ -968,6 +973,8 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
         config.ai = AIConfig(
             embedding_backend=ai.get('embedding_backend', 'local'),
             llm_backend=ai.get('llm_backend', 'none'),
+            llm_model=ai.get('llm_model', 'gpt-4o-mini'),
+            ollama_url=ai.get('ollama_url', 'http://localhost:11434'),
             openai_model=ai.get('openai_model', 'gpt-4-turbo-preview'),
             rag_index_path=ai.get(
                 'rag_index_path', '.garrison/rag_index.json'

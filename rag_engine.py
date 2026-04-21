@@ -623,86 +623,117 @@ class KnowledgeBaseBuilder:
 
 
 # ---------------------------------------------------------------------------
-# LLM-powered analysis (optional — requires openai package + API key)
+# LLM-powered analysis — supports OpenAI and Ollama providers
 # ---------------------------------------------------------------------------
 
-def generate_llm_analysis(
+def _build_analysis_prompt(
     finding: Dict[str, Any],
     similar_findings: List[Dict[str, Any]],
-    api_key: Optional[str] = None,
 ) -> str:
-    """Generate an LLM-powered analysis for a security finding.
-
-    Uses OpenAI gpt-4o-mini to produce a structured explanation covering:
-    - What the vulnerability is
-    - Why it matters in a DeFi/smart-contract context
-    - Specific remediation steps for the affected code
+    """Build the audit analysis prompt from finding data.
 
     Args:
-        finding: Finding dictionary (rule_id, title, description, severity,
-            code_snippet, etc.).
+        finding: Finding dictionary.
         similar_findings: Top-K similar past findings returned by RAG.
-        api_key: OpenAI API key.  Falls back to OPENAI_API_KEY env var.
 
     Returns:
-        Analysis text as a plain string, or empty string on any failure
-        (missing key, import error, network error, etc.).
+        Formatted prompt string ready to send to any LLM.
+    """
+    # Build context from top-3 similar past findings
+    context_lines: List[str] = []
+    for i, sf in enumerate(similar_findings[:3], 1):
+        meta = sf.get("metadata", {})
+        context_lines.append(
+            f"Past Finding {i}: "
+            f"[{meta.get('rule_id', 'unknown')}] "
+            f"{meta.get('title', meta.get('text', '')[:120])} "
+            f"(severity={meta.get('severity', '?')}) — "
+            f"Remediation: {meta.get('remediation', 'N/A')}"
+        )
+    context_block = "\n".join(context_lines) or "No similar past findings."
+
+    rule_id = finding.get("rule_id", "unknown")
+    title = finding.get("title", finding.get("message", ""))
+    description = finding.get("description", finding.get("message", ""))
+    severity = finding.get("severity", "UNKNOWN")
+    snippet = finding.get("code_snippet", "")
+    snippet_block = (
+        f"\n\nAffected code snippet:\n```solidity\n{snippet}\n```"
+        if snippet else ""
+    )
+
+    return (
+        f"You are an expert smart-contract security auditor.\n\n"
+        f"A scanner has detected the following vulnerability:\n"
+        f"- Rule ID: {rule_id}\n"
+        f"- Title: {title}\n"
+        f"- Severity: {severity}\n"
+        f"- Description: {description}{snippet_block}\n\n"
+        f"Similar past findings for context:\n{context_block}\n\n"
+        f"Please provide a concise analysis covering:\n"
+        f"1. What this vulnerability is (technical explanation)\n"
+        f"2. Why it matters specifically in a DeFi/smart-contract context "
+        f"(potential attack vectors, financial impact)\n"
+        f"3. Specific remediation steps for this code\n\n"
+        f"Keep the response under 400 words and use plain text."
+    )
+
+
+def _call_ollama(
+    prompt: str,
+    model: str,
+    base_url: str = "http://localhost:11434",
+) -> str:
+    """Call a local Ollama instance for LLM analysis.
+
+    Args:
+        prompt: The prompt text to send.
+        model: Ollama model name (e.g. "deepseek-coder", "codellama").
+        base_url: Ollama API base URL.
+
+    Returns:
+        Response text, or empty string on failure.
+    """
+    try:
+        import requests as _requests
+        url = f"{base_url.rstrip('/')}/api/generate"
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+        }
+        response = _requests.post(url, json=payload, timeout=120)
+        response.raise_for_status()
+        result = response.json().get("response", "")
+        logger.debug(
+            f"Ollama ({model}) returned {len(result)} chars"
+        )
+        return result.strip()
+    except Exception as e:
+        logger.warning(f"Ollama connection failed: {e}")
+        return ""
+
+
+def _call_openai(
+    prompt: str,
+    model: str,
+    api_key: str,
+) -> str:
+    """Call the OpenAI API for LLM analysis.
+
+    Args:
+        prompt: The prompt text to send.
+        model: OpenAI model name (e.g. "gpt-4o-mini").
+        api_key: OpenAI API key.
+
+    Returns:
+        Response text, or empty string on failure.
     """
     try:
         import openai as _openai  # optional dependency
-    except ImportError:
-        logger.debug("openai package not installed — LLM analysis skipped")
-        return ""
-
-    key = api_key or os.getenv("OPENAI_API_KEY")
-    if not key:
-        logger.debug("OPENAI_API_KEY not set — LLM analysis skipped")
-        return ""
-
-    try:
-        # Build context from top-3 similar past findings
-        context_lines: List[str] = []
-        for i, sf in enumerate(similar_findings[:3], 1):
-            meta = sf.get("metadata", {})
-            context_lines.append(
-                f"Past Finding {i}: "
-                f"[{meta.get('rule_id', 'unknown')}] "
-                f"{meta.get('title', meta.get('text', '')[:120])} "
-                f"(severity={meta.get('severity', '?')}) — "
-                f"Remediation: {meta.get('remediation', 'N/A')}"
-            )
-        context_block = "\n".join(context_lines) or "No similar past findings."
-
-        # Build the prompt
-        rule_id = finding.get("rule_id", "unknown")
-        title = finding.get("title", finding.get("message", ""))
-        description = finding.get("description", finding.get("message", ""))
-        severity = finding.get("severity", "UNKNOWN")
-        snippet = finding.get("code_snippet", "")
-        snippet_block = (
-            f"\n\nAffected code snippet:\n```solidity\n{snippet}\n```"
-            if snippet else ""
-        )
-
-        prompt = (
-            f"You are an expert smart-contract security auditor.\n\n"
-            f"A scanner has detected the following vulnerability:\n"
-            f"- Rule ID: {rule_id}\n"
-            f"- Title: {title}\n"
-            f"- Severity: {severity}\n"
-            f"- Description: {description}{snippet_block}\n\n"
-            f"Similar past findings for context:\n{context_block}\n\n"
-            f"Please provide a concise analysis covering:\n"
-            f"1. What this vulnerability is (technical explanation)\n"
-            f"2. Why it matters specifically in a DeFi/smart-contract context "
-            f"(potential attack vectors, financial impact)\n"
-            f"3. Specific remediation steps for this code\n\n"
-            f"Keep the response under 400 words and use plain text."
-        )
-
-        client = _openai.OpenAI(api_key=key)
+        client = _openai.OpenAI(api_key=api_key)
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -716,16 +747,67 @@ def generate_llm_analysis(
             max_tokens=512,
             temperature=0.2,
         )
-        analysis = response.choices[0].message.content or ""
+        result = response.choices[0].message.content or ""
         logger.debug(
-            f"LLM analysis generated for finding {rule_id} "
-            f"({len(analysis)} chars)"
+            f"OpenAI ({model}) returned {len(result)} chars"
         )
-        return analysis.strip()
-
-    except Exception as e:
-        logger.warning(f"LLM analysis failed for finding: {e}")
+        return result.strip()
+    except ImportError:
+        logger.debug("openai package not installed — LLM analysis skipped")
         return ""
+    except Exception as e:
+        logger.warning(f"OpenAI call failed: {e}")
+        return ""
+
+
+def generate_llm_analysis(
+    finding: Dict[str, Any],
+    similar_findings: List[Dict[str, Any]],
+    config: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
+) -> str:
+    """Generate an LLM-powered analysis for a security finding.
+
+    Routes to the configured LLM provider.  Supported providers:
+    - "openai"  — calls OpenAI Chat Completions (requires OPENAI_API_KEY)
+    - "ollama"  — calls a local Ollama instance via HTTP (no key needed)
+    - "none"    — disabled; returns empty string immediately
+
+    Args:
+        finding: Finding dictionary (rule_id, title, description, severity,
+            code_snippet, etc.).
+        similar_findings: Top-K similar past findings returned by RAG.
+        config: Provider config dict with keys: llm_backend, llm_model,
+            ollama_url, api_key.  Defaults to openai if omitted.
+        api_key: Legacy positional API key (OpenAI only).  Ignored when
+            config dict contains an ``api_key`` entry.
+
+    Returns:
+        Analysis text as a plain string, or empty string on any failure
+        (missing key, import error, network error, provider == "none").
+    """
+    cfg = config or {}
+    provider = cfg.get("llm_backend", "openai")
+    model = cfg.get("llm_model", "gpt-4o-mini")
+
+    if provider == "none":
+        return ""
+
+    prompt = _build_analysis_prompt(finding, similar_findings)
+
+    if provider == "ollama":
+        ollama_url = cfg.get("ollama_url", "http://localhost:11434")
+        return _call_ollama(prompt, model, ollama_url)
+
+    if provider == "openai":
+        key = cfg.get("api_key") or api_key or os.getenv("OPENAI_API_KEY", "")
+        if not key:
+            logger.debug("OPENAI_API_KEY not set — LLM analysis skipped")
+            return ""
+        return _call_openai(prompt, model, key)
+
+    logger.debug(f"Unknown llm_backend '{provider}' — LLM analysis skipped")
+    return ""
 
 
 class AuditCopilot:
@@ -839,9 +921,19 @@ class AuditCopilot:
             vector_remediation = "\n\n".join(remediations[:3])
             enriched["rag_references"] = references[:5]
 
-            # Optional LLM enrichment — only when enabled and API key present
-            if self.llm_enrichment and os.getenv("OPENAI_API_KEY"):
-                llm_text = generate_llm_analysis(finding, similar)
+            # Optional LLM enrichment — enabled when llm_backend != "none"
+            llm_backend = self.config.get("llm_backend", "none")
+            _llm_active = self.llm_enrichment and llm_backend != "none"
+            if _llm_active:
+                llm_config = {
+                    "llm_backend": llm_backend,
+                    "llm_model": self.config.get("llm_model", "gpt-4o-mini"),
+                    "ollama_url": self.config.get(
+                        "ollama_url", "http://localhost:11434"
+                    ),
+                    "api_key": os.environ.get("OPENAI_API_KEY", ""),
+                }
+                llm_text = generate_llm_analysis(finding, similar, config=llm_config)
                 if llm_text:
                     enriched["rag_remediation"] = llm_text
                     logger.debug(
@@ -904,7 +996,8 @@ class AuditCopilot:
 
         # Determine which findings qualify for LLM enrichment
         llm_eligible_ids: set = set()
-        if self.llm_enrichment and os.getenv("OPENAI_API_KEY"):
+        _llm_backend = self.config.get("llm_backend", "none")
+        if self.llm_enrichment and _llm_backend != "none":
             sorted_by_severity = sorted(
                 range(len(findings)),
                 key=lambda i: _SEVERITY_ORDER.get(

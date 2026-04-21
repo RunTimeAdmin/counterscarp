@@ -6,7 +6,7 @@
 [engine]
 # Engine-wide settings
 name = "Garrison Security Engine"
-version = "4.3.0"
+version = "4.4.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 fail_on_severity = "HIGH"
@@ -418,11 +418,18 @@ include_risk_assessment = true
 # "local" uses sentence-transformers (default, no API needed)
 embedding_backend = "local"
 
-# LLM backend for AI features (none, openai, anthropic)
-# "none" disables LLM features (default)
+# LLM provider: "none" (disabled), "openai", "ollama"
 llm_backend = "none"
 
-# OpenAI model for LLM features
+# Model name — used for both OpenAI and Ollama
+# OpenAI examples: "gpt-4o-mini", "gpt-4-turbo-preview"
+# Ollama examples: "deepseek-coder", "codellama", "llama3"
+llm_model = "gpt-4o-mini"
+
+# Ollama endpoint (only used when llm_backend = "ollama")
+ollama_url = "http://localhost:11434"
+
+# OpenAI model (deprecated — use llm_model instead; kept for backward compat)
 openai_model = "gpt-4-turbo-preview"
 
 # Path to the RAG vector index
@@ -435,8 +442,8 @@ top_k = 5
 auto_enrich = false
 
 # Enable LLM-powered analysis for enriched findings
-# Set to true and provide OPENAI_API_KEY environment variable to enable
-llm_enrichment = false  # Set to true + provide OPENAI_API_KEY to enable LLM analysis
+# Requires llm_backend != "none".  For OpenAI also set OPENAI_API_KEY env var.
+llm_enrichment = false
 
 
 # ============================================================================

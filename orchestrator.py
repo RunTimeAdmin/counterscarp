@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("garrison-engine")
 except Exception:
-    _ENGINE_VERSION = "4.3.0"
+    _ENGINE_VERSION = "4.4.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
@@ -756,7 +756,13 @@ def main() -> None:
     parser.add_argument(
         "--update-signatures",
         action="store_true",
-        help="Update bundled threat intelligence and protocol signature databases",
+        help="Update threat intelligence databases from GitHub (requires network)",
+    )
+    parser.add_argument(
+        "--update-from-file",
+        default=None,
+        metavar="PATH",
+        help="Import threat intel from a pre-downloaded JSON file (offline import)",
     )
     parser.add_argument(
         "--resume",
@@ -767,9 +773,20 @@ def main() -> None:
 
     # --- Update signatures (no --target needed) ---
     if args.update_signatures:
-        from signature_updater import update_all_signatures
-        update_all_signatures()
-        sys.exit(0)
+        from signature_updater import update_from_github
+        print("[*] Updating threat intelligence databases from GitHub...")
+        updated, failed = update_from_github()
+        if updated:
+            print(f"[+] Updated: {', '.join(updated)}")
+        if failed:
+            print(f"[-] Failed:  {', '.join(failed)}")
+        sys.exit(0 if not failed else 1)
+
+    if args.update_from_file:
+        from signature_updater import update_from_file
+        print(f"[*] Importing threat intel from: {args.update_from_file}")
+        success = update_from_file(args.update_from_file)
+        sys.exit(0 if success else 1)
 
     # Validate --target is provided for scanning operations (unless resuming)
     if not args.target and not args.resume:
@@ -782,6 +799,14 @@ def main() -> None:
             logger.error("Preflight check failed. Aborting scan.")
             sys.exit(1)
         logger.info("Preflight check passed — all tools verified.")
+
+    # --- Data freshness check (warn if databases are stale) ---
+    try:
+        from signature_updater import check_data_freshness
+        _data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        check_data_freshness(data_dir=_data_dir, warn_days=90)
+    except Exception:
+        pass  # Non-fatal — never block a scan
 
     # --- State manager initialization ---
     import time as _time

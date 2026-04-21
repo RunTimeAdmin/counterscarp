@@ -2,9 +2,15 @@
 
 import json
 import os
+import shutil
 import logging
-from datetime import datetime
-from typing import Dict
+from datetime import datetime, timezone
+from typing import Dict, List, Tuple
+
+try:
+    import requests as _requests
+except ImportError:  # pragma: no cover
+    _requests = None  # type: ignore
 
 logger = logging.getLogger("garrison.signature_updater")
 
@@ -157,3 +163,150 @@ def _refresh_protocol_db(db_path: str) -> int:
     )
 
     return count
+
+
+# ---------------------------------------------------------------------------
+# GitHub-pull updater (online mode)
+# ---------------------------------------------------------------------------
+
+GITHUB_RAW_BASE = (
+    "https://raw.githubusercontent.com/RunTimeAdmin/garrison-engine/main/data"
+)
+
+_FILES_TO_UPDATE = {
+    "threat_intel_db.json": f"{GITHUB_RAW_BASE}/threat_intel_db.json",
+    "protocol_fingerprints.json": f"{GITHUB_RAW_BASE}/protocol_fingerprints.json",
+}
+
+
+def update_from_github(data_dir: str = "data") -> Tuple[List[str], List[str]]:
+    """Pull latest threat intelligence from GitHub raw content.
+
+    Returns:
+        (updated, failed) — lists of filenames that succeeded / failed.
+    """
+    if _requests is None:
+        print("  Error: 'requests' library is not installed. "
+              "Run: pip install requests")
+        return [], list(_FILES_TO_UPDATE.keys())
+
+    os.makedirs(data_dir, exist_ok=True)
+    updated: List[str] = []
+    failed: List[str] = []
+
+    for filename, url in _FILES_TO_UPDATE.items():
+        target_path = os.path.join(data_dir, filename)
+        print(f"  Fetching {filename}...")
+        try:
+            response = _requests.get(url, timeout=30)
+            response.raise_for_status()
+
+            # Validate it's valid JSON before writing
+            data = response.json()
+
+            # Back up existing file
+            if os.path.exists(target_path):
+                backup_path = target_path + ".bak"
+                shutil.copy2(target_path, backup_path)
+
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+            print(f"  \u2713 {filename}: updated successfully")
+            updated.append(filename)
+        except _requests.exceptions.RequestException as e:
+            print(f"  \u2717 Failed to fetch {filename}: {e}")
+            failed.append(filename)
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"  \u2717 Invalid JSON from {filename}: {e}")
+            failed.append(filename)
+
+    return updated, failed
+
+
+# ---------------------------------------------------------------------------
+# Offline / local-file importer
+# ---------------------------------------------------------------------------
+
+def update_from_file(source_path: str, data_dir: str = "data") -> bool:
+    """Import threat intelligence from a pre-downloaded JSON file.
+
+    The target database is determined automatically from the file's content.
+    """
+    if not os.path.exists(source_path):
+        print(f"Error: File not found: {source_path}")
+        return False
+
+    try:
+        with open(source_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Determine target based on top-level keys
+        if "entries" in data or "vulnerabilities" in data:
+            target = os.path.join(data_dir, "threat_intel_db.json")
+        elif "protocols" in data or "fingerprints" in data or isinstance(data, list):
+            target = os.path.join(data_dir, "protocol_fingerprints.json")
+        else:
+            # Default to threat intel
+            target = os.path.join(data_dir, "threat_intel_db.json")
+
+        os.makedirs(data_dir, exist_ok=True)
+
+        # Backup existing
+        if os.path.exists(target):
+            shutil.copy2(target, target + ".bak")
+
+        with open(target, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        print(f"Imported {source_path} \u2192 {target}")
+        return True
+    except Exception as e:
+        print(f"Import failed: {e}")
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Data freshness check
+# ---------------------------------------------------------------------------
+
+def check_data_freshness(data_dir: str = "data", warn_days: int = 90) -> None:
+    """Check if bundled threat intel databases are outdated and warn if stale."""
+    for filename in ["threat_intel_db.json", "protocol_fingerprints.json"]:
+        filepath = os.path.join(data_dir, filename)
+        if not os.path.exists(filepath):
+            print(f"  \u26a0 {filename}: not found")
+            continue
+
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            # Support various timestamp field names
+            last_updated = (
+                data.get("last_updated")
+                or data.get("updated_at")
+                or data.get("timestamp")
+            )
+            if last_updated:
+                updated_dt = datetime.fromisoformat(
+                    last_updated.replace("Z", "+00:00")
+                )
+                # Make both naive or both aware
+                now = (
+                    datetime.now(tz=timezone.utc)
+                    if updated_dt.tzinfo is not None
+                    else datetime.now()
+                )
+                age_days = (now - updated_dt).days
+                if age_days > warn_days:
+                    print(
+                        f"  \u26a0 {filename}: {age_days} days old "
+                        f"(consider running --update-signatures)"
+                    )
+                else:
+                    print(f"  \u2713 {filename}: {age_days} days old")
+            else:
+                print(f"  \u2014 {filename}: no timestamp found")
+        except Exception:
+            pass
