@@ -21,7 +21,7 @@ from config_loader import (
     UpgradeDiffConfig,
     ReportingConfig,
     CIConfig,
-    SentinelConfig,
+    GarrisonConfig,
     load_config,
     find_config_file,
     validate_config,
@@ -32,23 +32,23 @@ from config_loader import (
 class TestTOMLParsing:
     """Test TOML parsing with valid config."""
 
-    def test_load_valid_config(self, tmp_path, sample_sentinel_toml):
+    def test_load_valid_config(self, tmp_path, sample_garrison_toml):
         """Test loading a valid TOML config file."""
-        config_file = tmp_path / "sentinel.toml"
-        config_file.write_text(sample_sentinel_toml)
+        config_file = tmp_path / "garrison.toml"
+        config_file.write_text(sample_garrison_toml)
         
         config = load_config(str(config_file))
         
-        assert isinstance(config, SentinelConfig)
-        assert config.engine.name == "Sentinel Security Engine"
+        assert isinstance(config, GarrisonConfig)
+        assert config.engine.name == "Garrison Security Engine"
         assert config.engine.version == "3.4.0"
         assert config.engine.fail_on_severity == "HIGH"
         assert config.engine.max_findings == 100
 
-    def test_load_config_with_heuristics(self, tmp_path, sample_sentinel_toml):
+    def test_load_config_with_heuristics(self, tmp_path, sample_garrison_toml):
         """Test loading config with heuristics section."""
-        config_file = tmp_path / "sentinel.toml"
-        config_file.write_text(sample_sentinel_toml)
+        config_file = tmp_path / "garrison.toml"
+        config_file.write_text(sample_garrison_toml)
         
         config = load_config(str(config_file))
         
@@ -56,10 +56,10 @@ class TestTOMLParsing:
         assert config.heuristics.severity_overrides.get("TX_ORIGIN_USAGE") == "CRITICAL"
         assert config.heuristics.disabled_rules.get("HARDCODED_ADDRESS") is True
 
-    def test_load_config_with_suppressions(self, tmp_path, sample_sentinel_toml):
+    def test_load_config_with_suppressions(self, tmp_path, sample_garrison_toml):
         """Test loading config with suppressions."""
-        config_file = tmp_path / "sentinel.toml"
-        config_file.write_text(sample_sentinel_toml)
+        config_file = tmp_path / "garrison.toml"
+        config_file.write_text(sample_garrison_toml)
         
         config = load_config(str(config_file))
         
@@ -68,10 +68,10 @@ class TestTOMLParsing:
         assert config.suppressions[0].file == "test/MockContract.sol"
         assert config.suppressions[0].line == 42
 
-    def test_load_config_with_static_analysis(self, tmp_path, sample_sentinel_toml):
+    def test_load_config_with_static_analysis(self, tmp_path, sample_garrison_toml):
         """Test loading config with static analysis section."""
-        config_file = tmp_path / "sentinel.toml"
-        config_file.write_text(sample_sentinel_toml)
+        config_file = tmp_path / "garrison.toml"
+        config_file.write_text(sample_garrison_toml)
         
         config = load_config(str(config_file))
         
@@ -79,10 +79,10 @@ class TestTOMLParsing:
         assert config.static_analysis.slither_exclude_detectors == "solc-version,naming-convention"
         assert config.static_analysis.aderyn_enabled is False
 
-    def test_load_config_with_fuzzing(self, tmp_path, sample_sentinel_toml):
+    def test_load_config_with_fuzzing(self, tmp_path, sample_garrison_toml):
         """Test loading config with fuzzing section."""
-        config_file = tmp_path / "sentinel.toml"
-        config_file.write_text(sample_sentinel_toml)
+        config_file = tmp_path / "garrison.toml"
+        config_file.write_text(sample_garrison_toml)
         
         config = load_config(str(config_file))
         
@@ -90,10 +90,10 @@ class TestTOMLParsing:
         assert config.fuzzing.foundry_runs == 10000
         assert config.fuzzing.medusa_enabled is False
 
-    def test_load_config_with_reporting(self, tmp_path, sample_sentinel_toml):
+    def test_load_config_with_reporting(self, tmp_path, sample_garrison_toml):
         """Test loading config with reporting section."""
-        config_file = tmp_path / "sentinel.toml"
-        config_file.write_text(sample_sentinel_toml)
+        config_file = tmp_path / "garrison.toml"
+        config_file.write_text(sample_garrison_toml)
         
         config = load_config(str(config_file))
         
@@ -101,10 +101,10 @@ class TestTOMLParsing:
         assert config.reporting.verbosity == "standard"
         assert config.reporting.group_by == "severity"
 
-    def test_load_config_with_ci(self, tmp_path, sample_sentinel_toml):
+    def test_load_config_with_ci(self, tmp_path, sample_garrison_toml):
         """Test loading config with CI section."""
-        config_file = tmp_path / "sentinel.toml"
-        config_file.write_text(sample_sentinel_toml)
+        config_file = tmp_path / "garrison.toml"
+        config_file.write_text(sample_garrison_toml)
         
         config = load_config(str(config_file))
         
@@ -114,10 +114,10 @@ class TestTOMLParsing:
 
     def test_load_nonexistent_config_returns_defaults(self):
         """Test loading nonexistent config returns default config."""
-        config = load_config("/nonexistent/path/sentinel.toml")
+        config = load_config("/nonexistent/path/garrison.toml")
         
-        assert isinstance(config, SentinelConfig)
-        assert config.engine.name == "Sentinel Security Engine"
+        assert isinstance(config, GarrisonConfig)
+        assert config.engine.name == "Garrison Security Engine"
         assert config.heuristics.enabled is True
 
 
@@ -374,7 +374,7 @@ class TestProfileLoading:
 
     def test_audit_profile(self, tmp_path, audit_profile_toml):
         """Test loading audit profile configuration."""
-        config_file = tmp_path / "sentinel-audit.toml"
+        config_file = tmp_path / "garrison-audit.toml"
         config_file.write_text(audit_profile_toml)
         
         config = load_config(str(config_file))
@@ -386,7 +386,7 @@ class TestProfileLoading:
 
     def test_pr_profile(self, tmp_path, pr_profile_toml):
         """Test loading PR profile configuration."""
-        config_file = tmp_path / "sentinel-pr.toml"
+        config_file = tmp_path / "garrison-pr.toml"
         config_file.write_text(pr_profile_toml)
         
         config = load_config(str(config_file))
@@ -398,7 +398,7 @@ class TestProfileLoading:
 
     def test_bounty_profile(self, tmp_path, bounty_profile_toml):
         """Test loading bounty profile configuration."""
-        config_file = tmp_path / "sentinel-bounty.toml"
+        config_file = tmp_path / "garrison-bounty.toml"
         config_file.write_text(bounty_profile_toml)
         
         config = load_config(str(config_file))
@@ -415,32 +415,32 @@ class TestInvalidTOMLSyntax:
 
     def test_invalid_toml_syntax(self, tmp_path):
         """Test loading config with invalid TOML syntax."""
-        config_file = tmp_path / "sentinel.toml"
+        config_file = tmp_path / "garrison.toml"
         config_file.write_text("""
 [engine
 name = "Test"  # Missing closing bracket
 """)
 
-        # Should not crash, returns default config or raises SentinelConfigError
+        # Should not crash, returns default config or raises GarrisonConfigError
         try:
             config = load_config(str(config_file))
-            assert isinstance(config, SentinelConfig)
+            assert isinstance(config, GarrisonConfig)
         except Exception as e:
             # Accept either default config or exception
             assert "Failed to parse" in str(e) or "config" in str(e).lower()
 
     def test_empty_config_file(self, tmp_path):
         """Test loading empty config file."""
-        config_file = tmp_path / "sentinel.toml"
+        config_file = tmp_path / "garrison.toml"
         config_file.write_text("")
         
         config = load_config(str(config_file))
-        assert isinstance(config, SentinelConfig)
-        assert config.engine.name == "Sentinel Security Engine"
+        assert isinstance(config, GarrisonConfig)
+        assert config.engine.name == "Garrison Security Engine"
 
     def test_malformed_toml(self, tmp_path):
         """Test loading malformed TOML."""
-        config_file = tmp_path / "sentinel.toml"
+        config_file = tmp_path / "garrison.toml"
         config_file.write_text("""
 engine = "not an object"
 heuristics = 123
@@ -449,7 +449,7 @@ heuristics = 123
         # Should handle gracefully - returns default config or raises error
         try:
             config = load_config(str(config_file))
-            assert isinstance(config, SentinelConfig)
+            assert isinstance(config, GarrisonConfig)
         except (AttributeError, TypeError):
             # Accept if it fails due to string type issues
             pass
@@ -459,21 +459,21 @@ class TestFindConfigFile:
     """Test find_config_file() function."""
 
     def test_finds_config_in_current_dir(self, tmp_path, monkeypatch):
-        """Test finds sentinel.toml in current directory."""
+        """Test finds garrison.toml in current directory."""
         monkeypatch.chdir(tmp_path)
-        config_file = tmp_path / "sentinel.toml"
+        config_file = tmp_path / "garrison.toml"
         config_file.write_text("[engine]\nname = \"Test\"")
         
         found = find_config_file()
         assert found == str(config_file)
 
     def test_finds_config_in_parent_dir(self, tmp_path, monkeypatch):
-        """Test finds sentinel.toml in parent directory."""
+        """Test finds garrison.toml in parent directory."""
         subdir = tmp_path / "subdir"
         subdir.mkdir()
         monkeypatch.chdir(subdir)
         
-        config_file = tmp_path / "sentinel.toml"
+        config_file = tmp_path / "garrison.toml"
         config_file.write_text("[engine]\nname = \"Test\"")
         
         found = find_config_file()
@@ -512,19 +512,19 @@ class TestHeuristicConfig:
         assert config.get_rule_severity("TEST", "HIGH") == "CRITICAL"
 
 
-class TestSentinelConfig:
-    """Test SentinelConfig class."""
+class TestGarrisonConfig:
+    """Test GarrisonConfig class."""
 
     def test_is_finding_suppressed_no_suppressions(self):
         """Test finding not suppressed when no suppressions."""
-        config = SentinelConfig()
+        config = GarrisonConfig()
         result = config.is_finding_suppressed("RULE", "file.sol", 10)
         assert result is None
 
     def test_is_finding_suppressed_with_match(self):
         """Test finding suppressed when suppression matches."""
         suppression = Suppression(rule_id="RULE", file="file.sol", line=10)
-        config = SentinelConfig(suppressions=[suppression])
+        config = GarrisonConfig(suppressions=[suppression])
         
         result = config.is_finding_suppressed("RULE", "file.sol", 10)
         assert result == suppression
@@ -532,7 +532,7 @@ class TestSentinelConfig:
     def test_is_finding_suppressed_no_match(self):
         """Test finding not suppressed when suppression doesn't match."""
         suppression = Suppression(rule_id="OTHER", file="other.sol")
-        config = SentinelConfig(suppressions=[suppression])
+        config = GarrisonConfig(suppressions=[suppression])
         
         result = config.is_finding_suppressed("RULE", "file.sol", 10)
         assert result is None
@@ -543,7 +543,7 @@ class TestPrintConfigSummary:
 
     def test_prints_summary(self, capsys, sample_config):
         """Test config summary is printed."""
-        config = SentinelConfig()
+        config = GarrisonConfig()
         config.engine.name = "Test Engine"
         config.engine.version = "1.0"
         config.heuristics.disabled_rules = {"RULE1": True, "RULE2": True}
@@ -565,7 +565,7 @@ class TestDataclassDefaults:
     def test_engine_config_defaults(self):
         """Test EngineConfig default values."""
         config = EngineConfig()
-        assert config.name == "Sentinel Security Engine"
+        assert config.name == "Garrison Security Engine"
         assert config.version == "3.4.0"
         assert config.fail_on_severity == "HIGH"
         assert config.max_findings == 0

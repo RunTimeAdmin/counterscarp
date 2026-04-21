@@ -1,5 +1,5 @@
 # ============================================================================
-# SENTINEL ENGINE - BOUNTY HUNTER MODE CONFIGURATION
+# GARRISON ENGINE - BOUNTY HUNTER MODE CONFIGURATION
 # ============================================================================
 # Profile: Maximum coverage for bug bounty hunting and exploit discovery
 # Speed: Slow (deep fuzzing, AI exploit generation)
@@ -7,7 +7,7 @@
 # ============================================================================
 
 [engine]
-name = "Sentinel Security Engine"
+name = "Garrison Security Engine"
 version = "3.4.0"
 profile = "bounty_hunter"
 

@@ -1,12 +1,12 @@
-# Sentinel Security Engine
+# Garrison Security Engine
 
 **Production-ready smart contract security platform with 21 integrated analyzers, configurable rules, and professional audit reports.**
 
 > One command. Zero false positives. Client-ready deliverables.
 
-[![PyPI](https://img.shields.io/pypi/v/sentinel-engine)](https://pypi.org/project/sentinel-engine/)
-[![Python](https://img.shields.io/pypi/pyversions/sentinel-engine)](https://pypi.org/project/sentinel-engine/)
-[![License](https://img.shields.io/pypi/l/sentinel-engine)](https://pypi.org/project/sentinel-engine/)
+[![PyPI](https://img.shields.io/pypi/v/garrison-engine)](https://pypi.org/project/garrison-engine/)
+[![Python](https://img.shields.io/pypi/pyversions/garrison-engine)](https://pypi.org/project/garrison-engine/)
+[![License](https://img.shields.io/pypi/l/garrison-engine)](https://pypi.org/project/garrison-engine/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 ---
@@ -17,19 +17,19 @@
 
 ```powershell
 # 1. Install from PyPI (recommended)
-pip install sentinel-engine
+pip install garrison-engine
 
 # 2. Install with web UI support
-pip install sentinel-engine[web]
+pip install garrison-engine[web]
 
 # 3. Install with AI/RAG features
-pip install sentinel-engine[ai]
+pip install garrison-engine[ai]
 
 # 4. Install with development dependencies
-pip install sentinel-engine[dev]
+pip install garrison-engine[dev]
 
 # 5. Verify installation
-sentinel-engine --help
+garrison-engine --help
 ```
 
 **Required Dependencies:**
@@ -60,7 +60,7 @@ go install github.com/crytic/medusa/cmd/medusa@latest
 
 ## Pricing Tiers
 
-Sentinel Engine includes both free and pro features in a single package. Pro features require a license key.
+Garrison Engine includes both free and pro features in a single package. Pro features require a license key.
 
 | Feature | Community (Free) | Developer ($49/mo) | Pro ($149/mo) | Team ($399/mo) | Enterprise |
 |---------|-----------------|-------------------|---------------|----------------|-----------|
@@ -77,22 +77,22 @@ Sentinel Engine includes both free and pro features in a single package. Pro fea
 | Machine Activations | - | 1 | 3 | 10 | Unlimited |
 | Support | GitHub | Email | Priority (24hr) | Dedicated | CSM |
 
-See full pricing at https://app.sentinel-engine.io/pricing
+See full pricing at https://garrisonsec.io/pricing
 
 ### Activating Pro
 
 ```bash
-export SENTINEL_PRO_LICENSE=your-key-here
-sentinel-engine path/to/contract.sol --rag --report html
+export GARRISON_PRO_LICENSE=your-key-here
+garrison-engine path/to/contract.sol --rag --report html
 ```
 
-Or add to `sentinel.toml`:
+Or add to `garrison.toml`:
 ```toml
 [license]
 key = "your-key-here"
 ```
 
-Get your license at [sentinel-engine.io/pricing](https://sentinel-engine.io/pricing).
+Get your license at [garrisonsec.io/pricing](https://garrisonsec.io/pricing).
 
 ---
 
@@ -107,16 +107,16 @@ python gui.py
 **Option 2: CLI (Professional)**
 ```powershell
 # Fast PR check (blockers only)
-sentinel-engine --target ./contracts --config sentinel-pr.toml
+garrison-engine --target ./contracts --config garrison-pr.toml
 
 # Full audit with HTML report
-sentinel-engine --target ./contracts --config sentinel-audit.toml --report --project-name "MyDeFi"
+garrison-engine --target ./contracts --config garrison-audit.toml --report --project-name "MyDeFi"
 
 # Bug bounty mode (max coverage)
-sentinel-engine --target ./contracts --config sentinel-bounty.toml --medusa
+garrison-engine --target ./contracts --config garrison-bounty.toml --medusa
 
 # Alternative: Use python directly
-python orchestrator.py --target ./contracts --config sentinel-pr.toml
+python orchestrator.py --target ./contracts --config garrison-pr.toml
 ```
 
 **Output:**
@@ -159,26 +159,26 @@ python orchestrator.py --target ./contracts --config sentinel-pr.toml
 - **HTML + Markdown** formats for clients and GitHub
 
 ### **Noise-Free Results**
-- **Configurable suppressions** via `sentinel.toml`
+- **Configurable suppressions** via `garrison.toml`
 - **Per-rule severity overrides** (e.g., downgrade timestamp usage for timelocks)
 - **Expiry-based accepted risks** ("This is safe until 2026-12-31")
 - **File/line-specific suppressions** (suppress specific occurrences, not all)
 
 ### **3 Execution Profiles**
 
-**Audit Mode** (`sentinel-audit.toml`)
+**Audit Mode** (`garrison-audit.toml`)
 - Maximum thoroughness for client deliverables
 - All analyzers enabled, deep fuzzing (250K tests)
 - Fail on MEDIUM+ severity
 - Verbose reporting with all context
 
-**PR Mode** (`sentinel-pr.toml`)
+**PR Mode** (`garrison-pr.toml`)
 - Fast blocker checks for CI/CD (< 2 minutes)
 - Skip slow analyzers (Aderyn, fuzzing)
 - Fail on HIGH+ only
 - Common false positives pre-suppressed
 
-**Bounty Hunter Mode** (`sentinel-bounty.toml`)
+**Bounty Hunter Mode** (`garrison-bounty.toml`)
 - Maximum coverage for exploit discovery
 - All rules enabled, extreme fuzzing (500K tests)
 - Never fails (report everything)
@@ -192,7 +192,7 @@ python orchestrator.py --target ./contracts --config sentinel-pr.toml
 ### **Client Audit Workflow**
 ```powershell
 # 1. Full automated scan
-sentinel-engine --target ./client-project --config sentinel-audit.toml --report --project-name "Client DeFi Protocol"
+garrison-engine --target ./client-project --config garrison-audit.toml --report --project-name "Client DeFi Protocol"
 
 # 2. Review HTML report
 # → audit_report_2025-12-21.html
@@ -215,21 +215,21 @@ on:
     branches: [main]
 
 jobs:
-  sentinel:
+  garrison:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install Sentinel Engine
-        run: pip install sentinel-engine
-      - name: Sentinel PR Check
+      - name: Install Garrison Engine
+        run: pip install garrison-engine
+      - name: Garrison PR Check
         run: |
-          sentinel-engine --target ./contracts --config sentinel-pr.toml
+          garrison-engine --target ./contracts --config garrison-pr.toml
 ```
 
 ### **Bug Bounty Hunting**
 ```powershell
 # Max coverage mode
-sentinel-engine --target ./target-protocol --config sentinel-bounty.toml --medusa --aderyn --report
+garrison-engine --target ./target-protocol --config garrison-bounty.toml --medusa --aderyn --report
 
 # Generate exploit PoCs (requires OpenAI API key)
 export OPENAI_API_KEY="sk-..."
@@ -242,7 +242,7 @@ python exploit_generator.py --finding-json findings.json --output exploits/
 
 **Heuristic Scanner** (no dependencies):
 ```powershell
-python heuristic_scanner.py ./contracts --config sentinel-pr.toml
+python heuristic_scanner.py ./contracts --config garrison-pr.toml
 # Detects: reentrancy, unchecked calls, oracle staleness, access control issues
 ```
 
@@ -270,12 +270,12 @@ python access_matrix.py ./contracts/Vault.sol
 
 ### **Complete Configuration Reference**
 
-Sentinel Engine uses TOML configuration files. Below are all available sections:
+Garrison Engine uses TOML configuration files. Below are all available sections:
 
 #### `[engine]` - Core Engine Settings
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `name` | string | "Sentinel Security Engine" | Engine name |
+| `name` | string | "Garrison Security Engine" | Engine name |
 | `version` | string | "3.1.3" | Engine version |
 | `fail_on_severity` | string | "HIGH" | Minimum severity to fail CI (CRITICAL, HIGH, MEDIUM, LOW, INFO) |
 | `max_findings` | int | 0 | Maximum findings before stopping (0 = unlimited) |
@@ -397,7 +397,7 @@ Sentinel Engine uses TOML configuration files. Below are all available sections:
 
 | Feature | PR Mode | Audit Mode | Bounty Mode |
 |---------|---------|------------|-------------|
-| **Config File** | `sentinel-pr.toml` | `sentinel-audit.toml` | `sentinel-bounty.toml` |
+| **Config File** | `garrison-pr.toml` | `garrison-audit.toml` | `garrison-bounty.toml` |
 | **Time** | < 2 min | 10-30 min | 1-2 hours |
 | **Fail Threshold** | HIGH+ | MEDIUM+ | Never fails |
 | **Heuristic Scanner** | ✅ Fast | ✅ Full | ✅ Full |
@@ -415,12 +415,12 @@ Sentinel Engine uses TOML configuration files. Below are all available sections:
 ### **Profile Selection**
 ```powershell
 # Use pre-built profiles
-sentinel-engine --target ./contracts --config sentinel-audit.toml    # Full audit
-sentinel-engine --target ./contracts --config sentinel-pr.toml       # Fast PR check
-sentinel-engine --target ./contracts --config sentinel-bounty.toml   # Bug bounty
+garrison-engine --target ./contracts --config garrison-audit.toml    # Full audit
+garrison-engine --target ./contracts --config garrison-pr.toml       # Fast PR check
+garrison-engine --target ./contracts --config garrison-bounty.toml   # Bug bounty
 
 # Or create custom config
-sentinel-engine --target ./contracts --config my-custom.toml
+garrison-engine --target ./contracts --config my-custom.toml
 ```
 
 ---
@@ -544,7 +544,7 @@ Detects dangerous proxy upgrade patterns:
 
 ## 🌐 **Web Application**
 
-Try Sentinel Engine online at **https://app.sentinel-engine.io** — no installation required.
+Try Garrison Engine online at **https://garrisonsec.io** — no installation required.
 
 The web app provides:
 - Upload and audit `.sol` or `.rs` files via browser
@@ -559,18 +559,18 @@ The web app provides:
 ### **Quick Start**
 ```bash
 # Build image
-docker build -t sentinel-engine .
+docker build -t garrison-engine .
 
 # Run audit
-docker run --rm -v $(pwd):/scan sentinel-engine --target /scan --config /scan/sentinel-pr.toml
+docker run --rm -v $(pwd):/scan garrison-engine --target /scan --config /scan/garrison-pr.toml
 
 # Generate report
-docker run --rm -v $(pwd):/scan sentinel-engine --target /scan --report
+docker run --rm -v $(pwd):/scan garrison-engine --target /scan --report
 ```
 
 ### **Docker Compose**
 ```bash
-docker-compose run --rm audit --target /scan --config /scan/sentinel-audit.toml --report
+docker-compose run --rm audit --target /scan --config /scan/garrison-audit.toml --report
 ```
 
 **Includes:**
@@ -618,7 +618,7 @@ python medusa_wrapper.py ./foundry-project --test-limit 50000 --timeout 300
 
 ## 🚀 **Innovative Features**
 
-Sentinel Engine includes 7 cutting-edge features that differentiate it from traditional security scanners:
+Garrison Engine includes 7 cutting-edge features that differentiate it from traditional security scanners:
 
 ### **1. AI Audit Copilot** 🤖
 
@@ -633,15 +633,15 @@ RAG-based knowledge retrieval system that provides intelligent vulnerability exp
 **CLI Usage:**
 ```powershell
 # Enable RAG enrichment during audit
-sentinel-engine --target ./contracts --rag
+garrison-engine --target ./contracts --rag
 
 # Build/update RAG index from historical reports
-sentinel-engine --build-rag-index ./past-audits
+garrison-engine --build-rag-index ./past-audits
 
 # Use specific LLM provider
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
-sentinel-engine --target ./contracts --rag --llm-provider anthropic
+garrison-engine --target ./contracts --rag --llm-provider anthropic
 ```
 
 **Configuration:**
@@ -653,7 +653,7 @@ embedding_model = "text-embedding-3-small"
 context_window = 4000
 rag_top_k = 5
 local_embeddings = true
-embedding_cache_dir = "./.sentinel/embeddings"
+embedding_cache_dir = "./.garrison/embeddings"
 ```
 
 ---
@@ -671,10 +671,10 @@ Interactive D3.js force-directed graph showing cross-contract attack paths and v
 **CLI Usage:**
 ```powershell
 # Generate attack graph as HTML
-sentinel-engine --target ./contracts --format attack-graph
+garrison-engine --target ./contracts --format attack-graph
 
 # Output to specific file
-sentinel-engine --target ./contracts --format attack-graph --output attack_paths.html
+garrison-engine --target ./contracts --format attack-graph --output attack_paths.html
 ```
 
 **Configuration:**
@@ -703,13 +703,13 @@ Git-based historical vulnerability tracking that scans commit history to find wh
 **CLI Usage:**
 ```powershell
 # Scan last 50 commits
-sentinel-engine --target ./contracts --history --commits 50
+garrison-engine --target ./contracts --history --commits 50
 
 # Scan since specific date
-sentinel-engine --target ./contracts --history --since "2025-01-01"
+garrison-engine --target ./contracts --history --since "2025-01-01"
 
 # Full history scan with blame attribution
-sentinel-engine --target ./contracts --history --blame
+garrison-engine --target ./contracts --history --blame
 ```
 
 **Configuration:**
@@ -721,7 +721,7 @@ since_date = ""
 blame_attribution = true
 ignore_merge_commits = true
 incremental_scan = true
-storage_path = "./.sentinel/history"
+storage_path = "./.garrison/history"
 ```
 
 ---
@@ -742,7 +742,7 @@ Dedicated Anchor IDL JSON parser for Solana programs. Validates constraints, tra
 python idl_validator.py ./target/idl/my_program.json
 
 # Full Solana analysis with IDL validation
-sentinel-engine --target ./programs --solana --idl-path ./target/idl
+garrison-engine --target ./programs --solana --idl-path ./target/idl
 ```
 
 **Configuration:**
@@ -776,16 +776,16 @@ Dynamic pipeline generation for GitHub Actions, GitLab CI, Azure DevOps, and Jen
 **CLI Usage:**
 ```powershell
 # Generate GitHub Actions workflow
-sentinel-generate-pipeline --platform github --output .github/workflows/
+garrison-generate-pipeline --platform github --output .github/workflows/
 
 # Generate GitLab CI config
-sentinel-generate-pipeline --platform gitlab --output .gitlab-ci.yml
+garrison-generate-pipeline --platform gitlab --output .gitlab-ci.yml
 
 # Generate Azure DevOps pipeline
-sentinel-generate-pipeline --platform azure --output azure-pipelines.yml
+garrison-generate-pipeline --platform azure --output azure-pipelines.yml
 
 # Generate Jenkinsfile
-sentinel-generate-pipeline --platform jenkins --output Jenkinsfile
+garrison-generate-pipeline --platform jenkins --output Jenkinsfile
 ```
 
 **Configuration:**
@@ -863,10 +863,10 @@ Identifies which known protocol a contract resembles (Uniswap, Compound, Aave, e
 **CLI Usage:**
 ```powershell
 # Fingerprint contracts against known protocols
-sentinel-engine --target ./contracts --fingerprint
+garrison-engine --target ./contracts --fingerprint
 
 # Detailed similarity report
-sentinel-engine --target ./contracts --fingerprint --verbose
+garrison-engine --target ./contracts --fingerprint --verbose
 ```
 
 **Configuration:**
@@ -942,7 +942,7 @@ report_inherited_risks = true
 ## 🗂️ **Project Structure**
 
 ```
-sentinel-engine/
+garrison-engine/
 │
 ├── gui.py                      # Interactive Tkinter interface
 ├── orchestrator.py             # CLI master pipeline + Markdown reports
@@ -1085,7 +1085,7 @@ python solana_intel.py programs/token/lib.rs
 
 - **[Getting Started](docs/GETTING_STARTED.md)** - Installation and first audit
 - **[CLI Reference](docs/CLI_REFERENCE.md)** - All commands and flags
-- **[Configuration](docs/CONFIGURATION.md)** - Full sentinel.toml reference
+- **[Configuration](docs/CONFIGURATION.md)** - Full garrison.toml reference
 - **[Web App Guide](docs/WEB_APP_GUIDE.md)** - Web UI features and API
 - **[Deployment](docs/DEPLOYMENT.md)** - Production server setup
 
@@ -1096,10 +1096,10 @@ See the source code for detailed module documentation.
 
 ## 📝 **Logging Configuration**
 
-Sentinel Engine uses a centralized logging system via `logger.py`:
+Garrison Engine uses a centralized logging system via `logger.py`:
 
 ### **Log Levels**
-Set via `SENTINEL_LOG_LEVEL` environment variable:
+Set via `GARRISON_LOG_LEVEL` environment variable:
 - `DEBUG` - Detailed debugging information
 - `INFO` - General operational information
 - `WARNING` - Warning messages for potential issues
@@ -1107,14 +1107,14 @@ Set via `SENTINEL_LOG_LEVEL` environment variable:
 - `CRITICAL` - Critical errors that may prevent operation
 
 ### **Log Formats**
-Set via `SENTINEL_LOG_FORMAT` environment variable:
+Set via `GARRISON_LOG_FORMAT` environment variable:
 - `text` - Human-readable colored output (default)
 - `json` - Structured JSON lines for machine parsing
 
 ### **File Logging**
-Set `SENTINEL_LOG_FILE` to enable logging to a file:
+Set `GARRISON_LOG_FILE` to enable logging to a file:
 ```bash
-export SENTINEL_LOG_FILE=/var/log/sentinel.log
+export GARRISON_LOG_FILE=/var/log/garrison.log
 python orchestrator.py --target ./contracts
 ```
 
@@ -1122,7 +1122,7 @@ python orchestrator.py --target ./contracts
 
 ## 📊 **SARIF Report Support**
 
-Sentinel Engine supports SARIF 2.1.0 (Static Analysis Results Interchange Format) for integration with GitHub Advanced Security and other tools.
+Garrison Engine supports SARIF 2.1.0 (Static Analysis Results Interchange Format) for integration with GitHub Advanced Security and other tools.
 
 ### **Generating SARIF Reports**
 
@@ -1147,18 +1147,18 @@ sarif_upload = true  # Enable GitHub SARIF upload
 Upload SARIF results to GitHub Advanced Security:
 
 ```yaml
-- name: Install Sentinel Engine
-  run: pip install sentinel-engine
+- name: Install Garrison Engine
+  run: pip install garrison-engine
 
-- name: Run Sentinel Scan
+- name: Run Garrison Scan
   run: |
-    sentinel-engine --target ./contracts --report
-    python report_generator.py --format sarif --output sentinel-results
+    garrison-engine --target ./contracts --report
+    python report_generator.py --format sarif --output garrison-results
 
 - name: Upload SARIF to GitHub
   uses: github/codeql-action/upload-sarif@v3
   with:
-    sarif_file: sentinel-results.sarif
+    sarif_file: garrison-results.sarif
 ```
 
 ---
@@ -1181,7 +1181,7 @@ The `http_utils.py` module provides resilient HTTP communication for threat inte
 ### **Error Classification**
 - Automatic classification of HTTP status codes
 - Different retry strategies for different error types
-- Structured error reporting via `SentinelAPIError`
+- Structured error reporting via `GarrisonAPIError`
 
 ---
 
@@ -1241,7 +1241,7 @@ solc-select use 0.8.19
 If threat intelligence lookups timeout:
 ```bash
 # Increase timeout via environment
-export SENTINEL_LOG_LEVEL=DEBUG  # See detailed retry attempts
+export GARRISON_LOG_LEVEL=DEBUG  # See detailed retry attempts
 
 # Check network connectivity
 python -c "from http_utils import resilient_get; resilient_get('https://osv.dev')"
@@ -1317,13 +1317,13 @@ HeuristicRule(
 
 ## 🔧 **Environment Variables**
 
-Sentinel Engine supports the following environment variables for configuration:
+Garrison Engine supports the following environment variables for configuration:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `SENTINEL_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO | No |
-| `SENTINEL_LOG_FORMAT` | Output format ("text" or "json") | text | No |
-| `SENTINEL_LOG_FILE` | Optional file path for log output | (none) | No |
+| `GARRISON_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO | No |
+| `GARRISON_LOG_FORMAT` | Output format ("text" or "json") | text | No |
+| `GARRISON_LOG_FILE` | Optional file path for log output | (none) | No |
 | `OPENAI_API_KEY` | OpenAI API key for GPT-4 exploit generation | (none) | For AI features |
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude exploit generation | (none) | For AI features |
 
@@ -1331,13 +1331,13 @@ Sentinel Engine supports the following environment variables for configuration:
 
 ```bash
 # Debug logging to file
-export SENTINEL_LOG_LEVEL=DEBUG
-export SENTINEL_LOG_FILE=/var/log/sentinel.log
-sentinel-engine --target ./contracts
+export GARRISON_LOG_LEVEL=DEBUG
+export GARRISON_LOG_FILE=/var/log/garrison.log
+garrison-engine --target ./contracts
 
 # JSON format for structured logging
-export SENTINEL_LOG_FORMAT=json
-sentinel-engine --target ./contracts 2>&1 | jq
+export GARRISON_LOG_FORMAT=json
+garrison-engine --target ./contracts 2>&1 | jq
 
 # OpenAI for exploit generation
 export OPENAI_API_KEY="sk-..."
@@ -1351,10 +1351,10 @@ python exploit_generator.py --finding-json findings.json
 **Professional Audits:**
 - CyberShield Austin
 - Twitter: [@defiauditccie](https://twitter.com/defiauditccie)
-- Website: [sentinel-engine.io](https://sentinel-engine.io)
+- Website: [garrisonsec.io](https://garrisonsec.io)
 
 **GitHub:**
-- Issues: [github.com/RunTimeAdmin/sentinel-engine/issues](https://github.com/RunTimeAdmin/sentinel-engine/issues)
+- Issues: [github.com/RunTimeAdmin/garrison-engine/issues](https://github.com/RunTimeAdmin/garrison-engine/issues)
 
 ---
 

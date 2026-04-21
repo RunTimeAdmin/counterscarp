@@ -1,5 +1,5 @@
 # ============================================================================
-# SENTINEL ENGINE - PR MODE CONFIGURATION
+# GARRISON ENGINE - PR MODE CONFIGURATION
 # ============================================================================
 # Profile: Fast blocker checks for pull request validation
 # Speed: Fast (blockers only, skip slow fuzzing)
@@ -7,7 +7,7 @@
 # ============================================================================
 
 [engine]
-name = "Sentinel Security Engine"
+name = "Garrison Security Engine"
 version = "3.4.0"
 profile = "pr"
 

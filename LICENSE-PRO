@@ -1,4 +1,4 @@
-SENTINEL ENGINE PRO
+GARRISON ENGINE PRO
 END USER LICENSE AGREEMENT
 
 Version 1.0
@@ -6,20 +6,20 @@ Effective Date: April 19, 2026
 
 IMPORTANT — READ CAREFULLY
 
-This End User License Agreement ("EULA") is a legal agreement between you ("Licensee" or "you") and Sentinel Engine ("Licensor" or "we") for the Pro features of the Sentinel Engine software. By activating or using any Pro feature, you acknowledge that you have read this EULA, understand it, and agree to be bound by its terms. If you do not agree with the terms of this EULA, you may not activate or use any Pro feature.
+This End User License Agreement ("EULA") is a legal agreement between you ("Licensee" or "you") and Garrison Engine ("Licensor" or "we") for the Pro features of the Garrison Engine software. By activating or using any Pro feature, you acknowledge that you have read this EULA, understand it, and agree to be bound by its terms. If you do not agree with the terms of this EULA, you may not activate or use any Pro feature.
 
-The Community Edition of Sentinel Engine, which does not require a license key, is governed by the MIT License (see the LICENSE file). This EULA applies exclusively to the Pro-gated features and functionality described in Section 3.
+The Community Edition of Garrison Engine, which does not require a license key, is governed by the MIT License (see the LICENSE file). This EULA applies exclusively to the Pro-gated features and functionality described in Section 3.
 
 
 ------------------------------------------------------------------------
 SECTION 1. DEFINITIONS
 ------------------------------------------------------------------------
 
-1.1  "Software" means the Sentinel Engine Pro features — the proprietary,
-     license-gated functionality within the sentinel-engine package that
+1.1  "Software" means the Garrison Engine Pro features — the proprietary,
+     license-gated functionality within the garrison-engine package that
      requires a valid License Key to activate, as described in Section 3.
 
-1.2  "Licensor" means Sentinel Engine, the entity that develops, owns, and
+1.2  "Licensor" means Garrison Engine, the entity that develops, owns, and
      distributes the Software.
 
 1.3  "Licensee" means the individual or organization that has purchased or
@@ -27,7 +27,7 @@ SECTION 1. DEFINITIONS
      EULA.
 
 1.4  "License Key" means the unique activation credential
-     (SENTINEL_PRO_LICENSE) issued by Licensor to Licensee, which enables
+     (GARRISON_PRO_LICENSE) issued by Licensor to Licensee, which enables
      access to the Pro features of the Software.
 
 1.5  "Machine" means a unique computing environment identified by a machine
@@ -43,7 +43,7 @@ SECTION 1. DEFINITIONS
      renewed.
 
 1.8  "Community Edition" means the free, open-source components of
-     sentinel-engine that are governed by the MIT License and do not require
+     garrison-engine that are governed by the MIT License and do not require
      a License Key.
 
 
@@ -80,12 +80,12 @@ SECTION 2. GRANT OF LICENSE
 SECTION 3. PRO FEATURES COVERED
 ------------------------------------------------------------------------
 
-This EULA governs the following Pro features of Sentinel Engine, which
+This EULA governs the following Pro features of Garrison Engine, which
 require a valid License Key for activation:
 
   Developer Tier:
   (a) Web Application — Access to the hosted web application at
-      app.sentinel-engine.io for up to 5 scans per month.
+      garrisonsec.io for up to 5 scans per month.
 
   (b) Solana Analyzer — 35 Rust/Anchor security pattern detectors, IDL
       constraint validation, and CPI flow tracing for Solana programs.
@@ -119,7 +119,7 @@ require a valid License Key for activation:
   (j) Shared Workspace — Collaborative audit workspace with shared
       configurations and report templates.
 
-  (k) API Access — Programmatic access to Sentinel Engine audit APIs
+  (k) API Access — Programmatic access to Garrison Engine audit APIs
       for CI/CD integration.
 
   Enterprise Tier (includes all features):
@@ -198,7 +198,7 @@ SECTION 5. SUBSCRIPTION AND PAYMENT
 5.2  Auto-Renewal. Subscriptions auto-renew at the end of each billing
      period (monthly or annual) unless Licensee cancels before the renewal
      date. Cancellation may be performed through the Licensor's website or
-     by contacting support@sentinel-engine.io.
+     by contacting support@garrisonsec.io.
 
 5.3  Refund Policy. Licensee is entitled to a full refund within fourteen
      (14) calendar days of the initial purchase of a Pro subscription. This
@@ -233,7 +233,7 @@ SECTION 6. MACHINE ACTIVATION
      activation limit.
 
 6.3  Deactivation. Licensee may deactivate a Machine by contacting
-     support@sentinel-engine.io or through the Licensor's website. Deactivation
+     support@garrisonsec.io or through the Licensor's website. Deactivation
      frees an activation slot for use on another Machine.
 
 6.4  Abuse Detection. Licensor reserves the right to revoke activations
@@ -283,7 +283,7 @@ SECTION 8. INTELLECTUAL PROPERTY
      shall remain the exclusive property of Licensor. No ownership rights are
      transferred to Licensee under this EULA.
 
-8.2  Community Edition. The Community Edition components of sentinel-engine
+8.2  Community Edition. The Community Edition components of garrison-engine
      are governed by the MIT License as set forth in the LICENSE file. This
      EULA does not modify, restrict, or supersede the rights granted under
      the MIT License for Community Edition components.
@@ -380,7 +380,7 @@ SECTION 11. TERMINATION
      (a) All rights granted to Licensee under this EULA cease immediately.
      (b) Licensee must cease all use of Pro features.
      (c) The Software will revert to the Community Edition (free tier).
-         The sentinel-engine package continues to function, but Pro features
+         The garrison-engine package continues to function, but Pro features
          will display an upgrade prompt instead of executing.
      (d) Sections 1, 4, 8, 9, 10, 11.4, 12, and 13 shall survive
          termination.
@@ -432,7 +432,7 @@ SECTION 13. MODIFICATIONS
 13.3 Rejection of Modifications. If Licensee does not agree with a modified
      EULA, Licensee may terminate this EULA by discontinuing use of the
      Software and requesting a pro-rata refund for the unused portion of the
-     current subscription period by contacting support@sentinel-engine.io within
+     current subscription period by contacting support@garrisonsec.io within
      thirty (30) calendar days of the modification notice.
 
 
@@ -477,16 +477,16 @@ SECTION 14. GENERAL PROVISIONS
 14.7 Contact Information. For questions, notices, or requests relating to
      this EULA, please contact:
 
-     Sentinel Engine
-     Email: support@sentinel-engine.io
-     Website: https://sentinel-engine.io
+     Garrison Engine
+     Email: support@garrisonsec.io
+     Website: https://garrisonsec.io
 
 
 ------------------------------------------------------------------------
 
-By activating or using any Pro feature of Sentinel Engine, you acknowledge
+By activating or using any Pro feature of Garrison Engine, you acknowledge
 that you have read, understood, and agree to be bound by the terms and
 conditions of this End User License Agreement.
 
-Sentinel Engine
+Garrison Engine
 Version 1.0 — April 19, 2026

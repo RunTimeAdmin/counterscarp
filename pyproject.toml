@@ -3,12 +3,12 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sentinel-engine"
-version = "3.4.0"
+name = "garrison-engine"
+version = "4.0.0"
 description = "Smart contract security auditing platform with Pro features"
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{name = "Sentinel Engine Team"}]
+authors = [{name = "Garrison Engine Team"}]
 readme = "README.md"
 keywords = ["security", "audit", "smart-contracts", "solidity", "solana", "blockchain"]
 classifiers = [
@@ -31,10 +31,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://sentinel-engine.io"
-Repository = "https://github.com/RunTimeAdmin/sentinel-engine"
-Documentation = "https://github.com/RunTimeAdmin/sentinel-engine/tree/main/docs"
-"Bug Tracker" = "https://github.com/RunTimeAdmin/sentinel-engine/issues"
+Homepage = "https://garrisonsec.io"
+Repository = "https://github.com/RunTimeAdmin/garrison-engine"
+Documentation = "https://github.com/RunTimeAdmin/garrison-engine/tree/main/docs"
+"Bug Tracker" = "https://github.com/RunTimeAdmin/garrison-engine/issues"
 
 [project.optional-dependencies]
 ai = [
@@ -64,9 +64,9 @@ dev = [
 ]
 
 [project.scripts]
-sentinel-engine = "orchestrator:main"
-sentinel = "orchestrator:main"
-sentinel-generate-pipeline = "pipeline_generator:main"
+garrison-engine = "orchestrator:main"
+garrison = "orchestrator:main"
+garrison-generate-pipeline = "pipeline_generator:main"
 
 [tool.pytest.ini_options]
 # Migrated from pytest.ini - this file can now be removed

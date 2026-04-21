@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Configuration Loader for Sentinel Engine
-Parses sentinel.toml and provides typed config access
+Configuration Loader for Garrison Engine
+Parses garrison.toml and provides typed config access
 """
 
 from __future__ import annotations
@@ -15,13 +15,13 @@ from pathlib import Path
 # Import logger and exceptions
 try:
     from logger import get_logger
-    from exceptions import SentinelValidationError, SentinelConfigError
+    from exceptions import GarrisonValidationError, GarrisonConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    SentinelValidationError = None
-    SentinelConfigError = None
+    GarrisonValidationError = None
+    GarrisonConfigError = None
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -56,7 +56,7 @@ class EngineConfig:
         fail_on_severity: Minimum severity level to fail on.
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
-    name: str = "Sentinel Security Engine"
+    name: str = "Garrison Security Engine"
     version: str = "3.4.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
@@ -533,7 +533,7 @@ class AIConfig:
     embedding_backend: str = "local"
     llm_backend: str = "none"
     openai_model: str = "gpt-4-turbo-preview"
-    rag_index_path: str = ".sentinel/rag_index.json"
+    rag_index_path: str = ".garrison/rag_index.json"
     top_k: int = 5
     auto_enrich: bool = False
 
@@ -547,7 +547,7 @@ class PluginsConfig:
         dirs: List of directories to scan for plugins.
     """
     enabled: bool = True
-    dirs: List[str] = field(default_factory=lambda: [".sentinel/plugins"])
+    dirs: List[str] = field(default_factory=lambda: [".garrison/plugins"])
 
 
 @dataclass
@@ -561,7 +561,7 @@ class LicenseConfig:
 
 
 @dataclass
-class SentinelConfig:
+class GarrisonConfig:
     """Root configuration object.
 
     Attributes:
@@ -631,28 +631,28 @@ class SentinelConfig:
         return None
 
 
-def load_config(config_path: Optional[str] = None) -> SentinelConfig:
+def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
     """
-    Load configuration from sentinel.toml.
+    Load configuration from garrison.toml.
 
     Args:
         config_path: Path to config file. If None, searches current dir and
             parent directories.
 
     Returns:
-        SentinelConfig object with loaded settings.
+        GarrisonConfig object with loaded settings.
     """
     if toml is None:
         logger.error("TOML parser not available, using default config")
-        return SentinelConfig()
+        return GarrisonConfig()
 
     # Find config file
     if config_path is None:
         config_path = find_config_file()
 
     if not config_path or not os.path.exists(config_path):
-        logger.info("No sentinel.toml found, using default configuration")
-        return SentinelConfig()
+        logger.info("No garrison.toml found, using default configuration")
+        return GarrisonConfig()
 
     logger.info(f"Loading configuration from: {config_path}")
 
@@ -671,30 +671,30 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
             data = toml.load(f)
     except FileNotFoundError:
         logger.warning("Config file not found (skipping): %s", config_path)
-        return SentinelConfig()
+        return GarrisonConfig()
     except (PermissionError, IOError) as e:
         logger.error("Cannot read config file '%s': %s", config_path, e)
-        return SentinelConfig()
+        return GarrisonConfig()
     except _toml_decode_error as e:
         logger.error(
             "TOML syntax error in config file '%s': %s",
             config_path,
             e,
         )
-        if SentinelConfigError:
-            raise SentinelConfigError(
+        if GarrisonConfigError:
+            raise GarrisonConfigError(
                 "Failed to parse configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
-        return SentinelConfig()
+        return GarrisonConfig()
     except Exception as e:
         logger.error("Unexpected error reading config '%s' (%s): %s", config_path, type(e).__name__, e)
-        if SentinelConfigError:
-            raise SentinelConfigError(
+        if GarrisonConfigError:
+            raise GarrisonConfigError(
                 "Failed to read configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
-        return SentinelConfig()
+        return GarrisonConfig()
 
     # Validate config schema and log warnings
     validation_warnings = validate_config(data)
@@ -703,13 +703,13 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         for warning in validation_warnings:
             logger.warning(f"  - {warning}")
 
-    config = SentinelConfig()
+    config = GarrisonConfig()
 
     # Parse engine config
     if 'engine' in data:
         eng = data['engine']
         config.engine = EngineConfig(
-            name=eng.get('name', 'Sentinel Security Engine'),
+            name=eng.get('name', 'Garrison Security Engine'),
             version=eng.get('version', '3.4.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
@@ -966,7 +966,7 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
             llm_backend=ai.get('llm_backend', 'none'),
             openai_model=ai.get('openai_model', 'gpt-4-turbo-preview'),
             rag_index_path=ai.get(
-                'rag_index_path', '.sentinel/rag_index.json'
+                'rag_index_path', '.garrison/rag_index.json'
             ),
             top_k=ai.get('top_k', 5),
             auto_enrich=ai.get('auto_enrich', False)
@@ -977,7 +977,7 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         plug = data['plugins']
         config.plugins = PluginsConfig(
             enabled=plug.get('enabled', True),
-            dirs=plug.get('dirs', ['.sentinel/plugins'])
+            dirs=plug.get('dirs', ['.garrison/plugins'])
         )
 
     # Parse license config
@@ -1001,13 +1001,13 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
 
 def find_config_file() -> Optional[str]:
     """
-    Search for sentinel.toml in current directory and parent directories.
+    Search for garrison.toml in current directory and parent directories.
     """
     current_dir = Path.cwd()
 
     # Search up to 5 levels up
     for _ in range(5):
-        config_path = current_dir / "sentinel.toml"
+        config_path = current_dir / "garrison.toml"
         if config_path.exists():
             return str(config_path)
         current_dir = current_dir.parent
@@ -1207,7 +1207,7 @@ def validate_config(config: dict) -> list[str]:
     return warnings
 
 
-def print_config_summary(config: SentinelConfig) -> None:
+def print_config_summary(config: GarrisonConfig) -> None:
     """Pretty-print configuration summary."""
     logger.debug("Printing configuration summary")
     print("\n" + "="*60)
@@ -1251,9 +1251,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Test Sentinel configuration loader"
+        description="Test Garrison configuration loader"
     )
-    parser.add_argument("--config", help="Path to sentinel.toml")
+    parser.add_argument("--config", help="Path to garrison.toml")
     args = parser.parse_args()
 
     config = load_config(args.config)

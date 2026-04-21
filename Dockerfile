@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# THE SENTINEL ENGINE - DOCKERFILE
+# THE GARRISON ENGINE - DOCKERFILE
 # Multi-Chain Smart Contract Security Auditing Toolkit
 # ------------------------------------------------------------------------------
 # Stage 1: Build stage for Rust/Go tools
@@ -57,7 +57,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. INSTALL PYTHON TOOLS
-# Install core dependencies for the Sentinel Engine
+# Install core dependencies for the Garrison Engine
 RUN pip install --no-cache-dir \
     slither-analyzer==0.11.5 \
     mythril==0.24.8 \
@@ -97,7 +97,7 @@ COPY --from=builder /root/go/bin/medusa /usr/local/bin/medusa
 # 6. SETUP WORKSPACE
 WORKDIR /app
 
-# Copy all Sentinel Engine scripts
+# Copy all Garrison Engine scripts
 COPY orchestrator.py .
 COPY red_team_scan.py .
 COPY supply_chain_check.py .
@@ -139,7 +139,7 @@ RUN python3 --version && \
     pip list | grep slither-analyzer && \
     aderyn --version && \
     medusa --version && \
-    echo "✓ Sentinel Engine core dependencies installed"
+    echo "✓ Garrison Engine core dependencies installed"
 
 # 8. HEALTHCHECK DIRECTIVE
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
@@ -154,17 +154,17 @@ CMD ["--help"]
 # USAGE EXAMPLES:
 #
 # Build:
-#   docker build -t sentinel-engine .
+#   docker build -t garrison-engine .
 #
 # Scan EVM contract:
-#   docker run --rm -v $(pwd):/scan sentinel-engine --target /scan
+#   docker run --rm -v $(pwd):/scan garrison-engine --target /scan
 #
 # Threat intel (EVM):
-#   docker run --rm -v $(pwd):/scan sentinel-engine python3 threat_intel.py /scan/contracts/Vault.sol
+#   docker run --rm -v $(pwd):/scan garrison-engine python3 threat_intel.py /scan/contracts/Vault.sol
 #
 # Threat intel (Solana):
-#   docker run --rm -v $(pwd):/scan sentinel-engine python3 solana_intel.py /scan/programs/lib.rs
+#   docker run --rm -v $(pwd):/scan garrison-engine python3 solana_intel.py /scan/programs/lib.rs
 #
 # Interactive shell:
-#   docker run --rm -it -v $(pwd):/scan sentinel-engine /bin/bash
+#   docker run --rm -it -v $(pwd):/scan garrison-engine /bin/bash
 # ------------------------------------------------------------------------------

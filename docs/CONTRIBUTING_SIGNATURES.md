@@ -1,8 +1,8 @@
 # Contributing Protocol Signatures
 
-Protocol signatures are the fingerprints Sentinel Engine uses to detect when a contract is a fork or close derivative of a known protocol (Uniswap, Aave, Compound, etc.). By matching function selectors, events, storage variable names, and interface markers, the engine can automatically surface inherited vulnerabilities — even when the source is renamed or partially modified.
+Protocol signatures are the fingerprints Garrison Engine uses to detect when a contract is a fork or close derivative of a known protocol (Uniswap, Aave, Compound, etc.). By matching function selectors, events, storage variable names, and interface markers, the engine can automatically surface inherited vulnerabilities — even when the source is renamed or partially modified.
 
-Adding a new signature means every future scan against that protocol family gets free inherited-risk analysis, benefiting the entire Sentinel community.
+Adding a new signature means every future scan against that protocol family gets free inherited-risk analysis, benefiting the entire Garrison community.
 
 ---
 
@@ -45,7 +45,7 @@ Each signature file must be a valid JSON object with the following fields:
 3. Run a scan — community signatures in that directory are **auto-loaded** on every scan with no code changes required.
 
 ```
-sentinel scan ./contracts --fingerprint
+garrison scan ./contracts --fingerprint
 ```
 
 The loader picks up every `*.json` file in `data/community_signatures/` at startup.
@@ -115,7 +115,7 @@ After adding your file, verify it loads and matches as expected:
 
 ```bash
 # Run fingerprint scan against a known contract
-sentinel scan ./path/to/contract.sol --fingerprint
+garrison scan ./path/to/contract.sol --fingerprint
 
 # Or run the scanner module directly
 python fingerprint_scanner.py ./path/to/contract.sol

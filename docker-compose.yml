@@ -2,13 +2,13 @@ version: '3.8'
 
 services:
   # =============================================================================
-  # THE SENTINEL ENGINE - DOCKER COMPOSE CONFIGURATION
+  # THE GARRISON ENGINE - DOCKER COMPOSE CONFIGURATION
   # =============================================================================
   
   audit:
     build: .
-    image: tokenaudit/sentinel-engine:latest
-    container_name: sentinel-engine
+    image: tokenaudit/garrison-engine:latest
+    container_name: garrison-engine
     
     volumes:
       # Mount current directory to /scan inside container
@@ -53,8 +53,8 @@ services:
   # Heuristic Scanner Only
   heuristic-scan:
     build: .
-    image: tokenaudit/sentinel-engine:latest
-    container_name: sentinel-heuristic
+    image: tokenaudit/garrison-engine:latest
+    container_name: garrison-heuristic
     volumes:
       - .:/scan
     command: ["python3", "heuristic_scanner.py", "/scan"]
@@ -62,8 +62,8 @@ services:
   # Threat Intelligence (Auto-detects EVM vs Solana)
   threat-intel:
     build: .
-    image: tokenaudit/sentinel-engine:latest
-    container_name: sentinel-intel
+    image: tokenaudit/garrison-engine:latest
+    container_name: garrison-intel
     volumes:
       - .:/scan
     entrypoint: ["python3", "threat_intel.py"]
@@ -72,8 +72,8 @@ services:
   # Liar Detector (Intent Checker)
   liar-detector:
     build: .
-    image: tokenaudit/sentinel-engine:latest
-    container_name: sentinel-intent
+    image: tokenaudit/garrison-engine:latest
+    container_name: garrison-intent
     volumes:
       - .:/scan
     entrypoint: ["python3", "intent_check.py"]
@@ -82,8 +82,8 @@ services:
   # Access Matrix (God Mode Detector)
   access-matrix:
     build: .
-    image: tokenaudit/sentinel-engine:latest
-    container_name: sentinel-access
+    image: tokenaudit/garrison-engine:latest
+    container_name: garrison-access
     volumes:
       - .:/scan
     entrypoint: ["python3", "access_matrix.py"]

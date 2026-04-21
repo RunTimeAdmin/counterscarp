@@ -1,4 +1,4 @@
-"""Server-side License Validation API for Sentinel Engine.
+"""Server-side License Validation API for Garrison Engine.
 
 Provides endpoints for license key validation, deactivation,
 and info lookups.  These routes are consumed by the client-side

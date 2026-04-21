@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Container health check verifying all analyzer tools on startup
 - `--preflight` CLI flag to validate tool versions before scanning
 - Confidence scoring (1-10) for all 29 heuristic rules
-- Inline suppression comments (`// sentinel-ignore: RULE_ID [reason]`)
+- Inline suppression comments (`// garrison-suppress: RULE_ID [reason]`)
 - `--min-confidence` CLI filter to set minimum confidence threshold
 - `--min-severity` CLI filter to set minimum severity threshold
 - `.dockerignore` for optimized Docker builds
@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dockerfile now pins exact versions for all security analysis tools
 - docker-compose.yml includes container health checks
 - Report output shows confidence scores in executive summary, top-10 table, and finding details
-- Config file (`sentinel.toml`) supports `min_confidence` and `min_severity` under `[heuristics]`
+- Config file (`garrison.toml`) supports `min_confidence` and `min_severity` under `[heuristics]`
 
 ## [3.2.0] - 2026-04-20
 
@@ -115,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyPI package distribution
 - 21 integrated security analyzers
 - 31 EVM heuristic rules + 35 Solana vulnerability patterns
-- Configurable execution profiles (sentinel.toml, sentinel-audit.toml, sentinel-pr.toml, sentinel-bounty.toml)
+- Configurable execution profiles (garrison.toml, garrison-audit.toml, garrison-pr.toml, garrison-bounty.toml)
 - Professional audit report generation (HTML, Markdown, SARIF, JSON)
 - AI-powered RAG enrichment with customer-managed OpenAI API key
 

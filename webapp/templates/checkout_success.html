@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Purchase Complete - Sentinel Engine{% endblock %}
+{% block title %}Purchase Complete - Garrison Engine{% endblock %}
 
 {% block content %}
 <style>
@@ -152,11 +152,11 @@
             <div class="success-icon">&#10004;</div>
             <h1 class="success-header">Purchase Complete!</h1>
             <p class="success-subtitle">
-                Your Sentinel Engine license is ready.
+                Your Garrison Engine license is ready.
             </p>
 
             <div class="license-card">
-                <h3>Your Sentinel Engine License</h3>
+                <h3>Your Garrison Engine License</h3>
                 <div class="license-tier">{{ tier|upper }} Tier</div>
 
                 <div class="license-key-box">
@@ -173,12 +173,12 @@
                         <div class="option-label">
                             Option 1: Environment Variable
                         </div>
-                        <div class="option-code" id="envCmd">export SENTINEL_PRO_LICENSE={{ license_key }}</div>
+                        <div class="option-code" id="envCmd">export GARRISON_PRO_LICENSE={{ license_key }}</div>
                     </div>
 
                     <div class="activation-option">
                         <div class="option-label">
-                            Option 2: Config File (sentinel.toml)
+                            Option 2: Config File (garrison.toml)
                         </div>
                         <div class="option-code">[license]
 key = "{{ license_key }}"</div>
@@ -205,9 +205,9 @@ key = "{{ license_key }}"</div>
                 </p>
                 <p>
                     If the issue persists, contact
-                    <a href="mailto:support@sentinel-engine.io"
+                    <a href="mailto:support@garrisonsec.io"
                        style="color:#667eea">
-                        support@sentinel-engine.io
+                        support@garrisonsec.io
                     </a>.
                 </p>
             </div>

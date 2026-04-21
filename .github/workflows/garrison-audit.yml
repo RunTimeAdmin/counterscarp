@@ -1,4 +1,4 @@
-name: Sentinel Security Audit
+name: Garrison Security Audit
 
 on:
   push:
@@ -114,11 +114,11 @@ jobs:
           solc-select install 0.8.19
           solc-select use 0.8.19
       
-      - name: Run Sentinel (Blocker Mode)
+      - name: Run Garrison (Blocker Mode)
         id: blocker_scan
         run: |
           if [ -d "./contracts" ]; then
-            python orchestrator.py --target ./contracts --config sentinel-pr.toml --report > scan_output.txt 2>&1 || true
+            python orchestrator.py --target ./contracts --config garrison-pr.toml --report > scan_output.txt 2>&1 || true
           else
             echo "No contracts directory found, skipping analysis" > scan_output.txt
           fi
@@ -155,12 +155,12 @@ jobs:
           }
 
           # Save SARIF report (ALWAYS produces valid SARIF with runs array)
-          save_sarif_report(findings, 'sentinel-report.sarif', metadata)
+          save_sarif_report(findings, 'garrison-report.sarif', metadata)
           print(f'Generated SARIF report with {len(findings)} findings')
 
           # Validate the generated SARIF
           try:
-              with open('sentinel-report.sarif', 'r') as f:
+              with open('garrison-report.sarif', 'r') as f:
                   data = json.load(f)
               assert 'runs' in data and data['runs'] is not None, 'Invalid SARIF: missing runs'
               assert isinstance(data['runs'], list), 'Invalid SARIF: runs is not an array'
@@ -173,7 +173,7 @@ jobs:
                   "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
                   "runs": []
               }
-              with open('sentinel-report.sarif', 'w') as f:
+              with open('garrison-report.sarif', 'w') as f:
                   json.dump(minimal_sarif, f, indent=2)
               print('Wrote minimal valid SARIF as fallback')
           EOF
@@ -185,12 +185,12 @@ jobs:
           import json
           import sys
           try:
-              with open('sentinel-report.sarif', 'r') as f:
+              with open('garrison-report.sarif', 'r') as f:
                   data = json.load(f)
               if 'runs' not in data or data['runs'] is None:
                   print('ERROR: SARIF missing runs array')
                   # Write minimal valid SARIF
-                  with open('sentinel-report.sarif', 'w') as f:
+                  with open('garrison-report.sarif', 'w') as f:
                       json.dump({'version': '2.1.0', 'runs': []}, f)
                   print('Wrote minimal valid SARIF')
               else:
@@ -198,17 +198,17 @@ jobs:
           except Exception as e:
               print(f'ERROR: {e}')
               # Write minimal valid SARIF on any error
-              with open('sentinel-report.sarif', 'w') as f:
+              with open('garrison-report.sarif', 'w') as f:
                   json.dump({'version': '2.1.0', 'runs': []}, f)
               print('Wrote minimal valid SARIF after error')
           "
 
       - name: Upload SARIF to GitHub Security Tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always() && hashFiles('sentinel-report.sarif') != ''
+        if: always() && hashFiles('garrison-report.sarif') != ''
         with:
-          sarif_file: sentinel-report.sarif
-          category: sentinel-engine
+          sarif_file: garrison-report.sarif
+          category: garrison-engine
       
       - name: Check for Blockers
         id: check_blockers
@@ -333,7 +333,7 @@ jobs:
         continue-on-error: true
         run: |
           if [ -d "./contracts" ]; then
-            python heuristic_scanner.py ./contracts --config sentinel-pr.toml > advisory_output.txt 2>&1 || true
+            python heuristic_scanner.py ./contracts --config garrison-pr.toml > advisory_output.txt 2>&1 || true
           else
             echo "No contracts directory found, skipping heuristics" > advisory_output.txt
           fi
@@ -395,7 +395,7 @@ jobs:
             
             comment += '---\n';
             comment += '*These are advisory findings that **do not block** the PR. Consider addressing them in a follow-up.*\n';
-            comment += '*Powered by [Sentinel Security Engine](https://github.com/CyberShieldAustin/sentinel-engine)*';
+            comment += '*Powered by [Garrison Security Engine](https://github.com/RunTimeAdmin/garrison-engine)*';
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,

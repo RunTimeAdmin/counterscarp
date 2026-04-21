@@ -1,6 +1,6 @@
-# Sentinel Engine Architecture
+# Garrison Engine Architecture
 
-A comprehensive visual documentation of the Sentinel Security Engine's architecture, data flows, and component relationships.
+A comprehensive visual documentation of the Garrison Security Engine's architecture, data flows, and component relationships.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ A comprehensive visual documentation of the Sentinel Security Engine's architect
 
 ## 1. System Architecture Overview
 
-The Sentinel Engine follows a modular, pipeline-based architecture with a central orchestrator coordinating multiple specialized security analyzers. The system is designed to be extensible, allowing optional analyzers to be integrated based on project requirements.
+The Garrison Engine follows a modular, pipeline-based architecture with a central orchestrator coordinating multiple specialized security analyzers. The system is designed to be extensible, allowing optional analyzers to be integrated based on project requirements.
 
 ```mermaid
 flowchart TD
@@ -384,11 +384,11 @@ flowchart LR
 
 ## 4. Exception Hierarchy
 
-Sentinel Engine uses a custom exception hierarchy for structured error handling. All exceptions inherit from `SentinelError` and support optional details dictionaries for structured context.
+Garrison Engine uses a custom exception hierarchy for structured error handling. All exceptions inherit from `GarrisonError` and support optional details dictionaries for structured context.
 
 ```mermaid
 classDiagram
-    class SentinelError {
+    class GarrisonError {
         +str message
         +dict details
         +__init__(message, details)
@@ -396,54 +396,54 @@ classDiagram
         +to_dict() dict
     }
 
-    class SentinelConfigError {
+    class GarrisonConfigError {
         +Configuration loading/validation errors
     }
 
-    class SentinelAnalysisError {
+    class GarrisonAnalysisError {
         +Security analyzer failures
     }
 
-    class SentinelAPIError {
+    class GarrisonAPIError {
         +External API call failures
     }
 
-    class SentinelReportError {
+    class GarrisonReportError {
         +Report generation failures
     }
 
-    class SentinelToolNotFoundError {
+    class GarrisonToolNotFoundError {
         +Required external tool not found
     }
 
-    class SentinelValidationError {
+    class GarrisonValidationError {
         +Input validation failures
     }
 
-    class SentinelTimeoutError {
+    class GarrisonTimeoutError {
         +Operation timeout errors
     }
 
-    SentinelError <|-- SentinelConfigError
-    SentinelError <|-- SentinelAnalysisError
-    SentinelError <|-- SentinelAPIError
-    SentinelError <|-- SentinelReportError
-    SentinelError <|-- SentinelToolNotFoundError
-    SentinelError <|-- SentinelValidationError
-    SentinelError <|-- SentinelTimeoutError
+    GarrisonError <|-- GarrisonConfigError
+    GarrisonError <|-- GarrisonAnalysisError
+    GarrisonError <|-- GarrisonAPIError
+    GarrisonError <|-- GarrisonReportError
+    GarrisonError <|-- GarrisonToolNotFoundError
+    GarrisonError <|-- GarrisonValidationError
+    GarrisonError <|-- GarrisonTimeoutError
 ```
 
 ### Exception Usage Examples
 
 | Exception | Usage Context | Example Details |
-|-----------|---------------|-----------------|
-| `SentinelConfigError` | Invalid TOML syntax, missing required keys | `{"path": "config.toml", "line": 42}` |
-| `SentinelAnalysisError` | Slither/Aderyn/Mythril execution failure | `{"tool": "slither", "contract": "Token.sol"}` |
-| `SentinelAPIError` | OSV.dev, threat intel API failures | `{"api": "osv", "status_code": 503}` |
-| `SentinelReportError` | HTML/MD/SARIF generation failure | `{"format": "html", "output_path": "/reports"}` |
-| `SentinelToolNotFoundError` | Missing external tool in PATH | `{"tool": "mythril", "install_cmd": "pip install mythril"}` |
-| `SentinelValidationError` | Invalid input parameters | `{"field": "address", "value": "0x123"}` |
-| `SentinelTimeoutError` | Analysis exceeding time limits | `{"operation": "symbolic_analysis", "timeout_seconds": 300}` |
+|-----------|---------------|------------------|
+| `GarrisonConfigError` | Invalid TOML syntax, missing required keys | `{"path": "config.toml", "line": 42}` |
+| `GarrisonAnalysisError` | Slither/Aderyn/Mythril execution failure | `{"tool": "slither", "contract": "Token.sol"}` |
+| `GarrisonAPIError` | OSV.dev, threat intel API failures | `{"api": "osv", "status_code": 503}` |
+| `GarrisonReportError` | HTML/MD/SARIF generation failure | `{"format": "html", "output_path": "/reports"}` |
+| `GarrisonToolNotFoundError` | Missing external tool in PATH | `{"tool": "mythril", "install_cmd": "pip install mythril"}` |
+| `GarrisonValidationError` | Invalid input parameters | `{"field": "address", "value": "0x123"}` |
+| `GarrisonTimeoutError` | Analysis exceeding time limits | `{"operation": "symbolic_analysis", "timeout_seconds": 300}` |
 
 ---
 
@@ -454,10 +454,10 @@ The configuration system uses a layered approach with base configuration and pro
 ```mermaid
 flowchart LR
     subgraph ConfigFiles["Config Files"]
-        BASE["sentinel.toml"]
-        PR["sentinel-pr.toml"]
-        AUDIT["sentinel-audit.toml"]
-        BOUNTY["sentinel-bounty.toml"]
+        BASE["garrison.toml"]
+        PR["garrison-pr.toml"]
+        AUDIT["garrison-audit.toml"]
+        BOUNTY["garrison-bounty.toml"]
     end
 
     subgraph Loader["Config Loader"]
@@ -466,7 +466,7 @@ flowchart LR
     end
 
     subgraph DataClasses["Dataclasses"]
-        ROOT["SentinelConfig"]
+        ROOT["GarrisonConfig"]
 
         subgraph Sections["Config Sections"]
             ENGINE["Engine"]
@@ -534,11 +534,11 @@ flowchart LR
 
 ## 6. Execution Profiles Comparison
 
-Sentinel Engine provides three pre-configured execution profiles optimized for different use cases.
+Garrison Engine provides three pre-configured execution profiles optimized for different use cases.
 
 | Feature | PR Mode | Audit Mode | Bounty Mode |
 |---------|---------|------------|-------------|
-| **Config file** | `sentinel-pr.toml` | `sentinel-audit.toml` | `sentinel-bounty.toml` |
+| **Config file** | `garrison-pr.toml` | `garrison-audit.toml` | `garrison-bounty.toml` |
 | **Target time** | < 2 min | 10-30 min | 1-2 hours |
 | **Slither** | Yes | Yes | Yes |
 | **Aderyn** | No | Yes | Yes |
@@ -637,7 +637,7 @@ class Finding:
 
 ## 8. Innovative Features Architecture
 
-This section details how the 7 innovative features integrate with the core Sentinel Engine architecture.
+This section details how the 7 innovative features integrate with the core Garrison Engine architecture.
 
 ### 8.1 AI Audit Copilot (RAG System)
 
@@ -802,7 +802,7 @@ Multi-platform pipeline generation for security automation.
 ```mermaid
 flowchart LR
     subgraph Config["Config"]
-        TOML["sentinel.toml"]
+        TOML["garrison.toml"]
         PROFILES["Profiles"]
     end
 
@@ -947,9 +947,9 @@ flowchart LR
 | `knowledge_fetcher.py` | Threat intelligence | Fetch from C4, Immunefi, Solodit |
 | `solana_intel.py` | Solana-specific intel | Fetch from Neodyme, OtterSec, Sec3 |
 | `report_generator.py` | Professional reports | `create_audit_report()`, `Finding` |
-| `config_loader.py` | Configuration management | `load_config()`, `SentinelConfig` |
+| `config_loader.py` | Configuration management | `load_config()`, `GarrisonConfig` |
 | `logger.py` | Structured logging | `get_logger()` |
-| `exceptions.py` | Custom exceptions | `SentinelError` hierarchy |
+| `exceptions.py` | Custom exceptions | `GarrisonError` hierarchy |
 | `http_utils.py` | Resilient HTTP client | Retry, backoff, rate limiting |
 | `gui.py` | Tkinter GUI interface | GUI application |
 | `intent_check.py` | Liar Detector | NatSpec validation |

@@ -1,10 +1,10 @@
-# Getting Started with Sentinel Engine
+# Getting Started with Garrison Engine
 
-> **Try it online:** [https://app.sentinel-engine.io](https://app.sentinel-engine.io) — Run audits in your browser, no installation required.
+> **Try it online:** [https://garrisonsec.io](https://garrisonsec.io) — Run audits in your browser, no installation required.
 
 ## Table of Contents
 
-- [What is Sentinel Engine?](#what-is-sentinel-engine)
+- [What is Garrison Engine?](#what-is-garrison-engine)
 - [Try It Online](#try-it-online)
 - [Installation](#installation)
 - [Your First Audit in 60 Seconds](#your-first-audit-in-60-seconds)
@@ -14,19 +14,19 @@
 
 ---
 
-## What is Sentinel Engine?
+## What is Garrison Engine?
 
-Sentinel Engine is a production-ready smart contract security auditing platform that combines static analysis, heuristic pattern scanning, fuzzing, symbolic execution, and AI-powered RAG enrichment into a single pipeline. It supports both EVM (Solidity) and Solana (Rust/Anchor) smart contracts, providing 31 EVM heuristic rules, 35 Solana vulnerability patterns, and integration with industry-standard tools like Slither, Aderyn, Medusa, and Mythril.
+Garrison Engine is a production-ready smart contract security auditing platform that combines static analysis, heuristic pattern scanning, fuzzing, symbolic execution, and AI-powered RAG enrichment into a single pipeline. It supports both EVM (Solidity) and Solana (Rust/Anchor) smart contracts, providing 31 EVM heuristic rules, 35 Solana vulnerability patterns, and integration with industry-standard tools like Slither, Aderyn, Medusa, and Mythril.
 
-Whether you're running a quick PR check, a full audit, or a bug bounty sweep, Sentinel Engine adapts to your workflow through configurable execution profiles and a composable analysis pipeline.
+Whether you're running a quick PR check, a full audit, or a bug bounty sweep, Garrison Engine adapts to your workflow through configurable execution profiles and a composable analysis pipeline.
 
 ---
 
 ## Try It Online
 
-The fastest way to try Sentinel Engine is via the live web app:
+The fastest way to try Garrison Engine is via the live web app:
 
-**[https://app.sentinel-engine.io](https://app.sentinel-engine.io)**
+**[https://garrisonsec.io](https://garrisonsec.io)**
 
 The online demo allows you to:
 - Upload and audit `.sol` or `.rs` files
@@ -40,7 +40,7 @@ The online demo allows you to:
 
 ### PyPI Package
 
-Sentinel Engine is available on PyPI: [https://pypi.org/project/sentinel-engine/](https://pypi.org/project/sentinel-engine/)
+Garrison Engine is available on PyPI: [https://pypi.org/project/garrison-engine/](https://pypi.org/project/garrison-engine/)
 
 ### Requirements
 
@@ -50,34 +50,34 @@ Sentinel Engine is available on PyPI: [https://pypi.org/project/sentinel-engine/
 ### Core Installation
 
 ```bash
-pip install sentinel-engine
+pip install garrison-engine
 ```
 
 ### Installation with Optional Features
 
 ```bash
 # Web UI (FastAPI + uvicorn)
-pip install "sentinel-engine[web]"
+pip install "garrison-engine[web]"
 
 # AI/RAG enrichment (local embeddings, no API needed)
-pip install "sentinel-engine[ai]"
+pip install "garrison-engine[ai]"
 
 # Everything at once
-pip install "sentinel-engine[web,ai]"
+pip install "garrison-engine[web,ai]"
 
 # Development dependencies (pytest, mypy, benchmarks)
-pip install "sentinel-engine[dev]"
+pip install "garrison-engine[dev]"
 ```
 
 ### Verify Installation
 
 ```bash
-sentinel --help
+garrison --help
 # or
-sentinel-engine --help
+garrison-engine --help
 ```
 
-**Tip:** The `sentinel` and `sentinel-engine` commands are interchangeable aliases.
+**Tip:** The `garrison` and `garrison-engine` commands are interchangeable aliases.
 
 ---
 
@@ -86,7 +86,7 @@ sentinel-engine --help
 ### 1. Scan a Solidity project
 
 ```bash
-sentinel --target ./contracts
+garrison --target ./contracts
 ```
 
 This runs the default pipeline: heuristic pattern scan + Slither static analysis + supply chain check.
@@ -94,7 +94,7 @@ This runs the default pipeline: heuristic pattern scan + Slither static analysis
 ### 2. Generate a professional report
 
 ```bash
-sentinel --target ./contracts --report --project-name "MyProtocol"
+garrison --target ./contracts --report --project-name "MyProtocol"
 ```
 
 This produces both an HTML and Markdown audit report with risk scoring.
@@ -102,10 +102,10 @@ This produces both an HTML and Markdown audit report with risk scoring.
 ### 3. Use a config file
 
 ```bash
-sentinel --target ./contracts --config sentinel.toml
+garrison --target ./contracts --config garrison.toml
 ```
 
-Create a `sentinel.toml` in your project root to customize rules, suppressions, and analysis behavior. See the [Configuration Guide](CONFIGURATION.md) for the full reference.
+Create a `garrison.toml` in your project root to customize rules, suppressions, and analysis behavior. See the [Configuration Guide](CONFIGURATION.md) for the full reference.
 
 ### Minimal Config Example
 
@@ -125,8 +125,8 @@ enabled = true
 ### Start the Development Server
 
 ```bash
-pip install "sentinel-engine[web]"
-cd sentinel-engine
+pip install "garrison-engine[web]"
+cd garrison-engine
 uvicorn webapp.main:app --reload --port 8001
 ```
 
@@ -148,21 +148,21 @@ For production deployment with nginx + SSL, see the [Deployment Guide](DEPLOYMEN
 
 ## Pro License Activation
 
-Sentinel Engine ships with both free and pro features in a single package. Pro features require a valid license key to unlock.
+Garrison Engine ships with both free and pro features in a single package. Pro features require a valid license key to unlock.
 
 ### Setting Your License Key
 
 **Option 1: Environment variable**
 
 ```bash
-export SENTINEL_PRO_LICENSE=SE-PRO-XXXXXXXXXXXX
+export GARRISON_PRO_LICENSE=SE-PRO-XXXXXXXXXXXX
 ```
 
 Replace the prefix based on your tier: `SE-DEV-xxx`, `SE-PRO-xxx`, `SE-TEAM-xxx`, or `SE-ENT-xxx`.
 
 **Option 2: Configuration file**
 
-Add a `[license]` section to your `sentinel.toml`:
+Add a `[license]` section to your `garrison.toml`:
 
 ```toml
 [license]
@@ -173,7 +173,7 @@ The environment variable takes priority over the config file.
 
 ### License Tiers
 
-Sentinel Engine offers five license tiers:
+Garrison Engine offers five license tiers:
 
 | Tier | Price | Key Prefix | Features |
 |------|-------|------------|----------|
@@ -187,7 +187,7 @@ Sentinel Engine offers five license tiers:
 
 **Developer tier** unlocks:
 
-- **Web App** — Full web-based audit interface at app.sentinel-engine.io
+- **Web App** — Full web-based audit interface at garrisonsec.io
 - **Solana Analyzer** — 35 Rust/Anchor security patterns with IDL validation
 - **Branded HTML/SARIF Reports** — Professional branded audit report output
 
@@ -207,7 +207,7 @@ Sentinel Engine offers five license tiers:
 
 ### Getting a License
 
-Visit [app.sentinel-engine.io/pricing](https://app.sentinel-engine.io/pricing) to purchase a Developer, Pro, Team, or Enterprise license.
+Visit [garrisonsec.io/pricing](https://garrisonsec.io/pricing) to purchase a Developer, Pro, Team, or Enterprise license.
 
 ---
 
@@ -216,7 +216,7 @@ Visit [app.sentinel-engine.io/pricing](https://app.sentinel-engine.io/pricing) t
 | Guide | Description |
 |-------|-------------|
 | [CLI Reference](CLI_REFERENCE.md) | All commands, flags, profiles, and exit codes |
-| [Configuration](CONFIGURATION.md) | Full sentinel.toml reference with examples |
+| [Configuration](CONFIGURATION.md) | Full garrison.toml reference with examples |
 | [Rules Catalog](RULES_CATALOG.md) | All 31 EVM and 35 Solana security rules |
 | [Web App Guide](WEB_APP_GUIDE.md) | Web UI features and API endpoints |
 | [Deployment](DEPLOYMENT.md) | Production server setup with nginx + SSL |
@@ -225,4 +225,4 @@ Visit [app.sentinel-engine.io/pricing](https://app.sentinel-engine.io/pricing) t
 
 ---
 
-*Sentinel Security Engine &bull; sentinel-engine.io*
+*Garrison Security Engine &bull; garrisonsec.io*

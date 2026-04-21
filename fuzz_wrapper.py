@@ -8,14 +8,14 @@ from typing import List, Dict, Any, Optional
 
 from logger import get_logger
 from exceptions import (
-    SentinelAnalysisError,
-    SentinelToolNotFoundError,
-    SentinelTimeoutError,
+    GarrisonAnalysisError,
+    GarrisonToolNotFoundError,
+    GarrisonTimeoutError,
 )
 
 # Import config loader
 try:
-    from config_loader import load_config, SentinelConfig
+    from config_loader import load_config, GarrisonConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 _config = None
 
 
-def get_config() -> SentinelConfig:
+def get_config() -> GarrisonConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -34,9 +34,9 @@ def get_config() -> SentinelConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = SentinelConfig()
+                _config = GarrisonConfig()
         else:
-            _config = SentinelConfig()
+            _config = GarrisonConfig()
     return _config
 
 
@@ -77,9 +77,9 @@ def run_foundry_fuzz(
         Raw stdout from the fuzzing run.
 
     Raises:
-        SentinelToolNotFoundError: If Foundry is not installed.
-        SentinelTimeoutError: If fuzzing times out.
-        SentinelAnalysisError: If fuzzing fails.
+        GarrisonToolNotFoundError: If Foundry is not installed.
+        GarrisonTimeoutError: If fuzzing times out.
+        GarrisonAnalysisError: If fuzzing fails.
     """
     # Use config value if not provided
     if fuzz_runs is None:
@@ -113,7 +113,7 @@ def run_foundry_fuzz(
         return result.stdout
     except FileNotFoundError as e:
         logger.error("Foundry (forge) not found")
-        raise SentinelToolNotFoundError(
+        raise GarrisonToolNotFoundError(
             "Foundry not found in PATH",
             details={
                 "tool": "forge",
@@ -122,13 +122,13 @@ def run_foundry_fuzz(
         ) from e
     except PermissionError as e:
         logger.error(f"Permission denied running Foundry: {e}")
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Permission denied running Foundry",
             details={"error": str(e)}
         ) from e
     except subprocess.TimeoutExpired as e:
         logger.error("Foundry fuzzing timed out")
-        raise SentinelTimeoutError(
+        raise GarrisonTimeoutError(
             "Foundry fuzzing timed out",
             details={"operation": "foundry_fuzzing"}
         ) from e

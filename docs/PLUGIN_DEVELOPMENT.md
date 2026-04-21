@@ -16,7 +16,7 @@
 
 ## Plugin Architecture Overview
 
-Sentinel Engine supports community-contributed analyzers and heuristic rules through a simple plugin discovery mechanism. Plugins are Python modules placed in configured directories that expose a `register()` function.
+Garrison Engine supports community-contributed analyzers and heuristic rules through a simple plugin discovery mechanism. Plugins are Python modules placed in configured directories that expose a `register()` function.
 
 ### How It Works
 
@@ -30,7 +30,7 @@ Sentinel Engine supports community-contributed analyzers and heuristic rules thr
 ### Directory Structure
 
 ```
-.sentinel/
+.garrison/
 └── plugins/
     ├── my_analyzer.py      # Custom analyzer plugin
     ├── my_rules.py         # Custom rule plugin
@@ -126,15 +126,15 @@ Each `HeuristicRule` has:
 ### Step 1: Create the Plugin Directory
 
 ```bash
-mkdir -p .sentinel/plugins
+mkdir -p .garrison/plugins
 ```
 
 ### Step 2: Write the Plugin Module
 
-Create `.sentinel/plugins/my_first_plugin.py`:
+Create `.garrison/plugins/my_first_plugin.py`:
 
 ```python
-"""My first Sentinel Engine plugin."""
+"""My first Garrison Engine plugin."""
 import re
 from typing import Any, Dict, List
 
@@ -162,18 +162,18 @@ def register(manager):
 
 ### Step 3: Configure the Plugin Directory
 
-In `sentinel.toml`:
+In `garrison.toml`:
 
 ```toml
 [plugins]
 enabled = true
-dirs = [".sentinel/plugins"]
+dirs = [".garrison/plugins"]
 ```
 
 ### Step 4: Run with Plugins
 
 ```bash
-sentinel --target ./contracts --config sentinel.toml
+garrison --target ./contracts --config garrison.toml
 ```
 
 The orchestrator will log plugin discovery:
@@ -265,7 +265,7 @@ from plugin_manager import PluginManager
 
 def test_plugin_discovery():
     manager = PluginManager()
-    count = manager.discover_plugins([".sentinel/plugins"])
+    count = manager.discover_plugins([".garrison/plugins"])
     assert count > 0
     assert manager.get_analyzer_count() >= 1
 ```
@@ -309,7 +309,7 @@ def register(manager):
     manager.register_rules(GasGriefingRules())
 ```
 
-Save as `.sentinel/plugins/gas_griefing_rules.py`.
+Save as `.garrison/plugins/gas_griefing_rules.py`.
 
 ---
 
@@ -399,8 +399,8 @@ def register(manager):
     manager.register_analyzer(SecurityTodoScanner())
 ```
 
-Save as `.sentinel/plugins/security_todo_scanner.py`.
+Save as `.garrison/plugins/security_todo_scanner.py`.
 
 ---
 
-*Sentinel Security Engine &bull; sentinel-engine.io*
+*Garrison Security Engine &bull; garrisonsec.io*

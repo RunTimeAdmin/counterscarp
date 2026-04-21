@@ -8,14 +8,14 @@ from typing import List, Dict, Any, Optional
 
 from logger import get_logger
 from exceptions import (
-    SentinelAnalysisError,
-    SentinelToolNotFoundError,
-    SentinelTimeoutError,
+    GarrisonAnalysisError,
+    GarrisonToolNotFoundError,
+    GarrisonTimeoutError,
 )
 
 # Import config loader
 try:
-    from config_loader import load_config, SentinelConfig
+    from config_loader import load_config, GarrisonConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 _config = None
 
 
-def get_config() -> SentinelConfig:
+def get_config() -> GarrisonConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -34,9 +34,9 @@ def get_config() -> SentinelConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = SentinelConfig()
+                _config = GarrisonConfig()
         else:
-            _config = SentinelConfig()
+            _config = GarrisonConfig()
     return _config
 
 
@@ -67,9 +67,9 @@ def run_mythril(
         Raw JSON output from Mythril.
 
     Raises:
-        SentinelToolNotFoundError: If Mythril is not installed.
-        SentinelTimeoutError: If analysis times out.
-        SentinelAnalysisError: If analysis fails.
+        GarrisonToolNotFoundError: If Mythril is not installed.
+        GarrisonTimeoutError: If analysis times out.
+        GarrisonAnalysisError: If analysis fails.
     """
     # Use config value if not provided
     if timeout is None:
@@ -96,7 +96,7 @@ def run_mythril(
         )
     except FileNotFoundError as e:
         logger.error("Mythril (myth) not found")
-        raise SentinelToolNotFoundError(
+        raise GarrisonToolNotFoundError(
             "Mythril not found in PATH",
             details={
                 "tool": "mythril",
@@ -105,7 +105,7 @@ def run_mythril(
         ) from e
     except subprocess.TimeoutExpired as e:
         logger.error(f"Mythril analysis timed out after {timeout}s")
-        raise SentinelTimeoutError(
+        raise GarrisonTimeoutError(
             "Mythril analysis timed out",
             details={
                 "operation": "mythril_analysis",
@@ -114,7 +114,7 @@ def run_mythril(
         ) from e
     except PermissionError as e:
         logger.error(f"Permission denied running Mythril: {e}")
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Permission denied running Mythril",
             details={"error": str(e)}
         ) from e

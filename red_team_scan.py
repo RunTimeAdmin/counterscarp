@@ -13,19 +13,19 @@ from typing import List, Dict, Any, Optional
 try:
     from logger import get_logger
     from exceptions import (
-        SentinelAnalysisError,
-        SentinelToolNotFoundError,
+        GarrisonAnalysisError,
+        GarrisonToolNotFoundError,
     )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    SentinelAnalysisError = None
-    SentinelToolNotFoundError = None
+    GarrisonAnalysisError = None
+    GarrisonToolNotFoundError = None
 
 # Import config loader
 try:
-    from config_loader import load_config, SentinelConfig
+    from config_loader import load_config, GarrisonConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -41,7 +41,7 @@ else:
 _config = None
 
 
-def get_config() -> SentinelConfig:
+def get_config() -> GarrisonConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -49,9 +49,9 @@ def get_config() -> SentinelConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = SentinelConfig()
+                _config = GarrisonConfig()
         else:
-            _config = SentinelConfig()
+            _config = GarrisonConfig()
     return _config
 
 
@@ -326,8 +326,8 @@ def run_slither(target: str) -> Dict[str, Any]:
         Parsed JSON output from Slither.
 
     Raises:
-        SentinelToolNotFoundError: If Slither is not installed.
-        SentinelAnalysisError: If Slither analysis fails or
+        GarrisonToolNotFoundError: If Slither is not installed.
+        GarrisonAnalysisError: If Slither analysis fails or
             output cannot be parsed.
     """
     print(f"[*] Spawning Slither process for target: {target}...")
@@ -491,7 +491,7 @@ def run_slither(target: str) -> Dict[str, Any]:
                     return fallback
             print("[!] CRITICAL: Slither failed to generate JSON. Raw output:")
             print(result.stderr)
-            raise SentinelAnalysisError(
+            raise GarrisonAnalysisError(
                 "Slither failed to produce JSON output",
                 details={
                     "tool": "slither",
@@ -543,7 +543,7 @@ def run_slither(target: str) -> Dict[str, Any]:
 
     except FileNotFoundError as e:
         logger.error("Slither command not found")
-        raise SentinelToolNotFoundError(
+        raise GarrisonToolNotFoundError(
             "Slither not found in PATH",
             details={
                 "tool": "slither",
@@ -563,25 +563,25 @@ def run_slither(target: str) -> Dict[str, Any]:
                 else (result.stdout if result else "")
             )
         }
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Could not parse Slither output - tool may have crashed",
             details=error_data
         ) from e
     except subprocess.CalledProcessError as e:
         logger.error(f"Slither process failed: {e}")
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Slither analysis failed",
             details={"returncode": e.returncode, "stderr": e.stderr}
         ) from e
     except subprocess.TimeoutExpired:
         logger.error("Slither analysis timed out (300s)")
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Slither analysis timed out after 300 seconds",
             details={"tool": "slither", "timeout": 300}
         )
     except PermissionError as e:
         logger.error(f"Permission denied running Slither: {e}")
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Permission denied running Slither",
             details={"error": str(e)}
         ) from e
@@ -755,7 +755,7 @@ if __name__ == "__main__":
         raw_data = run_slither(args.target)
         critical_intel = filter_vulnerabilities(raw_data)
         print_report(critical_intel)
-    except SentinelAnalysisError:
+    except GarrisonAnalysisError:
         raise
     except Exception as e:
         logger.error(f"Red team scan failed: {e}")

@@ -1,4 +1,4 @@
-"""Performance benchmarks for Sentinel Engine.
+"""Performance benchmarks for Garrison Engine.
 
 Run with: pytest tests/test_benchmarks.py --benchmark-only
 Skip during normal test runs with: pytest -m "not benchmark"

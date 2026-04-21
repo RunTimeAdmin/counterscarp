@@ -1,8 +1,8 @@
-# 🚀 Sentinel Engine - Quick Start Guide
+# 🚀 Garrison Engine - Quick Start Guide
 
 > Get started with security scanning in 5 minutes
 > 
-> Website: [sentinel-engine.io](https://sentinel-engine.io)
+> Website: [garrisonsec.io](https://garrisonsec.io)
 
 ## Zero-to-Audit in 3 Commands
 
@@ -11,27 +11,27 @@
 **Option A: pip install (Recommended)**
 ```bash
 # Install from PyPI
-pip install sentinel-engine
+pip install garrison-engine
 
 # Verify installation
-sentinel-engine --help
+garrison-engine --help
 ```
 
 **Optional extras:**
 ```bash
 # With web UI support
-pip install sentinel-engine[web]
+pip install garrison-engine[web]
 
 # With AI/RAG features
-pip install sentinel-engine[ai]
+pip install garrison-engine[ai]
 
 # With development dependencies
-pip install sentinel-engine[dev]
+pip install garrison-engine[dev]
 ```
 
 **Option B: Docker (For isolated environments)**
 ```bash
-docker build -t sentinel-engine .
+docker build -t garrison-engine .
 ```
 **Expected output:**
 ```
@@ -41,19 +41,19 @@ docker build -t sentinel-engine .
  => [5/10] RUN pip install slither-analyzer solc-select...
  => [8/10] RUN curl -L https://foundry.paradigm.xyz | bash
  => [10/10] RUN python3 -c "import slither; print('✓ Slither OK')"
-✓ Sentinel Engine initialized
+✓ Garrison Engine initialized
 ```
 
 **⏱️ Build time:** ~3-5 minutes (one-time setup)  
 **📦 Image size:** ~600MB
 
 **Configuration Profiles:**
-Sentinel Engine includes three pre-built configuration profiles:
-- `sentinel-pr.toml` - Fast PR checks (< 2 min)
-- `sentinel-audit.toml` - Full audit mode (10-30 min)
-- `sentinel-bounty.toml` - Bug bounty hunting (1-2 hours)
+Garrison Engine includes three pre-built configuration profiles:
+- `garrison-pr.toml` - Fast PR checks (< 2 min)
+- `garrison-audit.toml` - Full audit mode (10-30 min)
+- `garrison-bounty.toml` - Bug bounty hunting (1-2 hours)
 
-**Try it online:** [https://app.sentinel-engine.io](https://app.sentinel-engine.io) — No installation required
+**Try it online:** [https://garrisonsec.io](https://garrisonsec.io) — No installation required
 
 ---
 
@@ -62,19 +62,19 @@ Sentinel Engine includes three pre-built configuration profiles:
 **Method A: Full Pipeline (Orchestrator)**
 ```bash
 # Scan all contracts in current directory
-docker run --rm -v $(pwd):/scan sentinel-engine --target /scan
+docker run --rm -v $(pwd):/scan garrison-engine --target /scan
 ```
 
 **Method B: Single Module (Liar Detector)**
 ```bash
 # Check one specific file for intent mismatches
-docker run --rm -v $(pwd):/scan sentinel-engine python3 intent_check.py /scan/contracts/MyVault.sol
+docker run --rm -v $(pwd):/scan garrison-engine python3 intent_check.py /scan/contracts/MyVault.sol
 ```
 
 **Method C: Threat Intelligence**
 ```bash
 # Auto-detect EVM/Solana and query vulnerability databases
-docker run --rm -v $(pwd):/scan sentinel-engine python3 threat_intel.py /scan/contracts/Token.sol
+docker run --rm -v $(pwd):/scan garrison-engine python3 threat_intel.py /scan/contracts/Token.sol
 ```
 
 ---
@@ -129,7 +129,7 @@ docker-compose run --rm threat-intel /scan/contracts/Vault.sol
 ### **For Professional Auditors**
 ```bash
 # Full pipeline with all modules enabled
-docker run --rm -v $(pwd):/scan sentinel-engine \
+docker run --rm -v $(pwd):/scan garrison-engine \
   --target /scan \
   --heuristic \
   --symbolic \
@@ -139,7 +139,7 @@ docker run --rm -v $(pwd):/scan sentinel-engine \
 ### **For Learning/Education (TokenAudit YouTube)**
 ```bash
 # Interactive shell to explore tools
-docker run --rm -it -v $(pwd):/scan sentinel-engine /bin/bash
+docker run --rm -it -v $(pwd):/scan garrison-engine /bin/bash
 
 # Inside container:
 root@abc:/app# python3 intent_check.py /scan/examples/VulnerableVault.sol
@@ -151,29 +151,29 @@ root@abc:/app# python3 threat_intel.py /scan/examples/AMM.sol
 
 ## 🔧 Environment Variables
 
-Configure Sentinel Engine behavior using these environment variables:
+Configure Garrison Engine behavior using these environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SENTINEL_LOG_LEVEL` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL | INFO |
-| `SENTINEL_LOG_FORMAT` | Output format: "text" or "json" | text |
-| `SENTINEL_LOG_FILE` | Optional file path for log output | (none) |
+| `GARRISON_LOG_LEVEL` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL | INFO |
+| `GARRISON_LOG_FORMAT` | Output format: "text" or "json" | text |
+| `GARRISON_LOG_FILE` | Optional file path for log output | (none) |
 | `OPENAI_API_KEY` | OpenAI API key for exploit generation | (none) |
 
 ### Quick Examples
 
 ```bash
 # Enable debug logging
-export SENTINEL_LOG_LEVEL=DEBUG
-sentinel-engine --target ./contracts
+export GARRISON_LOG_LEVEL=DEBUG
+garrison-engine --target ./contracts
 
 # Structured JSON logging
-export SENTINEL_LOG_FORMAT=json
-sentinel-engine --target ./contracts 2>&1 | jq
+export GARRISON_LOG_FORMAT=json
+garrison-engine --target ./contracts 2>&1 | jq
 
 # Log to file
-export SENTINEL_LOG_FILE=/tmp/sentinel.log
-sentinel-engine --target ./contracts
+export GARRISON_LOG_FILE=/tmp/garrison.log
+garrison-engine --target ./contracts
 ```
 
 ---
@@ -184,10 +184,10 @@ sentinel-engine --target ./contracts
 ```bash
 # Make sure you're mounting the correct directory
 # Windows PowerShell:
-docker run --rm -v ${PWD}:/scan sentinel-engine --target /scan
+docker run --rm -v ${PWD}:/scan garrison-engine --target /scan
 
 # Linux/Mac:
-docker run --rm -v $(pwd):/scan sentinel-engine --target /scan
+docker run --rm -v $(pwd):/scan garrison-engine --target /scan
 ```
 
 ### **Issue: "Slither failed to compile"**
@@ -219,16 +219,16 @@ RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
    - Edit `heuristic_scanner.py` to add custom vulnerability patterns
    - Edit `intent_check.py` to add project-specific trust keywords
    - Edit `docker-compose.yml` to set default contract paths
-   - Choose a configuration profile: `sentinel-pr.toml`, `sentinel-audit.toml`, or `sentinel-bounty.toml`
+   - Choose a configuration profile: `garrison-pr.toml`, `garrison-audit.toml`, or `garrison-bounty.toml`
 
 2. **Integrate into CI/CD:**
    ```yaml
    # .github/workflows/security.yml
-   - name: Install Sentinel Engine
-     run: pip install sentinel-engine
+   - name: Install Garrison Engine
+     run: pip install garrison-engine
    - name: Security Scan
      run: |
-       sentinel-engine --target ./contracts --config sentinel-pr.toml
+       garrison-engine --target ./contracts --config garrison-pr.toml
    ```
 
 3. **Deploy Forta Watchtower:**
@@ -236,7 +236,7 @@ RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
    - Convert your invariant tests to runtime monitors
 
 4. **Learn More:**
-   - Visit [sentinel-engine.io](https://sentinel-engine.io) for full documentation
+   - Visit [garrisonsec.io](https://garrisonsec.io) for full documentation
    - See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines
    - Add new heuristic patterns or threat intelligence sources
 
@@ -247,6 +247,6 @@ RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
 **🏆 Bug Bounties:** Immunefi/Code4rena hunting toolkit
 
 **Questions?** 
-- Open an issue on [GitHub](https://github.com/RunTimeAdmin/sentinel-engine/issues)
-- Visit [sentinel-engine.io](https://sentinel-engine.io)
+- Open an issue on [GitHub](https://github.com/RunTimeAdmin/garrison-engine/issues)
+- Visit [garrisonsec.io](https://garrisonsec.io)
 - Contact: [@defiauditccie](https://twitter.com/defiauditccie)

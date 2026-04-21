@@ -10,7 +10,7 @@ from logger import get_logger, setup_logging
 
 try:
     from importlib.metadata import version as _pkg_version
-    _ENGINE_VERSION = _pkg_version("sentinel-engine")
+    _ENGINE_VERSION = _pkg_version("garrison-engine")
 except Exception:
     _ENGINE_VERSION = "3.4.0"
 
@@ -25,7 +25,7 @@ _license = LicenseManager()
 # Import your specialists
 try:
     import red_team_scan
-    from exceptions import SentinelAnalysisError
+    from exceptions import GarrisonAnalysisError
     import supply_chain_check
     import fuzz_wrapper
     import heuristic_scanner
@@ -83,13 +83,13 @@ except ImportError as e:
     history_scanner = None
 
 try:
-    from config_loader import load_config, SentinelConfig
+    from config_loader import load_config, GarrisonConfig
     CONFIG_AVAILABLE = True
     logger.debug("Config loader imported successfully")
 except ImportError as e:
     logger.info(f"Config loader not available: {e}")
     CONFIG_AVAILABLE = False
-    SentinelConfig = None
+    GarrisonConfig = None
 
 # Optional plugin manager
 try:
@@ -623,7 +623,7 @@ def _safe_line_no(location_str: str) -> int:
 
 
 def main() -> None:
-    """Main entry point for the Sentinel orchestrator.
+    """Main entry point for the Garrison orchestrator.
 
     Parses command-line arguments, runs all configured security checks,
     and generates comprehensive remediation reports.
@@ -633,10 +633,10 @@ def main() -> None:
     # persisted to a log file regardless of shell piping or redirection.
     _log_file = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        f"sentinel_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        f"garrison_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     )
     setup_logging(log_file=_log_file)
-    logger.info("Sentinel Engine scan initializing...")
+    logger.info("Garrison Engine scan initializing...")
     logger.info("Log file: %s", _log_file)
 
     parser = argparse.ArgumentParser(description="Action-Oriented Security Engine")
@@ -674,7 +674,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        help="Path to sentinel.toml config file",
+        help="Path to garrison.toml config file",
         default=None,
     )
     parser.add_argument(
@@ -811,12 +811,12 @@ def main() -> None:
             logger.error("Config file not found: %s", args.config)
             logger.info("Continuing with default settings...")
         except PermissionError as e:
-            logger.error("Permission denied reading config '%s': %s", args.config or "sentinel.toml", e)
+            logger.error("Permission denied reading config '%s': %s", args.config or "garrison.toml", e)
             logger.info("Continuing with default settings...")
         except Exception as e:
             logger.error(
                 "Error loading config '%s' (%s): %s",
-                args.config or "sentinel.toml",
+                args.config or "garrison.toml",
                 type(e).__name__,
                 e,
             )
@@ -969,7 +969,7 @@ def main() -> None:
         raw_slither = red_team_scan.run_slither(args.target)
         static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
         logger.info("Slither analysis complete: %d issues found", len(static_issues))
-    except SentinelAnalysisError as e:
+    except GarrisonAnalysisError as e:
         logger.error("Slither analysis failed: %s", e)
         static_issues = []
         raw_slither = None

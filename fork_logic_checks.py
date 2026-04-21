@@ -11,7 +11,7 @@ from typing import List
 
 from heuristic_scanner import HeuristicFinding
 
-logger = logging.getLogger("sentinel.fork_logic_checks")
+logger = logging.getLogger("garrison.fork_logic_checks")
 
 # ---------------------------------------------------------------------------
 # Helpers

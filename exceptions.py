@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Custom Exception Hierarchy for Sentinel Engine.
+Custom Exception Hierarchy for Garrison Engine.
 
-Provides a clean, structured exception hierarchy for all Sentinel Engine
+Provides a clean, structured exception hierarchy for all Garrison Engine
 errors. Each exception supports optional details dict for structured error
 context and preserves original exception chaining.
 
 Example:
-    >>> from exceptions import SentinelConfigError
+    >>> from exceptions import GarrisonConfigError
     >>> try:
     ...     load_config("invalid.toml")
     ... except Exception as e:
-    ...     raise SentinelConfigError(
+    ...     raise GarrisonConfigError(
     ...         "Failed to load config", details={"path": "invalid.toml"}
     ...     ) from e
 """
@@ -19,10 +19,10 @@ Example:
 from typing import Optional, Dict, Any
 
 
-class SentinelError(Exception):
-    """Base exception for all Sentinel Engine errors.
+class GarrisonError(Exception):
+    """Base exception for all Garrison Engine errors.
     
-    All custom exceptions in the Sentinel Engine should inherit from this
+    All custom exceptions in the Garrison Engine should inherit from this
     class to allow for unified error handling.
     
     Attributes:
@@ -30,8 +30,8 @@ class SentinelError(Exception):
         details: Optional dictionary containing structured error context.
     
     Example:
-        >>> raise SentinelError("Generic error occurred")
-        >>> raise SentinelError("Generic error", details={"code": 500})
+        >>> raise GarrisonError("Generic error occurred")
+        >>> raise GarrisonError("Generic error", details={"code": 500})
     """
     
     def __init__(
@@ -79,14 +79,14 @@ class SentinelError(Exception):
         return result
 
 
-class SentinelConfigError(SentinelError):
+class GarrisonConfigError(GarrisonError):
     """Raised for configuration loading/validation errors.
     
     This exception is raised when there's a problem with loading or
-    validating the Sentinel configuration file (sentinel.toml).
+    validating the Garrison configuration file (garrison.toml).
     
     Example:
-        >>> raise SentinelConfigError(
+        >>> raise GarrisonConfigError(
         ...     "Invalid TOML syntax",
         ...     details={"path": "/path/to/config.toml", "line": 42}
         ... )
@@ -106,14 +106,14 @@ class SentinelConfigError(SentinelError):
         super().__init__(message, details)
 
 
-class SentinelAnalysisError(SentinelError):
+class GarrisonAnalysisError(GarrisonError):
     """Raised when a security analyzer fails.
     
     This exception is raised when static analysis, fuzzing, or other
     security analysis tools fail to execute properly.
     
     Example:
-        >>> raise SentinelAnalysisError(
+        >>> raise GarrisonAnalysisError(
         ...     "Slither analysis failed",
         ...     details={"tool": "slither", "contract": "Token.sol"}
         ... )
@@ -133,7 +133,7 @@ class SentinelAnalysisError(SentinelError):
         super().__init__(message, details)
 
 
-class SentinelAPIError(SentinelError):
+class GarrisonAPIError(GarrisonError):
     """Raised for external API call failures.
     
     This exception is raised when external API calls fail, such as
@@ -141,7 +141,7 @@ class SentinelAPIError(SentinelError):
     external service interactions.
     
     Example:
-        >>> raise SentinelAPIError(
+        >>> raise GarrisonAPIError(
         ...     "OSV API request failed",
         ...     details={
         ...         "api": "osv", "status_code": 503, "endpoint": "/v1/query"
@@ -164,14 +164,14 @@ class SentinelAPIError(SentinelError):
         super().__init__(message, details)
 
 
-class SentinelReportError(SentinelError):
+class GarrisonReportError(GarrisonError):
     """Raised for report generation failures.
     
     This exception is raised when the report generator fails to create
     output files or format findings properly.
     
     Example:
-        >>> raise SentinelReportError(
+        >>> raise GarrisonReportError(
         ...     "Failed to write HTML report",
         ...     details={"format": "html", "output_path": "/reports/out.html"}
         ... )
@@ -192,14 +192,14 @@ class SentinelReportError(SentinelError):
         super().__init__(message, details)
 
 
-class SentinelToolNotFoundError(SentinelError):
+class GarrisonToolNotFoundError(GarrisonError):
     """Raised when a required external tool is not found.
     
     This exception is raised when external tools like Slither, Aderyn,
     Medusa, or Mythril are not installed or not available in PATH.
     
     Example:
-        >>> raise SentinelToolNotFoundError(
+        >>> raise GarrisonToolNotFoundError(
         ...     "Slither not found in PATH",
         ...     details={
         ...         "tool": "slither",
@@ -223,14 +223,14 @@ class SentinelToolNotFoundError(SentinelError):
         super().__init__(message, details)
 
 
-class SentinelValidationError(SentinelError):
+class GarrisonValidationError(GarrisonError):
     """Raised for input validation failures.
     
     This exception is raised when user input or scanned code fails
     validation checks.
     
     Example:
-        >>> raise SentinelValidationError(
+        >>> raise GarrisonValidationError(
         ...     "Invalid contract address format",
         ...     details={"field": "address", "value": "0x123"}
         ... )
@@ -250,14 +250,14 @@ class SentinelValidationError(SentinelError):
         super().__init__(message, details)
 
 
-class SentinelTimeoutError(SentinelError):
+class GarrisonTimeoutError(GarrisonError):
     """Raised when an operation times out.
     
     This exception is raised when analysis operations exceed their
     configured timeout limits.
     
     Example:
-        >>> raise SentinelTimeoutError(
+        >>> raise GarrisonTimeoutError(
         ...     "Mythril analysis timed out",
         ...     details={
         ...         "operation": "symbolic_analysis", "timeout_seconds": 300
@@ -306,26 +306,26 @@ def format_exception_chain(exc: Exception) -> str:
     return "\n".join(lines)
 
 
-def is_sentinel_error(exc: Exception) -> bool:
-    """Check if an exception is a Sentinel Engine error.
+def is_garrison_error(exc: Exception) -> bool:
+    """Check if an exception is a Garrison Engine error.
     
     Args:
         exc: The exception to check.
         
     Returns:
-        True if the exception is a SentinelError or subclass.
+        True if the exception is a GarrisonError or subclass.
     """
-    return isinstance(exc, SentinelError)
+    return isinstance(exc, GarrisonError)
 
 
 if __name__ == "__main__":
     # Demo/test code
-    print("Testing Sentinel Exception Hierarchy\n")
+    print("Testing Garrison Exception Hierarchy\n")
     
     # Test basic exception
     try:
-        raise SentinelError("Generic error", details={"code": 500})
-    except SentinelError as e:
+        raise GarrisonError("Generic error", details={"code": 500})
+    except GarrisonError as e:
         print(f"1. Basic error: {e}")
         print(f"   Dict: {e.to_dict()}\n")
     
@@ -334,24 +334,24 @@ if __name__ == "__main__":
         try:
             raise ValueError("Original error")
         except ValueError as original:
-            raise SentinelConfigError(
+            raise GarrisonConfigError(
                 "Config load failed",
                 details={"path": "config.toml"}
             ) from original
-    except SentinelError as e:
+    except GarrisonError as e:
         print(f"2. Chained error: {e}")
         print(f"   Cause: {e.__cause__}")
         print(f"   Formatted chain:\n   {format_exception_chain(e)}\n")
     
     # Test all exception types
     exceptions_to_test = [
-        SentinelConfigError("Config error", {"file": "test.toml"}),
-        SentinelAnalysisError("Analysis failed", {"tool": "slither"}),
-        SentinelAPIError("API error", {"status": 500}),
-        SentinelReportError("Report failed", {"format": "html"}),
-        SentinelToolNotFoundError("Tool missing", {"tool": "mythril"}),
-        SentinelValidationError("Invalid input", {"field": "address"}),
-        SentinelTimeoutError("Timeout", {"seconds": 30}),
+        GarrisonConfigError("Config error", {"file": "test.toml"}),
+        GarrisonAnalysisError("Analysis failed", {"tool": "slither"}),
+        GarrisonAPIError("API error", {"status": 500}),
+        GarrisonReportError("Report failed", {"format": "html"}),
+        GarrisonToolNotFoundError("Tool missing", {"tool": "mythril"}),
+        GarrisonValidationError("Invalid input", {"field": "address"}),
+        GarrisonTimeoutError("Timeout", {"seconds": 30}),
     ]
     
     print("3. All exception types:")
@@ -359,7 +359,7 @@ if __name__ == "__main__":
         print(f"   - {exc.__class__.__name__}: {exc}")
     
     print("\n4. Exception hierarchy check:")
-    print(f"   SentinelConfigError is SentinelError: "
-          f"{is_sentinel_error(SentinelConfigError('test'))}")
-    print(f"   ValueError is SentinelError: "
-          f"{is_sentinel_error(ValueError('test'))}")
+    print(f"   GarrisonConfigError is GarrisonError: "
+          f"{is_garrison_error(GarrisonConfigError('test'))}")
+    print(f"   ValueError is GarrisonError: "
+          f"{is_garrison_error(ValueError('test'))}")

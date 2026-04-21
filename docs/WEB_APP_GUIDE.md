@@ -1,6 +1,6 @@
 # Web Application Guide
 
-> **Live Demo:** [https://app.sentinel-engine.io](https://app.sentinel-engine.io) — Official beta instance
+> **Live Demo:** [https://garrisonsec.io](https://garrisonsec.io) — Official beta instance
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@
 
 ## Overview
 
-The Sentinel Engine web application provides a browser-based interface for running security audits on smart contracts. Upload `.sol` or `.rs` files, run a full analysis pipeline, and view results with risk scoring, severity breakdowns, and AI-powered insights — all without the CLI.
+The Garrison Engine web application provides a browser-based interface for running security audits on smart contracts. Upload `.sol` or `.rs` files, run a full analysis pipeline, and view results with risk scoring, severity breakdowns, and AI-powered insights — all without the CLI.
 
 The web app is built with FastAPI and runs on uvicorn, supporting both local development and production deployment behind nginx.
 
@@ -27,7 +27,7 @@ The web app is built with FastAPI and runs on uvicorn, supporting both local dev
 ### Local Development
 
 ```bash
-pip install "sentinel-engine[web]"
+pip install "garrison-engine[web]"
 uvicorn webapp.main:app --reload --port 8001
 ```
 
@@ -35,7 +35,7 @@ Open **http://localhost:8001** in your browser.
 
 ### Production (Official Beta)
 
-The official beta instance is available at **https://app.sentinel-engine.io**.
+The official beta instance is available at **https://garrisonsec.io**.
 
 This is the live production deployment where you can:
 - Upload and audit smart contracts without any local installation
@@ -114,7 +114,7 @@ When the AI Audit Copilot is available, it provides:
 - **Remediation guidance** — Suggests fixes based on historical patterns
 - **Context enrichment** — Adds relevant references and CWE classifications
 
-**Note:** The AI Copilot uses local sentence-transformers embeddings by default. No API keys are required. Install with `pip install "sentinel-engine[ai]"`.
+**Note:** The AI Copilot uses local sentence-transformers embeddings by default. No API keys are required. Install with `pip install "garrison-engine[ai]"`.
 
 ---
 
@@ -146,7 +146,7 @@ Access the attack graph at: `/results/{audit_id}/attack-graph`
 
 The attack graph is generated automatically when findings are detected. If no findings exist, the graph is skipped.
 
-**Configuration:** Attack graph behavior can be customized in `sentinel.toml` under the `[visualization]` section. See the [Configuration Guide](CONFIGURATION.md#visualization) for details.
+**Configuration:** Attack graph behavior can be customized in `garrison.toml` under the `[visualization]` section. See the [Configuration Guide](CONFIGURATION.md#visualization) for details.
 
 ---
 
@@ -231,4 +231,4 @@ Health check endpoint.
 
 ---
 
-*Sentinel Security Engine &bull; sentinel-engine.io*
+*Garrison Security Engine &bull; garrisonsec.io*

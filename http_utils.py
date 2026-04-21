@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HTTP Utilities for Sentinel Engine.
+HTTP Utilities for Garrison Engine.
 
 Provides reusable retry logic, rate limiting, and resilient HTTP request
 wrappers for external API calls. Implements exponential backoff with jitter
@@ -28,11 +28,11 @@ from requests.exceptions import (
 )
 
 from logger import get_logger
-from exceptions import SentinelAPIError, SentinelTimeoutError
+from exceptions import GarrisonAPIError, GarrisonTimeoutError
 
 # Import config loader
 try:
-    from config_loader import load_config, SentinelConfig
+    from config_loader import load_config, GarrisonConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -43,7 +43,7 @@ logger = get_logger(__name__)
 _config = None
 
 
-def get_config() -> SentinelConfig:
+def get_config() -> GarrisonConfig:
     """Get or load the configuration."""
     global _config
     if _config is None:
@@ -51,9 +51,9 @@ def get_config() -> SentinelConfig:
             try:
                 _config = load_config()
             except Exception:
-                _config = SentinelConfig()
+                _config = GarrisonConfig()
         else:
-            _config = SentinelConfig()
+            _config = GarrisonConfig()
     return _config
 
 
@@ -322,8 +322,8 @@ def resilient_request(
         Response object from successful request.
         
     Raises:
-        SentinelTimeoutError: If the request times out.
-        SentinelAPIError: If the request fails after all retries or returns
+        GarrisonTimeoutError: If the request times out.
+        GarrisonAPIError: If the request fails after all retries or returns
             4xx error.
         
     Example:
@@ -356,7 +356,7 @@ def resilient_request(
             
             elif classification == "no_retry":
                 # 4xx errors (except 429) - don't retry
-                raise SentinelAPIError(
+                raise GarrisonAPIError(
                     f"HTTP {response.status_code} error from {url}",
                     details={
                         "url": url,
@@ -386,7 +386,7 @@ def resilient_request(
                     time.sleep(delay)
                     continue
                 else:
-                    raise SentinelAPIError(
+                    raise GarrisonAPIError(
                         f"Rate limited (429) after {max_retries} "
                         f"retries: {url}",
                         details={
@@ -408,7 +408,7 @@ def resilient_request(
                     time.sleep(delay)
                     continue
                 else:
-                    raise SentinelAPIError(
+                    raise GarrisonAPIError(
                         f"Server error ({response.status_code}) after "
                         f"{max_retries} retries: {url}",
                         details={
@@ -431,7 +431,7 @@ def resilient_request(
                 )
                 time.sleep(delay)
             else:
-                raise SentinelTimeoutError(
+                raise GarrisonTimeoutError(
                     f"Request timed out after {max_retries + 1} "
                     f"attempts: {url}",
                     details={
@@ -452,7 +452,7 @@ def resilient_request(
                 )
                 time.sleep(delay)
             else:
-                raise SentinelAPIError(
+                raise GarrisonAPIError(
                     f"Connection failed after {max_retries + 1} "
                     f"attempts: {url}",
                     details={
@@ -472,7 +472,7 @@ def resilient_request(
                 )
                 time.sleep(delay)
             else:
-                raise SentinelAPIError(
+                raise GarrisonAPIError(
                     f"Request failed after {max_retries + 1} attempts: {url}",
                     details={
                         "url": url,
@@ -484,7 +484,7 @@ def resilient_request(
     
     # Should not reach here, but handle just in case
     if last_exception:
-        raise SentinelAPIError(
+        raise GarrisonAPIError(
             f"Unexpected error in resilient_request: {url}",
             details={
                 "url": url,
@@ -493,7 +493,7 @@ def resilient_request(
             }
         ) from last_exception
     
-    raise SentinelAPIError(
+    raise GarrisonAPIError(
         f"Unknown error in resilient_request: {url}",
         details={"url": url, "method": method}
     )
@@ -519,8 +519,8 @@ def resilient_get(
         Response object from successful request.
         
     Raises:
-        SentinelTimeoutError: If the request times out.
-        SentinelAPIError: If the request fails after all retries.
+        GarrisonTimeoutError: If the request times out.
+        GarrisonAPIError: If the request fails after all retries.
         
     Example:
         >>> response = resilient_get('https://api.example.com/data')
@@ -556,8 +556,8 @@ def resilient_post(
         Response object from successful request.
         
     Raises:
-        SentinelTimeoutError: If the request times out.
-        SentinelAPIError: If the request fails after all retries.
+        GarrisonTimeoutError: If the request times out.
+        GarrisonAPIError: If the request fails after all retries.
         
     Example:
         >>> response = resilient_post(
@@ -614,9 +614,9 @@ if __name__ == "__main__":
             response = resilient_get(test_url, max_retries=2)
             print(f"   Success: HTTP {response.status_code}")
             print(f"   Content length: {len(response.text)} bytes")
-        except SentinelAPIError as e:
+        except GarrisonAPIError as e:
             print(f"   API Error: {e}")
-        except SentinelTimeoutError as e:
+        except GarrisonTimeoutError as e:
             print(f"   Timeout Error: {e}")
     else:
         print("4. Skipping resilient request test (provide URL as argument)")

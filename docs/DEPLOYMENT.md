@@ -45,11 +45,11 @@ sudo bash deploy/setup.sh
 
 | Step | Action |
 |------|--------|
-| 1/8 | Creates service user `sentinel` (no login shell) |
-| 2/8 | Clones/updates repository to `/opt/sentinel-engine` |
-| 3/8 | Creates Python venv and installs `sentinel-engine[web]` |
+| 1/8 | Creates service user `garrison` (no login shell) |
+| 2/8 | Clones/updates repository to `/opt/garrison-engine` |
+| 3/8 | Creates Python venv and installs `garrison-engine[web]` |
 | 4/8 | Creates `uploads/` and `results/` directories |
-| 5/8 | Sets ownership to `sentinel:sentinel` |
+| 5/8 | Sets ownership to `garrison:garrison` |
 | 6/8 | Installs nginx config and reloads nginx |
 | 7/8 | Obtains SSL certificate via certbot (if not already present) |
 | 8/8 | Installs systemd service and starts it |
@@ -60,68 +60,68 @@ If you prefer to deploy manually:
 
 ```bash
 # 1. Create service user
-useradd -r -s /bin/false sentinel
+useradd -r -s /bin/false garrison
 
 # 2. Setup directory (choose one method)
 
 # Method A: Install from PyPI (recommended for production)
-mkdir -p /opt/sentinel-engine
-cd /opt/sentinel-engine
+mkdir -p /opt/garrison-engine
+cd /opt/garrison-engine
 python3 -m venv venv
 ./venv/bin/pip install --upgrade pip
-./venv/bin/pip install "sentinel-engine[web]"
+./venv/bin/pip install "garrison-engine[web]"
 
 # Method B: Clone from GitHub (for development/customization)
-# mkdir -p /opt/sentinel-engine
-# cd /opt/sentinel-engine
-# git clone https://github.com/RunTimeAdmin/sentinel-engine.git .
+# mkdir -p /opt/garrison-engine
+# cd /opt/garrison-engine
+# git clone https://github.com/RunTimeAdmin/garrison-engine.git .
 # python3 -m venv venv
 # ./venv/bin/pip install --upgrade pip
 # ./venv/bin/pip install -e ".[web]"
 
 # 3. Create directories
-mkdir -p /opt/sentinel-engine/uploads
-mkdir -p /opt/sentinel-engine/results
+mkdir -p /opt/garrison-engine/uploads
+mkdir -p /opt/garrison-engine/results
 
 # 4. Set ownership
-chown -R sentinel:sentinel /opt/sentinel-engine
+chown -R garrison:garrison /opt/garrison-engine
 
 # 5. Configure nginx
-cp deploy/nginx-sentinel.conf /etc/nginx/sites-available/sentinel
-ln -sf /etc/nginx/sites-available/sentinel /etc/nginx/sites-enabled/sentinel
+cp deploy/nginx-garrison.conf /etc/nginx/sites-available/garrison
+ln -sf /etc/nginx/sites-available/garrison /etc/nginx/sites-enabled/garrison
 nginx -t && systemctl reload nginx
 
 # 6. SSL certificate
-certbot certonly --nginx -d app.sentinel-engine.io --non-interactive --agree-tos -m your@email.com
+certbot certonly --nginx -d garrisonsec.io --non-interactive --agree-tos -m your@email.com
 
 # 7. Start service
-cp deploy/sentinel-engine.service /etc/systemd/system/
+cp deploy/garrison-engine.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable sentinel-engine
-systemctl start sentinel-engine
+systemctl enable garrison-engine
+systemctl start garrison-engine
 ```
 
 ---
 
 ## Nginx Reverse Proxy Configuration
 
-The nginx configuration is located at `deploy/nginx-sentinel.conf`:
+The nginx configuration is located at `deploy/nginx-garrison.conf`:
 
 ```nginx
 server {
     listen 80;
     listen [::]:80;
-    server_name app.sentinel-engine.io;
+    server_name garrisonsec.io;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name app.sentinel-engine.io;
+    server_name garrisonsec.io;
 
-    ssl_certificate /etc/letsencrypt/live/app.sentinel-engine.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/app.sentinel-engine.io/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/garrisonsec.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/garrisonsec.io/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -144,7 +144,7 @@ server {
     }
 
     location /static/ {
-        alias /opt/sentinel-engine/webapp/static/;
+        alias /opt/garrison-engine/webapp/static/;
         expires 7d;
         add_header Cache-Control "public, immutable";
     }
@@ -168,7 +168,7 @@ server {
 ### Initial Certificate
 
 ```bash
-sudo certbot certonly --nginx -d app.sentinel-engine.io --non-interactive --agree-tos -m your@email.com
+sudo certbot certonly --nginx -d garrisonsec.io --non-interactive --agree-tos -m your@email.com
 ```
 
 ### Certificate Renewal
@@ -189,8 +189,8 @@ sudo certbot renew --dry-run
 
 | File | Path |
 |------|------|
-| Full chain | `/etc/letsencrypt/live/app.sentinel-engine.io/fullchain.pem` |
-| Private key | `/etc/letsencrypt/live/app.sentinel-engine.io/privkey.pem` |
+| Full chain | `/etc/letsencrypt/live/garrisonsec.io/fullchain.pem` |
+| Private key | `/etc/letsencrypt/live/garrisonsec.io/privkey.pem` |
 | SSL options | `/etc/letsencrypt/options-ssl-nginx.conf` |
 | DH params | `/etc/letsencrypt/ssl-dhparams.pem` |
 
@@ -198,24 +198,24 @@ sudo certbot renew --dry-run
 
 ## Systemd Service Management
 
-The service unit file is at `deploy/sentinel-engine.service`:
+The service unit file is at `deploy/garrison-engine.service`:
 
 ```ini
 [Unit]
-Description=Sentinel Engine Web Application
+Description=Garrison Engine Web Application
 After=network.target
 
 [Service]
 Type=exec
-User=sentinel
-Group=sentinel
-WorkingDirectory=/opt/sentinel-engine
-ExecStart=/opt/sentinel-engine/venv/bin/uvicorn webapp.main:app --host 127.0.0.1 --port 8001 --workers 4
+User=garrison
+Group=garrison
+WorkingDirectory=/opt/garrison-engine
+ExecStart=/opt/garrison-engine/venv/bin/uvicorn webapp.main:app --host 127.0.0.1 --port 8001 --workers 4
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-Environment=SENTINEL_UPLOAD_DIR=/opt/sentinel-engine/uploads
-Environment=SENTINEL_RESULTS_DIR=/opt/sentinel-engine/results
+Environment=GARRISON_UPLOAD_DIR=/opt/garrison-engine/uploads
+Environment=GARRISON_RESULTS_DIR=/opt/garrison-engine/results
 
 [Install]
 WantedBy=multi-user.target
@@ -225,25 +225,25 @@ WantedBy=multi-user.target
 
 ```bash
 # Start the service
-sudo systemctl start sentinel-engine
+sudo systemctl start garrison-engine
 
 # Stop the service
-sudo systemctl stop sentinel-engine
+sudo systemctl stop garrison-engine
 
 # Restart the service
-sudo systemctl restart sentinel-engine
+sudo systemctl restart garrison-engine
 
 # Check status
-sudo systemctl status sentinel-engine
+sudo systemctl status garrison-engine
 
 # Enable auto-start on boot
-sudo systemctl enable sentinel-engine
+sudo systemctl enable garrison-engine
 
 # View live logs
-sudo journalctl -u sentinel-engine -f
+sudo journalctl -u garrison-engine -f
 
 # View recent logs
-sudo journalctl -u sentinel-engine -n 50
+sudo journalctl -u garrison-engine -n 50
 ```
 
 **Note:** After modifying the unit file, always run `systemctl daemon-reload` before restarting.
@@ -319,17 +319,17 @@ This script:
 ### Manual Update
 
 ```bash
-cd /opt/sentinel-engine
+cd /opt/garrison-engine
 
 # Method A: Update from PyPI (if installed via pip)
-./venv/bin/pip install --upgrade "sentinel-engine[web]"
+./venv/bin/pip install --upgrade "garrison-engine[web]"
 
 # Method B: Update from Git (if cloned)
 # git pull origin main
 # ./venv/bin/pip install -e ".[web]" --quiet
 
-chown -R sentinel:sentinel /opt/sentinel-engine
-sudo systemctl restart sentinel-engine
+chown -R garrison:garrison /opt/garrison-engine
+sudo systemctl restart garrison-engine
 ```
 
 ### Verify Update
@@ -357,24 +357,24 @@ Expected response:
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| 502 Bad Gateway | App not running | `systemctl restart sentinel-engine` |
+| 502 Bad Gateway | App not running | `systemctl restart garrison-engine` |
 | 413 Request Entity Too Large | File exceeds 10 MB | Increase `client_max_body_size` in nginx config |
 | SSL errors | Certificate expired | `certbot renew && systemctl reload nginx` |
 | Slow responses | Analysis taking long | Increase `proxy_read_timeout` in nginx |
-| Upload fails | Permissions wrong | `chown -R sentinel:sentinel /opt/sentinel-engine/uploads` |
+| Upload fails | Permissions wrong | `chown -R garrison:garrison /opt/garrison-engine/uploads` |
 
 ### Check Disk Space
 
 ```bash
-df -h /opt/sentinel-engine
+df -h /opt/garrison-engine
 ```
 
 Uploads and results accumulate over time. Consider setting up a cron job to clean old audit data:
 
 ```bash
 # Remove results older than 30 days
-find /opt/sentinel-engine/results -type d -mtime +30 -exec rm -rf {} +
-find /opt/sentinel-engine/uploads -type d -mtime +30 -exec rm -rf {} +
+find /opt/garrison-engine/results -type d -mtime +30 -exec rm -rf {} +
+find /opt/garrison-engine/uploads -type d -mtime +30 -exec rm -rf {} +
 ```
 
 ### Check Running Processes
@@ -392,16 +392,16 @@ ss -tlnp | grep 8001
 
 ```bash
 # Follow live logs
-sudo journalctl -u sentinel-engine -f
+sudo journalctl -u garrison-engine -f
 
 # Last 100 lines
-sudo journalctl -u sentinel-engine -n 100
+sudo journalctl -u garrison-engine -n 100
 
 # Logs since yesterday
-sudo journalctl -u sentinel-engine --since yesterday
+sudo journalctl -u garrison-engine --since yesterday
 
 # Logs with specific severity
-sudo journalctl -u sentinel-engine -p err
+sudo journalctl -u garrison-engine -p err
 ```
 
 ### Nginx Logs
@@ -427,4 +427,4 @@ Nginx logs are rotated by `logrotate` (installed by default on Ubuntu).
 
 ---
 
-*Sentinel Security Engine &bull; sentinel-engine.io*
+*Garrison Security Engine &bull; garrisonsec.io*

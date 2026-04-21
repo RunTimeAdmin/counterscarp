@@ -1,2 +1,2 @@
-# Sentinel Engine Test Suite
+# Garrison Engine Test Suite
 # Part 1: Core Module Tests

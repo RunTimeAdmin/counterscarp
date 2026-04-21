@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Centralized Logging Module for Sentinel Engine.
+Centralized Logging Module for Garrison Engine.
 
 Provides production-quality logging with configurable output formats,
 levels, and optional file logging. Supports both text and JSON output
@@ -185,7 +185,7 @@ def setup_logging(
         
     Example:
         >>> setup_logging(
-        ...     level="DEBUG", format="json", log_file="sentinel.log"
+        ...     level="DEBUG", format="json", log_file="garrison.log"
         ... )
     """
     global _logging_configured, _root_handlers
@@ -193,13 +193,13 @@ def setup_logging(
     with _logging_lock:
         # Get configuration from environment variables or defaults
         if level is None:
-            level = os.environ.get("SENTINEL_LOG_LEVEL", DEFAULT_LOG_LEVEL)
+            level = os.environ.get("GARRISON_LOG_LEVEL", DEFAULT_LOG_LEVEL)
 
         if format is None:
-            format = os.environ.get("SENTINEL_LOG_FORMAT", DEFAULT_LOG_FORMAT)
+            format = os.environ.get("GARRISON_LOG_FORMAT", DEFAULT_LOG_FORMAT)
 
         if log_file is None:
-            log_file = os.environ.get("SENTINEL_LOG_FILE")
+            log_file = os.environ.get("GARRISON_LOG_FILE")
 
         # Convert level string to int if needed
         if isinstance(level, str):
@@ -280,7 +280,7 @@ def get_log_level() -> str:
     Returns:
         The current log level string.
     """
-    return os.environ.get("SENTINEL_LOG_LEVEL", DEFAULT_LOG_LEVEL)
+    return os.environ.get("GARRISON_LOG_LEVEL", DEFAULT_LOG_LEVEL)
 
 
 def get_log_format() -> str:
@@ -289,7 +289,7 @@ def get_log_format() -> str:
     Returns:
         The current log format ("text" or "json").
     """
-    return os.environ.get("SENTINEL_LOG_FORMAT", DEFAULT_LOG_FORMAT)
+    return os.environ.get("GARRISON_LOG_FORMAT", DEFAULT_LOG_FORMAT)
 
 
 # Convenience function for quick logging setup
@@ -316,7 +316,7 @@ if __name__ == "__main__":
     # Demo/test code
     configure(level="DEBUG", format="text")
     
-    test_logger = get_logger("sentinel.test")
+    test_logger = get_logger("garrison.test")
     
     test_logger.debug("This is a debug message")
     test_logger.info("This is an info message")
@@ -328,6 +328,6 @@ if __name__ == "__main__":
     
     configure(level="DEBUG", format="json")
     
-    test_logger2 = get_logger("sentinel.test.json")
+    test_logger2 = get_logger("garrison.test.json")
     test_logger2.info("JSON formatted log message")
     test_logger2.warning("Pattern match in comment skipped")

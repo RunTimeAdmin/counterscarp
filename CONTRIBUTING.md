@@ -1,9 +1,9 @@
-# Contributing to Sentinel Engine
+# Contributing to Garrison Engine
 
-Thank you for your interest in contributing to Sentinel Engine! This guide will help you get started with adding new features, fixing bugs, and improving the codebase.
+Thank you for your interest in contributing to Garrison Engine! This guide will help you get started with adding new features, fixing bugs, and improving the codebase.
 
-> **Website:** [sentinel-engine.io](https://sentinel-engine.io)  
-> **Issues:** [GitHub Issues](https://github.com/RunTimeAdmin/sentinel-engine/issues)
+> **Website:** [garrisonsec.io](https://garrisonsec.io)  
+> **Issues:** [GitHub Issues](https://github.com/RunTimeAdmin/garrison-engine/issues)
 
 ---
 
@@ -31,8 +31,8 @@ Thank you for your interest in contributing to Sentinel Engine! This guide will 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/RunTimeAdmin/sentinel-engine.git
-cd sentinel-engine
+git clone https://github.com/RunTimeAdmin/garrison-engine.git
+cd garrison-engine
 
 # 2. Create a virtual environment (recommended)
 python -m venv venv
@@ -47,7 +47,7 @@ source venv/bin/activate
 pip install -e ".[dev]"
 
 # 4. Verify installation
-sentinel-engine --help
+garrison-engine --help
 # Or: python orchestrator.py --help
 ```
 
@@ -153,7 +153,7 @@ This is handled by the [`is_in_code_context()`](heuristic_scanner.py#L253) and [
 
 ```python
 # Test the rule manually
-python heuristic_scanner.py /path/to/test/contracts --config sentinel-pr.toml
+python heuristic_scanner.py /path/to/test/contracts --config garrison-pr.toml
 
 # Or write a unit test
 def test_my_new_rule():
@@ -184,9 +184,9 @@ from typing import Dict, Any, List
 
 from logger import get_logger
 from exceptions import (
-    SentinelAnalysisError,
-    SentinelToolNotFoundError,
-    SentinelTimeoutError,
+    GarrisonAnalysisError,
+    GarrisonToolNotFoundError,
+    GarrisonTimeoutError,
 )
 
 logger = get_logger(__name__)
@@ -209,7 +209,7 @@ def check_tool_installed() -> bool:
 def run_my_analyzer(project_root: str) -> Dict[str, Any]:
     """Run the analyzer and return structured results."""
     if not check_tool_installed():
-        raise SentinelToolNotFoundError(
+        raise GarrisonToolNotFoundError(
             "my-analyzer not found",
             details={"tool": "my-analyzer", "install_cmd": "pip install my-analyzer"}
         )
@@ -225,12 +225,12 @@ def run_my_analyzer(project_root: str) -> Dict[str, Any]:
         )
         return json.loads(result.stdout)
     except subprocess.TimeoutExpired as e:
-        raise SentinelTimeoutError(
+        raise GarrisonTimeoutError(
             "Analysis timed out",
             details={"operation": "my_analyzer", "timeout_seconds": 120}
         ) from e
     except Exception as e:
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Analysis failed",
             details={"error": str(e)}
         ) from e
@@ -300,7 +300,7 @@ Your wrapper should return a dictionary with this structure:
 ### Test Directory Structure
 
 ```
-sentinel-engine/
+garrison-engine/
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py              # Shared fixtures
@@ -324,7 +324,7 @@ sentinel-engine/
 Create a `tests/conftest.py` file with common fixtures:
 
 ```python
-"""Shared test fixtures for Sentinel Engine."""
+"""Shared test fixtures for Garrison Engine."""
 
 import pytest
 import tempfile
@@ -421,27 +421,27 @@ def test_tx_origin_detection(temp_sol_file, mock_config):
 All exceptions are defined in [`exceptions.py`](exceptions.py):
 
 ```
-SentinelError (base)
-├── SentinelConfigError      # Configuration issues
-├── SentinelAnalysisError    # Analyzer failures
-├── SentinelAPIError         # External API failures
-├── SentinelReportError      # Report generation failures
-├── SentinelToolNotFoundError # Missing external tools
-├── SentinelValidationError  # Input validation failures
-└── SentinelTimeoutError     # Operation timeouts
+GarrisonError (base)
+├── GarrisonConfigError      # Configuration issues
+├── GarrisonAnalysisError    # Analyzer failures
+├── GarrisonAPIError         # External API failures
+├── GarrisonReportError      # Report generation failures
+├── GarrisonToolNotFoundError # Missing external tools
+├── GarrisonValidationError  # Input validation failures
+└── GarrisonTimeoutError     # Operation timeouts
 ```
 
 ### When to Use Each Exception Type
 
 | Exception | Use When | Example |
 |-----------|----------|---------|
-| `SentinelConfigError` | TOML syntax error, invalid config value | Missing `[engine]` section |
-| `SentinelAnalysisError` | Slither/Aderyn/Mythril fails | Compilation error, timeout |
-| `SentinelAPIError` | OSV.dev or threat intel API fails | 500 error from API |
-| `SentinelReportError` | Can't write report file | Permission denied on output dir |
-| `SentinelToolNotFoundError` | External tool not installed | Slither not in PATH |
-| `SentinelValidationError` | User input is invalid | Invalid contract address format |
-| `SentinelTimeoutError` | Operation exceeds time limit | Mythril analysis > 5 minutes |
+| `GarrisonConfigError` | TOML syntax error, invalid config value | Missing `[engine]` section |
+| `GarrisonAnalysisError` | Slither/Aderyn/Mythril fails | Compilation error, timeout |
+| `GarrisonAPIError` | OSV.dev or threat intel API fails | 500 error from API |
+| `GarrisonReportError` | Can't write report file | Permission denied on output dir |
+| `GarrisonToolNotFoundError` | External tool not installed | Slither not in PATH |
+| `GarrisonValidationError` | User input is invalid | Invalid contract address format |
+| `GarrisonTimeoutError` | Operation exceeds time limit | Mythril analysis > 5 minutes |
 
 ### API Integration with `http_utils.py`
 
@@ -500,12 +500,12 @@ logger.critical("Critical failure")           # May crash the program
 Always chain exceptions to preserve context:
 
 ```python
-from exceptions import SentinelConfigError
+from exceptions import GarrisonConfigError
 
 try:
     load_config(path)
 except Exception as e:
-    raise SentinelConfigError(
+    raise GarrisonConfigError(
         "Failed to load configuration",
         details={"path": path, "error": str(e)}
     ) from e
@@ -524,7 +524,7 @@ from typing import List, Dict, Optional, Any
 
 def scan_target(
     target: str,
-    config: Optional[SentinelConfig] = None
+    config: Optional[GarrisonConfig] = None
 ) -> List[HeuristicFinding]:
     """Scan a target file or directory.
     
@@ -591,21 +591,21 @@ The following environment variables are supported:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `SENTINEL_LOG_LEVEL` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL | INFO | No |
-| `SENTINEL_LOG_FORMAT` | Output format: "text" or "json" | text | No |
-| `SENTINEL_LOG_FILE` | Path to log file (optional) | (none) | No |
+| `GARRISON_LOG_LEVEL` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL | INFO | No |
+| `GARRISON_LOG_FORMAT` | Output format: "text" or "json" | text | No |
+| `GARRISON_LOG_FILE` | Path to log file (optional) | (none) | No |
 | `OPENAI_API_KEY` | OpenAI API key for exploit generation | (none) | For AI features |
 
 ### Usage Examples
 
 ```bash
 # Debug logging to file
-export SENTINEL_LOG_LEVEL=DEBUG
-export SENTINEL_LOG_FILE=/var/log/sentinel.log
+export GARRISON_LOG_LEVEL=DEBUG
+export GARRISON_LOG_FILE=/var/log/garrison.log
 python orchestrator.py --target ./contracts
 
 # JSON format for structured logging
-export SENTINEL_LOG_FORMAT=json
+export GARRISON_LOG_FORMAT=json
 python orchestrator.py --target ./contracts 2>&1 | jq
 
 # OpenAI for exploit generation
@@ -640,7 +640,7 @@ python exploit_generator.py --finding-json findings.json
 ## Questions?
 
 - Open an issue on GitHub
-- Visit [sentinel-engine.io](https://sentinel-engine.io)
+- Visit [garrisonsec.io](https://garrisonsec.io)
 - Contact: [@defiauditccie](https://twitter.com/defiauditccie)
 
-Thank you for contributing to Sentinel Engine!
+Thank you for contributing to Garrison Engine!

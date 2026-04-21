@@ -1,4 +1,4 @@
-"""Signature and threat intelligence database updater for Sentinel Engine."""
+"""Signature and threat intelligence database updater for Garrison Engine."""
 
 import json
 import os
@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import Dict
 
-logger = logging.getLogger("sentinel.signature_updater")
+logger = logging.getLogger("garrison.signature_updater")
 
 
 def update_all_signatures(config=None) -> Dict[str, int]:

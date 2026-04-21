@@ -1,1 +1,1 @@
-"""Sentinel Engine Web Application."""
+"""Garrison Engine Web Application."""

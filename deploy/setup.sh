@@ -1,22 +1,22 @@
 #!/bin/bash
-# Sentinel Engine Web App - VPS Deployment Script
+# Garrison Engine Web App - VPS Deployment Script
 # Run as root on Ubuntu 22.04
 set -e
 
-echo "=== Sentinel Engine Deployment ==="
+echo "=== Garrison Engine Deployment ==="
 
 # Create service user (no login shell, no home)
 echo "[1/8] Creating service user..."
-useradd -r -s /bin/false sentinel 2>/dev/null || true
+useradd -r -s /bin/false garrison 2>/dev/null || true
 
 # Clone or update repository
 echo "[2/8] Cloning/updating repository..."
-mkdir -p /opt/sentinel-engine
-cd /opt/sentinel-engine
+mkdir -p /opt/garrison-engine
+cd /opt/garrison-engine
 if [ -d ".git" ]; then
     git pull origin main
 else
-    git clone https://github.com/RunTimeAdmin/sentinel-engine.git .
+    git clone https://github.com/RunTimeAdmin/garrison-engine.git .
 fi
 
 # Create Python virtualenv and install
@@ -27,17 +27,17 @@ python3 -m venv venv
 
 # Create required directories
 echo "[4/8] Creating directories..."
-mkdir -p /opt/sentinel-engine/uploads
-mkdir -p /opt/sentinel-engine/results
+mkdir -p /opt/garrison-engine/uploads
+mkdir -p /opt/garrison-engine/results
 
 # Set ownership
 echo "[5/8] Setting permissions..."
-chown -R sentinel:sentinel /opt/sentinel-engine
+chown -R garrison:garrison /opt/garrison-engine
 
 # Install nginx configuration
 echo "[6/8] Configuring nginx..."
-cp deploy/nginx-sentinel.conf /etc/nginx/sites-available/sentinel
-ln -sf /etc/nginx/sites-available/sentinel /etc/nginx/sites-enabled/sentinel
+cp deploy/nginx-garrison.conf /etc/nginx/sites-available/garrison
+ln -sf /etc/nginx/sites-available/garrison /etc/nginx/sites-enabled/garrison
 nginx -t
 systemctl reload nginx
 
@@ -52,16 +52,16 @@ fi
 
 # Install and start systemd service
 echo "[8/8] Starting service..."
-cp deploy/sentinel-engine.service /etc/systemd/system/
+cp deploy/garrison-engine.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable sentinel-engine
-systemctl restart sentinel-engine
+systemctl enable garrison-engine
+systemctl restart garrison-engine
 
 echo ""
 echo "=== Deployment Complete ==="
 echo "   URL: https://app.sentinel-engine.io"
-echo "   Status: systemctl status sentinel-engine"
-echo "   Logs: journalctl -u sentinel-engine -f"
+echo "   Status: systemctl status garrison-engine"
+echo "   Logs: journalctl -u garrison-engine -f"
 echo ""
 
 # Verify health
@@ -69,5 +69,5 @@ sleep 3
 if curl -s http://127.0.0.1:8001/health | grep -q "ok"; then
     echo "   Health check: PASSED"
 else
-    echo "   Health check: FAILED - check logs with: journalctl -u sentinel-engine -n 50"
+    echo "   Health check: FAILED - check logs with: journalctl -u garrison-engine -n 50"
 fi

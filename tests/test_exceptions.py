@@ -9,31 +9,31 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from exceptions import (
-    SentinelError,
-    SentinelConfigError,
-    SentinelAnalysisError,
-    SentinelAPIError,
-    SentinelReportError,
-    SentinelToolNotFoundError,
-    SentinelValidationError,
-    SentinelTimeoutError,
+    GarrisonError,
+    GarrisonConfigError,
+    GarrisonAnalysisError,
+    GarrisonAPIError,
+    GarrisonReportError,
+    GarrisonToolNotFoundError,
+    GarrisonValidationError,
+    GarrisonTimeoutError,
     format_exception_chain,
-    is_sentinel_error,
+    is_garrison_error,
 )
 
 
-class TestSentinelError:
-    """Test base SentinelError class."""
+class TestGarrisonError:
+    """Test base GarrisonError class."""
 
     def test_creation_with_message(self):
         """Test exception can be created with message."""
-        exc = SentinelError("Test error message")
+        exc = GarrisonError("Test error message")
         assert str(exc) == "Test error message"
         assert exc.message == "Test error message"
 
     def test_creation_with_details(self):
         """Test exception can be created with details."""
-        exc = SentinelError(
+        exc = GarrisonError(
             "Test error",
             details={"key": "value", "code": 500}
         )
@@ -42,7 +42,7 @@ class TestSentinelError:
 
     def test_str_with_details(self):
         """Test string representation includes details."""
-        exc = SentinelError(
+        exc = GarrisonError(
             "Test error",
             details={"path": "/test"}
         )
@@ -52,38 +52,38 @@ class TestSentinelError:
 
     def test_str_without_details(self):
         """Test string representation without details."""
-        exc = SentinelError("Simple error")
+        exc = GarrisonError("Simple error")
         assert str(exc) == "Simple error"
 
     def test_to_dict_basic(self):
         """Test to_dict with basic error."""
-        exc = SentinelError("Test error")
+        exc = GarrisonError("Test error")
         d = exc.to_dict()
-        assert d["type"] == "SentinelError"
+        assert d["type"] == "GarrisonError"
         assert d["message"] == "Test error"
 
     def test_to_dict_with_details(self):
         """Test to_dict includes details."""
-        exc = SentinelError("Test", details={"code": 500})
+        exc = GarrisonError("Test", details={"code": 500})
         d = exc.to_dict()
         assert d["details"]["code"] == 500
 
     def test_to_dict_with_cause(self):
         """Test to_dict includes cause when chained."""
         original = ValueError("Original error")
-        exc = SentinelError("Wrapped error")
+        exc = GarrisonError("Wrapped error")
         exc.__cause__ = original
         d = exc.to_dict()
         assert "cause" in d
         assert "Original error" in d["cause"]
 
 
-class TestSentinelConfigError:
-    """Test SentinelConfigError class."""
+class TestGarrisonConfigError:
+    """Test GarrisonConfigError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = SentinelConfigError(
+        exc = GarrisonConfigError(
             "Config load failed",
             details={"path": "config.toml", "line": 10}
         )
@@ -91,17 +91,17 @@ class TestSentinelConfigError:
         assert exc.details["path"] == "config.toml"
 
     def test_inheritance(self):
-        """Test inheritance from SentinelError."""
-        exc = SentinelConfigError("Test")
-        assert isinstance(exc, SentinelError)
+        """Test inheritance from GarrisonError."""
+        exc = GarrisonConfigError("Test")
+        assert isinstance(exc, GarrisonError)
 
 
-class TestSentinelAnalysisError:
-    """Test SentinelAnalysisError class."""
+class TestGarrisonAnalysisError:
+    """Test GarrisonAnalysisError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = SentinelAnalysisError(
+        exc = GarrisonAnalysisError(
             "Slither failed",
             details={"tool": "slither", "contract": "test.sol"}
         )
@@ -109,17 +109,17 @@ class TestSentinelAnalysisError:
         assert exc.details["tool"] == "slither"
 
     def test_inheritance(self):
-        """Test inheritance from SentinelError."""
-        exc = SentinelAnalysisError("Test")
-        assert isinstance(exc, SentinelError)
+        """Test inheritance from GarrisonError."""
+        exc = GarrisonAnalysisError("Test")
+        assert isinstance(exc, GarrisonError)
 
 
-class TestSentinelAPIError:
-    """Test SentinelAPIError class."""
+class TestGarrisonAPIError:
+    """Test GarrisonAPIError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = SentinelAPIError(
+        exc = GarrisonAPIError(
             "OSV API failed",
             details={"status_code": 503, "endpoint": "/v1/query"}
         )
@@ -127,17 +127,17 @@ class TestSentinelAPIError:
         assert exc.details["status_code"] == 503
 
     def test_inheritance(self):
-        """Test inheritance from SentinelError."""
-        exc = SentinelAPIError("Test")
-        assert isinstance(exc, SentinelError)
+        """Test inheritance from GarrisonError."""
+        exc = GarrisonAPIError("Test")
+        assert isinstance(exc, GarrisonError)
 
 
-class TestSentinelReportError:
-    """Test SentinelReportError class."""
+class TestGarrisonReportError:
+    """Test GarrisonReportError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = SentinelReportError(
+        exc = GarrisonReportError(
             "Failed to write report",
             details={"format": "html", "output_path": "/reports"}
         )
@@ -145,17 +145,17 @@ class TestSentinelReportError:
         assert exc.details["format"] == "html"
 
     def test_inheritance(self):
-        """Test inheritance from SentinelError."""
-        exc = SentinelReportError("Test")
-        assert isinstance(exc, SentinelError)
+        """Test inheritance from GarrisonError."""
+        exc = GarrisonReportError("Test")
+        assert isinstance(exc, GarrisonError)
 
 
-class TestSentinelToolNotFoundError:
-    """Test SentinelToolNotFoundError class."""
+class TestGarrisonToolNotFoundError:
+    """Test GarrisonToolNotFoundError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = SentinelToolNotFoundError(
+        exc = GarrisonToolNotFoundError(
             "Slither not found",
             details={"tool": "slither", "install_cmd": "pip install slither"}
         )
@@ -163,17 +163,17 @@ class TestSentinelToolNotFoundError:
         assert exc.details["tool"] == "slither"
 
     def test_inheritance(self):
-        """Test inheritance from SentinelError."""
-        exc = SentinelToolNotFoundError("Test")
-        assert isinstance(exc, SentinelError)
+        """Test inheritance from GarrisonError."""
+        exc = GarrisonToolNotFoundError("Test")
+        assert isinstance(exc, GarrisonError)
 
 
-class TestSentinelValidationError:
-    """Test SentinelValidationError class."""
+class TestGarrisonValidationError:
+    """Test GarrisonValidationError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = SentinelValidationError(
+        exc = GarrisonValidationError(
             "Invalid input",
             details={"field": "address", "value": "0x123"}
         )
@@ -181,17 +181,17 @@ class TestSentinelValidationError:
         assert exc.details["field"] == "address"
 
     def test_inheritance(self):
-        """Test inheritance from SentinelError."""
-        exc = SentinelValidationError("Test")
-        assert isinstance(exc, SentinelError)
+        """Test inheritance from GarrisonError."""
+        exc = GarrisonValidationError("Test")
+        assert isinstance(exc, GarrisonError)
 
 
-class TestSentinelTimeoutError:
-    """Test SentinelTimeoutError class."""
+class TestGarrisonTimeoutError:
+    """Test GarrisonTimeoutError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = SentinelTimeoutError(
+        exc = GarrisonTimeoutError(
             "Analysis timed out",
             details={"operation": "fuzzing", "timeout_seconds": 300}
         )
@@ -199,9 +199,9 @@ class TestSentinelTimeoutError:
         assert exc.details["timeout_seconds"] == 300
 
     def test_inheritance(self):
-        """Test inheritance from SentinelError."""
-        exc = SentinelTimeoutError("Test")
-        assert isinstance(exc, SentinelError)
+        """Test inheritance from GarrisonError."""
+        exc = GarrisonTimeoutError("Test")
+        assert isinstance(exc, GarrisonError)
 
 
 class TestExceptionChaining:
@@ -210,7 +210,7 @@ class TestExceptionChaining:
     def test_explicit_chaining(self):
         """Test explicit exception chaining with 'from'."""
         original = ValueError("Original error")
-        exc = SentinelConfigError("Config failed")
+        exc = GarrisonConfigError("Config failed")
         exc.__cause__ = original
         assert exc.__cause__ is original
         assert str(exc.__cause__) == "Original error"
@@ -221,8 +221,8 @@ class TestExceptionChaining:
             try:
                 raise ValueError("Inner error")
             except ValueError:
-                raise SentinelError("Outer error")
-        except SentinelError as exc:
+                raise GarrisonError("Outer error")
+        except GarrisonError as exc:
             # Implicit chaining sets __context__, not __cause__
             # __cause__ is only set with explicit 'from' syntax
             assert exc.__context__ is not None or exc.__cause__ is not None
@@ -233,8 +233,8 @@ class TestExceptionChaining:
             raise RuntimeError("Root cause")
         except RuntimeError as root:
             try:
-                raise SentinelAnalysisError("Analysis failed") from root
-            except SentinelAnalysisError as analysis:
+                raise GarrisonAnalysisError("Analysis failed") from root
+            except GarrisonAnalysisError as analysis:
                 d = analysis.to_dict()
                 assert "cause" in d
 
@@ -244,14 +244,14 @@ class TestFormatExceptionChain:
 
     def test_single_exception(self):
         """Test formatting single exception."""
-        exc = SentinelError("Single error")
+        exc = GarrisonError("Single error")
         result = format_exception_chain(exc)
         assert result == "Single error"
 
     def test_chained_exceptions(self):
         """Test formatting chained exceptions."""
         root = ValueError("Root cause")
-        exc = SentinelError("Wrapped")
+        exc = GarrisonError("Wrapped")
         exc.__cause__ = root
         result = format_exception_chain(exc)
         assert "Wrapped" in result
@@ -261,9 +261,9 @@ class TestFormatExceptionChain:
     def test_triple_chained_exceptions(self):
         """Test formatting triple chained exceptions."""
         e1 = Exception("Level 1")
-        e2 = SentinelError("Level 2")
+        e2 = GarrisonError("Level 2")
         e2.__cause__ = e1
-        e3 = SentinelConfigError("Level 3")
+        e3 = GarrisonConfigError("Level 3")
         e3.__cause__ = e2
         result = format_exception_chain(e3)
         assert "Level 3" in result
@@ -271,63 +271,63 @@ class TestFormatExceptionChain:
         assert "Level 1" in result
 
 
-class TestIsSentinelError:
-    """Test is_sentinel_error function."""
+class TestIsGarrisonError:
+    """Test is_garrison_error function."""
 
-    def test_sentinel_error_returns_true(self):
-        """Test SentinelError returns True."""
-        exc = SentinelError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_error_returns_true(self):
+        """Test GarrisonError returns True."""
+        exc = GarrisonError("Test")
+        assert is_garrison_error(exc) is True
 
-    def test_sentinel_config_error_returns_true(self):
-        """Test SentinelConfigError returns True."""
-        exc = SentinelConfigError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_config_error_returns_true(self):
+        """Test GarrisonConfigError returns True."""
+        exc = GarrisonConfigError("Test")
+        assert is_garrison_error(exc) is True
 
-    def test_sentinel_analysis_error_returns_true(self):
-        """Test SentinelAnalysisError returns True."""
-        exc = SentinelAnalysisError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_analysis_error_returns_true(self):
+        """Test GarrisonAnalysisError returns True."""
+        exc = GarrisonAnalysisError("Test")
+        assert is_garrison_error(exc) is True
 
-    def test_sentinel_api_error_returns_true(self):
-        """Test SentinelAPIError returns True."""
-        exc = SentinelAPIError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_api_error_returns_true(self):
+        """Test GarrisonAPIError returns True."""
+        exc = GarrisonAPIError("Test")
+        assert is_garrison_error(exc) is True
 
-    def test_sentinel_report_error_returns_true(self):
-        """Test SentinelReportError returns True."""
-        exc = SentinelReportError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_report_error_returns_true(self):
+        """Test GarrisonReportError returns True."""
+        exc = GarrisonReportError("Test")
+        assert is_garrison_error(exc) is True
 
-    def test_sentinel_tool_not_found_error_returns_true(self):
-        """Test SentinelToolNotFoundError returns True."""
-        exc = SentinelToolNotFoundError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_tool_not_found_error_returns_true(self):
+        """Test GarrisonToolNotFoundError returns True."""
+        exc = GarrisonToolNotFoundError("Test")
+        assert is_garrison_error(exc) is True
 
-    def test_sentinel_validation_error_returns_true(self):
-        """Test SentinelValidationError returns True."""
-        exc = SentinelValidationError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_validation_error_returns_true(self):
+        """Test GarrisonValidationError returns True."""
+        exc = GarrisonValidationError("Test")
+        assert is_garrison_error(exc) is True
 
-    def test_sentinel_timeout_error_returns_true(self):
-        """Test SentinelTimeoutError returns True."""
-        exc = SentinelTimeoutError("Test")
-        assert is_sentinel_error(exc) is True
+    def test_garrison_timeout_error_returns_true(self):
+        """Test GarrisonTimeoutError returns True."""
+        exc = GarrisonTimeoutError("Test")
+        assert is_garrison_error(exc) is True
 
     def test_value_error_returns_false(self):
         """Test ValueError returns False."""
         exc = ValueError("Test")
-        assert is_sentinel_error(exc) is False
+        assert is_garrison_error(exc) is False
 
     def test_runtime_error_returns_false(self):
         """Test RuntimeError returns False."""
         exc = RuntimeError("Test")
-        assert is_sentinel_error(exc) is False
+        assert is_garrison_error(exc) is False
 
     def test_type_error_returns_false(self):
         """Test TypeError returns False."""
         exc = TypeError("Test")
-        assert is_sentinel_error(exc) is False
+        assert is_garrison_error(exc) is False
 
 
 class TestAllExceptionTypes:
@@ -336,31 +336,31 @@ class TestAllExceptionTypes:
     def test_all_types_with_message(self):
         """Test all exception types can be created with message."""
         exceptions = [
-            SentinelError("Base"),
-            SentinelConfigError("Config"),
-            SentinelAnalysisError("Analysis"),
-            SentinelAPIError("API"),
-            SentinelReportError("Report"),
-            SentinelToolNotFoundError("Tool"),
-            SentinelValidationError("Validation"),
-            SentinelTimeoutError("Timeout"),
+            GarrisonError("Base"),
+            GarrisonConfigError("Config"),
+            GarrisonAnalysisError("Analysis"),
+            GarrisonAPIError("API"),
+            GarrisonReportError("Report"),
+            GarrisonToolNotFoundError("Tool"),
+            GarrisonValidationError("Validation"),
+            GarrisonTimeoutError("Timeout"),
         ]
         
         for exc in exceptions:
-            assert isinstance(exc, SentinelError)
+            assert isinstance(exc, GarrisonError)
             assert exc.message is not None
 
     def test_all_types_with_details(self):
         """Test all exception types can be created with details."""
         exceptions = [
-            SentinelError("Base", {"code": 1}),
-            SentinelConfigError("Config", {"file": "test"}),
-            SentinelAnalysisError("Analysis", {"tool": "slither"}),
-            SentinelAPIError("API", {"status": 500}),
-            SentinelReportError("Report", {"format": "html"}),
-            SentinelToolNotFoundError("Tool", {"tool": "mythril"}),
-            SentinelValidationError("Validation", {"field": "address"}),
-            SentinelTimeoutError("Timeout", {"seconds": 30}),
+            GarrisonError("Base", {"code": 1}),
+            GarrisonConfigError("Config", {"file": "test"}),
+            GarrisonAnalysisError("Analysis", {"tool": "slither"}),
+            GarrisonAPIError("API", {"status": 500}),
+            GarrisonReportError("Report", {"format": "html"}),
+            GarrisonToolNotFoundError("Tool", {"tool": "mythril"}),
+            GarrisonValidationError("Validation", {"field": "address"}),
+            GarrisonTimeoutError("Timeout", {"seconds": 30}),
         ]
         
         for exc in exceptions:
@@ -369,14 +369,14 @@ class TestAllExceptionTypes:
     def test_all_types_to_dict(self):
         """Test all exception types can be serialized to dict."""
         exceptions = [
-            SentinelError("Base"),
-            SentinelConfigError("Config"),
-            SentinelAnalysisError("Analysis"),
-            SentinelAPIError("API"),
-            SentinelReportError("Report"),
-            SentinelToolNotFoundError("Tool"),
-            SentinelValidationError("Validation"),
-            SentinelTimeoutError("Timeout"),
+            GarrisonError("Base"),
+            GarrisonConfigError("Config"),
+            GarrisonAnalysisError("Analysis"),
+            GarrisonAPIError("API"),
+            GarrisonReportError("Report"),
+            GarrisonToolNotFoundError("Tool"),
+            GarrisonValidationError("Validation"),
+            GarrisonTimeoutError("Timeout"),
         ]
         
         for exc in exceptions:

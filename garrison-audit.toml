@@ -1,5 +1,5 @@
 # ============================================================================
-# SENTINEL ENGINE - AUDIT MODE CONFIGURATION
+# GARRISON ENGINE - AUDIT MODE CONFIGURATION
 # ============================================================================
 # Profile: Maximum thoroughness for comprehensive client audits
 # Speed: Slow (deep analysis, full coverage)
@@ -7,7 +7,7 @@
 # ============================================================================
 
 [engine]
-name = "Sentinel Security Engine"
+name = "Garrison Security Engine"
 version = "3.4.0"
 profile = "audit"
 

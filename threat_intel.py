@@ -21,7 +21,7 @@ import knowledge_fetcher  # EVM intelligence
 import solana_intel       # Solana intelligence
 
 from logger import get_logger
-from exceptions import SentinelAPIError, SentinelValidationError
+from exceptions import GarrisonAPIError, GarrisonValidationError
 
 logger = get_logger(__name__)
 
@@ -128,7 +128,7 @@ Examples:
             knowledge_fetcher.generate_comprehensive_report(args.file)
         except Exception as e:
             logger.error(f"EVM intelligence engine failed: {e}")
-            raise SentinelAPIError(
+            raise GarrisonAPIError(
                 "EVM intelligence engine failed",
                 details={"file": args.file, "error": str(e)}
             ) from e
@@ -141,7 +141,7 @@ Examples:
             solana_intel.generate_solana_report(args.file)
         except Exception as e:
             logger.error(f"Solana intelligence engine failed: {e}")
-            raise SentinelAPIError(
+            raise GarrisonAPIError(
                 "Solana intelligence engine failed",
                 details={"file": args.file, "error": str(e)}
             ) from e
@@ -151,7 +151,7 @@ Examples:
         print(f"[!] ERROR: Could not detect chain type for '{args.file}'")
         print("[!] Supported: .sol (Solidity/EVM), .rs (Rust/Solana)")
         print("[!] Use --force-chain to override auto-detection")
-        raise SentinelValidationError(
+        raise GarrisonValidationError(
             "Could not detect chain type",
             details={"file": args.file, "supported_types": [".sol", ".rs"]}
         )

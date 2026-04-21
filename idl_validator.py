@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
 from logger import get_logger
-from exceptions import SentinelValidationError, SentinelAnalysisError
+from exceptions import GarrisonValidationError, GarrisonAnalysisError
 
 logger = get_logger(__name__)
 
@@ -106,13 +106,13 @@ class IDLParser:
             Parsed IDLProgram object.
 
         Raises:
-            SentinelValidationError: If the IDL file is invalid or cannot
+            GarrisonValidationError: If the IDL file is invalid or cannot
                 be parsed.
         """
         logger.debug(f"Parsing IDL file: {idl_path}")
 
         if not os.path.exists(idl_path):
-            raise SentinelValidationError(
+            raise GarrisonValidationError(
                 f"IDL file not found: {idl_path}",
                 details={"path": idl_path}
             )
@@ -121,12 +121,12 @@ class IDLParser:
             with open(idl_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         except json.JSONDecodeError as e:
-            raise SentinelValidationError(
+            raise GarrisonValidationError(
                 f"Invalid JSON in IDL file: {e}",
                 details={"path": idl_path, "error": str(e)}
             ) from e
         except IOError as e:
-            raise SentinelValidationError(
+            raise GarrisonValidationError(
                 f"Failed to read IDL file: {e}",
                 details={"path": idl_path, "error": str(e)}
             ) from e
@@ -837,7 +837,7 @@ def validate_idl(
         List of findings as dictionaries.
 
     Raises:
-        SentinelAnalysisError: If validation fails unexpectedly.
+        GarrisonAnalysisError: If validation fails unexpectedly.
     """
     logger.info(f"Starting IDL validation: {idl_path}")
 
@@ -903,10 +903,10 @@ def validate_idl(
             f"IDL validation complete. Found {len(findings)} issue(s)."
         )
 
-    except SentinelValidationError:
+    except GarrisonValidationError:
         raise
     except Exception as e:
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             f"IDL validation failed: {e}",
             details={"path": idl_path, "error": str(e)}
         ) from e

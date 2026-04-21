@@ -4,16 +4,16 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 3.x.x   | Yes               |
-| < 3.0   | No                |
+| 4.x.x   | Yes               |
+| < 4.0   | No                |
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Sentinel Engine, please report it responsibly.
+If you discover a security vulnerability in Garrison Engine, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email us at: **support@sentinel-engine.io**
+Instead, please email us at: **support@garrisonsec.io**
 
 ### What to Include
 
@@ -34,9 +34,9 @@ Instead, please email us at: **support@sentinel-engine.io**
 ### Scope
 
 The following are in scope:
-- Sentinel Engine core analyzers and scanning logic
+- Garrison Engine core analyzers and scanning logic
 - License validation and key management
-- Web application (app.sentinel-engine.io)
+- Web application (app.garrisonsec.io)
 - CLI tools and report generation
 
 The following are out of scope:

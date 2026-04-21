@@ -1,11 +1,11 @@
 # ============================================================================
-# Sentinel Engine Configuration
+# Garrison Engine Configuration
 # Per-project security analysis settings
 # ============================================================================
 
 [engine]
 # Engine-wide settings
-name = "Sentinel Security Engine"
+name = "Garrison Security Engine"
 version = "3.4.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
@@ -419,7 +419,7 @@ llm_backend = "none"
 openai_model = "gpt-4-turbo-preview"
 
 # Path to the RAG vector index
-rag_index_path = ".sentinel/rag_index.json"
+rag_index_path = ".garrison/rag_index.json"
 
 # Number of similar findings to retrieve for enrichment
 top_k = 5
@@ -437,7 +437,7 @@ auto_enrich = false
 enabled = true
 
 # Directories to scan for plugin modules (relative to project root)
-dirs = [".sentinel/plugins"]
+dirs = [".garrison/plugins"]
 
 
 # ============================================================================
@@ -445,8 +445,8 @@ dirs = [".sentinel/plugins"]
 # ============================================================================
 
 [license]
-# Pro license key. Can also be set via SENTINEL_PRO_LICENSE env var.
-# Get your key at https://sentinel-engine.io/pricing
+# Pro license key. Can also be set via GARRISON_PRO_LICENSE env var.
+# Get your key at https://garrisonsec.io/pricing
 key = ""
 
 

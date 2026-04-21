@@ -89,7 +89,7 @@ class TestFreeTier:
     def setup_method(self):
         LicenseManager._instance = None
         # Ensure no license env var
-        os.environ.pop("SENTINEL_PRO_LICENSE", None)
+        os.environ.pop("GARRISON_PRO_LICENSE", None)
 
     def teardown_method(self):
         LicenseManager._instance = None
@@ -128,7 +128,7 @@ class TestUpgradeMessage:
 
     def test_upgrade_message_contains_pricing_url(self):
         msg = LicenseManager.get_upgrade_message(ATTACK_GRAPH)
-        assert "app.sentinel-engine.io/pricing" in msg
+        assert "app.garrison-engine.io/pricing" in msg
 
     def test_upgrade_message_for_all_features(self):
         for feature in ALL_PRO_FEATURES:
@@ -142,7 +142,7 @@ class TestRequireProDecorator:
 
     def setup_method(self):
         LicenseManager._instance = None
-        os.environ.pop("SENTINEL_PRO_LICENSE", None)
+        os.environ.pop("GARRISON_PRO_LICENSE", None)
 
     def teardown_method(self):
         LicenseManager._instance = None
@@ -274,37 +274,37 @@ class TestTierFromKeyPrefix:
 
     def setup_method(self):
         LicenseManager._instance = None
-        os.environ.pop("SENTINEL_PRO_LICENSE", None)
+        os.environ.pop("GARRISON_PRO_LICENSE", None)
 
     def teardown_method(self):
         LicenseManager._instance = None
 
     def test_dev_prefix_returns_developer(self):
-        os.environ["SENTINEL_PRO_LICENSE"] = "SE-DEV-abcdef1234567890"
+        os.environ["GARRISON_PRO_LICENSE"] = "SE-DEV-abcdef1234567890"
         LicenseManager._instance = None
         mgr = LicenseManager()
         assert mgr._tier_from_key_prefix() == DEVELOPER
 
     def test_pro_prefix_returns_pro(self):
-        os.environ["SENTINEL_PRO_LICENSE"] = "SE-PRO-abcdef1234567890"
+        os.environ["GARRISON_PRO_LICENSE"] = "SE-PRO-abcdef1234567890"
         LicenseManager._instance = None
         mgr = LicenseManager()
         assert mgr._tier_from_key_prefix() == PRO
 
     def test_team_prefix_returns_team(self):
-        os.environ["SENTINEL_PRO_LICENSE"] = "SE-TEAM-abcdef1234567890"
+        os.environ["GARRISON_PRO_LICENSE"] = "SE-TEAM-abcdef1234567890"
         LicenseManager._instance = None
         mgr = LicenseManager()
         assert mgr._tier_from_key_prefix() == TEAM
 
     def test_ent_prefix_returns_enterprise(self):
-        os.environ["SENTINEL_PRO_LICENSE"] = "SE-ENT-abcdef1234567890"
+        os.environ["GARRISON_PRO_LICENSE"] = "SE-ENT-abcdef1234567890"
         LicenseManager._instance = None
         mgr = LicenseManager()
         assert mgr._tier_from_key_prefix() == ENTERPRISE
 
     def test_legacy_enterprise_prefix(self):
-        os.environ["SENTINEL_PRO_LICENSE"] = (
+        os.environ["GARRISON_PRO_LICENSE"] = (
             "SE-ENTERPRISE-abcdef1234567890"
         )
         LicenseManager._instance = None
@@ -312,7 +312,7 @@ class TestTierFromKeyPrefix:
         assert mgr._tier_from_key_prefix() == ENTERPRISE
 
     def test_unknown_prefix_returns_community(self):
-        os.environ["SENTINEL_PRO_LICENSE"] = "SE-UNKNOWN-abcdef1234567890"
+        os.environ["GARRISON_PRO_LICENSE"] = "SE-UNKNOWN-abcdef1234567890"
         LicenseManager._instance = None
         mgr = LicenseManager()
         assert mgr._tier_from_key_prefix() == COMMUNITY

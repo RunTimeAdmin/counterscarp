@@ -1,13 +1,13 @@
 {
-  "name": "sentinel-security",
-  "displayName": "Sentinel Security - Smart Contract Auditor",
-  "description": "Real-time security analysis for Solidity contracts powered by The Sentinel Engine",
+  "name": "garrison-security",
+  "displayName": "Garrison Security - Smart Contract Auditor",
+  "description": "Real-time security analysis for Solidity contracts powered by Garrison Engine",
   "version": "1.0.0",
   "publisher": "CyberShieldAustin",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/sentinel-engine"
+    "url": "https://github.com/RunTimeAdmin/garrison-engine"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -27,43 +27,43 @@
   ],
   "activationEvents": [
     "onLanguage:solidity",
-    "onCommand:sentinel.analyze"
+    "onCommand:garrison.analyze"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "sentinel.analyze",
-        "title": "Sentinel: Analyze Contract"
+        "command": "garrison.analyze",
+        "title": "Garrison: Analyze Contract"
       },
       {
-        "command": "sentinel.liarDetector",
-        "title": "Sentinel: Run Liar Detector"
+        "command": "garrison.liarDetector",
+        "title": "Garrison: Run Liar Detector"
       },
       {
-        "command": "sentinel.accessMatrix",
-        "title": "Sentinel: Show Access Matrix"
+        "command": "garrison.accessMatrix",
+        "title": "Garrison: Show Access Matrix"
       }
     ],
     "configuration": {
-      "title": "Sentinel Security",
+      "title": "Garrison Security",
       "properties": {
-        "sentinel.pythonPath": {
+        "garrison.pythonPath": {
           "type": "string",
           "default": "python3",
           "description": "Path to Python interpreter"
         },
-        "sentinel.enginePath": {
+        "garrison.enginePath": {
           "type": "string",
           "default": "",
-          "description": "Path to Sentinel Engine installation"
+          "description": "Path to Garrison Engine installation"
         },
-        "sentinel.enableRealtime": {
+        "garrison.enableRealtime": {
           "type": "boolean",
           "default": true,
           "description": "Enable real-time analysis on file save"
         },
-        "sentinel.openaiApiKey": {
+        "garrison.openaiApiKey": {
           "type": "string",
           "default": "",
           "description": "OpenAI API key for AI exploit generation (optional)"

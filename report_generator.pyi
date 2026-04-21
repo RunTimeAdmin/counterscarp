@@ -49,10 +49,10 @@ SEVERITY_WEIGHTS: Dict[str, float]
 # SARIF severity mapping
 SARIF_LEVEL_MAP: Dict[str, str]
 
-# Sentinel Engine version for SARIF reports
-SENTINEL_ENGINE_VERSION: str
-SENTINEL_ENGINE_SEMANTIC_VERSION: str
-SENTINEL_INFORMATION_URI: str
+# Garrison Engine version for SARIF reports
+GARRISON_ENGINE_VERSION: str
+GARRISON_ENGINE_SEMANTIC_VERSION: str
+GARRISON_INFORMATION_URI: str
 
 # Remediation knowledge base
 REMEDIATION_KB: Dict[str, Dict[str, Any]]

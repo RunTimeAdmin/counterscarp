@@ -522,7 +522,7 @@ class TestCLIArgumentParsing:
             "--solana-root", "./programs",
             "--upgrade-old", "old.sol",
             "--upgrade-new", "new.sol",
-            "--config", "sentinel.toml",
+            "--config", "garrison.toml",
             "--report",
             "--project-name", "MyProject"
         ])
@@ -535,7 +535,7 @@ class TestCLIArgumentParsing:
         assert args.solana_root == "./programs"
         assert args.upgrade_old == "old.sol"
         assert args.upgrade_new == "new.sol"
-        assert args.config == "sentinel.toml"
+        assert args.config == "garrison.toml"
         assert args.report is True
         assert args.project_name == "MyProject"
 

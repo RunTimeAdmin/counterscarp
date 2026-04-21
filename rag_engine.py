@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RAG pipeline for Sentinel Engine.
+"""RAG pipeline for Garrison Engine.
 
 Provides vector storage, knowledge base building, and audit copilot
 for enriching security findings with historical context.
@@ -46,13 +46,13 @@ _OFFLINE_RESULT: Dict[str, Any] = {
 # Import logger and exceptions
 try:
     from logger import get_logger
-    from exceptions import SentinelError, SentinelConfigError
+    from exceptions import GarrisonError, GarrisonConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    SentinelError = Exception
-    SentinelConfigError = Exception
+    GarrisonError = Exception
+    GarrisonConfigError = Exception
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -84,11 +84,11 @@ else:
     np = None
 
 # Default configuration
-DEFAULT_INDEX_PATH = ".sentinel/rag_index.json"
+DEFAULT_INDEX_PATH = ".garrison/rag_index.json"
 DEFAULT_TOP_K = 5
 
 
-class RAGError(SentinelError):
+class RAGError(GarrisonError):
     """Raised when RAG operations fail."""
     pass
 
@@ -914,7 +914,7 @@ class AuditCopilot:
 def main():
     """CLI entry point for RAG engine."""
     parser = argparse.ArgumentParser(
-        description="RAG Engine for Sentinel - Build and query knowledge base"
+        description="RAG Engine for Garrison - Build and query knowledge base"
     )
     parser.add_argument(
         "--build-index",

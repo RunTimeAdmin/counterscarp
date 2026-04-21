@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Time-Travel Historical Vulnerability Scanner for Sentinel Engine.
+Time-Travel Historical Vulnerability Scanner for Garrison Engine.
 
 Scans Git history to track when vulnerabilities were introduced and fixed,
 providing a timeline view of security issues across the codebase evolution.
@@ -26,15 +26,15 @@ from dataclasses import dataclass, field, asdict
 try:
     from logger import get_logger
     from exceptions import (
-        SentinelError, SentinelAnalysisError, SentinelValidationError
+        GarrisonError, GarrisonAnalysisError, GarrisonValidationError
     )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None
-    SentinelError = Exception
-    SentinelAnalysisError = Exception
-    SentinelValidationError = Exception
+    GarrisonError = Exception
+    GarrisonAnalysisError = Exception
+    GarrisonValidationError = Exception
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -46,13 +46,13 @@ else:
 # Import heuristic scanner
 try:
     from heuristic_scanner import scan_file, HeuristicFinding
-    from config_loader import SentinelConfig, load_config
+    from config_loader import GarrisonConfig, load_config
     HEURISTIC_AVAILABLE = True
 except ImportError:
     HEURISTIC_AVAILABLE = False
     scan_file = None
     HeuristicFinding = None
-    SentinelConfig = None
+    GarrisonConfig = None
     load_config = None
 
 
@@ -149,15 +149,15 @@ def parse_git_history(
         List of CommitInfo objects with metadata and changed files.
     
     Raises:
-        SentinelValidationError: If repo_path is not a valid git repository.
-        SentinelAnalysisError: If git command fails.
+        GarrisonValidationError: If repo_path is not a valid git repository.
+        GarrisonAnalysisError: If git command fails.
     """
     repo_path = os.path.abspath(repo_path)
     
     # Validate repository
     git_dir = os.path.join(repo_path, ".git")
     if not os.path.isdir(git_dir):
-        raise SentinelValidationError(
+        raise GarrisonValidationError(
             "Not a valid Git repository",
             details={"path": repo_path}
         )
@@ -192,7 +192,7 @@ def parse_git_history(
         )
         
         if result.returncode != 0:
-            raise SentinelAnalysisError(
+            raise GarrisonAnalysisError(
                 "Git log command failed",
                 details={"error": result.stderr, "path": repo_path}
             )
@@ -204,12 +204,12 @@ def parse_git_history(
         )
         return []
     except FileNotFoundError:
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Git command not found",
             details={"install_hint": "Install Git and ensure it's in PATH"}
         )
     except subprocess.SubprocessError as e:
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Failed to execute git command",
             details={"error": str(e)}
         )
@@ -263,7 +263,7 @@ def scan_commit(
     repo_path: str,
     commit_hash: str,
     files: List[str],
-    config: Optional[SentinelConfig] = None
+    config: Optional[GarrisonConfig] = None
 ) -> CommitFinding:
     """Scan files at a specific commit for vulnerabilities.
     
@@ -280,10 +280,10 @@ def scan_commit(
         CommitFinding with all findings from this commit.
     
     Raises:
-        SentinelAnalysisError: If git show or scanning fails.
+        GarrisonAnalysisError: If git show or scanning fails.
     """
     if not HEURISTIC_AVAILABLE or scan_file is None:
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Heuristic scanner not available",
             details={"hint": "Ensure heuristic_scanner.py is accessible"}
         )
@@ -292,7 +292,7 @@ def scan_commit(
     all_findings = []
     
     # Create temporary directory for extracted files
-    temp_dir = tempfile.mkdtemp(prefix="sentinel_history_")
+    temp_dir = tempfile.mkdtemp(prefix="garrison_history_")
     
     try:
         for file_path in files:
@@ -631,7 +631,7 @@ def generate_history_report(
         Tuple of (json_path, markdown_path).
     
     Raises:
-        SentinelAnalysisError: If report generation fails.
+        GarrisonAnalysisError: If report generation fails.
     """
     output_dir = os.path.abspath(output_dir)
     os.makedirs(output_dir, exist_ok=True)
@@ -652,7 +652,7 @@ def generate_history_report(
         logger.info(f"Timeline JSON written to: {json_path}")
     
     except (IOError, OSError) as e:
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Failed to write timeline JSON",
             details={"path": json_path, "error": str(e)}
         )
@@ -748,7 +748,7 @@ def generate_history_report(
         logger.info(f"Trends Markdown written to: {md_path}")
     
     except (IOError, OSError) as e:
-        raise SentinelAnalysisError(
+        raise GarrisonAnalysisError(
             "Failed to write trends Markdown",
             details={"path": md_path, "error": str(e)}
         )
@@ -762,7 +762,7 @@ def scan_history(
     since: Optional[str] = None,
     branch: str = "main",
     output_dir: str = ".",
-    config: Optional[SentinelConfig] = None
+    config: Optional[GarrisonConfig] = None
 ) -> Dict[str, Any]:
     """Main entry point for historical vulnerability scanning.
     
@@ -775,7 +775,7 @@ def scan_history(
         since: Optional date filter (ISO format).
         branch: Branch to scan (default: "main").
         output_dir: Directory to write reports.
-        config: Optional SentinelConfig for heuristic scanning.
+        config: Optional GarrisonConfig for heuristic scanning.
     
     Returns:
         Summary dictionary with counts and report paths.
@@ -902,7 +902,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        help="Path to sentinel.toml config file"
+        help="Path to garrison.toml config file"
     )
     
     args = parser.parse_args()

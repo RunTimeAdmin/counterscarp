@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from exceptions import SentinelAnalysisError
+from exceptions import GarrisonAnalysisError
 from red_team_scan import (
     run_slither,
     validate_slither_output,
@@ -248,7 +248,7 @@ class TestRunSlither:
             returncode=1
         )
 
-        with pytest.raises(SentinelAnalysisError) as exc_info:
+        with pytest.raises(GarrisonAnalysisError) as exc_info:
             run_slither("test.sol")
 
         assert "slither" in str(exc_info.value).lower()
