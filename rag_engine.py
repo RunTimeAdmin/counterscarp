@@ -19,6 +19,30 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 
+# Network error types for graceful offline handling
+try:
+    import requests.exceptions as _req_exc
+    _NETWORK_ERRORS = (
+        _req_exc.ConnectionError,
+        _req_exc.Timeout,
+        _req_exc.RequestException,
+        ConnectionError,
+        TimeoutError,
+        OSError,
+    )
+except ImportError:
+    _NETWORK_ERRORS = (ConnectionError, TimeoutError, OSError)
+
+_OFFLINE_RESULT: Dict[str, Any] = {
+    "rag_status": "offline",
+    "rag_message": (
+        "AI enrichment unavailable — scan continues without LLM analysis"
+    ),
+    "rag_similar_findings": [],
+    "rag_remediation": "",
+    "rag_references": [],
+}
+
 # Import logger and exceptions
 try:
     from logger import get_logger
@@ -654,6 +678,8 @@ class AuditCopilot:
                 - rag_similar_findings: Top-K similar past findings
                 - rag_remediation: Aggregated remediation guidance
                 - rag_references: Related audit reports/disclosures
+            On network/API failure returns a dict with rag_status="offline"
+            so callers can short-circuit without raising.
         """
         if not self.vector_store.entries:
             logger.debug("No RAG index loaded, skipping enrichment")
@@ -711,7 +737,17 @@ class AuditCopilot:
             )
             
             return enriched
-            
+
+        except _NETWORK_ERRORS as e:  # type: ignore[misc]
+            logger.warning(
+                f"AI Copilot unavailable (offline mode): {e}"
+            )
+            offline = dict(_OFFLINE_RESULT)
+            offline.update(
+                {k: finding.get(k) for k in finding if k not in offline}
+            )
+            return offline
+
         except Exception as e:
             logger.warning(f"Failed to enrich finding: {e}")
             finding["rag_similar_findings"] = []
@@ -724,22 +760,46 @@ class AuditCopilot:
         findings: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Enrich multiple findings with RAG context.
+
+        Short-circuits the loop if an API is unreachable (offline mode),
+        so subsequent findings are returned un-enriched rather than causing
+        repeated timeout delays.
         
         Args:
             findings: List of finding dictionaries.
             
         Returns:
-            List of enriched findings.
+            List of enriched findings (some may have rag_status='offline').
         """
         enriched = []
+        copilot_offline = False
         for finding in findings:
-            enriched.append(self.enrich_finding(finding))
+            if copilot_offline:
+                # API already confirmed unreachable — skip remainder
+                offline = dict(_OFFLINE_RESULT)
+                offline.update(
+                    {k: finding.get(k)
+                     for k in finding if k not in offline}
+                )
+                enriched.append(offline)
+                continue
+            result = self.enrich_finding(finding)
+            if result.get("rag_status") == "offline":
+                copilot_offline = True
+                logger.info(
+                    "AI Copilot offline — skipping enrichment"
+                    " for remaining findings"
+                )
+            enriched.append(result)
         
         logger.info(f"Enriched {len(findings)} findings with RAG context")
         return enriched
     
     def rebuild_index(self, sources: Dict[str, Any]) -> Dict[str, int]:
         """Rebuild the RAG index from specified sources.
+
+        Network/API failures during index building are caught and logged;
+        the build continues with whatever local sources are available.
         
         Args:
             sources: Dict specifying sources to index:
@@ -758,34 +818,77 @@ class AuditCopilot:
         
         # Index remediation database
         if "remediation_db" in sources:
-            count = self.knowledge_builder.build_from_remediation_db(
-                sources["remediation_db"]
-            )
-            counts["remediation_db"] = count
+            try:
+                count = self.knowledge_builder.build_from_remediation_db(
+                    sources["remediation_db"]
+                )
+                counts["remediation_db"] = count
+            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+                logger.warning(
+                    "AI Copilot unavailable (offline mode)"
+                    f" during index build: {e}"
+                )
+                counts["remediation_db"] = 0
+            except Exception as e:
+                logger.warning(f"Failed to index remediation_db: {e}")
+                counts["remediation_db"] = 0
         
         # Index historical findings
         if "findings" in sources:
-            count = self.knowledge_builder.build_from_findings(
-                sources["findings"]
-            )
-            counts["findings"] = count
+            try:
+                count = self.knowledge_builder.build_from_findings(
+                    sources["findings"]
+                )
+                counts["findings"] = count
+            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+                logger.warning(
+                    "AI Copilot unavailable (offline mode)"
+                    f" during index build: {e}"
+                )
+                counts["findings"] = 0
+            except Exception as e:
+                logger.warning(f"Failed to index findings: {e}")
+                counts["findings"] = 0
         
         # Index threat intel
         if "threat_intel" in sources:
-            count = self.knowledge_builder.build_from_threat_intel(
-                sources["threat_intel"]
-            )
-            counts["threat_intel"] = count
+            try:
+                count = self.knowledge_builder.build_from_threat_intel(
+                    sources["threat_intel"]
+                )
+                counts["threat_intel"] = count
+            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+                logger.warning(
+                    "AI Copilot unavailable (offline mode)"
+                    f" during index build: {e}"
+                )
+                counts["threat_intel"] = 0
+            except Exception as e:
+                logger.warning(f"Failed to index threat_intel: {e}")
+                counts["threat_intel"] = 0
         
         # Index audit reports
         if "audit_reports_dir" in sources:
-            count = self.knowledge_builder.build_from_audit_reports(
-                sources["audit_reports_dir"]
-            )
-            counts["audit_reports"] = count
+            try:
+                count = self.knowledge_builder.build_from_audit_reports(
+                    sources["audit_reports_dir"]
+                )
+                counts["audit_reports"] = count
+            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+                logger.warning(
+                    "AI Copilot unavailable (offline mode)"
+                    f" during index build: {e}"
+                )
+                counts["audit_reports"] = 0
+            except Exception as e:
+                logger.warning(f"Failed to index audit_reports: {e}")
+                counts["audit_reports"] = 0
         
         # Save the new index
-        self.vector_store.save(self.index_path)
+        try:
+            self.vector_store.save(self.index_path)
+        except Exception as e:
+            logger.warning(f"Failed to save RAG index: {e}")
         
         logger.info(f"Rebuilt RAG index: {counts}")
         return counts

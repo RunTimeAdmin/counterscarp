@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Sentinel Security Engine"
-    version: str = "3.3.0"
+    version: str = "3.4.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -417,11 +417,15 @@ class ThreatIntelConfig:
         immunefi_timeout: Immunefi RSS feed timeout in seconds.
         solana_github_timeout: Solana intelligence GitHub API timeout in seconds.
         api_rate_limit: Default API rate limit (requests per second).
+        offline_mode: Force offline mode (skip all network calls).
+        bundled_db_path: Path to bundled threat intel database JSON file.
     """
     c4_timeout: int = 10
     immunefi_timeout: int = 10
     solana_github_timeout: int = 10
     api_rate_limit: int = 5
+    offline_mode: bool = False      # Force offline mode (skip all network calls)
+    bundled_db_path: str = "data/threat_intel_db.json"
 
 
 @dataclass
@@ -706,7 +710,7 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Sentinel Security Engine'),
-            version=eng.get('version', '3.3.0'),
+            version=eng.get('version', '3.4.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )
@@ -891,7 +895,9 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
             c4_timeout=ti.get('c4_timeout', 10),
             immunefi_timeout=ti.get('immunefi_timeout', 10),
             solana_github_timeout=ti.get('solana_github_timeout', 10),
-            api_rate_limit=ti.get('api_rate_limit', 5)
+            api_rate_limit=ti.get('api_rate_limit', 5),
+            offline_mode=ti.get('offline_mode', False),
+            bundled_db_path=ti.get('bundled_db_path', 'data/threat_intel_db.json')
         )
 
     # Parse HTTP config

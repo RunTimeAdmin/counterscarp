@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("sentinel-engine")
 except Exception:
-    _ENGINE_VERSION = "3.3.0"
+    _ENGINE_VERSION = "3.4.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
@@ -640,7 +640,7 @@ def main() -> None:
     logger.info("Log file: %s", _log_file)
 
     parser = argparse.ArgumentParser(description="Action-Oriented Security Engine")
-    parser.add_argument("--target", required=True, help="Path to project root or .sol file")
+    parser.add_argument("--target", required=False, default=None, help="Path to project root or .sol file")
     parser.add_argument(
         "--fuzz-contract",
         help="Name of the Invariant Test contract (e.g., InvariantTest)",
@@ -747,7 +747,22 @@ def main() -> None:
         default="INFO",
         help="Minimum severity level to include in report (default: INFO = all)",
     )
+    parser.add_argument(
+        "--update-signatures",
+        action="store_true",
+        help="Update bundled threat intelligence and protocol signature databases",
+    )
     args = parser.parse_args()
+
+    # --- Update signatures (no --target needed) ---
+    if args.update_signatures:
+        from signature_updater import update_all_signatures
+        update_all_signatures()
+        sys.exit(0)
+
+    # Validate --target is provided for scanning operations
+    if not args.target:
+        parser.error("--target is required for scanning operations")
 
     # --- Preflight tool version check ---
     if args.preflight:
@@ -1192,24 +1207,62 @@ def main() -> None:
             
             # Check if index exists
             if copilot.vector_store.entries:
+                rag_offline = False
                 # Enrich heuristic results
-                if heuristic_results:
+                if heuristic_results and not rag_offline:
                     heuristic_results = copilot.enrich_findings_batch(
                         heuristic_results
                     )
-                    print(f"    Enriched {len(heuristic_results)} heuristic findings")
-                    logger.info("Enriched %d heuristic findings", len(heuristic_results))
+                    print(
+                        f"    Enriched {len(heuristic_results)}"
+                        " heuristic findings"
+                    )
+                    logger.info(
+                        "Enriched %d heuristic findings",
+                        len(heuristic_results),
+                    )
+                    # Detect offline signal from batch result
+                    if any(
+                        r.get("rag_status") == "offline"
+                        for r in heuristic_results
+                    ):
+                        print(
+                            "    [INFO] AI Copilot offline — continuing"
+                            " scan without LLM enrichment"
+                        )
+                        rag_offline = True
                 
                 # Enrich static issues
-                if static_issues:
+                if static_issues and not rag_offline:
                     static_issues = copilot.enrich_findings_batch(
                         static_issues
                     )
-                    print(f"    Enriched {len(static_issues)} static analysis findings")
-                    logger.info("Enriched %d static analysis findings", len(static_issues))
+                    print(
+                        f"    Enriched {len(static_issues)}"
+                        " static analysis findings"
+                    )
+                    logger.info(
+                        "Enriched %d static analysis findings",
+                        len(static_issues),
+                    )
+                    if any(
+                        r.get("rag_status") == "offline"
+                        for r in static_issues
+                    ):
+                        print(
+                            "    [INFO] AI Copilot offline — continuing"
+                            " scan without LLM enrichment"
+                        )
+                        rag_offline = True
                 
-                print("    [+] RAG enrichment complete")
-                logger.info("RAG enrichment complete")
+                if not rag_offline:
+                    print("    [+] RAG enrichment complete")
+                    logger.info("RAG enrichment complete")
+                else:
+                    print(
+                        "    [!] RAG enrichment skipped (AI Copilot offline)"
+                    )
+                    logger.warning("RAG enrichment aborted — offline mode")
             else:
                 print("    [!] No RAG index found. Build with: --build-rag-index")
                 logger.warning("No RAG index found — cannot enrich findings")

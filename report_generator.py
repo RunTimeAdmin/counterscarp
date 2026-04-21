@@ -21,7 +21,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("sentinel-engine")
 except Exception:
-    _ENGINE_VERSION = "3.3.0"
+    _ENGINE_VERSION = "3.4.0"
 from license_manager import LicenseManager, BRANDED_REPORTS
 
 logger = get_logger(__name__)
@@ -131,8 +131,8 @@ SARIF_LEVEL_MAP = {
 }
 
 # Sentinel Engine version for SARIF reports
-SENTINEL_ENGINE_VERSION = "3.3.0"
-SENTINEL_ENGINE_SEMANTIC_VERSION = "3.3.0"
+SENTINEL_ENGINE_VERSION = "3.4.0"
+SENTINEL_ENGINE_SEMANTIC_VERSION = "3.4.0"
 SENTINEL_INFORMATION_URI = "https://github.com/RunTimeAdmin/sentinel-engine"
 
 # Remediation knowledge base

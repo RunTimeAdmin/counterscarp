@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field, asdict
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 # Import logger and exceptions
@@ -86,12 +87,51 @@ class ProtocolFingerprint:
         )
 
 
+# Path to the bundled JSON fingerprint database (relative to this file)
+_FINGERPRINT_DB_PATH = os.path.join(os.path.dirname(__file__), "data", "protocol_fingerprints.json")
+
+
+def _load_fingerprints_from_json(path: str) -> Optional[List[ProtocolFingerprint]]:
+    """Attempt to load fingerprints from the JSON database file.
+
+    Args:
+        path: Path to the JSON file.
+
+    Returns:
+        List of ProtocolFingerprint instances on success, None on failure.
+    """
+    if not os.path.isfile(path):
+        logger.warning(f"Fingerprint JSON database not found at {path}; falling back to hardcoded entries")
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        fingerprints = [ProtocolFingerprint.from_dict(item) for item in data]
+        logger.debug(f"Loaded {len(fingerprints)} protocol fingerprints from {path}")
+        return fingerprints
+    except (IOError, OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        logger.warning(f"Failed to load fingerprint JSON database from {path}: {exc}; falling back to hardcoded entries")
+        return None
+
+
 def get_default_fingerprints() -> List[ProtocolFingerprint]:
     """Get all built-in protocol fingerprints.
+
+    Attempts to load from the bundled JSON database first
+    (``data/protocol_fingerprints.json``).  Falls back to the hardcoded
+    list if the file is missing or unreadable.
 
     Returns:
         List of built-in ProtocolFingerprint instances.
     """
+    # JSON file is the source of truth — load it when available
+    json_fingerprints = _load_fingerprints_from_json(_FINGERPRINT_DB_PATH)
+    if json_fingerprints is not None:
+        return json_fingerprints
+
+    # ------------------------------------------------------------------ #
+    # Hardcoded fallback — kept in sync with data/protocol_fingerprints.json
+    # ------------------------------------------------------------------ #
     fingerprints = []
 
     # Uniswap V2 - AMM
@@ -701,6 +741,41 @@ def get_fingerprint_by_name(
         if fp.name.lower() == name.lower():
             return fp
     return None
+
+
+def load_community_signatures(community_dir: str = None) -> List[ProtocolFingerprint]:
+    """Load community-contributed protocol signatures from data/community_signatures/*.json
+
+    Args:
+        community_dir: Path to the community signatures directory.
+            Defaults to ``data/community_signatures/`` relative to this file.
+
+    Returns:
+        List of ProtocolFingerprint instances loaded from community files.
+    """
+    if community_dir is None:
+        community_dir = os.path.join(os.path.dirname(__file__), "data", "community_signatures")
+
+    signatures = []
+    if not os.path.isdir(community_dir):
+        return signatures
+
+    for json_file in sorted(Path(community_dir).glob("*.json")):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Validate required fields
+            required = ["name", "category", "function_signatures"]
+            if not all(k in data for k in required):
+                logger.warning(f"Skipping {json_file.name}: missing required fields {required}")
+                continue
+            sig = ProtocolFingerprint.from_dict(data)
+            signatures.append(sig)
+            logger.info(f"Loaded community signature: {sig.name} ({json_file.name})")
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(f"Failed to load {json_file.name}: {e}")
+
+    return signatures
 
 
 def get_fingerprints_by_category(

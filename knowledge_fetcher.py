@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import xml.etree.ElementTree as ET
-from typing import Any
+from typing import Any, Dict, List
 from urllib.parse import quote
 
 from logger import get_logger
@@ -112,9 +112,54 @@ def get_contract_context(filepath: str) -> List[str]:
 # Backwards compatibility alias
 scan_file_for_context = get_contract_context
 
+def _filter_bundled_db(query: str, source: str = None) -> List[Dict[str, Any]]:
+    """Filter bundled threat intel entries by query keywords.
+
+    Args:
+        query: Space-separated keyword string to match against entries.
+        source: Optional source tag appended to result source field.
+
+    Returns:
+        List of matching threat intel entries from the bundled database.
+    """
+    from threat_intel import load_bundled_db
+    entries = load_bundled_db()
+    if not entries:
+        return []
+
+    query_lower = query.lower()
+    keywords = query_lower.split()
+
+    results = []
+    for entry in entries:
+        text = (
+            f"{entry.get('title', '')} "
+            f"{entry.get('description', '')} "
+            f"{entry.get('category', '')}"
+        ).lower()
+        if any(kw in text for kw in keywords):
+            results.append({
+                "title": entry.get("title", ""),
+                "description": entry.get("description", ""),
+                "severity": entry.get("severity", "MEDIUM"),
+                "category": entry.get("category", ""),
+                "references": entry.get("references", []),
+                "source": f"bundled_db ({entry.get('id', 'unknown')})"
+            })
+
+    if results:
+        logger.info(
+            f"Bundled DB returned {len(results)} matches for '{query}'"
+        )
+    return results
+
+
 # --- MODULE 1: CODE4RENA SCRAPER ---
 def fetch_c4_findings(keywords: List[str]) -> List[Dict[str, Any]]:
     """Fetch Code4rena findings for given keywords.
+
+    Falls back to the bundled threat intelligence database when offline
+    or when ``config.threat_intel.offline_mode`` is True.
 
     Args:
         keywords: List of search keywords.
@@ -122,6 +167,17 @@ def fetch_c4_findings(keywords: List[str]) -> List[Dict[str, Any]]:
     Returns:
         List of Code4rena findings.
     """
+    # Check offline mode
+    try:
+        if get_config().threat_intel.offline_mode:
+            logger.info(
+                "Offline mode enabled — skipping Code4rena network call, "
+                "using bundled threat intelligence database"
+            )
+            return _filter_bundled_db(" ".join(keywords), "c4")
+    except Exception:
+        pass
+
     print(f"    [*] Querying Code4rena (GitHub)...")
     query = f"org:code-423n4 is:issue label:\"3 (High Risk)\" {' '.join(keywords)}"
     params = {"q": query, "sort": "created", "order": "desc", "per_page": 3}
@@ -136,7 +192,11 @@ def fetch_c4_findings(keywords: List[str]) -> List[Dict[str, Any]]:
         )
         return resp.json().get("items", [])
     except Exception as e:
-        logger.warning(f"Code4rena API request failed: {e}")
+        logger.warning(
+            f"Network unavailable for Code4rena — using bundled threat "
+            f"intelligence database: {e}"
+        )
+        return _filter_bundled_db(" ".join(keywords), "c4")
     return []
 
 # Backwards compatibility alias
@@ -146,12 +206,26 @@ search_c4_findings = fetch_c4_findings
 def fetch_immunefi_reports(keywords: List[str]) -> List[Dict[str, Any]]:
     """Fetch Immunefi reports for given keywords.
 
+    Falls back to the bundled threat intelligence database when offline
+    or when ``config.threat_intel.offline_mode`` is True.
+
     Args:
         keywords: List of search keywords.
 
     Returns:
         List of Immunefi report dictionaries.
     """
+    # Check offline mode
+    try:
+        if get_config().threat_intel.offline_mode:
+            logger.info(
+                "Offline mode enabled — skipping Immunefi network call, "
+                "using bundled threat intelligence database"
+            )
+            return _filter_bundled_db(" ".join(keywords), "immunefi")
+    except Exception:
+        pass
+
     print(f"    [*] Querying Immunefi (Medium RSS)...")
     reports = []
     try:
@@ -188,7 +262,11 @@ def fetch_immunefi_reports(keywords: List[str]) -> List[Dict[str, Any]]:
     except ET.ParseError as e:
         logger.warning(f"Failed to parse Immunefi RSS XML: {e}")
     except Exception as e:
-        logger.warning(f"Immunefi RSS request failed: {e}")
+        logger.warning(
+            f"Network unavailable for Immunefi — using bundled threat "
+            f"intelligence database: {e}"
+        )
+        return _filter_bundled_db(" ".join(keywords), "immunefi")
 
     return reports
 
@@ -197,6 +275,8 @@ def generate_solodit_links(keywords: List[str]) -> List[Dict[str, str]]:
     """Generate Solodit deep links for given keywords.
 
     Since Solodit is hard to scrape (React), we generate precise Deep Links.
+    Falls back to the bundled threat intelligence database when offline
+    or when ``config.threat_intel.offline_mode`` is True.
 
     Args:
         keywords: List of search keywords.
@@ -204,14 +284,36 @@ def generate_solodit_links(keywords: List[str]) -> List[Dict[str, str]]:
     Returns:
         List of Solodit link dictionaries.
     """
-    links = []
-    for k in keywords:
-        # Construct a query for High Severity + Keyword
-        # Solodit query param format is usually ?q=KEYWORD
-        query = quote(k)
-        url = f"{SOLODIT_BASE}?q={query}&min_severity=HIGH"
-        links.append({"title": f"Solodit Search: High Severity '{k}' Bugs", "url": url, "source": "Solodit"})
-    return links
+    # Check offline mode
+    try:
+        if get_config().threat_intel.offline_mode:
+            logger.info(
+                "Offline mode enabled — skipping Solodit link generation, "
+                "using bundled threat intelligence database"
+            )
+            return _filter_bundled_db(" ".join(keywords), "solodit")
+    except Exception:
+        pass
+
+    try:
+        links = []
+        for k in keywords:
+            # Construct a query for High Severity + Keyword
+            # Solodit query param format is usually ?q=KEYWORD
+            query = quote(k)
+            url = f"{SOLODIT_BASE}?q={query}&min_severity=HIGH"
+            links.append({
+                "title": f"Solodit Search: High Severity '{k}' Bugs",
+                "url": url,
+                "source": "Solodit"
+            })
+        return links
+    except Exception as e:
+        logger.warning(
+            f"Network unavailable for Solodit — using bundled threat "
+            f"intelligence database: {e}"
+        )
+        return _filter_bundled_db(" ".join(keywords), "solodit")
 
 # --- REPORT GENERATOR ---
 def generate_comprehensive_report(filepath: str) -> Dict[str, Any]:

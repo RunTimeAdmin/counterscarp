@@ -11,6 +11,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
+import os
+from functools import lru_cache
 from pathlib import Path
 
 # Import both engines
@@ -21,6 +24,34 @@ from logger import get_logger
 from exceptions import SentinelAPIError, SentinelValidationError
 
 logger = get_logger(__name__)
+
+
+@lru_cache(maxsize=1)
+def load_bundled_db(db_path: str = None) -> list:
+    """Load the bundled offline threat intelligence database.
+
+    Args:
+        db_path: Path to the bundled threat intel JSON database.
+            If None, defaults to data/threat_intel_db.json relative to
+            this file.
+
+    Returns:
+        List of threat intelligence entries, or empty list on failure.
+    """
+    if db_path is None:
+        db_path = os.path.join(
+            os.path.dirname(__file__), "data", "threat_intel_db.json"
+        )
+    try:
+        with open(db_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        logger.info(
+            f"Loaded bundled threat intel database: {len(data)} entries"
+        )
+        return data
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logger.warning(f"Failed to load bundled threat intel DB: {e}")
+        return []
 
 
 def detect_chain_type(filepath: str) -> str:

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-04-21
+
+### Added
+- Bundled offline threat intelligence database (`data/threat_intel_db.json`) with 63 vulnerability patterns for air-gapped deployments
+- Automatic offline fallback in threat intel fetchers — network failures gracefully fall back to bundled database
+- `offline_mode` and `bundled_db_path` configuration in `[threat_intel]` section
+- `--update-signatures` CLI command to refresh threat intel and protocol databases on demand
+- Graceful AI Copilot offline failure — scan continues without LLM enrichment when API is unreachable
+- 11 new protocol fork signatures: SushiSwap, PancakeSwap, QuickSwap, Cream Finance, Venus, Benqi, Radiant Capital, Spark Protocol, GMX V1, GMX V2, Vela Exchange
+- Fork-specific logic checks: AMM rounding errors, Compound oracle staleness, Aave flash loan callback validation, GMX price manipulation, fee-on-transfer handling
+- Community protocol signature contribution system (`data/community_signatures/`, `data/protocol_template.json`)
+- `docs/CONTRIBUTING_SIGNATURES.md` documentation for signature contributors
+- `signature_updater.py` module for programmatic database updates
+
+### Changed
+- `--target` is no longer required when using `--update-signatures`
+- Protocol database (`protocol_db.py`) now loads from JSON file as source of truth with hardcoded fallback
+- `fingerprint_scanner.py` auto-loads community signatures and runs fork-specific checks after protocol matches
+- `knowledge_fetcher.py` catches network errors and falls back to bundled threat intel
+- `rag_engine.py` skips remaining enrichments after first offline detection to avoid repeated timeouts
+
 ## [3.3.0] - 2026-04-21
 
 ### Added

@@ -6,7 +6,7 @@
 [engine]
 # Engine-wide settings
 name = "Sentinel Security Engine"
-version = "3.3.0"
+version = "3.4.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 fail_on_severity = "HIGH"
@@ -175,6 +175,12 @@ solana_github_timeout = 10
 
 # Default API rate limit (requests per second)
 api_rate_limit = 5
+
+# Set to true for air-gapped environments (skips all network calls)
+offline_mode = false
+
+# Path to bundled threat intel database (used when offline or network fails)
+bundled_db_path = "data/threat_intel_db.json"
 
 
 # ============================================================================

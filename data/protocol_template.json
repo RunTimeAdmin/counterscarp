@@ -1,0 +1,29 @@
+{
+  "name": "Your Protocol Name",
+  "category": "AMM | Lending | Perpetuals | Governance | Bridge | Other",
+  "version": "1.0",
+  "function_signatures": [
+    "functionName(paramType1,paramType2)"
+  ],
+  "event_signatures": [
+    "EventName(type1 indexed param1, type2 param2)"
+  ],
+  "storage_patterns": [
+    "variableName"
+  ],
+  "inheritance_markers": [
+    "IInterfaceName"
+  ],
+  "constants": {
+    "CONSTANT_NAME": "value"
+  },
+  "known_vulnerabilities": [
+    {
+      "id": "PROTO-001",
+      "title": "Vulnerability Title",
+      "severity": "CRITICAL | HIGH | MEDIUM | LOW",
+      "description": "Detailed description of the vulnerability and its impact.",
+      "reference_url": "https://..."
+    }
+  ]
+}

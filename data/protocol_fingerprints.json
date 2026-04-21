@@ -498,5 +498,651 @@
         "reference_url": "https://docs.makerdao.com/smart-contract-modules/shutdown-module"
       }
     ]
+  },
+  {
+    "name": "SushiSwap",
+    "category": "AMM",
+    "version": "1.0",
+    "function_signatures": [
+      "swap(uint256,uint256,address,bytes)",
+      "mint(address)",
+      "burn(address)",
+      "getReserves()",
+      "setMigrator(address)",
+      "setBarFeeAmount(uint256)",
+      "sync()",
+      "skim(address)",
+      "initialize(address,address)"
+    ],
+    "event_signatures": [
+      "Swap(address indexed sender,uint256 amount0In,uint256 amount1In,uint256 amount0Out,uint256 amount1Out,address indexed to)",
+      "Sync(uint112 reserve0,uint112 reserve1)",
+      "Mint(address indexed sender,uint256 amount0,uint256 amount1)",
+      "Burn(address indexed sender,uint256 amount0,uint256 amount1,address indexed to)"
+    ],
+    "storage_patterns": [
+      "reserve0",
+      "reserve1",
+      "barFee",
+      "migrator"
+    ],
+    "inheritance_markers": [
+      "IUniswapV2Pair",
+      "ISushiSwapFactory"
+    ],
+    "constants": {
+      "MINIMUM_LIQUIDITY": "1000",
+      "SUSHI_TOKEN": "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "SUSHI-001",
+        "title": "Migrator Function Privilege Escalation",
+        "severity": "CRITICAL",
+        "description": "The setMigrator function allows the owner to set an arbitrary migrator contract that can drain all LP tokens from the MasterChef contract",
+        "reference_url": "https://github.com/sushiswap/sushiswap/blob/master/contracts/MasterChef.sol"
+      },
+      {
+        "id": "SUSHI-002",
+        "title": "barFee Manipulation",
+        "severity": "HIGH",
+        "description": "The barFee parameter can be adjusted by governance to extract excessive fees from swap operations",
+        "reference_url": "https://docs.sushi.com/docs/Products/AMM"
+      },
+      {
+        "id": "SUSHI-003",
+        "title": "Inherited Uniswap V2 Price Oracle Manipulation",
+        "severity": "CRITICAL",
+        "description": "Spot price from reserves can be manipulated in a single block, inherited from Uniswap V2 base",
+        "reference_url": "https://docs.uniswap.org/protocol/V2/concepts/core-concepts/oracles"
+      }
+    ]
+  },
+  {
+    "name": "PancakeSwap",
+    "category": "AMM",
+    "version": "2.0",
+    "function_signatures": [
+      "swap(uint256,uint256,address,bytes)",
+      "mint(address)",
+      "burn(address)",
+      "cakePerBlock()",
+      "enterStaking(uint256)",
+      "leaveStaking(uint256)",
+      "getReserves()",
+      "sync()"
+    ],
+    "event_signatures": [
+      "Swap(address indexed sender,uint256 amount0In,uint256 amount1In,uint256 amount0Out,uint256 amount1Out,address indexed to)",
+      "Deposit(address indexed user,uint256 indexed pid,uint256 amount)",
+      "Withdraw(address indexed user,uint256 indexed pid,uint256 amount)",
+      "EmergencyWithdraw(address indexed user,uint256 indexed pid,uint256 amount)"
+    ],
+    "storage_patterns": [
+      "reserve0",
+      "reserve1",
+      "cakePerBlock",
+      "CAKE"
+    ],
+    "inheritance_markers": [
+      "IPancakeFactory",
+      "IPancakePair",
+      "IMasterChef"
+    ],
+    "constants": {
+      "CAKE_TOKEN": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+      "MINIMUM_LIQUIDITY": "1000"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "CAKE-001",
+        "title": "Syrup Pool Migration Risk",
+        "severity": "HIGH",
+        "description": "MasterChef migration mechanism allows admin to redirect staked assets to an arbitrary contract",
+        "reference_url": "https://github.com/pancakeswap/pancake-smart-contracts"
+      },
+      {
+        "id": "CAKE-002",
+        "title": "BSC Timestamp Dependency",
+        "severity": "MEDIUM",
+        "description": "BSC validators have limited block timestamp manipulation capability that can affect time-weighted calculations",
+        "reference_url": "https://docs.pancakeswap.finance/products"
+      },
+      {
+        "id": "CAKE-003",
+        "title": "cakePerBlock Admin Manipulation",
+        "severity": "HIGH",
+        "description": "Admin can change cakePerBlock at any time, affecting reward distribution and potentially enabling flash reward attacks",
+        "reference_url": "https://github.com/pancakeswap/pancake-smart-contracts/blob/master/projects/farms-pools"
+      }
+    ]
+  },
+  {
+    "name": "QuickSwap",
+    "category": "AMM",
+    "version": "1.0",
+    "function_signatures": [
+      "swap(uint256,uint256,address,bytes)",
+      "mint(address)",
+      "burn(address)",
+      "getReserves()",
+      "setDragonLair(address)",
+      "sync()",
+      "skim(address)"
+    ],
+    "event_signatures": [
+      "Swap(address indexed sender,uint256 amount0In,uint256 amount1In,uint256 amount0Out,uint256 amount1Out,address indexed to)",
+      "Sync(uint112 reserve0,uint112 reserve1)",
+      "Mint(address indexed sender,uint256 amount0,uint256 amount1)",
+      "Burn(address indexed sender,uint256 amount0,uint256 amount1,address indexed to)",
+      "StakingReward(address indexed user,uint256 reward)"
+    ],
+    "storage_patterns": [
+      "reserve0",
+      "reserve1",
+      "QUICK"
+    ],
+    "inheritance_markers": [
+      "IUniswapV2Pair",
+      "IQuickSwapFactory"
+    ],
+    "constants": {
+      "QUICK_TOKEN": "0x831753DD7087CaC61aB5644b308642cc1c33Dc13",
+      "MINIMUM_LIQUIDITY": "1000"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "QUICK-001",
+        "title": "Polygon Bridge Dependency",
+        "severity": "HIGH",
+        "description": "QuickSwap relies on the Polygon PoS bridge for cross-chain asset transfers, introducing bridge exploit risk",
+        "reference_url": "https://quickswap.exchange/#/"
+      },
+      {
+        "id": "QUICK-002",
+        "title": "QUICK Token Inflation Risk",
+        "severity": "MEDIUM",
+        "description": "QUICK token emission schedule can be modified by governance, affecting liquidity mining rewards and token value",
+        "reference_url": "https://docs.quickswap.exchange/"
+      },
+      {
+        "id": "QUICK-003",
+        "title": "Inherited Uniswap V2 Oracle Vulnerability",
+        "severity": "CRITICAL",
+        "description": "Spot price manipulation in a single block is possible on Polygon where block times are ~2 seconds",
+        "reference_url": "https://docs.uniswap.org/protocol/V2/concepts/core-concepts/oracles"
+      }
+    ]
+  },
+  {
+    "name": "Cream Finance",
+    "category": "Lending",
+    "version": "1.0",
+    "function_signatures": [
+      "mint(uint256)",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow(uint256)",
+      "borrowInternal(address,uint256)",
+      "flashLoan(address,address,uint256,bytes)",
+      "liquidateBorrow(address,address,uint256)",
+      "accrueInterest()"
+    ],
+    "event_signatures": [
+      "Mint(address,uint256,uint256)",
+      "Redeem(address,uint256,uint256)",
+      "Borrow(address,uint256,uint256,uint256)",
+      "RepayBorrow(address,address,uint256,uint256,uint256)",
+      "LiquidateBorrow(address,address,uint256,uint256,address)"
+    ],
+    "storage_patterns": [
+      "totalBorrows",
+      "borrowIndex",
+      "crToken",
+      "accountBorrows",
+      "accountTokens"
+    ],
+    "inheritance_markers": [
+      "CrErc20",
+      "CrToken",
+      "ComptrollerInterface"
+    ],
+    "constants": {
+      "collateralFactor": "0.75",
+      "closeFactor": "0.5"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "CREAM-001",
+        "title": "Flash Loan Reentrancy",
+        "severity": "CRITICAL",
+        "description": "The Cream Finance hack exploited flash loan reentrancy in the Iron Bank fork allowing recursive borrowing to drain $130M",
+        "reference_url": "https://medium.com/cream-finance/post-mortem-exploit-oct-27-507b0ea70786"
+      },
+      {
+        "id": "CREAM-002",
+        "title": "Cross-Protocol Borrow Exploit",
+        "severity": "CRITICAL",
+        "description": "Iron Bank integration enables cross-protocol undercollateralized borrowing that can be exploited with flash loans",
+        "reference_url": "https://creamdotfinance.medium.com/moving-forward-post-exploit-next-steps-for-c-r-e-a-m-finance-1ad05e2066d5"
+      },
+      {
+        "id": "CREAM-003",
+        "title": "Oracle Price Manipulation",
+        "severity": "HIGH",
+        "description": "Using Uniswap V2 spot price as oracle allows price manipulation within a single transaction",
+        "reference_url": "https://compound.finance/docs/prices"
+      }
+    ]
+  },
+  {
+    "name": "Venus",
+    "category": "Lending",
+    "version": "1.0",
+    "function_signatures": [
+      "mint(uint256)",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow(uint256)",
+      "mintVenus(uint256)",
+      "claimVenus(address)",
+      "liquidateBorrow(address,address,uint256)"
+    ],
+    "event_signatures": [
+      "Mint(address,uint256,uint256)",
+      "Redeem(address,uint256,uint256)",
+      "DistributedSupplierVenus(address indexed vToken,address indexed supplier,uint256 venusDelta,uint256 venusSupplyIndex)"
+    ],
+    "storage_patterns": [
+      "vToken",
+      "XVS",
+      "totalBorrows",
+      "borrowIndex",
+      "accountBorrows"
+    ],
+    "inheritance_markers": [
+      "VBep20",
+      "VToken",
+      "ComptrollerInterface"
+    ],
+    "constants": {
+      "XVS_TOKEN": "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "VENUS-001",
+        "title": "Oracle Manipulation - BTC Incident",
+        "severity": "CRITICAL",
+        "description": "Venus oracle manipulation incident where BTC price was spiked to extract $200M in loans before liquidation cascades",
+        "reference_url": "https://rekt.news/venus-blizz-rekt/"
+      },
+      {
+        "id": "VENUS-002",
+        "title": "Reward Distribution Overflow",
+        "severity": "HIGH",
+        "description": "XVS reward distribution logic is susceptible to overflow in the reward index calculation under high utilization",
+        "reference_url": "https://github.com/VenusProtocol/venus-protocol"
+      },
+      {
+        "id": "VENUS-003",
+        "title": "Governance Token Concentration Risk",
+        "severity": "MEDIUM",
+        "description": "XVS governance token concentration allows whale manipulation of protocol parameters",
+        "reference_url": "https://docs.venus.io/docs/governance"
+      }
+    ]
+  },
+  {
+    "name": "Benqi",
+    "category": "Lending",
+    "version": "1.0",
+    "function_signatures": [
+      "mint(uint256)",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow(uint256)",
+      "claimReward(uint8,address)",
+      "liquidateBorrow(address,address,uint256)",
+      "accrueInterest()"
+    ],
+    "event_signatures": [
+      "Mint(address,uint256,uint256)",
+      "Redeem(address,uint256,uint256)",
+      "Borrow(address,uint256,uint256,uint256)",
+      "QiDistributed(address indexed qiToken,address indexed recipient,uint256 qiDelta)"
+    ],
+    "storage_patterns": [
+      "qiToken",
+      "QI",
+      "totalBorrows",
+      "borrowIndex",
+      "accountBorrows"
+    ],
+    "inheritance_markers": [
+      "QiErc20",
+      "QiToken",
+      "ComptrollerInterface"
+    ],
+    "constants": {
+      "QI_TOKEN": "0x8729438EB15e2C8B576fCc6AeCdA6A148776C0F5"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "BENQI-001",
+        "title": "Avalanche Bridge Dependency",
+        "severity": "HIGH",
+        "description": "Benqi relies on the Avalanche bridge for asset transfers, introducing bridge exploit and censorship risk",
+        "reference_url": "https://benqi.fi/"
+      },
+      {
+        "id": "BENQI-002",
+        "title": "AVAX Liquid Staking Integration Risk",
+        "severity": "HIGH",
+        "description": "sAVAX integration in the lending market creates a recursive collateral loop risk with Benqi Liquid Staking",
+        "reference_url": "https://staking.benqi.fi/"
+      },
+      {
+        "id": "BENQI-003",
+        "title": "Reward Calculation Precision Loss",
+        "severity": "MEDIUM",
+        "description": "QI reward index calculation may lose precision for small suppliers/borrowers in high-supply markets",
+        "reference_url": "https://docs.benqi.fi/"
+      }
+    ]
+  },
+  {
+    "name": "Radiant Capital",
+    "category": "Lending",
+    "version": "2.0",
+    "function_signatures": [
+      "deposit(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)",
+      "lockZap(uint256,bool)",
+      "claimRDNT(address)",
+      "liquidationCall(address,address,address,uint256,bool)"
+    ],
+    "event_signatures": [
+      "Deposit(address indexed reserve,address user,address indexed onBehalfOf,uint256 amount,uint16 indexed referral)",
+      "Withdraw(address indexed reserve,address indexed user,address indexed to,uint256 amount)",
+      "Borrow(address indexed reserve,address user,address indexed onBehalfOf,uint256 amount,uint256 borrowRateMode,uint256 borrowRate,uint16 indexed referral)",
+      "Repay(address indexed reserve,address indexed user,address indexed repayer,uint256 amount)",
+      "RewardsClaimed(address indexed user,uint256 amount)"
+    ],
+    "storage_patterns": [
+      "_reserves",
+      "RDNT",
+      "dLPLocks",
+      "aToken",
+      "_reservesList"
+    ],
+    "inheritance_markers": [
+      "ILendingPool",
+      "IRadiantStaking"
+    ],
+    "constants": {
+      "RDNT_TOKEN": "0x3082CC23568eA640225c2467653dB90e9250AaA0",
+      "LOCK_DURATION": "2592000"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "RADIANT-001",
+        "title": "Cross-Chain Message Replay",
+        "severity": "CRITICAL",
+        "description": "The Radiant Capital hack exploited compromised multi-sig keys to upgrade contracts across multiple chains simultaneously, draining $50M",
+        "reference_url": "https://rekt.news/radiant-capital-rekt2/"
+      },
+      {
+        "id": "RADIANT-002",
+        "title": "dLP Lock Bypass",
+        "severity": "HIGH",
+        "description": "The dLP lock mechanism can potentially be bypassed through edge cases in the vesting schedule calculation",
+        "reference_url": "https://docs.radiant.capital/"
+      },
+      {
+        "id": "RADIANT-003",
+        "title": "LayerZero Message Griefing",
+        "severity": "MEDIUM",
+        "description": "Cross-chain messages via LayerZero can be front-run or griefed causing inconsistent state across chains",
+        "reference_url": "https://docs.radiant.capital/radiant-capital/radiant-v2/cross-chain"
+      }
+    ]
+  },
+  {
+    "name": "Spark Protocol",
+    "category": "Lending",
+    "version": "1.0",
+    "function_signatures": [
+      "deposit(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)",
+      "depositDAI(uint256)",
+      "redeemSDAI(uint256,address,address)",
+      "liquidationCall(address,address,address,uint256,bool)"
+    ],
+    "event_signatures": [
+      "Deposit(address indexed reserve,address user,address indexed onBehalfOf,uint256 amount,uint16 indexed referral)",
+      "Withdraw(address indexed reserve,address indexed user,address indexed to,uint256 amount)",
+      "SparkReward(address indexed user,address indexed asset,uint256 amount)"
+    ],
+    "storage_patterns": [
+      "sDAI",
+      "savingsRate",
+      "pot",
+      "_reserves",
+      "_reservesList"
+    ],
+    "inheritance_markers": [
+      "IPool",
+      "ISDAI",
+      "ISparkLend"
+    ],
+    "constants": {
+      "SDAI_TOKEN": "0x83F20F44975D03b1b09e64809B757c47f942BEeA"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "SPARK-001",
+        "title": "DAI Savings Rate Manipulation",
+        "severity": "HIGH",
+        "description": "The DSR rate is controlled by MakerDAO governance; a governance attack could set DSR to 0 or extreme values affecting sDAI collateral valuations",
+        "reference_url": "https://docs.spark.fi/"
+      },
+      {
+        "id": "SPARK-002",
+        "title": "MakerDAO Governance Dependency",
+        "severity": "HIGH",
+        "description": "Spark Protocol inherits all MakerDAO governance risks; a hostile governance takeover directly impacts Spark lending",
+        "reference_url": "https://docs.makerdao.com/governance/governance-risk-framework"
+      },
+      {
+        "id": "SPARK-003",
+        "title": "sDAI Oracle Manipulation",
+        "severity": "MEDIUM",
+        "description": "sDAI used as collateral relies on pot.chi for valuation which accumulates DSR, allowing griefing through delayed drip() calls",
+        "reference_url": "https://docs.makerdao.com/smart-contract-modules/rates-module/pot-detailed-documentation"
+      }
+    ]
+  },
+  {
+    "name": "GMX V1",
+    "category": "Perpetuals",
+    "version": "1.0",
+    "function_signatures": [
+      "increasePosition(address[],address,uint256,uint256,bool,uint256)",
+      "decreasePosition(address,address,address,uint256,uint256,bool,address)",
+      "swap(address[],uint256,uint256,address)",
+      "createIncreaseOrder(address[],uint256,address,uint256,uint256,address,bool,uint256,bool,uint256,bool)",
+      "createDecreaseOrder(address,uint256,address,uint256,bool,uint256,bool)",
+      "liquidatePosition(address,address,address,bool,address)",
+      "buyUSDG(address,address)",
+      "sellUSDG(address,address)"
+    ],
+    "event_signatures": [
+      "IncreasePosition(bytes32 indexed key,address account,address collateralToken,address indexToken,uint256 collateralDelta,uint256 sizeDelta,bool isLong,uint256 price,uint256 fee)",
+      "DecreasePosition(bytes32 indexed key,address account,address collateralToken,address indexToken,uint256 collateralDelta,uint256 sizeDelta,bool isLong,uint256 price,uint256 fee)",
+      "LiquidatePosition(bytes32 indexed key,address account,address collateralToken,address indexToken,bool isLong,uint256 size,uint256 collateral,uint256 reserveAmount,int256 realisedPnl,uint256 markPrice)",
+      "Swap(address account,address tokenIn,address tokenOut,uint256 amountIn,uint256 amountOut,uint256 amountOutAfterFees,uint256 feeBasisPoints)",
+      "BuyUSDG(address account,address token,uint256 tokenAmount,uint256 usdgAmount,uint256 feeBasisPoints)",
+      "SellUSDG(address account,address token,uint256 usdgAmount,uint256 tokenAmount,uint256 feeBasisPoints)"
+    ],
+    "storage_patterns": [
+      "positions",
+      "guaranteedUsd",
+      "poolAmounts",
+      "reservedAmounts",
+      "GLP"
+    ],
+    "inheritance_markers": [
+      "IVault",
+      "IRouter",
+      "IPositionRouter",
+      "IGlpManager"
+    ],
+    "constants": {
+      "BASIS_POINTS_DIVISOR": "10000",
+      "PRICE_PRECISION": "1000000000000000000000000000000",
+      "GLP_PRECISION": "1000000000000000000"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "GMX-V1-001",
+        "title": "Price Manipulation via Keeper Delay",
+        "severity": "HIGH",
+        "description": "GMX V1 uses off-chain price feeds executed by keepers; front-running keeper transactions allows attackers to open positions at stale prices",
+        "reference_url": "https://gmxio.gitbook.io/gmx/trading"
+      },
+      {
+        "id": "GMX-V1-002",
+        "title": "GLP Sandwich Attack",
+        "severity": "HIGH",
+        "description": "GLP mint/burn operations with large price impact can be sandwiched to extract value from the GLP pool",
+        "reference_url": "https://gmxio.gitbook.io/gmx/glp"
+      },
+      {
+        "id": "GMX-V1-003",
+        "title": "Position Size Limit Bypass",
+        "severity": "MEDIUM",
+        "description": "Multiple accounts can be used to bypass per-account position size limits, concentrating large directional risk",
+        "reference_url": "https://github.com/gmx-io/gmx-contracts"
+      }
+    ]
+  },
+  {
+    "name": "GMX V2",
+    "category": "Perpetuals",
+    "version": "2.0",
+    "function_signatures": [
+      "createDeposit(address,(address,address,address[],address[],uint256,uint256,uint256,uint256,bool,uint256,uint256))",
+      "createWithdrawal(address,(address,address,address[],address[],uint256,uint256,uint256,uint256,bool,uint256,uint256))",
+      "createOrder(address,(uint8,address,address,address,address,uint256,uint256,uint256,uint256,uint256,bool,bool,bool))",
+      "executeDeposit(bytes32,(bytes32[],bytes32[],bytes32[]))",
+      "executeOrder(bytes32,(bytes32[],bytes32[],bytes32[]))",
+      "cancelOrder(bytes32)"
+    ],
+    "event_signatures": [
+      "DepositCreated(bytes32 indexed key,address account)",
+      "OrderCreated(bytes32 indexed key,address account)",
+      "PositionIncrease(bytes32 indexed positionKey,address account,address market,address collateralToken,bool isLong,uint256 executionPrice,uint256 sizeDeltaUsd)",
+      "PositionDecrease(bytes32 indexed positionKey,address account,address market,address collateralToken,bool isLong,uint256 executionPrice,uint256 sizeDeltaUsd)"
+    ],
+    "storage_patterns": [
+      "dataStore",
+      "positions",
+      "orders",
+      "markets"
+    ],
+    "inheritance_markers": [
+      "IDataStore",
+      "IEventEmitter",
+      "IMarketFactory",
+      "IExchangeRouter"
+    ],
+    "constants": {
+      "PRECISION": "1000000000000000000000000000000",
+      "MAX_CALLBACK_GAS_LIMIT": "2000000"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "GMX-V2-001",
+        "title": "Keeper Front-Running",
+        "severity": "HIGH",
+        "description": "Order execution keepers can front-run user orders or selectively delay execution based on price movement",
+        "reference_url": "https://gmxio.gitbook.io/gmx/v2"
+      },
+      {
+        "id": "GMX-V2-002",
+        "title": "DataStore Market Manipulation",
+        "severity": "HIGH",
+        "description": "The key-value DataStore pattern means governance can modify critical market parameters without timelocks",
+        "reference_url": "https://github.com/gmx-io/gmx-synthetics"
+      },
+      {
+        "id": "GMX-V2-003",
+        "title": "Callback Gas Griefing",
+        "severity": "MEDIUM",
+        "description": "Order callbacks with insufficient gas can cause orders to be cancelled or partially executed, griefing users",
+        "reference_url": "https://github.com/gmx-io/gmx-synthetics/blob/main/contracts/order/OrderUtils.sol"
+      }
+    ]
+  },
+  {
+    "name": "Vela Exchange",
+    "category": "Perpetuals",
+    "version": "1.0",
+    "function_signatures": [
+      "increasePosition(address[],address,uint256,uint256,bool,uint256)",
+      "decreasePosition(address,address,address,uint256,uint256,bool,address)",
+      "setVLP(address)",
+      "stakeVELA(uint256)",
+      "unstakeVELA(uint256)",
+      "liquidatePosition(address,address,address,bool,address)"
+    ],
+    "event_signatures": [
+      "IncreasePosition(bytes32 indexed key,address account,address collateralToken,address indexToken,uint256 collateralDelta,uint256 sizeDelta,bool isLong,uint256 price,uint256 fee)",
+      "DecreasePosition(bytes32 indexed key,address account,address collateralToken,address indexToken,uint256 collateralDelta,uint256 sizeDelta,bool isLong,uint256 price,uint256 fee)",
+      "VelaStaked(address indexed user,uint256 amount)"
+    ],
+    "storage_patterns": [
+      "positions",
+      "VLP",
+      "VELA"
+    ],
+    "inheritance_markers": [
+      "IVault",
+      "IVelaStaking"
+    ],
+    "constants": {
+      "BASIS_POINTS_DIVISOR": "10000",
+      "VELA_TOKEN": "0x088cd8f5eF3652623c22D48b1605DCfE860Cd704"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "VELA-001",
+        "title": "GMX V1 Inherited Position Manipulation",
+        "severity": "HIGH",
+        "description": "As a GMX V1 fork, Vela inherits keeper delay and position size vulnerabilities from the original codebase",
+        "reference_url": "https://www.vela.exchange/"
+      },
+      {
+        "id": "VELA-002",
+        "title": "VLP Oracle Dependency",
+        "severity": "HIGH",
+        "description": "VLP pool pricing depends on off-chain oracle feeds; oracle manipulation or delay directly affects VLP NAV and trader PnL",
+        "reference_url": "https://docs.vela.exchange/"
+      },
+      {
+        "id": "VELA-003",
+        "title": "VELA Staking Lock Bypass",
+        "severity": "MEDIUM",
+        "description": "The VELA staking contract may allow bypass of lock periods through edge cases in the unstake cooldown logic",
+        "reference_url": "https://docs.vela.exchange/vela-token/staking"
+      }
+    ]
   }
 ]

@@ -30,6 +30,7 @@ try:
         ProtocolFingerprint,
         get_default_fingerprints,
         load_fingerprint_db,
+        load_community_signatures,
     )
     PROTOCOL_DB_AVAILABLE = True
 except ImportError:
@@ -42,6 +43,14 @@ try:
 except ImportError:
     CONFIG_AVAILABLE = False
     SentinelConfig = None
+
+# Import fork-specific logic checks
+try:
+    from fork_logic_checks import run_fork_checks
+    FORK_CHECKS_AVAILABLE = True
+except ImportError:
+    FORK_CHECKS_AVAILABLE = False
+    run_fork_checks = None  # type: ignore[assignment]
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger:
@@ -806,6 +815,12 @@ def scan_project(
     else:
         fingerprints = get_default_fingerprints()
 
+    # Extend with community-contributed signatures
+    community_sigs = load_community_signatures()
+    if community_sigs:
+        fingerprints = list(fingerprints) + community_sigs
+        logger.info(f"Loaded {len(community_sigs)} community protocol signature(s)")
+
     # Collect files to scan
     files_to_scan = []
     if os.path.isfile(target_path) and target_path.endswith('.sol'):
@@ -827,10 +842,35 @@ def scan_project(
         )
 
         if matches:
+            # Run fork-specific logic checks for each matched protocol
+            fork_findings = []
+            if FORK_CHECKS_AVAILABLE and run_fork_checks is not None:
+                try:
+                    with open(file_path, "r", encoding="utf-8") as _f:
+                        _source = _f.read()
+                    for match in matches:
+                        fork_findings.extend(
+                            run_fork_checks(
+                                _source,
+                                match['protocol'],
+                                file_path,
+                            )
+                        )
+                    if fork_findings:
+                        logger.info(
+                            f"Fork checks: {len(fork_findings)} finding(s) "
+                            f"in {file_path}"
+                        )
+                except Exception as _exc:
+                    logger.warning(
+                        f"Fork logic checks failed for {file_path}: {_exc}"
+                    )
+
             all_results.append({
                 'file': file_path,
                 'matches': matches,
                 'risk_assessment': assess_inherited_risk(matches),
+                'fork_findings': fork_findings,
             })
 
     return all_results
