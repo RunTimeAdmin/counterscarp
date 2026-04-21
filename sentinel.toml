@@ -6,7 +6,7 @@
 [engine]
 # Engine-wide settings
 name = "Sentinel Security Engine"
-version = "3.2.0"
+version = "3.3.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 fail_on_severity = "HIGH"
@@ -23,6 +23,12 @@ max_findings = 0
 [heuristics]
 # Global toggle for all heuristic scanning
 enabled = true
+
+# Minimum confidence score for heuristic findings (1-10, 0 = show all findings)
+min_confidence = 0
+
+# Minimum severity level to include in report (CRITICAL, HIGH, MEDIUM, LOW, INFO)
+min_severity = "INFO"
 
 # Severity override: upgrade or downgrade rule severity
 # Format: RULE_ID = "NEW_SEVERITY"

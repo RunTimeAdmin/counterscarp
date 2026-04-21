@@ -19,14 +19,14 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:$PATH"
 
 # Install Aderyn (Rust-based Solidity static analyzer by Cyfrin)
-RUN cargo install aderyn
+RUN cargo install aderyn@0.6.2
 
 # Install Go (for Medusa)
 RUN curl -L https://go.dev/dl/go1.22.0.linux-amd64.tar.gz | tar -C /usr/local -xzf -
 ENV PATH="/usr/local/go/bin:$PATH"
 
 # Install Medusa (Go-based coverage-guided fuzzer by Crytic)
-RUN go install github.com/crytic/medusa/cmd/medusa@latest
+RUN go install github.com/crytic/medusa/cmd/medusa@v0.1.8
 
 # ------------------------------------------------------------------------------
 # Stage 2: Final runtime image
@@ -59,7 +59,8 @@ RUN apt-get update && apt-get install -y \
 # 3. INSTALL PYTHON TOOLS
 # Install core dependencies for the Sentinel Engine
 RUN pip install --no-cache-dir \
-    slither-analyzer \
+    slither-analyzer==0.11.5 \
+    mythril==0.24.8 \
     solc-select \
     requests \
     packaging
@@ -121,6 +122,10 @@ COPY aderyn_wrapper.py .
 # GUI (optional - for local runs)
 COPY gui.py .
 
+# Tool version manifest
+COPY tool-versions.json /app/tool-versions.json
+COPY healthcheck.py /app/healthcheck.py
+
 # Design Documentation (reference)
 # Note: Skipping design docs to keep image lean (available in repo)
 # COPY Pragmatic\ Security\ Engine.txt ./docs/
@@ -136,7 +141,11 @@ RUN python3 --version && \
     medusa --version && \
     echo "✓ Sentinel Engine core dependencies installed"
 
-# 8. ENTRYPOINT
+# 8. HEALTHCHECK DIRECTIVE
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD python /app/healthcheck.py
+
+# 9. ENTRYPOINT
 # Default: Show orchestrator help
 ENTRYPOINT ["python3", "orchestrator.py"]
 CMD ["--help"]

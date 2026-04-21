@@ -41,7 +41,7 @@ class TestTOMLParsing:
         
         assert isinstance(config, SentinelConfig)
         assert config.engine.name == "Sentinel Security Engine"
-        assert config.engine.version == "3.2.0"
+        assert config.engine.version == "3.3.0"
         assert config.engine.fail_on_severity == "HIGH"
         assert config.engine.max_findings == 100
 
@@ -566,7 +566,7 @@ class TestDataclassDefaults:
         """Test EngineConfig default values."""
         config = EngineConfig()
         assert config.name == "Sentinel Security Engine"
-        assert config.version == "3.2.0"
+        assert config.version == "3.3.0"
         assert config.fail_on_severity == "HIGH"
         assert config.max_findings == 0
 

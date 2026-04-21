@@ -39,6 +39,13 @@ services:
           cpus: '2.0'
           memory: 2G
 
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # =============================================================================
   # STANDALONE MODULES (Run specific tools without full pipeline)
   # =============================================================================

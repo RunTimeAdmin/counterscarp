@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("sentinel-engine")
 except Exception:
-    _ENGINE_VERSION = "3.2.0"
+    _ENGINE_VERSION = "3.3.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
@@ -730,7 +730,32 @@ def main() -> None:
         action="store_true",
         help="Rebuild the RAG knowledge base index",
     )
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Run tool version checks before scanning",
+    )
+    parser.add_argument(
+        "--min-confidence",
+        type=int,
+        default=0,
+        help="Minimum confidence score (1-10) to include in report (default: 0 = all)",
+    )
+    parser.add_argument(
+        "--min-severity",
+        choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+        default="INFO",
+        help="Minimum severity level to include in report (default: INFO = all)",
+    )
     args = parser.parse_args()
+
+    # --- Preflight tool version check ---
+    if args.preflight:
+        from healthcheck import run_healthcheck
+        if not run_healthcheck():
+            logger.error("Preflight check failed. Aborting scan.")
+            sys.exit(1)
+        logger.info("Preflight check passed — all tools verified.")
 
     # --- Path validation (fast-fail before any scan work) ---
     if not os.path.exists(args.target):
@@ -1018,6 +1043,7 @@ def main() -> None:
                         "file": hf.file,
                         "line_no": hf.line_no,
                         "line_text": hf.line_text,
+                        "confidence": getattr(hf, "confidence", 5),
                     }
                 )
         logger.info("Heuristic scan complete: %d findings (total), %d non-suppressed",
@@ -1195,6 +1221,41 @@ def main() -> None:
         print("\n>>> RAG Enrichment Requested...")
         logger.warning("RAG engine not available — cannot enrich findings")
         print("    [!] RAG engine not available. Install: pip install sentence-transformers numpy")
+
+    # --- Noise Control Filters ---
+    _severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+
+    # Resolve effective thresholds: CLI args take precedence over config defaults
+    effective_min_confidence = args.min_confidence or getattr(
+        config.heuristics, 'min_confidence', 0
+    ) if config else args.min_confidence
+    effective_min_severity = (
+        args.min_severity if args.min_severity != "INFO"
+        else getattr(config.heuristics, 'min_severity', 'INFO')
+    ) if config else args.min_severity
+
+    if effective_min_confidence > 0:
+        pre_filter = len(heuristic_results)
+        heuristic_results = [
+            h for h in heuristic_results
+            if h.get("confidence", 5) >= effective_min_confidence
+        ]
+        logger.info(
+            "Confidence filter (>=%d): %d -> %d findings",
+            effective_min_confidence, pre_filter, len(heuristic_results)
+        )
+
+    if effective_min_severity != "INFO":
+        pre_filter = len(heuristic_results)
+        min_level = _severity_order[effective_min_severity]
+        heuristic_results = [
+            h for h in heuristic_results
+            if _severity_order.get(h.get("severity", "INFO").upper(), 4) <= min_level
+        ]
+        logger.info(
+            "Severity filter (>=%s): %d -> %d findings",
+            effective_min_severity, pre_filter, len(heuristic_results)
+        )
 
     # [PHASE 8] Action Report
     print("\n>>> Writing Action Plan...")

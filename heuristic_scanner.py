@@ -4,7 +4,7 @@ import os
 import re
 import argparse
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import List, Optional, Tuple
 
 # Import logger
 try:
@@ -36,6 +36,13 @@ try:
 except ImportError:
     PLUGIN_MANAGER_AVAILABLE = False
     PluginManager = None
+
+
+# Compiled regex for inline suppression pragmas (sentinel-ignore).
+# Matches: // sentinel-ignore: RULE_ID [optional reason]
+#          /* sentinel-ignore: RULE_ID */
+#          // sentinel-ignore: ALL
+SUPPRESS_PATTERN = re.compile(r'sentinel-ignore:\s*(\w+)(?:\s+(.*))?')
 
 
 # Rule categories: groups rule IDs by security domain for coverage reporting.
@@ -88,6 +95,7 @@ class HeuristicFinding:
         line_text: The actual code line that triggered the finding.
         suppressed: Whether this finding is suppressed by config.
         suppression_reason: Reason for suppression if applicable.
+        confidence: Confidence score for this finding (1-10 scale).
     """
     rule_id: str
     severity: str
@@ -97,6 +105,7 @@ class HeuristicFinding:
     line_text: str
     suppressed: bool = False
     suppression_reason: str = ""
+    confidence: int = 5  # 1-10 scale
 
 
 @dataclass
@@ -109,12 +118,14 @@ class HeuristicRule:
         severity: Default severity level for findings from this rule.
         pattern: Compiled regex pattern to match against code.
         hint: Remediation hint for developers.
+        confidence: Confidence score for findings from this rule (1-10 scale).
     """
     id: str
     description: str
     severity: str
     pattern: re.Pattern[str]
     hint: str
+    confidence: int = 5  # 1-10 scale
 
 
 # Core heuristic rules. These complement Slither/Mythril with simple
@@ -126,6 +137,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"tx\.origin"),
         hint="Avoid tx.origin for authorization; use msg.sender and proper role-based access control.",
+        confidence=6,
     ),
     HeuristicRule(
         id="BLOCK_TIMESTAMP_RANDOMNESS",
@@ -133,6 +145,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"block\.timestamp|\bnow\b"),
         hint="Do not use block.timestamp/now as randomness; use VRF or off-chain randomness.",
+        confidence=2,
     ),
     HeuristicRule(
         id="DELEGATECALL_USAGE",
@@ -140,6 +153,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"delegatecall\s*\("),
         hint="Ensure delegatecall targets are trusted and immutable; review proxy patterns carefully.",
+        confidence=8,
     ),
     HeuristicRule(
         id="LOWLEVEL_CALL_USAGE",
@@ -147,6 +161,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"\.call\s*\(|\.staticcall\s*\("),
         hint="Wrap low-level calls with return value checks and reentrancy protection.",
+        confidence=2,
     ),
     HeuristicRule(
         id="HARDCODED_ADDRESS",
@@ -154,6 +169,7 @@ RULES: List[HeuristicRule] = [
         severity="INFO",
         pattern=re.compile(r"0x[0-9a-fA-F]{38,40}"),
         hint="Verify hardcoded addresses are correct and documented; consider configurability.",
+        confidence=1,
     ),
     HeuristicRule(
         id="EMERGENCY_WITHDRAW_PUBLIC",
@@ -161,6 +177,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"function\s+(emergencyWithdraw|withdrawAll|rescue|drain)\b"),
         hint="Ensure emergency/withdraw/rescue functions are admin-only and ideally timelocked.",
+        confidence=6,
     ),
     HeuristicRule(
         id="UPGRADE_FUNCTION",
@@ -168,6 +185,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"function\s+(upgradeTo|upgrade|setOwner|transferOwnership)\b"),
         hint="Confirm these functions are protected by strong access control (multi-sig, timelock).",
+        confidence=5,
     ),
     # Kill Chain / Behavioral / Math heuristics (first-pass approximations)
     HeuristicRule(
@@ -176,6 +194,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"(for|while)\s*\(.*msg\.value"),
         hint="Ensure deposits are not multiplied by loop iterations; track value per user, not per iteration.",
+        confidence=7,
     ),
     HeuristicRule(
         id="STRICT_BALANCE_EQUALITY",
@@ -183,6 +202,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"address\(this\)\.balance\s*=="),
         hint="Use >= or more robust accounting; forced ETH sends can break strict equality.",
+        confidence=6,
     ),
     HeuristicRule(
         id="HIDDEN_MINT",
@@ -190,6 +210,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"_mint\s*\("),
         hint="Review all mint paths; ensure they are expected (e.g., only in public mint/claim functions).",
+        confidence=5,
     ),
     HeuristicRule(
         id="FAKE_RENOUNCE_OWNER_ZERO",
@@ -197,6 +218,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"owner\s*=\s*address\(0\)"),
         hint="Verify there is no parallel manager/admin role keeping effective control.",
+        confidence=3,
     ),
     HeuristicRule(
         id="TRADING_TOGGLE_BOOL",
@@ -204,6 +226,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"bool\s+(trading(Open|Enabled)|tradingOpen|tradingEnabled)"),
         hint="Ensure trading toggles are time-bound, documented, and not abusable to trap liquidity.",
+        confidence=3,
     ),
     HeuristicRule(
         id="SET_FEE_FUNCTION",
@@ -211,6 +234,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"function\s+set(Fee|Tax)"),
         hint="Check for upper bounds on new fee values (e.g., <= 25%).",
+        confidence=4,
     ),
     HeuristicRule(
         id="DIVIDE_BEFORE_MULTIPLY",
@@ -218,6 +242,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"/[^*].*\*"),
         hint="Prefer (a * c) / b over (a / b) * c to avoid rounding to zero.",
+        confidence=4,
     ),
     HeuristicRule(
         id="BOOLEAN_TRANSFER_CHECK",
@@ -225,6 +250,7 @@ RULES: List[HeuristicRule] = [
         severity="INFO",
         pattern=re.compile(r"if\s*\(!\s*\w+\.transfer\s*\("),
         hint="Ensure this pattern matches the token library semantics (e.g., Solmate SafeTransferLib reverts instead of returning bool).",
+        confidence=1,
     ),
     
     # ========== BUG BOUNTY PATTERNS (High-value Immunefi/Code4rena targets) ==========
@@ -233,8 +259,9 @@ RULES: List[HeuristicRule] = [
         id="UNCHECKED_EXTERNAL_CALL",
         description="Low-level call/transfer without return value check (funds may be lost)",
         severity="CRITICAL",
-        pattern=re.compile(r"(\w+(?:\([^)]*\))?)\.(call\{|transfer\(|transferFrom\()"),
+        pattern=re.compile(r"(\w+(?:\([^)]*\))?)\.\(call\{|transfer\(|transferFrom\("),
         hint="CRITICAL: Always check return values of external calls. Unchecked calls are top bug bounty targets ($10K-$100K).",
+        confidence=9,
     ),
     
     HeuristicRule(
@@ -243,6 +270,7 @@ RULES: List[HeuristicRule] = [
         severity="CRITICAL",
         pattern=re.compile(r"(latestAnswer|latestRoundData)\(\)(?!.*require.*updatedAt|.*block\.timestamp)"),
         hint="CRITICAL: Check updatedAt timestamp and answeredInRound to prevent stale price attacks ($50K-$500K bounties).",
+        confidence=9,
     ),
     
     HeuristicRule(
@@ -251,6 +279,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"ecrecover\((?!.*nonce|.*deadline)"),
         hint="HIGH: Add nonce and deadline to prevent signature replay attacks. Common in account abstraction ($20K-$100K).",
+        confidence=8,
     ),
     
     HeuristicRule(
@@ -259,6 +288,7 @@ RULES: List[HeuristicRule] = [
         severity="CRITICAL",
         pattern=re.compile(r"function\s+\w*flash\w*.*\{(?!.*nonReentrant|.*ReentrancyGuard)"),
         hint="CRITICAL: Flash loan callbacks must have nonReentrant modifier. Major DeFi exploit vector ($100K-$1M+ bounties).",
+        confidence=10,
     ),
     
     HeuristicRule(
@@ -267,6 +297,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"(UUPS|TransparentUpgradeableProxy|initializer|__gap)"),
         hint="HIGH: Storage collisions in upgrades can brick contracts. Use storage gap patterns and OpenZeppelin guidelines ($30K-$200K).",
+        confidence=8,
     ),
     
     HeuristicRule(
@@ -275,6 +306,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"uint(128|64|32|16|8)\(\w+\)(?!.*require|.*assert)"),
         hint="HIGH: Downcasting without overflow check can cause critical bugs. Use SafeCast library ($10K-$50K).",
+        confidence=7,
     ),
     
     HeuristicRule(
@@ -283,6 +315,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"(swapExactTokensFor|swap)\(.*,\s*0\s*[,\)]"),
         hint="HIGH: Zero slippage protection allows MEV bots to sandwich trade. Always set minAmountOut ($5K-$30K).",
+        confidence=7,
     ),
     
     HeuristicRule(
@@ -291,6 +324,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"function\s+(pause|unpause|setImplementation)\s*\(.*\).*onlyOwner(?!.*timelock)"),
         hint="MEDIUM: Centralization risk. Use multi-sig + timelock for critical admin functions. Common Code4rena Medium finding.",
+        confidence=4,
     ),
 
     # ========== STORAGE & MEMORY PATTERNS ==========
@@ -301,6 +335,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"blockhash\s*\("),
         hint="Do not use blockhash() for randomness; use Chainlink VRF or commit-reveal schemes.",
+        confidence=3,
     ),
 
     HeuristicRule(
@@ -309,6 +344,7 @@ RULES: List[HeuristicRule] = [
         severity="HIGH",
         pattern=re.compile(r"\.length\s*(?:--|=\s*0\s*-|-=)"),
         hint="Avoid manipulating array.length directly. Use pop() or ensure Solidity >= 0.8 for overflow protection.",
+        confidence=5,
     ),
 
     HeuristicRule(
@@ -317,6 +353,7 @@ RULES: List[HeuristicRule] = [
         severity="MEDIUM",
         pattern=re.compile(r"\.transfer\s*\(|\.send\s*\("),
         hint="Prefer pull-payment pattern or use call() with reentrancy guards instead of transfer()/send().",
+        confidence=3,
     ),
 ]
 
@@ -359,6 +396,30 @@ def get_all_rules(plugin_mgr: Optional[PluginManager] = None) -> List[HeuristicR
         except Exception as exc:
             logger.warning("Failed to load plugin rules: %s", exc)
     return all_rules
+
+
+def _check_inline_suppression(
+    lines: List[str], line_idx: int, rule_id: str
+) -> Tuple[bool, str]:
+    """Check current line and line above for a sentinel-ignore pragma.
+
+    Args:
+        lines: All lines of the file (0-based list).
+        line_idx: 0-based index of the line that triggered the finding.
+        rule_id: The rule ID to check suppression for.
+
+    Returns:
+        Tuple of (is_suppressed, reason_string).
+    """
+    for check_idx in (line_idx, line_idx - 1):
+        if 0 <= check_idx < len(lines):
+            match = SUPPRESS_PATTERN.search(lines[check_idx])
+            if match:
+                suppressed_rule = match.group(1)
+                reason = match.group(2) or "inline suppression"
+                if suppressed_rule == rule_id or suppressed_rule == "ALL":
+                    return True, reason.strip()
+    return False, ""
 
 
 def is_in_code_context(line: str, match_start: int) -> bool:
@@ -542,10 +603,23 @@ def scan_file(
                     file=path,
                     line_no=i,
                     line_text=line.rstrip("\n"),
+                    confidence=rule.confidence,
                 )
 
-                # Check suppressions
-                if config:
+                # Check inline suppression pragmas first (current line + line above)
+                suppressed, suppression_reason = _check_inline_suppression(
+                    lines, i - 1, rule.id
+                )
+                if suppressed:
+                    finding.suppressed = True
+                    finding.suppression_reason = suppression_reason
+                    logger.debug(
+                        "Inline suppression applied for %s at %s:%d: %s",
+                        rule.id, path, i, suppression_reason,
+                    )
+
+                # Check config-based suppressions (only if not already suppressed inline)
+                if not finding.suppressed and config:
                     suppression = config.is_finding_suppressed(rule.id, path, i)
                     if suppression:
                         finding.suppressed = True
@@ -594,6 +668,7 @@ def scan_file(
                 file=path,
                 line_no=0,
                 line_text=f"function {func_name}(...)",
+                confidence=7,
             )
 
             # Check suppressions

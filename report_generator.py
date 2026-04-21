@@ -21,7 +21,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("sentinel-engine")
 except Exception:
-    _ENGINE_VERSION = "3.2.0"
+    _ENGINE_VERSION = "3.3.0"
 from license_manager import LicenseManager, BRANDED_REPORTS
 
 logger = get_logger(__name__)
@@ -71,6 +71,7 @@ class Finding:
     owasp: Optional[str] = None
     similar_locations: List[str] = field(default_factory=list)
     duplicate_count: int = 0
+    confidence: int = 5  # 1-10 confidence score
 
 
 @dataclass
@@ -130,8 +131,8 @@ SARIF_LEVEL_MAP = {
 }
 
 # Sentinel Engine version for SARIF reports
-SENTINEL_ENGINE_VERSION = "3.2.0"
-SENTINEL_ENGINE_SEMANTIC_VERSION = "3.2.0"
+SENTINEL_ENGINE_VERSION = "3.3.0"
+SENTINEL_ENGINE_SEMANTIC_VERSION = "3.3.0"
 SENTINEL_INFORMATION_URI = "https://github.com/RunTimeAdmin/sentinel-engine"
 
 # Remediation knowledge base
@@ -429,6 +430,7 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
                     <strong>Rule:</strong> {finding.rule_id} | 
                     <strong>Location:</strong> {finding.file}:{finding.line_no}
                     {f" | <strong>CWE:</strong> {finding.cwe}" if finding.cwe else ""}
+                     | <strong>Confidence:</strong> {getattr(finding, 'confidence', 5)}/10
                 </div>
                 <div class="finding-description">{finding.description}</div>
 """
@@ -738,15 +740,16 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
     if _top_findings:
         _severity_emoji_map = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🔵", "INFO": "ℹ️"}
         md += "### Top 10 Priority Issues\n\n"
-        md += "| # | Severity | Issue | Location | Description |\n"
-        md += "|---|----------|-------|----------|-------------|\n"
+        md += "| # | Severity | Confidence | Issue | Location | Description |\n"
+        md += "|---|----------|-----------|-------|----------|-------------|\n"
         for _i, _f in enumerate(_top_findings, 1):
             _sev = _f.severity
             _sev_em = _severity_emoji_map.get(_sev, "❓")
             _issue = (_f.rule_id or _f.title or "unknown")
             _loc = f"{_f.file}:{_f.line_no}" if _f.file else "unknown"
             _desc = (_f.title or _f.description or "")[:80].replace("|", "\\|")
-            md += f"| {_i} | {_sev_em} {_sev} | {_issue} | {_loc} | {_desc} |\n"
+            _conf = getattr(_f, 'confidence', 5)
+            md += f"| {_i} | {_sev_em} {_sev} | [{_conf}/10] | {_issue} | {_loc} | {_desc} |\n"
         md += "\n"
 
     md += "---\n\n"
@@ -764,7 +767,8 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
             emoji = severity_emoji.get(finding.severity, "❓")
             
             md += f"### {i}. {emoji} {finding.title}\n\n"
-            md += f"**Severity:** {finding.severity}  \n"
+            _conf_val = getattr(finding, 'confidence', 5)
+            md += f"**Severity:** {finding.severity} | **Confidence:** {_conf_val}/10  \n"
             md += f"**Category:** {finding.category}  \n"
             md += f"**Rule ID:** `{finding.rule_id}`  \n"
             md += f"**Location:** `{finding.file}:{finding.line_no}`  \n"
@@ -854,7 +858,8 @@ def aggregate_findings_from_orchestrator(
             description=item["message"],
             file=item["file"],
             line_no=item["line_no"],
-            code_snippet=item.get("line_text", "")
+            code_snippet=item.get("line_text", ""),
+            confidence=item.get("confidence", 5)
         ))
     
     # Liar Detector

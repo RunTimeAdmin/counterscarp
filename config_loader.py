@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Sentinel Security Engine"
-    version: str = "3.2.0"
+    version: str = "3.3.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -70,10 +70,14 @@ class HeuristicConfig:
         enabled: Whether heuristic scanning is enabled.
         severity_overrides: Dict mapping rule IDs to custom severity levels.
         disabled_rules: Dict mapping rule IDs to disabled status.
+        min_confidence: Minimum confidence score (1-10) to include; 0 = show all.
+        min_severity: Minimum severity level to include; INFO = show all.
     """
     enabled: bool = True
     severity_overrides: Dict[str, str] = field(default_factory=dict)
     disabled_rules: Dict[str, bool] = field(default_factory=dict)
+    min_confidence: int = 0      # 0 = show all
+    min_severity: str = "INFO"   # INFO = show all
 
     def is_rule_enabled(self, rule_id: str) -> bool:
         """Check if a rule is enabled.
@@ -702,7 +706,7 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Sentinel Security Engine'),
-            version=eng.get('version', '3.2.0'),
+            version=eng.get('version', '3.3.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )
@@ -713,7 +717,9 @@ def load_config(config_path: Optional[str] = None) -> SentinelConfig:
         config.heuristics = HeuristicConfig(
             enabled=heur.get('enabled', True),
             severity_overrides=heur.get('severity_overrides', {}),
-            disabled_rules=heur.get('disabled_rules', {})
+            disabled_rules=heur.get('disabled_rules', {}),
+            min_confidence=heur.get('min_confidence', 0),
+            min_severity=heur.get('min_severity', 'INFO')
         )
 
     # Parse suppressions

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-04-21
+
+### Added
+- Docker environment isolation with pinned tool versions (Slither 0.11.5, Aderyn 0.6.2, Medusa 0.1.8, Mythril 0.24.8, Foundry 1.0.0)
+- Tool version manifest (`tool-versions.json`) for reproducible builds
+- Container health check verifying all analyzer tools on startup
+- `--preflight` CLI flag to validate tool versions before scanning
+- Confidence scoring (1-10) for all 29 heuristic rules
+- Inline suppression comments (`// sentinel-ignore: RULE_ID [reason]`)
+- `--min-confidence` CLI filter to set minimum confidence threshold
+- `--min-severity` CLI filter to set minimum severity threshold
+- `.dockerignore` for optimized Docker builds
+
+### Changed
+- Dockerfile now pins exact versions for all security analysis tools
+- docker-compose.yml includes container health checks
+- Report output shows confidence scores in executive summary, top-10 table, and finding details
+- Config file (`sentinel.toml`) supports `min_confidence` and `min_severity` under `[heuristics]`
+
 ## [3.2.0] - 2026-04-20
 
 ### Added

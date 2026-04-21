@@ -1,0 +1,8 @@
+{
+  "slither": "0.11.5",
+  "aderyn": "0.6.2",
+  "medusa": "0.1.8",
+  "mythril": "0.24.8",
+  "foundry": "1.0.0",
+  "solc_default": "0.8.28"
+}
