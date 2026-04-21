@@ -13,7 +13,7 @@ If you discover a security vulnerability in Counterscarp Engine, please report i
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email us at: **support@counterscarp.io**
+Instead, please email us at: **contact@counterscarp.io**
 
 ### What to Include
 
