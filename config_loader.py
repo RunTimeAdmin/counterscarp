@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Garrison Security Engine"
-    version: str = "3.4.0"
+    version: str = "4.0.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -710,7 +710,7 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Garrison Security Engine'),
-            version=eng.get('version', '3.4.0'),
+            version=eng.get('version', '4.0.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )
