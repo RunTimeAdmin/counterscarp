@@ -838,6 +838,513 @@
       ],
       "cve": null,
       "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-087",
+      "title": "Bridge Message Authenticity Verification Failure",
+      "category": "Cross-Chain Bridge Vulnerabilities",
+      "severity": "CRITICAL",
+      "description": "Bridge relay contracts that fail to properly verify the authenticity of cross-chain messages allow attackers to forge messages claiming token deposits on the source chain that never occurred, causing the destination bridge to mint or release unbacked tokens. The Nomad bridge hack ($190M) exploited exactly this flaw — a faulty message verification routine allowed any arbitrary message to be treated as proven without a valid Merkle proof. Root causes include missing Merkle proof validation against the committed state root, validator signature threshold checks that fall below Byzantine fault tolerance (requiring at least n/3+1 signatures), failure to mark message hashes as consumed after processing (enabling replay), accepting messages before source chain transaction finality is confirmed, and using tx.origin instead of msg.sender for message sender verification. Protocols relying on light clients or optimistic verification must implement the full proof verification pipeline without shortcuts.",
+      "affected_patterns": [
+        "bridge accepting messages without Merkle proof verification against committed state root",
+        "validator signature threshold below Byzantine fault tolerance (fewer than n/3+1 validators required)",
+        "message hash not marked as consumed after processing — allows replay of same message",
+        "cross-chain message relay without source chain finality confirmation (e.g., accepting 1-block-old state)",
+        "bridge contract using tx.origin for message sender verification instead of msg.sender",
+        "missing nonce tracking per source-destination channel allowing message replay attacks"
+      ],
+      "references": [
+        "https://medium.com/nomad-xyz-blog/nomad-bridge-hack-root-cause-analysis-875ad2e5aacd",
+        "https://swcregistry.io/docs/SWC-115",
+        "https://ethereum.org/en/developers/docs/bridges/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-088",
+      "title": "Bridge Validator Key Compromise and Multisig Threshold Weakness",
+      "category": "Cross-Chain Bridge Vulnerabilities",
+      "severity": "CRITICAL",
+      "description": "Bridges secured by multisig schemes or external validator sets where the signing threshold is too low, or where validators share cloud infrastructure, are vulnerable to coordinated key compromise. The Ronin bridge hack ($625M) succeeded by compromising just 5 of 9 validators — four through a single spear-phishing campaign and one via a gas-free RPC backdoor. Risk factors include: a multisig threshold set below 2/3 of total signers (insufficient for Byzantine fault tolerance), validators co-located in the same cloud provider or data center (correlated failure), absence of a key rotation mechanism meaning a compromised key remains valid indefinitely, and validator set updates that can be applied immediately without a governance timelock. Bridges must enforce a high threshold (typically 2/3+1), mandate geographic and infrastructure diversity among validators, provide an emergency key rotation path, and require timelocked governance approval for validator set changes.",
+      "affected_patterns": [
+        "multisig threshold below 2/3 of total signers (e.g., 5-of-9 threshold is insufficient)",
+        "validator set updatable by a single admin address without timelock delay",
+        "bridge using EOA-controlled validators instead of smart-contract-based validation with slashing",
+        "no mechanism for emergency validator key rotation after suspected compromise",
+        "validator signatures not verified against a registered and active validator set on-chain",
+        "bridge continuing to accept signatures from validators that have been formally removed"
+      ],
+      "references": [
+        "https://roninblockchain.substack.com/p/community-alert-ronin-validators",
+        "https://blog.chainalysis.com/reports/ronin-network-hack-2022/",
+        "https://ethereum.org/en/developers/docs/bridges/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-089",
+      "title": "Canonical vs Wrapped Token Confusion in Bridge Transfers",
+      "category": "Cross-Chain Bridge Vulnerabilities",
+      "severity": "HIGH",
+      "description": "Bridges that fail to properly distinguish between canonical (natively issued) tokens and their wrapped representations across chains create conditions for double-counting or unbacked minting. The attack pattern: an attacker deposits wrapped tokens on chain A; the bridge, lacking a rigorous token registry, incorrectly classifies the wrapped token as canonical and mints additional wrapped tokens on chain B. This inflates the total wrapped supply beyond the backing reserve. The underlying issue is an incomplete or mutable token address registry that does not enforce a strict canonical-to-wrapped mapping, combined with absent supply reconciliation between the source and destination bridge contracts. Any minting on the destination side must be conditional on verified, finalized, and un-replayable lock events on the source side for verified canonical tokens only.",
+      "affected_patterns": [
+        "bridge failing to distinguish between native token deposits and wrapped token deposits",
+        "missing token registry mapping canonical token addresses to their wrapped counterparts across chains",
+        "bridge accepting wrapped token deposits and minting additional wrapped tokens on destination chain",
+        "no supply reconciliation mechanism between source and destination bridge contracts",
+        "token address mapping in bridge registry updatable by a single admin without governance vote or timelock"
+      ],
+      "references": [
+        "https://ethereum.org/en/developers/docs/bridges/",
+        "https://docs.layer3.xyz/bridging/canonical-vs-wrapped",
+        "https://rekt.news/wormhole-rekt/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-090",
+      "title": "Bridge Liquidity Pool Drain via Fraudulent Withdrawal Proofs",
+      "category": "Cross-Chain Bridge Vulnerabilities",
+      "severity": "CRITICAL",
+      "description": "Optimistic bridges and ZK bridges where withdrawal proofs can be forged, or where the fraud challenge period is insufficiently short, allow attackers to drain the bridge liquidity pool. In optimistic designs, the attacker submits a fraudulent state root claiming a large deposit, waits out a challenge period that is too short for honest parties to detect and respond, then withdraws funds. In ZK designs, the risk is a subtle edge case in the proof verifier circuit that causes the verifier to accept an invalid proof (as occurred in the Wormhole Solana verification bug). Critical mitigations: enforce a minimum 7-day challenge period for optimistic bridges, implement an accessible and incentivized fraud proof submission mechanism, subject ZK verifier contracts to formal verification, disallow withdrawals during active challenge periods, require withdrawal proofs to be cryptographically linked to specific deposit transaction hashes, and impose withdrawal rate limits on liquidity pools.",
+      "affected_patterns": [
+        "optimistic bridge challenge period configured under 7 days",
+        "no fraud proof submission mechanism or interactive challenge game for disputed state roots",
+        "ZK proof verifier contract accepting invalid proofs due to arithmetic edge cases or missing range checks",
+        "bridge allowing withdrawals to proceed during an active, unresolved challenge period",
+        "withdrawal proof not cryptographically linked to a specific deposit transaction on the source chain",
+        "bridge liquidity pool lacking withdrawal rate limiting or per-block withdrawal caps"
+      ],
+      "references": [
+        "https://extropy-io.medium.com/optimistic-rollup-fraud-proofs-explained-c17cf9f41b3e",
+        "https://rekt.news/wormhole-rekt/",
+        "https://ethereum.org/en/developers/docs/scaling/optimistic-rollups/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-091",
+      "title": "Cross-Chain Replay Attack on Bridge Transactions",
+      "category": "Cross-Chain Bridge Vulnerabilities",
+      "severity": "HIGH",
+      "description": "Bridge transactions lacking chain-specific identifiers or unique per-channel nonces can be replayed on different chains or different bridge deployments. An attacker intercepts a legitimate bridge message (e.g., a signed deposit proof), replays it on a different target chain or a different bridge instance on the same target chain, and double-claims tokens. This is analogous to the EIP-155 replay protection problem on standard Ethereum transactions. Each bridge message must embed both a source chain ID and a destination chain ID (using block.chainid or a hardcoded chain-specific domain separator), and nonces must be scoped per source-destination pair — not global — to prevent cross-channel nonce reuse. Messages from chains sharing the same chain ID (test networks, forked chains) require additional domain separation.",
+      "affected_patterns": [
+        "bridge message missing source chain identifier in its signed payload",
+        "bridge message missing destination chain identifier — message valid on any chain",
+        "bridge nonce not scoped per source-destination chain pair, allowing nonce reuse across channels",
+        "bridge contract using block.chainid without EIP-155-style replay protection domain separator",
+        "same bridge contract deployed with identical addresses on multiple chains sharing the same nonce space"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-155",
+        "https://ethereum.org/en/developers/docs/bridges/",
+        "https://consensys.github.io/smart-contract-best-practices/attacks/replay-attacks/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-092",
+      "title": "Bridge Exit Mechanism Denial of Service",
+      "category": "Cross-Chain Bridge Vulnerabilities",
+      "severity": "HIGH",
+      "description": "Bridges where the exit (withdrawal) mechanism can be congested, blocked, or griefed allow attackers to trap user funds indefinitely. Attack vectors include: flooding the exit queue with dust withdrawals to exhaust available processing capacity; submitting withdrawals whose proof verification is so gas-intensive that the transaction cannot fit within the block gas limit; bribing or controlling the sole relayer or sequencer to censor specific withdrawal transactions; and depleting exit liquidity tokens to make the exit path economically infeasible. Emergency exit mechanisms (e.g., forced inclusion via L1 calldata, direct state proof submission) are essential safety valves. Without them, a DoS on the normal exit path permanently locks funds. Bridges should cap the exit queue depth, cap proof verification gas, mandate decentralized relay networks with censorship resistance, and provide a permissionless emergency exit path.",
+      "affected_patterns": [
+        "bridge exit queue unbounded with no maximum pending withdrawal limit",
+        "withdrawal proof verification gas cost exceeds block gas limit for large or adversarial proof batches",
+        "single relayer or sequencer with no permissionless forced-inclusion fallback",
+        "bridge exit requiring a specific token that can be made artificially scarce by an adversary",
+        "no emergency exit mechanism allowing users to bypass the normal queue via L1 direct submission"
+      ],
+      "references": [
+        "https://ethereum.org/en/developers/docs/scaling/optimistic-rollups/",
+        "https://l2beat.com/scaling/summary",
+        "https://research.arbitrum.io/t/forcing-transactions-on-arbitrum/4"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-093",
+      "title": "Chainlink L2 Sequencer Downtime Stale Price Consumption",
+      "category": "L2 Sequencer and Oracle Failure Modes",
+      "severity": "CRITICAL",
+      "description": "On L2 networks (Arbitrum, Optimism, Base, and similar rollups), when the sequencer goes offline, Chainlink decentralized price feeds stop receiving updates because no transactions can be included. However, the feeds' latestRoundData() function continues to return the last known price with an outdated timestamp. Lending protocols and derivatives platforms that consume these feeds without checking the L2 Sequencer Uptime Feed (a Chainlink-provided contract that signals whether the sequencer is live) will treat stale prices as current. This allows users to borrow against artificially inflated collateral (using pre-crash prices during sequencer downtime), avoid liquidations, or execute arbitrage against the stale price. Additionally, a grace period must be enforced after sequencer restart — prices immediately post-restart may still lag real market conditions. Protocols must: (1) check the L2 Sequencer Uptime Feed, (2) confirm the sequencer has been live for at least a grace period (e.g., 60 seconds), and (3) validate price timestamp freshness relative to the sequencer's last restart time.",
+      "affected_patterns": [
+        "L2 protocol calling Chainlink latestRoundData() without first checking the L2 Sequencer Uptime Feed contract",
+        "missing grace period enforcement after sequencer restart before trusting newly updated prices",
+        "protocol not comparing price feed answer timestamp against the sequencer's last-confirmed restart timestamp",
+        "latestRoundData() result used directly without staleness timestamp validation on L2 deployment",
+        "hardcoded heartbeat staleness timeout that does not account for variable sequencer downtime durations"
+      ],
+      "references": [
+        "https://docs.chain.link/data-feeds/l2-sequencer-feeds",
+        "https://medium.com/cyfrin/chainlink-oracle-defi-attacks-93b6cb6541bf",
+        "https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/L2SequencerUptimeFeed.sol"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-094",
+      "title": "Sequencer Transaction Ordering Manipulation (L2 MEV)",
+      "category": "L2 Sequencer and Oracle Failure Modes",
+      "severity": "HIGH",
+      "description": "L2 sequencers hold complete authority over transaction ordering within a block — a power far exceeding what any single miner/validator holds on L1 due to the sequencer's monopolistic position. A malicious or compromised sequencer can front-run profitable transactions (e.g., large DEX trades), back-run liquidations, or censor specific addresses indefinitely. This Sequencer Extractable Value (SEV) is structurally different from L1 MEV because there is no competitive mempool to provide ordering transparency or competing relayers to enforce fairness. Protocols with time-sensitive operations — auctions, liquidations, TWAP updates — must account for sequencer ordering risk. Mitigations include: verifying the existence of a forced inclusion mechanism (transactions submitted directly to L1 that the sequencer must eventually include), avoiding reliance on block.timestamp provided by the sequencer for security-critical logic, and providing L1-based emergency paths for time-critical operations.",
+      "affected_patterns": [
+        "protocol assuming fair ordering on L2 with no forced transaction inclusion mechanism",
+        "time-sensitive operations (liquidations, auctions, TWAP snapshots) with no L1 fallback path",
+        "security-critical logic relying on block.timestamp set exclusively by the sequencer without bounds checking",
+        "no mechanism for users or protocols to bypass the sequencer for emergency transactions",
+        "smart contract using randomness derived from sequencer-controlled block variables"
+      ],
+      "references": [
+        "https://research.arbitrum.io/t/sequencer-and-mev/102",
+        "https://community.optimism.io/docs/developers/build/differences/",
+        "https://ethereum.org/en/developers/docs/mev/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-095",
+      "title": "L2 State Root Submission Delay and Pre-Finalization Exploitation",
+      "category": "L2 Sequencer and Oracle Failure Modes",
+      "severity": "HIGH",
+      "description": "Optimistic rollups post state roots to L1 with a time delay (typically 7 days) during which any party can submit a fraud proof to invalidate an incorrect root. Protocols that treat L2 transaction execution as final before the L1 state root is confirmed and the challenge period has passed are exposed to state reversion attacks. If the L2 state is later invalidated, transactions that appeared fully confirmed are rolled back, potentially causing double-spending or leaving counterparties with invalid accounting. This is particularly dangerous for cross-chain protocols that credit funds or release collateral on L2 state before L1 finalization. Protocols must clearly distinguish between L2 execution (soft finality) and L1-confirmed finalization (hard finality) and apply appropriate delays to any operation that cannot be reversed.",
+      "affected_patterns": [
+        "bridge accepting L2 state as final before the L1 challenge period has fully elapsed",
+        "cross-chain message relay relying on an unfinalized L2 state root not yet confirmed on L1",
+        "protocol crediting user funds based on an L2 transaction receipt before state root finalization",
+        "no reorg or state reversion protection for time-sensitive L2 operations involving external value",
+        "L2-to-L1 message processed and funds released before the dispute/challenge period concludes"
+      ],
+      "references": [
+        "https://ethereum.org/en/developers/docs/scaling/optimistic-rollups/",
+        "https://l2beat.com/scaling/summary",
+        "https://developer.arbitrum.io/arbos/l2-to-l1-messaging"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-096",
+      "title": "Oracle Price Feed Aggregator Multi-Source Failure and Stale Round Detection",
+      "category": "L2 Sequencer and Oracle Failure Modes",
+      "severity": "HIGH",
+      "description": "Chainlink and similar aggregator-based oracle systems can enter states where the returned data is invalid or stale. This occurs when: multiple data sources simultaneously go offline causing the aggregator to lose quorum; a round fails to complete (answeredInRound < roundId signals an in-progress or failed round); or the aggregator returns a zero price. Protocols that do not validate these conditions treat invalid oracle data as legitimate market prices, enabling borrowing against zero-value collateral, skipping liquidations, or triggering erroneous liquidations. The complete validation checklist for latestRoundData() is: (1) revert if price <= 0, (2) revert if answeredInRound < roundId (stale/failed round), (3) revert if updatedAt timestamp exceeds the maximum acceptable staleness threshold, (4) implement a circuit breaker that pauses the protocol if the oracle has been stale beyond a configurable maximum. A fallback oracle (e.g., Uniswap TWAP) should activate automatically when the primary aggregator fails.",
+      "affected_patterns": [
+        "protocol not checking answeredInRound == roundId from Chainlink latestRoundData() before using price",
+        "protocol accepting price == 0 from oracle aggregator without reverting or falling back",
+        "no circuit breaker or pause mechanism when oracle returns data stale beyond acceptable threshold",
+        "missing fallback oracle activation when primary Chainlink aggregator loses quorum or goes offline",
+        "protocol using a single oracle source with no redundancy or cross-validation against secondary source"
+      ],
+      "references": [
+        "https://docs.chain.link/data-feeds/api-reference",
+        "https://medium.com/cyfrin/chainlink-oracle-defi-attacks-93b6cb6541bf",
+        "https://blog.openzeppelin.com/secure-smart-contract-guidelines-the-dangers-of-price-oracles"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-097",
+      "title": "L2 Gas Price Oracle Manipulation via L1 Base Fee Distortion",
+      "category": "L2 Sequencer and Oracle Failure Modes",
+      "severity": "MEDIUM",
+      "description": "L2 networks calculate transaction fees by querying an on-chain L1 gas price oracle that estimates the cost of posting transaction data to Ethereum as calldata. If this oracle uses the spot L1 base fee (rather than a time-weighted average), an attacker who can influence L1 base fee (e.g., by flooding the L1 mempool) can temporarily spike L2 transaction costs to uneconomical levels, pricing out legitimate users or frontrunning operations that rely on gas estimates. Conversely, suppressing L1 base fee can make L2 transactions artificially cheap, enabling spam or DoS attacks. The L1 gas oracle itself, if updatable by a single address without governance, is also a direct manipulation target. Protocols must use smoothed or capped gas price inputs, apply min/max bounds to fee calculations, and require multi-sig or governance-timelocked oracle updates.",
+      "affected_patterns": [
+        "L2 gas oracle reading spot L1 base fee rather than an exponential moving average or smoothed value",
+        "gas price oracle contract updatable by a single EOA address without governance or timelock",
+        "protocol hardcoding L2 gas estimates for operations instead of dynamically querying the gas oracle",
+        "no gas price ceiling or floor in L2 fee calculations allowing extreme fee values to pass through",
+        "L1 base fee manipulation (via mempool flooding) directly propagating into L2 transaction cost predictions"
+      ],
+      "references": [
+        "https://community.optimism.io/docs/developers/build/transaction-fees/",
+        "https://developer.arbitrum.io/arbos/gas",
+        "https://eips.ethereum.org/EIPS/eip-1559"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-098",
+      "title": "Flash Loan Governance Vote Manipulation",
+      "category": "Governance Attack Expansion",
+      "severity": "CRITICAL",
+      "description": "An attacker borrows a large quantity of governance tokens via flash loan within a single transaction, uses that temporary voting power to create or vote on a governance proposal, then repays the loan — all in one atomic block. This is possible when the governance system records voting power at the time of the vote rather than at the time of proposal creation (or at a prior block snapshot). The Beanstalk protocol attack ($182M, April 2022) demonstrated this precisely: the attacker used a flash loan to acquire a super-majority, passed an emergency governance proposal that sent the entire treasury to the attacker's wallet, and repaid the loan in the same transaction. Robust governance must use snapshot-based voting (ERC-20Votes / ERC-20VotesComp checkpoint model), enforce a minimum token holding period before votes become eligible, and reject delegations that take effect within the same block as the vote.",
+      "affected_patterns": [
+        "governance snapshot recorded at vote-casting time rather than at proposal creation block",
+        "no minimum token holding period before tokens are eligible for voting or delegation",
+        "governance contract accepting freshly delegated votes within the same block as the delegation transaction",
+        "governance token lacking snapshot-based checkpoint voting (ERC-20Votes) — uses live balance instead",
+        "proposal creation and proposal voting executable within the same transaction or block without delay"
+      ],
+      "references": [
+        "https://rekt.news/beanstalk-rekt/",
+        "https://eips.ethereum.org/EIPS/eip-5805",
+        "https://docs.openzeppelin.com/contracts/4.x/governance"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-099",
+      "title": "Governance Token Concentration and Whale Vote Dominance",
+      "category": "Governance Attack Expansion",
+      "severity": "HIGH",
+      "description": "When a small number of addresses or coordinated entities hold majority voting power in a governance token distribution, the protocol's governance is effectively centralized despite its on-chain form. A single whale or a colluding group can pass any proposal — treasury drains, fee parameter changes to benefit themselves, or upgrades to inject malicious code — without the broader community being able to resist. This is exacerbated by low quorum thresholds that can be met by a single large holder, and by treasury withdrawal proposals that require only a simple majority of a low quorum. Mitigations include: quadratic voting, vote delegation caps, minimum quorum thresholds set as a percentage of circulating (not total) supply, time-weighted voting power, and multisig-based treasury access requiring broader consensus.",
+      "affected_patterns": [
+        "single address holding more than 10% of total governance token supply with no voting power cap",
+        "top 5 addresses collectively controlling more than 50% of total voting power",
+        "quorum threshold set below the practical participation rate — achievable by a single large holder",
+        "treasury withdrawal proposal executable with fewer than 5% of total supply participating in vote",
+        "no per-address voting power cap or quadratic voting mechanism to limit whale dominance"
+      ],
+      "references": [
+        "https://a16zcrypto.com/content/article/dao-governance-attacks-and-how-to-avoid-them/",
+        "https://docs.openzeppelin.com/contracts/4.x/governance",
+        "https://vitalik.eth.limo/general/2021/08/16/voting3.html"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-100",
+      "title": "Delegation Sandwich Attack and Vote Weight Override",
+      "category": "Governance Attack Expansion",
+      "severity": "HIGH",
+      "description": "In governance systems with on-chain token delegation, an attacker can execute a delegation sandwich: delegate voting power to themselves just before a voting snapshot block, cast votes, then immediately undelegate — net cost is only transaction fees. More severe variants include chaining delegations across multiple controlled addresses to amplify apparent voting weight (though checkpoint-based systems prevent double-counting, poorly audited implementations may not). Delegation to address(0) permanently destroys voting power as a griefing vector against governance participation. Governance systems must enforce a cooldown period between delegation changes, prevent circular delegation loops, revert on delegation to address(0) if the intent is to preserve voting power, and use per-block checkpoint accounting (ERC-20Votes) that prevents mid-block delegation abuse.",
+      "affected_patterns": [
+        "delegation changes taking effect immediately in the same block without a lockup or cooldown delay",
+        "no cooldown period between successive delegation changes allowing rapid delegate-vote-undelegate cycling",
+        "delegation mechanism allowing circular delegation loops that could cause accounting inconsistencies",
+        "delegation to address(0) silently accepted, effectively burning votes as a governance griefing attack",
+        "checkpoint-based voting system not correctly accounting for mid-block delegation changes"
+      ],
+      "references": [
+        "https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#ERC20Votes",
+        "https://a16zcrypto.com/content/article/dao-governance-attacks-and-how-to-avoid-them/",
+        "https://eips.ethereum.org/EIPS/eip-5805"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-101",
+      "title": "Timelock Parameter Bypass and Governance Delay Manipulation",
+      "category": "Governance Attack Expansion",
+      "severity": "CRITICAL",
+      "description": "Governance timelocks are the primary defense against malicious proposals — they enforce a mandatory delay between approval and execution, giving the community time to detect and react. Attackers targeting the timelock itself can neutralize this protection: (1) pass a proposal to reduce the timelock delay to zero or near-zero, then immediately execute a treasury drain in a second proposal; (2) add themselves as a new proposer/executor role on the timelock; (3) use a batch proposal to combine a timelock parameter change with a malicious action, executing both simultaneously. The Tornado Cash governance attack (2023) used a malicious proposal with a hidden self-destruct-and-redeploy trick to gain permanent control of the governance contract. Mitigations: enforce an immutable minimum timelock floor, require higher quorum for proposals that modify timelock parameters, restrict delegatecall in timelock executors, and validate proposal payload hashes at submission to prevent substitution.",
+      "affected_patterns": [
+        "timelock delay modifiable by governance with no hardcoded minimum floor (e.g., can be set to 0)",
+        "timelock admin/proposer role transferable within the same proposal as a malicious treasury action",
+        "batch proposal execution that combines a timelock delay reduction with a treasury drain in one transaction",
+        "governance timelock executing delegatecall to an arbitrary user-supplied target address",
+        "proposal description hash not validated at execution — allows payload substitution after approval"
+      ],
+      "references": [
+        "https://rekt.news/tornado-cash-governance-rekt/",
+        "https://docs.openzeppelin.com/contracts/4.x/api/governance#TimelockController",
+        "https://a16zcrypto.com/content/article/dao-governance-attacks-and-how-to-avoid-them/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-102",
+      "title": "Proposal Griefing and Governance Denial of Service",
+      "category": "Governance Attack Expansion",
+      "severity": "MEDIUM",
+      "description": "Governance systems can be rendered non-functional by adversarial participants who exploit the governance mechanics to prevent legitimate proposals from passing or reaching execution. Attack vectors include: creating an unlimited number of spam proposals (if no minimum token balance is required), exploiting a proposal cap to block the queue and prevent urgent security fixes from being submitted, systematically voting against every proposal to consume quorum and block progress, and inflating the governance token holder count via dust attacks to push the effective quorum requirement beyond what honest participants can meet. Critical security fixes require a fast-track emergency governance path (ideally a guardian multisig with limited emergency powers and a short-duration window) to ensure that protocol-breaking vulnerabilities can be patched without waiting for a full governance vote cycle.",
+      "affected_patterns": [
+        "no minimum governance token balance requirement for proposal creation, enabling spam proposals",
+        "proposal submission limit per time period absent or set high enough to enable queue flooding",
+        "quorum calculated from total token supply including locked, burned, or permanently inactive tokens",
+        "no emergency governance bypass mechanism for critical security vulnerability patches",
+        "vote-against griefing carries no token cost or reputational penalty to the griefing actor"
+      ],
+      "references": [
+        "https://a16zcrypto.com/content/article/dao-governance-attacks-and-how-to-avoid-them/",
+        "https://docs.openzeppelin.com/contracts/4.x/governance",
+        "https://vitalik.eth.limo/general/2021/08/16/voting3.html"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-103",
+      "title": "Governor Contract Upgrade Hijacking via Self-Governance",
+      "category": "Governance Attack Expansion",
+      "severity": "CRITICAL",
+      "description": "When the governance contract itself is upgradeable and the upgrade authority is controlled by the governance contract (i.e., the governor is its own admin), an attacker who accumulates sufficient voting power can submit and pass a proposal that upgrades the governor to a malicious implementation. The malicious implementation may remove timelocks, disable quorum requirements, grant permanent admin access to the attacker, or simply drain all protocol treasury in the same transaction. This represents the ultimate governance attack because it permanently and irreversibly undermines every other safety mechanism in the system. Mitigations: the governor contract's upgrade authority should be held by an independent multisig (not the governor itself), the upgrade proxy admin should be explicitly excluded from governor control, upgrade proposals should require a supermajority quorum significantly higher than normal proposals, and an immutable guardian address should retain veto power over self-upgrades.",
+      "affected_patterns": [
+        "governor contract is upgradeable and the upgrade is controlled by the governor itself (self-admin)",
+        "no external guardian multisig or independent body with veto power over governor upgrade proposals",
+        "governor upgrade proposal requiring no higher quorum than standard parameter-change proposals",
+        "governance contract proxy admin address set to the governance contract itself — circular control",
+        "no immutable safety rails or hardcoded invariants preventing governor self-upgrade to a malicious implementation"
+      ],
+      "references": [
+        "https://rekt.news/tornado-cash-governance-rekt/",
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy",
+        "https://a16zcrypto.com/content/article/dao-governance-attacks-and-how-to-avoid-them/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-104",
+      "title": "Governance Oracle and External Data Dependency Manipulation",
+      "category": "Governance Attack Expansion",
+      "severity": "MEDIUM",
+      "description": "Governance proposals that condition their execution on external on-chain data — oracle prices, token balances on other chains verified via bridge messages, or off-chain vote tallies submitted by a single relayer — introduce an attack surface where the governing condition can be manipulated independently from the governance process. An attacker can corrupt the external data source to make a proposal execute under false pretenses. For example: a proposal that triggers a collateral parameter change when an oracle price is above a threshold — the attacker manipulates the oracle to satisfy the condition at execution time. Mitigations: validate oracle prices within governance execution with tight bounds checks, use multi-source data with anomaly detection, require cross-chain vote data from at least one independent verifier, and apply a mandatory delay between data observation and proposal execution to reduce flash manipulation risk.",
+      "affected_patterns": [
+        "governance proposal reading and acting on oracle price at execution time without bounds validation",
+        "cross-chain governance relying on a single unverified bridge message for vote tally import",
+        "proposal execution conditional on external contract state manipulable by a third party",
+        "off-chain vote result submitted by a single trusted relayer without cryptographic multi-party verification",
+        "governance proposal using block.timestamp for time-gated execution without sequencer-proof verification on L2"
+      ],
+      "references": [
+        "https://a16zcrypto.com/content/article/dao-governance-attacks-and-how-to-avoid-them/",
+        "https://blog.openzeppelin.com/secure-smart-contract-guidelines-the-dangers-of-price-oracles",
+        "https://ethereum.org/en/developers/docs/bridges/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-105",
+      "title": "Vote Buying, Dark DAO Collusion, and Governance Bribery",
+      "category": "Governance Attack Expansion",
+      "severity": "HIGH",
+      "description": "Vote buying in on-chain governance occurs when a third-party contract or off-chain coordination mechanism compensates token holders for voting in a specific direction, enabling a minority of capital to capture governance outcomes by purchasing votes from passive or economically motivated holders. Dark DAOs are trustless vote-buying platforms implemented as smart contracts: token holders deposit their governance tokens into the Dark DAO, which programmatically casts votes in the direction chosen by whoever paid the highest fee, then distributes proceeds to depositors. Because the entire process is on-chain and non-custodial, it is difficult to prohibit. More subtle forms include governance bribery protocols (e.g., Votium, Hidden Hand) that explicitly offer compensation for votes. Defenses include: vote privacy via commit-reveal schemes, time-weighted lock requirements that raise the cost of vote aggregation, and constitutional governance rules that make purchased-vote outcomes legally and technically challengeable.",
+      "affected_patterns": [
+        "governance token wrappable into a third-party contract that controls vote delegation on behalf of depositors",
+        "no vote privacy mechanism — all votes publicly visible on-chain allowing buyer verification and payment",
+        "token holders able to trustlessly commit their future vote direction to a third-party smart contract",
+        "delegation to a contract address that programmatically casts votes based on highest-bidder instructions",
+        "governance reward or bribe distribution mechanism tied to specific voting direction rather than participation"
+      ],
+      "references": [
+        "https://vitalik.eth.limo/general/2021/08/16/voting3.html",
+        "https://a16zcrypto.com/content/article/dao-governance-attacks-and-how-to-avoid-them/",
+        "https://ethresear.ch/t/minimal-anti-collusion-infrastructure/5413"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-106",
+      "title": "Permit2 Universal Allowance Widening and Cross-Protocol Drainage",
+      "category": "Permit/Permit2 Ecosystem",
+      "severity": "HIGH",
+      "description": "Uniswap's Permit2 contract centralizes token approvals: users grant Permit2 a maximum allowance, then use off-chain signatures to authorize individual protocol operations. An attacker who obtains a user's Permit2 signature (via phishing, malicious DApp, or front-running) can use it to transfer tokens across any protocol integrated with Permit2, not just the intended one. The risk is amplified when: (1) the allowance amount is set to type(uint160).max without an expiration, (2) the signed spender field is the Permit2 contract itself rather than a specific target contract, or (3) the DApp requests a batch approval covering multiple tokens beyond what the operation requires. Permit2 signatures are off-chain, leave no visible on-chain approval record, and are difficult for users to audit or revoke without specialized tooling. Protocols integrating Permit2 must request the minimum necessary amount with short-duration deadlines and restrict spender to the specific contract address.",
+      "affected_patterns": [
+        "Permit2 approval signature authorizing type(uint160).max token amount without expiration deadline",
+        "Permit2 signature not scoping the spender field to a specific protocol contract address",
+        "user signing a Permit2 batch approval covering multiple tokens without clear per-token scope explanation",
+        "protocol requesting Permit2 approval with a broader token amount or longer duration than the specific operation requires",
+        "Permit2 approval with no deadline or a deadline set far in the future (e.g., year 2106)"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/permit2/overview",
+        "https://blog.uniswap.org/permit2-and-universal-router",
+        "https://eips.ethereum.org/EIPS/eip-2612"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-107",
+      "title": "EIP-2612 Permit Signature Frontrunning and Griefing",
+      "category": "Permit/Permit2 Ecosystem",
+      "severity": "HIGH",
+      "description": "EIP-2612 permit() allows token approvals via off-chain signatures submitted as transaction parameters. When a user submits a permit() + transferFrom() as separate transactions (or as individual calls in a multi-step flow), an attacker monitoring the public mempool can front-run the permit() call with an identical signature — setting the allowance to their preferred amount or address before the user's transaction executes. The user's transaction then either reverts (if the nonce is already consumed) or is a no-op. A more severe variant: the attacker sandwiches the permit by calling permit() to set the allowance, then immediately calling transferFrom() to drain the approved tokens before the user's intended operation executes. Smart contracts that integrate permit() must use try/catch around the permit call (and proceed if the allowance is already set), submit permit+transferFrom atomically in a single transaction, or use private mempools (e.g., Flashbots Protect) to prevent frontrunning.",
+      "affected_patterns": [
+        "permit() call submitted as a separate transaction from the subsequent transferFrom(), creating a frontrun window",
+        "smart contract calling permit() and reverting on failure instead of checking if allowance is already sufficient",
+        "permit transaction broadcast to the public mempool without private submission or bundled execution",
+        "contract not using try/catch around permit() call — single-point griefing possible by frontrunning the permit",
+        "no check for existing allowance before calling permit(), making the flow brittle to permit replay"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-2612",
+        "https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#ERC20Permit",
+        "https://medium.com/coinmonks/eip-2612-permit-erc20-signed-approvals-explained-and-risks-97e9c843d83"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-108",
+      "title": "ERC-721/ERC-1155 NFT Permit Nonce Reset on Transfer (EIP-4494)",
+      "category": "Permit/Permit2 Ecosystem",
+      "severity": "MEDIUM",
+      "description": "NFT permit standards (EIP-4494 for ERC-721, various ERC-1155 extensions) face a unique replay vulnerability when nonces are scoped to the token ID rather than to the owner's address. If a user signs a permit for tokenId 42, transfers the NFT to another address, and later receives the same tokenId 42 back (e.g., via a marketplace purchase or transfer), the previously-signed permit may become valid again if the token's nonce was not incremented during the transfer. An attacker who retained the original permit signature can submit it against the returned NFT to gain an unexpected approval. Correct implementations must either: (1) tie nonces to the owner address (not the tokenId), (2) increment the tokenId nonce on every transfer (not just on permit use), or (3) invalidate all outstanding permits when a token changes ownership.",
+      "affected_patterns": [
+        "ERC-721 permit nonce scoped to tokenId rather than to the owner address",
+        "permit signature remaining valid after the NFT is transferred to a new owner and returned",
+        "missing permit nonce increment or invalidation when the NFT token changes ownership via transfer",
+        "ERC-1155 permit implementation lacking an operator-scoped nonce tied to the specific owner address",
+        "permit deadline set to type(uint256).max, creating an effectively permanent approval for NFT spending"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-4494",
+        "https://eips.ethereum.org/EIPS/eip-2612",
+        "https://docs.openzeppelin.com/contracts/4.x/api/token/erc721#ERC721Permit"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-109",
+      "title": "Permit Signature Phishing via Malicious DApp or Fake UI",
+      "category": "Permit/Permit2 Ecosystem",
+      "severity": "HIGH",
+      "description": "Unlike approve() transactions (which appear visibly on-chain and require gas), permit() and Permit2 signatures are off-chain operations with no gas cost — users are less suspicious of signing requests. Attackers deploy phishing websites or malicious DApps that request permit signatures from users under false pretenses (e.g., 'sign to verify your wallet' or 'sign to claim your airdrop'). The signed permit is then submitted by the attacker to drain the user's tokens. Because the permit is executed by the attacker's transaction, the user's wallet history shows no approval and the drainage is often attributed to an unknown transfer. This attack vector was responsible for hundreds of millions in losses during 2023-2024 NFT and DeFi phishing campaigns. Mitigations (for protocol developers): request permits only for amounts strictly necessary for the immediate operation, use very short expiration deadlines (minutes, not days), and clearly display human-readable permit data in the signing request UI.",
+      "affected_patterns": [
+        "DApp requesting permit approval for token amounts significantly exceeding the specific transaction's need",
+        "permit signature request covering tokens not involved in or relevant to the stated DApp operation",
+        "off-chain permit signature request presented without a clear human-readable breakdown of amount and spender",
+        "permit approval request for contract addresses not matching the DApp's verified and audited contracts",
+        "Permit2 batch signature request covering multiple unrelated tokens in a single phishing-optimized request"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/permit2/overview",
+        "https://eips.ethereum.org/EIPS/eip-2612",
+        "https://support.metamask.io/hc/en-us/articles/12399970191387-Protect-yourself-from-permit-phishing"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-110",
+      "title": "Permit2 Batch Transfer Atomicity Failure and Partial Approval Exploitation",
+      "category": "Permit/Permit2 Ecosystem",
+      "severity": "MEDIUM",
+      "description": "Permit2 batch operations (permitBatch and transferFromBatch) allow multiple token approvals or transfers to be processed in a single call. If individual transfers within the batch can fail independently without reverting the entire batch, the operation leaves the contract in an inconsistent state: some allowances are set, some are not; some transfers executed, others did not. An approved-but-not-transferred allowance can be exploited by the approved spender in a separate transaction after the partial execution. Furthermore, protocols that mix ERC-20 and ERC-721 transfers in the same batch may face asymmetric failure modes — ERC-721 transfers revert on missing approvals while ERC-20 transfers silently return false (in non-reverting implementations). Batch operations must be fully atomic: any individual transfer failure must revert the entire batch and all associated allowance changes.",
+      "affected_patterns": [
+        "Permit2 batch approval operation without guaranteed atomicity — partial success leaves inconsistent approval state",
+        "batch transfer not reverting on individual transfer failure, leaving remaining allowances unexpectedly active",
+        "allowances set for the entire batch upfront before transfers execute, with no rollback on partial failure",
+        "no rollback mechanism for partially-executed batch approvals leaving stale allowances exploitable",
+        "batch operation mixing ERC-20 and ERC-721 token transfers with different revert/return-false failure modes"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/permit2/overview",
+        "https://github.com/Uniswap/permit2",
+        "https://eips.ethereum.org/EIPS/eip-2612"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
     }
   ]
 }
