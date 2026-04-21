@@ -695,6 +695,77 @@
       "references": ["https://swcregistry.io/docs/SWC-126"],
       "cve": null,
       "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-081",
+      "title": "Uniswap V4 Hook Re-entrancy During Swap/Liquidity Operations",
+      "category": "Hook Vulnerabilities",
+      "severity": "CRITICAL",
+      "description": "Uniswap V4 hooks execute user-defined code during swap and liquidity operations via beforeSwap() and afterSwap() callbacks. A malicious hook can re-enter the pool contract during execution, manipulating reserves, balances, or hook state mid-operation. Unlike V3, hooks have full access to pool internals. Because hooks are directly called by the pool and execute arbitrary code, improper reentrancy guards in hook implementations allow attackers to drain liquidity pools, manipulate prices, or steal fees. The vulnerability is amplified in V4 because hooks can trigger multiple callback types (mint, burn, swap, donate) creating complex re-entry chains.",
+      "affected_patterns": [
+        "beforeSwap() hook without ReentrancyGuard or mutex",
+        "afterSwap() hook making external calls",
+        "hook calling pool.swap() recursively",
+        "cross-hook reentrancy (mint hook calling swap hook)",
+        "beforeSwap() reading pool state without accounting for in-progress operations",
+        "hook contract inheriting from IHooks without reentrancy protection",
+        "flashSwap callback into hook context without guards"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/v4/concepts/hooks",
+        "https://docs.uniswap.org/contracts/v4/concepts/flash-accounting",
+        "https://github.com/Uniswap/v4-core/blob/main/src/interfaces/IHooks.sol",
+        "https://blog.uniswap.org/uniswap-v4-design"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-082",
+      "title": "Malicious Fee-on-Transfer Hook Silently Drains Tokens",
+      "category": "Hook Vulnerabilities",
+      "severity": "CRITICAL",
+      "description": "A hook contract implementing beforeSwap() or afterSwap() callbacks can embed hidden fee logic that siphons tokens during token transfers. By implementing custom hook logic that reads token amounts and silently transfers a percentage to an attacker-controlled address during swap execution, the hook can drain value without being obvious in the swap event logs. This is particularly dangerous in wrapped token scenarios where the hook contract mediates token transfers. Attackers can disguise the fee as a legitimate protocol fee or flash loan repayment premium, bypassing user slippage checks because the fee is extracted at hook execution time, after the swap has been executed.",
+      "affected_patterns": [
+        "beforeSwap() hook transferring tokens to external address",
+        "afterSwap() hook with unchecked external token transfers",
+        "hook calling token.transfer() without event emission",
+        "beforeSwap() subtracting from amount0/amount1 before returning",
+        "hook receiving tokens and not returning them",
+        "multiple hooks on same pool with chain of transfers",
+        "hook with delegatecall to proxy contract controlling token flow"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/v4/concepts/fees",
+        "https://github.com/Uniswap/v4-core/blob/main/src/Pool.sol",
+        "https://swcregistry.io/docs/SWC-104"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-083",
+      "title": "Flash Loan Callback Manipulation Through Hook State Injection",
+      "category": "Hook Vulnerabilities",
+      "severity": "HIGH",
+      "description": "During a pool's flash loan callback (or beforeSwap hook), an attacker can trigger the execution of hook code that manipulates the state read by downstream operations. In Uniswap V4, hooks have access to PoolKey, balances, liquidity, and fee data. An attacker can craft a sequence where: (1) a flash loan is initiated, (2) the beforeSwap hook fires and modifies hook state or calls back into the pool, (3) the callback sees stale/manipulated state and makes incorrect decisions about pricing or collateral. The attack exploits the fact that hooks run synchronously during pool operations and can influence the execution context of subsequently-called hooks or external contracts that depend on pool invariants.",
+      "affected_patterns": [
+        "beforeSwap() hook modifying hook storage during flash operation",
+        "afterSwap() hook reading state modified by beforeSwap() without validation",
+        "hook callback during flash loan re-entering with delegatecall",
+        "hook using tx.origin or msg.sender to identify caller, vulnerable to sandwich",
+        "hook state not reset on reentry, causing state leakage across callbacks",
+        "hook calling balanceOf() or getReserves() during callback execution",
+        "hook without proper flash accounting sync (not calling settleBalance)"
+      ],
+      "references": [
+        "https://docs.uniswap.org/contracts/v4/concepts/flash-accounting",
+        "https://github.com/Uniswap/v4-core/blob/main/src/PoolManager.sol",
+        "https://github.com/Uniswap/v4-core/blob/main/src/interfaces/IPoolManager.sol",
+        "https://blog.openzeppelin.com/reentrancy-after-istanbul/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
     }
   ]
 }
