@@ -6,7 +6,7 @@
 [engine]
 # Engine-wide settings
 name = "Garrison Security Engine"
-version = "4.0.0"
+version = "4.1.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 fail_on_severity = "HIGH"
@@ -426,6 +426,10 @@ top_k = 5
 
 # Automatically enrich findings with RAG context
 auto_enrich = false
+
+# Enable LLM-powered analysis for enriched findings
+# Set to true and provide OPENAI_API_KEY environment variable to enable
+llm_enrichment = false  # Set to true + provide OPENAI_API_KEY to enable LLM analysis
 
 
 # ============================================================================

@@ -13,6 +13,7 @@ Example:
 from __future__ import annotations
 
 import json
+import os
 import argparse
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -621,6 +622,112 @@ class KnowledgeBaseBuilder:
         return sections
 
 
+# ---------------------------------------------------------------------------
+# LLM-powered analysis (optional — requires openai package + API key)
+# ---------------------------------------------------------------------------
+
+def generate_llm_analysis(
+    finding: Dict[str, Any],
+    similar_findings: List[Dict[str, Any]],
+    api_key: Optional[str] = None,
+) -> str:
+    """Generate an LLM-powered analysis for a security finding.
+
+    Uses OpenAI gpt-4o-mini to produce a structured explanation covering:
+    - What the vulnerability is
+    - Why it matters in a DeFi/smart-contract context
+    - Specific remediation steps for the affected code
+
+    Args:
+        finding: Finding dictionary (rule_id, title, description, severity,
+            code_snippet, etc.).
+        similar_findings: Top-K similar past findings returned by RAG.
+        api_key: OpenAI API key.  Falls back to OPENAI_API_KEY env var.
+
+    Returns:
+        Analysis text as a plain string, or empty string on any failure
+        (missing key, import error, network error, etc.).
+    """
+    try:
+        import openai as _openai  # optional dependency
+    except ImportError:
+        logger.debug("openai package not installed — LLM analysis skipped")
+        return ""
+
+    key = api_key or os.getenv("OPENAI_API_KEY")
+    if not key:
+        logger.debug("OPENAI_API_KEY not set — LLM analysis skipped")
+        return ""
+
+    try:
+        # Build context from top-3 similar past findings
+        context_lines: List[str] = []
+        for i, sf in enumerate(similar_findings[:3], 1):
+            meta = sf.get("metadata", {})
+            context_lines.append(
+                f"Past Finding {i}: "
+                f"[{meta.get('rule_id', 'unknown')}] "
+                f"{meta.get('title', meta.get('text', '')[:120])} "
+                f"(severity={meta.get('severity', '?')}) — "
+                f"Remediation: {meta.get('remediation', 'N/A')}"
+            )
+        context_block = "\n".join(context_lines) or "No similar past findings."
+
+        # Build the prompt
+        rule_id = finding.get("rule_id", "unknown")
+        title = finding.get("title", finding.get("message", ""))
+        description = finding.get("description", finding.get("message", ""))
+        severity = finding.get("severity", "UNKNOWN")
+        snippet = finding.get("code_snippet", "")
+        snippet_block = (
+            f"\n\nAffected code snippet:\n```solidity\n{snippet}\n```"
+            if snippet else ""
+        )
+
+        prompt = (
+            f"You are an expert smart-contract security auditor.\n\n"
+            f"A scanner has detected the following vulnerability:\n"
+            f"- Rule ID: {rule_id}\n"
+            f"- Title: {title}\n"
+            f"- Severity: {severity}\n"
+            f"- Description: {description}{snippet_block}\n\n"
+            f"Similar past findings for context:\n{context_block}\n\n"
+            f"Please provide a concise analysis covering:\n"
+            f"1. What this vulnerability is (technical explanation)\n"
+            f"2. Why it matters specifically in a DeFi/smart-contract context "
+            f"(potential attack vectors, financial impact)\n"
+            f"3. Specific remediation steps for this code\n\n"
+            f"Keep the response under 400 words and use plain text."
+        )
+
+        client = _openai.OpenAI(api_key=key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a senior smart-contract security auditor "
+                        "specialising in DeFi protocols. Be precise and actionable."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=512,
+            temperature=0.2,
+        )
+        analysis = response.choices[0].message.content or ""
+        logger.debug(
+            f"LLM analysis generated for finding {rule_id} "
+            f"({len(analysis)} chars)"
+        )
+        return analysis.strip()
+
+    except Exception as e:
+        logger.warning(f"LLM analysis failed for finding: {e}")
+        return ""
+
+
 class AuditCopilot:
     """Main interface for AI-powered audit assistance.
     
@@ -648,6 +755,7 @@ class AuditCopilot:
         self.index_path = self.config.get("rag_index_path", DEFAULT_INDEX_PATH)
         self.top_k = self.config.get("top_k", DEFAULT_TOP_K)
         self.auto_enrich = self.config.get("auto_enrich", False)
+        self.llm_enrichment = self.config.get("llm_enrichment", False)
         
         self.vector_store = VectorStore()
         self.knowledge_builder = KnowledgeBaseBuilder(self.vector_store)
@@ -728,8 +836,23 @@ class AuditCopilot:
             # Add RAG fields to finding
             enriched = finding.copy()
             enriched["rag_similar_findings"] = similar
-            enriched["rag_remediation"] = "\n\n".join(remediations[:3])
+            vector_remediation = "\n\n".join(remediations[:3])
             enriched["rag_references"] = references[:5]
+
+            # Optional LLM enrichment — only when enabled and API key present
+            if self.llm_enrichment and os.getenv("OPENAI_API_KEY"):
+                llm_text = generate_llm_analysis(finding, similar)
+                if llm_text:
+                    enriched["rag_remediation"] = llm_text
+                    logger.debug(
+                        f"LLM remediation stored for "
+                        f"{finding.get('rule_id', 'unknown')}"
+                    )
+                else:
+                    # Fallback to vector-only remediation
+                    enriched["rag_remediation"] = vector_remediation
+            else:
+                enriched["rag_remediation"] = vector_remediation
             
             logger.debug(
                 f"Enriched finding {finding.get('rule_id', 'unknown')} with "
@@ -764,6 +887,10 @@ class AuditCopilot:
         Short-circuits the loop if an API is unreachable (offline mode),
         so subsequent findings are returned un-enriched rather than causing
         repeated timeout delays.
+
+        When LLM enrichment is enabled, only the top 20 highest-severity
+        findings receive LLM analysis to control API costs.  The rest fall
+        back to vector-only enrichment.
         
         Args:
             findings: List of finding dictionaries.
@@ -771,9 +898,24 @@ class AuditCopilot:
         Returns:
             List of enriched findings (some may have rag_status='offline').
         """
+        # --- Rate-limiting: cap LLM calls to 20 highest-severity findings ---
+        _SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+        LLM_CAP = 20
+
+        # Determine which findings qualify for LLM enrichment
+        llm_eligible_ids: set = set()
+        if self.llm_enrichment and os.getenv("OPENAI_API_KEY"):
+            sorted_by_severity = sorted(
+                range(len(findings)),
+                key=lambda i: _SEVERITY_ORDER.get(
+                    str(findings[i].get("severity", "INFO")).upper(), 4
+                ),
+            )
+            llm_eligible_ids = set(sorted_by_severity[:LLM_CAP])
+
         enriched = []
         copilot_offline = False
-        for finding in findings:
+        for idx, finding in enumerate(findings):
             if copilot_offline:
                 # API already confirmed unreachable — skip remainder
                 offline = dict(_OFFLINE_RESULT)
@@ -783,7 +925,17 @@ class AuditCopilot:
                 )
                 enriched.append(offline)
                 continue
+
+            # Temporarily disable LLM for findings outside the cap
+            _orig_llm = self.llm_enrichment
+            if self.llm_enrichment and idx not in llm_eligible_ids:
+                self.llm_enrichment = False
+
             result = self.enrich_finding(finding)
+
+            # Restore flag
+            self.llm_enrichment = _orig_llm
+
             if result.get("rag_status") == "offline":
                 copilot_offline = True
                 logger.info(

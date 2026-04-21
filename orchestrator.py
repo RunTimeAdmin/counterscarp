@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("garrison-engine")
 except Exception:
-    _ENGINE_VERSION = "4.0.0"
+    _ENGINE_VERSION = "4.1.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
@@ -731,6 +731,11 @@ def main() -> None:
         help="Rebuild the RAG knowledge base index",
     )
     parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="Enable LLM-powered analysis for findings (requires OPENAI_API_KEY)",
+    )
+    parser.add_argument(
         "--preflight",
         action="store_true",
         help="Run tool version checks before scanning",
@@ -1200,8 +1205,14 @@ def main() -> None:
                 rag_config = {
                     "embedding_backend": config.ai.embedding_backend,
                     "rag_index_path": config.ai.rag_index_path,
-                    "top_k": config.ai.top_k
+                    "top_k": config.ai.top_k,
+                    # llm_enrichment: CLI --llm flag overrides config file
+                    "llm_enrichment": (
+                        args.llm or getattr(config.ai, 'llm_enrichment', False)
+                    ),
                 }
+            elif args.llm:
+                rag_config = {"llm_enrichment": True}
             
             copilot = AuditCopilot(rag_config)
             
@@ -1398,6 +1409,49 @@ def main() -> None:
     print("=" * 60 + "\n")
     logger.info("Action Plan ready: %s", os.path.abspath(report_file))
 
+    # [PHASE 8B] Inline Time-Travel Historical Scan (Pro, for unified report)
+    history_timeline: list = []
+    if (
+        args.report
+        and REPORT_GENERATOR_AVAILABLE
+        and history_scanner is not None
+        and _license.check_pro_feature(TIME_TRAVEL)
+        and os.path.isdir(args.target)
+        and os.path.isdir(os.path.join(args.target, ".git"))
+    ):
+        print("\n>>> Running Time-Travel Historical Scan for unified report...")
+        logger.info("[PHASE 8B] Running inline Time-Travel Historical Scan")
+        try:
+            _hist_output_dir = "."
+            if config and hasattr(config, 'history') and config.history:
+                _hist_output_dir = getattr(config.history, 'output_dir', '.')
+            _hist_results = history_scanner.scan_history(
+                repo_path=args.target,
+                max_commits=getattr(args, 'commits', 50),
+                since=getattr(args, 'since', None),
+                branch=getattr(args, 'branch', 'main'),
+                output_dir=_hist_output_dir,
+                config=config,
+            )
+            # Reload the timeline entries from the JSON report for conversion
+            _hist_json_path = (_hist_results.get("reports") or {}).get("json", "")
+            if _hist_json_path and os.path.isfile(_hist_json_path):
+                import json as _json
+                with open(_hist_json_path, "r", encoding="utf-8") as _f:
+                    _hist_data = _json.load(_f)
+                history_timeline = _hist_data.get("timeline", [])
+            logger.info(
+                "Time-Travel scan complete: %d timeline entries",
+                len(history_timeline),
+            )
+            print(
+                f"    [+] Time-Travel scan complete: "
+                f"{_hist_results.get('total_vulnerabilities', 0)} historical vulnerabilities"
+            )
+        except Exception as _hist_exc:
+            logger.warning("Inline Time-Travel scan failed: %s", _hist_exc)
+            print(f"    [!] Time-Travel scan failed (continuing without): {_hist_exc}")
+
     # [PHASE 9] Professional Report (Optional)
     if args.report and REPORT_GENERATOR_AVAILABLE:
         print("\n>>> Generating Professional Audit Report...")
@@ -1419,7 +1473,10 @@ def main() -> None:
                 description=h["message"],
                 file=h["file"],
                 line_no=h["line_no"],
-                code_snippet=h.get("line_text", "")
+                code_snippet=h.get("line_text", ""),
+                rag_similar_findings=h.get("rag_similar_findings", []),
+                rag_remediation=h.get("rag_remediation", ""),
+                rag_references=h.get("rag_references", []),
             ))
         
         # Static (Slither)
@@ -1431,7 +1488,10 @@ def main() -> None:
                 title=s.get("title", "Slither Finding"),
                 description=s.get("description", ""),
                 file=s.get("location", "").split(":")[0] if ":" in s.get("location", "") else s.get("location", ""),
-                line_no=_safe_line_no(s.get("location", ""))
+                line_no=_safe_line_no(s.get("location", "")),
+                rag_similar_findings=s.get("rag_similar_findings", []),
+                rag_remediation=s.get("rag_remediation", ""),
+                rag_references=s.get("rag_references", []),
             ))
         
         # Aderyn (if available)
@@ -1474,7 +1534,92 @@ def main() -> None:
                         line_no=f.line_no,
                         remediation=f.fix_suggestion if hasattr(f, 'fix_suggestion') else ""
                     ))
-        
+
+        # Historical Analysis (Time-Travel, Pro tier)
+        # Only include ACTIVE vulnerabilities (not yet fixed) so the report
+        # reflects current risk with historical context.
+        for _ht in history_timeline:
+            _status = _ht.get("status", "active")
+            if _status != "active":
+                continue  # skip already-fixed historical findings
+
+            _raw_rule = _ht.get("rule_id", "UNKNOWN")
+            _severity = (_ht.get("severity") or "INFO").upper()
+            _file = _ht.get("file", "")
+            _line_no = int(_ht.get("line_no", 0) or 0)
+            _intro_commit = (_ht.get("introduced_commit") or "")[:8]
+            _intro_date = (_ht.get("introduced_date") or "")[:10]
+            _intro_author = _ht.get("introduced_author") or "unknown"
+            _lifespan = int(_ht.get("lifespan_days", 0) or 0)
+            _vuln_id = _ht.get("vuln_id", "")
+
+            # Build temporal context for title and description
+            _title = (
+                f"[Historical] {_raw_rule.replace('_', ' ').title()} "
+                f"(introduced {_intro_date})"
+            )
+            _description_parts = [
+                f"This vulnerability was detected by Time-Travel historical scan.",
+                f"Introduced in commit {_intro_commit} on {_intro_date} by {_intro_author}.",
+            ]
+            if _lifespan > 0:
+                _description_parts.append(
+                    f"Has persisted for at least {_lifespan} days without being fixed."
+                )
+            _description = " ".join(_description_parts)
+
+            all_findings.append(Finding(
+                rule_id=f"HIST-{_raw_rule}",
+                severity=_severity,
+                category="Historical Analysis",
+                title=_title,
+                description=_description,
+                file=_file,
+                line_no=_line_no,
+            ))
+
+        if history_timeline:
+            _active_hist = sum(
+                1 for _ht in history_timeline if _ht.get("status") == "active"
+            )
+            logger.info(
+                "Added %d active historical findings to unified report "
+                "(%d total in timeline)",
+                _active_hist,
+                len(history_timeline),
+            )
+
+        # --- Wire exploit PoC results back into unified findings (Pro tier) ---
+        if exploit_results:
+            _wired = 0
+            for _er in exploit_results:
+                if _er.status != "success" or not _er.output_path:
+                    continue
+                _ef = _er.finding  # dict with rule_id, file, severity, …
+                _er_rule = _ef.get("rule_id", "")
+                _er_file = _ef.get("file", "")
+                # Read generated Solidity source once
+                try:
+                    with open(_er.output_path, "r", encoding="utf-8") as _fp:
+                        _exploit_src = _fp.read()
+                except Exception:
+                    _exploit_src = ""
+                # Match against all_findings by rule_id (and optionally file)
+                for _uf in all_findings:
+                    if getattr(_uf, 'exploit_code', ''):
+                        continue  # already wired
+                    if _uf.rule_id == _er_rule:
+                        # Prefer exact file match; accept any match when file unknown
+                        if _er_file and _uf.file and _er_file not in _uf.file and _uf.file not in _er_file:
+                            continue
+                        _uf.exploit_code = _exploit_src
+                        _uf.exploit_path = _er.output_path
+                        _wired += 1
+                        break  # one result per finding is enough
+            logger.info("Wired %d exploit PoC(s) into unified findings", _wired)
+            if _wired:
+                print(f"    [+] Exploit PoC code wired into {_wired} finding(s) for HTML/SARIF reports")
+
         # Create report
         project_name = args.project_name or os.path.basename(os.path.abspath(args.target))
         audit_report = create_audit_report(

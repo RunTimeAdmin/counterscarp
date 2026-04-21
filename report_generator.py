@@ -72,6 +72,11 @@ class Finding:
     similar_locations: List[str] = field(default_factory=list)
     duplicate_count: int = 0
     confidence: int = 5  # 1-10 confidence score
+    rag_similar_findings: List[Dict[str, Any]] = field(default_factory=list)
+    rag_remediation: str = ""
+    rag_references: List[Dict[str, str]] = field(default_factory=list)
+    exploit_code: str = ""   # Generated exploit PoC source code (Pro)
+    exploit_path: str = ""   # Path to generated exploit file (Pro)
 
 
 @dataclass
@@ -462,7 +467,69 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
                 if finding.duplicate_count > 5:
                     locations_text += f" ... and {finding.duplicate_count - 5} more"
                 html += f'<div class="duplicate-note" style="color:#666;font-size:0.85em;margin-top:4px;">Also found in {finding.duplicate_count} other location(s): {locations_text}</div>'
-            
+
+            # RAG: AI Analysis
+            rag_remediation = getattr(finding, 'rag_remediation', None)
+            if rag_remediation:
+                html += f"""
+                <div style="background:#1a1a2e;border-left:4px solid #7c3aed;padding:12px 16px;margin:10px 0;border-radius:4px;">
+                    <strong style="color:#a78bfa;">AI Analysis</strong>
+                    <p style="color:#e0e0e0;margin:8px 0 0 0;">{rag_remediation}</p>
+                </div>
+"""
+
+            # RAG: Similar Past Findings (top 3)
+            rag_similar = getattr(finding, 'rag_similar_findings', None)
+            if rag_similar:
+                html += """
+                <div style="margin:10px 0;">
+                    <strong style="color:#94a3b8;">Related Past Findings:</strong>
+                    <ul style="margin:4px 0;">
+"""
+                for entry in rag_similar[:3]:
+                    text = entry.get('text', '')
+                    score = entry.get('similarity', 0.0)
+                    source = entry.get('metadata', {}).get('source', '')
+                    html += f'                        <li style="color:#cbd5e1;">{text} <span style="color:#7c3aed;">(similarity: {score:.0%})</span> — <em>{source}</em></li>\n'
+                html += """                    </ul>
+                </div>
+"""
+
+            # RAG: AI References
+            rag_references = getattr(finding, 'rag_references', None)
+            if rag_references:
+                html += """
+                <div style="margin:10px 0;">
+                    <strong style="color:#94a3b8;">AI References:</strong>
+                    <ul style="margin:4px 0;">
+"""
+                for ref in rag_references:
+                    url = ref.get('url', '#')
+                    source = ref.get('source', url)
+                    html += f'                        <li><a href="{url}" style="color:#60a5fa;">{source}</a></li>\n'
+                html += """                    </ul>
+                </div>
+"""
+
+            # Exploit PoC (Pro tier)
+            exploit_code = getattr(finding, 'exploit_code', '')
+            exploit_path = getattr(finding, 'exploit_path', '')
+            if exploit_code:
+                import html as _html_escape
+                escaped_code = _html_escape.escape(exploit_code)
+                path_note = f' &nbsp;<span style="color:#94a3b8;font-size:0.85em;">({_html_escape.escape(exploit_path)})</span>' if exploit_path else ''
+                html += f"""
+                <details style="margin:12px 0;">
+                    <summary style="cursor:pointer;background:#1a0a00;border-left:4px solid #f97316;padding:8px 14px;border-radius:4px;color:#fb923c;font-weight:bold;">
+                        &#x1F4A5; Exploit PoC (Foundry){path_note}
+                    </summary>
+                    <div style="background:#120800;border-left:4px solid #f97316;padding:12px 16px;border-radius:0 0 4px 4px;margin-top:2px;">
+                        <p style="color:#94a3b8;font-size:0.85em;margin:0 0 8px 0;">Generated Foundry test &mdash; run with <code style="background:#1e1e1e;padding:2px 6px;border-radius:3px;">forge test</code></p>
+                        <pre style="background:#0d0d0d;border:1px solid #374151;border-radius:4px;padding:12px;overflow-x:auto;margin:0;"><code style="color:#e2e8f0;font-size:0.85em;font-family:monospace;">{escaped_code}</code></pre>
+                    </div>
+                </details>
+"""
+
             html += "            </div>\n"
         
         html += "        </div>\n"
@@ -567,7 +634,44 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
             # Add remediation as a related location if available
             if finding.remediation:
                 result["message"]["text"] += f"\n\nRemediation: {finding.remediation}"
-            
+
+            # Add RAG-enriched data to properties (SARIF extensibility point)
+            rag_properties: Dict[str, Any] = {}
+
+            rag_remediation = getattr(finding, "rag_remediation", None)
+            if rag_remediation:
+                rag_properties["ai_remediation"] = rag_remediation
+
+            rag_references = getattr(finding, "rag_references", None)
+            if rag_references:
+                urls = [ref.get("url", "") for ref in rag_references if ref.get("url")]
+                if urls:
+                    rag_properties["ai_references"] = urls
+
+            rag_similar = getattr(finding, "rag_similar_findings", None)
+            if rag_similar:
+                similar_list = [
+                    {
+                        "text": sf.get("text", ""),
+                        "similarity": round(sf.get("similarity", 0), 3),
+                        "source": sf.get("metadata", {}).get("source", "unknown"),
+                    }
+                    for sf in rag_similar[:3]
+                ]
+                if similar_list:
+                    rag_properties["similar_findings"] = similar_list
+
+            # Exploit PoC (Pro tier)
+            _exploit_code = getattr(finding, "exploit_code", "")
+            _exploit_path = getattr(finding, "exploit_path", "")
+            if _exploit_code:
+                rag_properties["exploit_code"] = _exploit_code
+            if _exploit_path:
+                rag_properties["exploit_path"] = _exploit_path
+
+            if rag_properties:
+                result["properties"] = rag_properties
+
             results.append(result)
         
         # Build the SARIF document - ALWAYS has valid runs array
@@ -789,13 +893,49 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
                 for ref in finding.references:
                     md += f"- {ref}\n"
                 md += "\n"
-            
+
+            rag_remediation = getattr(finding, 'rag_remediation', None)
+            if rag_remediation:
+                md += "> **AI Analysis:**  \n"
+                for line in rag_remediation.splitlines():
+                    md += f"> {line}  \n"
+                md += "\n"
+
+            rag_similar = getattr(finding, 'rag_similar_findings', None)
+            if rag_similar:
+                md += "**Similar Past Findings:**\n"
+                for entry in rag_similar[:3]:
+                    text = entry.get('text', '')
+                    score = entry.get('similarity', 0.0)
+                    source = entry.get('metadata', {}).get('source', 'unknown')
+                    md += f"- {text} (similarity: {score:.0%}) — *{source}*\n"
+                md += "\n"
+
+            rag_refs = getattr(finding, 'rag_references', None)
+            if rag_refs:
+                md += "**AI References:**\n"
+                for ref in rag_refs:
+                    url = ref.get('url', '')
+                    source = ref.get('source', url)
+                    md += f"- [{source}]({url})\n"
+                md += "\n"
+
             if finding.duplicate_count > 0:
                 md += f"\n> **Also found in {finding.duplicate_count} other location(s):** "
                 md += ", ".join(finding.similar_locations[:5])
                 if finding.duplicate_count > 5:
                     md += f" ... and {finding.duplicate_count - 5} more"
                 md += "\n"
+
+            # Exploit PoC (Pro tier)
+            _md_exploit_code = getattr(finding, 'exploit_code', '')
+            _md_exploit_path = getattr(finding, 'exploit_path', '')
+            if _md_exploit_code:
+                md += "\n**💥 Exploit PoC (Foundry)**"
+                if _md_exploit_path:
+                    md += f"  \n*File: `{_md_exploit_path}`*"
+                md += "  \nGenerated Foundry test — run with `forge test`\n\n"
+                md += f"```solidity\n{_md_exploit_code}\n```\n\n"
             
             md += "---\n\n"
 

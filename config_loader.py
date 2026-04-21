@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Garrison Security Engine"
-    version: str = "4.0.0"
+    version: str = "4.1.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -536,6 +536,7 @@ class AIConfig:
     rag_index_path: str = ".garrison/rag_index.json"
     top_k: int = 5
     auto_enrich: bool = False
+    llm_enrichment: bool = False
 
 
 @dataclass
@@ -710,7 +711,7 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Garrison Security Engine'),
-            version=eng.get('version', '4.0.0'),
+            version=eng.get('version', '4.1.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )
@@ -969,7 +970,8 @@ def load_config(config_path: Optional[str] = None) -> GarrisonConfig:
                 'rag_index_path', '.garrison/rag_index.json'
             ),
             top_k=ai.get('top_k', 5),
-            auto_enrich=ai.get('auto_enrich', False)
+            auto_enrich=ai.get('auto_enrich', False),
+            llm_enrichment=ai.get('llm_enrichment', False)
         )
 
     # Parse plugins config
