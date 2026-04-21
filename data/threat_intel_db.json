@@ -1345,6 +1345,635 @@
       ],
       "cve": null,
       "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-111",
+      "title": "ERC-4626 Share Precision Loss via Rounding Exploitation",
+      "category": "ERC-4626 Vault Composability",
+      "severity": "HIGH",
+      "description": "ERC-4626 vaults calculate share-to-asset ratios using integer division, which rounds down. Attackers exploit rounding by making many small deposits/withdrawals where each operation loses a fraction of a token to rounding, systematically draining the vault. This is amplified in vaults with high asset-per-share ratios where rounding errors represent significant value.",
+      "affected_patterns": [
+        "vault using division without rounding up for deposits (shares = assets * supply / totalAssets)",
+        "withdraw/redeem not rounding in favor of the vault",
+        "preview functions rounding differently than actual operations",
+        "vault with fewer than 18 decimals amplifying rounding losses",
+        "repeated deposit/withdraw cycles extracting rounding dust"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-4626",
+        "https://blog.openzeppelin.com/a-novel-defense-against-erc4626-inflation-attacks",
+        "https://docs.openzeppelin.com/contracts/4.x/erc4626"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-112",
+      "title": "ERC-4626 Exit Queue Griefing and Withdrawal DoS",
+      "category": "ERC-4626 Vault Composability",
+      "severity": "MEDIUM",
+      "description": "Vaults with withdrawal queues can be griefed by attackers who submit many small withdrawal requests, filling the queue and blocking legitimate large withdrawals. Alternatively, attackers front-run withdrawal processing to extract yield accrued during the queue wait period.",
+      "affected_patterns": [
+        "withdrawal queue with no minimum withdrawal amount",
+        "queue processing order exploitable by front-running",
+        "no priority mechanism for large vs small withdrawals",
+        "yield continuing to accrue on queued withdrawal shares",
+        "queue size unbounded allowing dust withdrawal spam"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-4626",
+        "https://consensys.github.io/smart-contract-best-practices/development-recommendations/general/external-calls/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-113",
+      "title": "ERC-4626 Multi-Step Liquidation Cascade",
+      "category": "ERC-4626 Vault Composability",
+      "severity": "CRITICAL",
+      "description": "When ERC-4626 vault shares are used as collateral in lending protocols, a price drop triggers liquidation which redeems vault shares, reducing totalAssets and share price, triggering more liquidations in a cascade. This death spiral is amplified when multiple lending protocols use the same vault shares as collateral.",
+      "affected_patterns": [
+        "vault shares used as collateral in lending protocol without circuit breaker",
+        "share price oracle not accounting for liquidation-induced redemption spiral",
+        "multiple protocols using same vault shares as collateral without cross-protocol awareness",
+        "vault with illiquid underlying assets where mass redemption causes slippage",
+        "no withdrawal rate limiter to dampen cascading redemptions"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-4626",
+        "https://www.euler.finance/blog/euler-attack-post-mortem",
+        "https://medium.com/immunefi/defi-liquidation-mechanics-and-cascading-risks"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-114",
+      "title": "ERC-4626 Yield Accrual Manipulation via Strategic Timing",
+      "category": "ERC-4626 Vault Composability",
+      "severity": "HIGH",
+      "description": "Vault strategies accrue yield at discrete intervals (harvest, rebase, reward distribution). An attacker deposits just before yield accrual and withdraws immediately after, capturing a disproportionate share of yield without bearing the risk during the accrual period. Known as 'harvest sandwiching' or 'yield sniping.'",
+      "affected_patterns": [
+        "vault yield accrued in discrete harvest() calls visible in mempool",
+        "no deposit/withdrawal lockup period around yield events",
+        "share price jumping discontinuously on harvest rather than streaming",
+        "vault accepting flash-loan-funded deposits for yield capture",
+        "no performance fee on short-duration deposits"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-4626",
+        "https://medium.com/chain-cloud-company-blog/yield-sniping-and-harvest-sandwiching-in-defi-vaults",
+        "https://consensys.github.io/smart-contract-best-practices/attacks/front-running/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-115",
+      "title": "ERC-4626 Rebase Token Integration Accounting Errors",
+      "category": "ERC-4626 Vault Composability",
+      "severity": "HIGH",
+      "description": "Vaults holding rebasing tokens (stETH, AMPL, aTokens) must account for balance changes that happen outside of deposit/withdraw operations. If the vault caches totalAssets() and the underlying token rebases, the cached value diverges from reality, causing incorrect share pricing. Positive rebases give too few shares to new depositors; negative rebases allow excess withdrawal.",
+      "affected_patterns": [
+        "vault caching totalAssets without updating on rebase events",
+        "vault using balanceOf() inconsistently between deposit and withdraw",
+        "rebasing token wrapper (wstETH) not used to normalize balances",
+        "vault accounting not handling negative rebases (balance decrease)",
+        "totalAssets() not called atomically with share calculation"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-4626",
+        "https://docs.lido.fi/guides/steth-integration-guide",
+        "https://blog.openzeppelin.com/contracts-vulnerabilities-in-rebasing-erc-20"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-116",
+      "title": "ERC-20 Approve/TransferFrom Race Condition",
+      "category": "Token Approval Race Conditions",
+      "severity": "MEDIUM",
+      "description": "The classic ERC-20 approve race: when a user changes an existing allowance from N to M, a spender can front-run the approve(M) call with a transferFrom for N, then use the new allowance M — effectively spending N+M total. Mitigated by increaseAllowance/decreaseAllowance but still present in tokens that don't implement these.",
+      "affected_patterns": [
+        "contract calling approve() to change non-zero allowance to another non-zero value",
+        "token not implementing increaseAllowance/decreaseAllowance",
+        "protocol not resetting approval to 0 before setting new value",
+        "user-facing UI allowing direct allowance modification without reset",
+        "approve() transaction visible in mempool without private submission"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-114",
+        "https://eips.ethereum.org/EIPS/eip-20#approve",
+        "https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#ERC20-increaseAllowance-address-uint256-"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-117",
+      "title": "Infinite Approval Token Drain",
+      "category": "Token Approval Race Conditions",
+      "severity": "HIGH",
+      "description": "DApps commonly request type(uint256).max approval for gas efficiency. If the approved contract is compromised or has an upgrade path, the attacker can drain all tokens of every user who granted infinite approval. This is a systemic risk across DeFi — any single contract vulnerability becomes a multi-user fund drain.",
+      "affected_patterns": [
+        "protocol requesting type(uint256).max approval from users",
+        "approved contract is upgradeable (proxy pattern) with mutable logic",
+        "no mechanism for users to be notified when approved contract is upgraded",
+        "protocol not supporting permit-based just-in-time approvals",
+        "approved contract having admin functions that can redirect transferFrom targets"
+      ],
+      "references": [
+        "https://consensys.github.io/smart-contract-best-practices/development-recommendations/general/tokens/",
+        "https://revoke.cash/",
+        "https://eips.ethereum.org/EIPS/eip-2612"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-118",
+      "title": "SafeERC20 and Non-Standard Token Approval Failures",
+      "category": "Token Approval Race Conditions",
+      "severity": "MEDIUM",
+      "description": "Some tokens (USDT, BNB, others) revert on approve() if the current allowance is non-zero and the new value is non-zero. Others don't return a boolean from approve(). Protocols that don't use SafeERC20 or forceApprove() will silently fail or revert when interacting with these non-standard tokens, potentially leaving stale approvals or trapping user funds.",
+      "affected_patterns": [
+        "contract calling token.approve() without SafeERC20.forceApprove()",
+        "approve() assuming boolean return value from all tokens",
+        "protocol not handling USDT-style require-zero-before-approve",
+        "try/catch around approve not handling revert vs return-false",
+        "stale allowance remaining after failed approve call"
+      ],
+      "references": [
+        "https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#SafeERC20",
+        "https://github.com/d-xo/weird-erc20",
+        "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/utils/SafeERC20.sol"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-119",
+      "title": "Unchecked Low-Level Call Return Value",
+      "category": "Unchecked Return Values",
+      "severity": "CRITICAL",
+      "description": "Solidity's low-level call(), delegatecall(), and staticcall() return a boolean success value that MUST be checked. If the return value is ignored, the calling contract continues execution believing the call succeeded when it actually failed. This leads to state inconsistencies — e.g., a token transfer that silently fails while the contract credits the recipient.",
+      "affected_patterns": [
+        "address.call() without checking (bool success) return",
+        "delegatecall return value assigned but never used in conditional",
+        "staticcall result ignored leading to stale data usage",
+        "low-level call in loop where single failure corrupts batch state",
+        "assembly call() opcode without checking return value on stack"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-104",
+        "https://consensys.github.io/smart-contract-best-practices/development-recommendations/general/external-calls/",
+        "https://docs.soliditylang.org/en/v0.8.20/control-structures.html#error-handling-assert-require-revert-and-exceptions"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-120",
+      "title": "Delegatecall Return Value and Storage Corruption",
+      "category": "Unchecked Return Values",
+      "severity": "CRITICAL",
+      "description": "delegatecall executes external code in the context of the calling contract's storage. If the delegatecall target reverts, the calling contract may not detect the failure. Worse, a successful delegatecall to a malicious contract can overwrite arbitrary storage slots. Unchecked delegatecall is one of the most dangerous patterns in Solidity.",
+      "affected_patterns": [
+        "delegatecall to user-supplied or upgradeable address without return check",
+        "delegatecall target able to write to storage slots used by caller",
+        "fallback function using delegatecall without validating target contract",
+        "delegatecall in proxy not properly forwarding revert data",
+        "chained delegatecalls where intermediate failure is swallowed"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-112",
+        "https://blog.openzeppelin.com/proxy-patterns/",
+        "https://docs.soliditylang.org/en/v0.8.20/introduction-to-smart-contracts.html#delegatecall-and-libraries"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-121",
+      "title": "Silent Token Transfer Failure (Non-Reverting ERC-20)",
+      "category": "Unchecked Return Values",
+      "severity": "HIGH",
+      "description": "Some ERC-20 tokens return false on transfer/transferFrom failure instead of reverting. If the calling contract doesn't check the return value, it believes the transfer succeeded. This is particularly dangerous in exchange/swap contracts where one side of the trade completes while the other silently fails.",
+      "affected_patterns": [
+        "token.transfer() called without checking boolean return value",
+        "token.transferFrom() return value discarded",
+        "protocol not using SafeERC20.safeTransfer()",
+        "swap contract crediting output without verifying input transfer success",
+        "batch transfer where one silent failure corrupts entire batch accounting"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-104",
+        "https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#SafeERC20",
+        "https://github.com/d-xo/weird-erc20#missing-return-values"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-122",
+      "title": "External Call Exception Swallowing in Try/Catch",
+      "category": "Unchecked Return Values",
+      "severity": "MEDIUM",
+      "description": "Solidity try/catch only catches errors from external calls and reverts — it does not catch all failure modes. Out-of-gas errors, invalid opcode, and some low-level failures bypass the catch block entirely. Contracts that rely on try/catch for critical error handling may have execution paths where failures are neither caught nor reverted.",
+      "affected_patterns": [
+        "try/catch used as sole error handling for critical token operations",
+        "catch block that silently continues without logging or compensating action",
+        "try/catch around delegatecall where out-of-gas bypasses catch",
+        "catch block assuming specific error type without catch(bytes memory)",
+        "empty catch block swallowing all errors without state rollback"
+      ],
+      "references": [
+        "https://docs.soliditylang.org/en/v0.8.20/control-structures.html#try-catch",
+        "https://swcregistry.io/docs/SWC-104",
+        "https://consensys.github.io/smart-contract-best-practices/development-recommendations/general/external-calls/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-123",
+      "title": "Block Gas Limit DoS via Unbounded Loop",
+      "category": "Denial of Service Patterns",
+      "severity": "HIGH",
+      "description": "Contracts that iterate over dynamically-growing arrays (user lists, token holders, pending withdrawals) can exceed the block gas limit as the array grows, making the function permanently uncallable. This is a permanent DoS — not just a temporary delay. Particularly dangerous in withdrawal/claim functions where user funds become trapped.",
+      "affected_patterns": [
+        "for loop iterating over array that grows with user actions",
+        "withdrawal function looping over all pending requests",
+        "reward distribution iterating over all stakers",
+        "governance vote counting iterating over all voters",
+        "no pagination or batch processing for array operations"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-128",
+        "https://consensys.github.io/smart-contract-best-practices/attacks/denial-of-service/",
+        "https://ethereum.org/en/developers/docs/gas/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-124",
+      "title": "External Call DoS via Revert or Gas Griefing",
+      "category": "Denial of Service Patterns",
+      "severity": "HIGH",
+      "description": "When a contract sends ETH or calls an external contract in a loop (e.g., distributing rewards to multiple addresses), a single recipient can DoS the entire operation by reverting in their receive/fallback function or consuming excessive gas. All subsequent recipients are blocked.",
+      "affected_patterns": [
+        "ETH transfer via transfer() or send() in loop where one revert blocks all",
+        "external call in loop without individual try/catch isolation",
+        "reward distribution that skips no addresses on failure",
+        "contract using call() with forwarding all remaining gas to untrusted address",
+        "batch operation not using pull-over-push pattern for fund distribution"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-113",
+        "https://consensys.github.io/smart-contract-best-practices/attacks/denial-of-service/",
+        "https://consensys.github.io/smart-contract-best-practices/development-recommendations/general/external-calls/#favor-pull-over-push-for-external-calls"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-125",
+      "title": "Storage Write Amplification and Gas Griefing",
+      "category": "Denial of Service Patterns",
+      "severity": "MEDIUM",
+      "description": "Attackers trigger operations that cause disproportionate storage writes relative to the gas they pay. By crafting inputs that maximize SSTORE operations (e.g., creating many small positions, registering many tokens, or triggering cascading state updates), an attacker makes future operations prohibitively expensive for legitimate users due to accumulated storage reads.",
+      "affected_patterns": [
+        "mapping that grows unboundedly with attacker-controlled keys",
+        "no cap on number of user positions or registered assets",
+        "function that reads all entries in growing mapping",
+        "storage cleanup not performed when entries are logically deleted",
+        "state accumulation making future gas costs grow linearly with historical activity"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-128",
+        "https://eips.ethereum.org/EIPS/eip-2929",
+        "https://consensys.github.io/smart-contract-best-practices/attacks/denial-of-service/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-126",
+      "title": "Computational Complexity DoS via Crafted Input",
+      "category": "Denial of Service Patterns",
+      "severity": "MEDIUM",
+      "description": "Functions with super-linear computational complexity (sorting, nested loops, recursive calculations) can be DoS'd by providing inputs sized to exhaust gas. Even if the array is bounded, the quadratic or cubic gas growth makes the function uncallable at the upper bound. Attackers may not need to call the function themselves — they just need to create the state that makes legitimate calls fail.",
+      "affected_patterns": [
+        "on-chain sorting algorithm with O(n^2) complexity",
+        "nested loops where inner loop size depends on outer loop variable",
+        "recursive function without depth limit",
+        "math operations with iterative convergence (Newton's method) without iteration cap",
+        "string/bytes manipulation with length-dependent gas cost"
+      ],
+      "references": [
+        "https://swcregistry.io/docs/SWC-128",
+        "https://consensys.github.io/smart-contract-best-practices/attacks/denial-of-service/",
+        "https://ethereum.org/en/developers/docs/gas/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-127",
+      "title": "CREATE2 Predictable Address Exploitation",
+      "category": "CREATE2 and Metamorphic Contracts",
+      "severity": "HIGH",
+      "description": "CREATE2 deploys contracts at deterministic addresses based on deployer, salt, and init code hash. If an attacker can predict or influence the deployed address, they can pre-fund it, pre-approve tokens to it, or arrange for other contracts to trust it — all before the contract exists. When the contract is deployed, it inherits these pre-existing privileges.",
+      "affected_patterns": [
+        "factory using CREATE2 with user-controllable salt without restrictions",
+        "address pre-computation used for trust decisions before deployment",
+        "contracts granting approvals to CREATE2-predictable addresses",
+        "no verification that CREATE2-deployed contract matches expected code hash",
+        "factory allowing redeployment at same address after selfdestruct"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-1014",
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#Clones",
+        "https://swcregistry.io/docs/SWC-117"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-128",
+      "title": "Metamorphic Contract via SELFDESTRUCT and Redeploy",
+      "category": "CREATE2 and Metamorphic Contracts",
+      "severity": "CRITICAL",
+      "description": "A metamorphic contract uses CREATE2 to deploy at a deterministic address, SELFDESTRUCT to remove itself, then redeploys different code at the same address. Any contract that trusted the original code at that address now interacts with completely different (malicious) logic. This breaks the fundamental assumption that code at an address is immutable.",
+      "affected_patterns": [
+        "contract containing selfdestruct callable by owner or attacker",
+        "CREATE2 factory allowing redeployment after selfdestruct at same salt",
+        "contract address hardcoded in other contracts as trusted",
+        "no code hash verification before interacting with external contract",
+        "approval granted to contract address that can be metamorphically replaced"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-1014",
+        "https://blog.openzeppelin.com/the-transparent-proxy-pattern/",
+        "https://0age.medium.com/the-promise-and-the-peril-of-metamorphic-contracts-9eb8b8413c5e"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-129",
+      "title": "CREATE2 Front-Running in Factory Deployment",
+      "category": "CREATE2 and Metamorphic Contracts",
+      "severity": "MEDIUM",
+      "description": "When a user submits a transaction to deploy a contract via a CREATE2 factory, an attacker who observes the mempool can front-run with the same salt and init code, deploying the contract first. The attacker's deployment succeeds and the user's transaction reverts. If the deployed contract has an initializer, the attacker becomes the owner.",
+      "affected_patterns": [
+        "CREATE2 factory with user-controllable salt visible in mempool",
+        "factory not restricting deployment to msg.sender-derived salts",
+        "deployed contract using initializer that grants owner to first caller",
+        "no commit-reveal scheme for CREATE2 salt submission",
+        "factory deployment transaction without private mempool submission"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-1014",
+        "https://consensys.github.io/smart-contract-best-practices/attacks/front-running/",
+        "https://docs.flashbots.net/flashbots-protect/overview"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-130",
+      "title": "CREATE2 Initialization Order Dependence",
+      "category": "CREATE2 and Metamorphic Contracts",
+      "severity": "MEDIUM",
+      "description": "Contracts deployed via CREATE2 that require post-deployment initialization (initialize() calls) are vulnerable to race conditions. The deployment and initialization are separate transactions, and between them, anyone can call initialize() to hijack ownership or set malicious parameters.",
+      "affected_patterns": [
+        "CREATE2 deployment and initialization in separate transactions",
+        "initialize() function callable by anyone (not restricted to deployer)",
+        "no mechanism to atomically deploy and initialize via CREATE2",
+        "deployed contract accepting first initialize() caller as owner",
+        "factory not calling initialize() in same transaction as deployment"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-1014",
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#Initializable",
+        "https://swcregistry.io/docs/SWC-118"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-131",
+      "title": "Multi-Block MEV and Cross-Block State Manipulation",
+      "category": "MEV and Frontrunning Expansion",
+      "severity": "HIGH",
+      "description": "Advanced MEV strategies that span multiple blocks — an attacker manipulates state in block N to create a profitable opportunity in block N+1. This is harder to detect than single-block sandwich attacks because the setup and extraction happen in different transactions/blocks. Examples: manipulating TWAP over multiple blocks, creating liquidation conditions that trigger in the next block.",
+      "affected_patterns": [
+        "TWAP oracle readable and influenceable across consecutive blocks",
+        "liquidation threshold reachable via multi-block price manipulation",
+        "auction/bid mechanism where setup and extraction span blocks",
+        "governance proposal timing exploitable across block boundaries",
+        "reward accumulation rate manipulable via multi-block MEV"
+      ],
+      "references": [
+        "https://arxiv.org/abs/2101.05511",
+        "https://docs.uniswap.org/contracts/v3/reference/core/libraries/Oracle",
+        "https://ethereum.org/en/developers/docs/mev/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-132",
+      "title": "Builder/Proposer Collusion and Censorship MEV",
+      "category": "MEV and Frontrunning Expansion",
+      "severity": "HIGH",
+      "description": "In PBS (Proposer-Builder Separation), block builders can collude with proposers to censor specific transactions or guarantee ordering for MEV extraction. Builders who control a large percentage of block space can systematically exclude competing MEV transactions, delay time-sensitive operations, or front-run users they've agreed to protect.",
+      "affected_patterns": [
+        "protocol assuming fair transaction inclusion without censorship resistance",
+        "time-critical operation (liquidation/auction) without alternative execution path",
+        "smart contract relying on inclusion within N blocks without fallback",
+        "no mechanism to bypass builder censorship for emergency transactions",
+        "protocol assuming Flashbots Protect guarantees ordering fairness"
+      ],
+      "references": [
+        "https://ethereum.org/en/developers/docs/mev/",
+        "https://boost.flashbots.net/",
+        "https://notes.ethereum.org/@vbuterin/pbs_censorship_resistance"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-133",
+      "title": "JIT (Just-In-Time) Liquidity MEV",
+      "category": "MEV and Frontrunning Expansion",
+      "severity": "MEDIUM",
+      "description": "MEV searchers detect large pending swaps in the mempool, add concentrated liquidity at the exact price range the swap will traverse, earn fees from the swap, then immediately remove the liquidity — all in the same block. This extracts value from existing LPs by capturing fees they would have earned, while bearing zero inventory risk.",
+      "affected_patterns": [
+        "AMM allowing single-block add/remove liquidity cycle",
+        "concentrated liquidity position opened and closed in same block",
+        "no minimum liquidity duration or early withdrawal penalty",
+        "LP fee distribution not accounting for liquidity duration",
+        "large swap visible in mempool enabling JIT positioning"
+      ],
+      "references": [
+        "https://uniswap.org/blog/jit-liquidity",
+        "https://arxiv.org/abs/2101.05511",
+        "https://ethereum.org/en/developers/docs/mev/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-134",
+      "title": "Backrunning and Atomic Arbitrage in DEX Aggregation",
+      "category": "MEV and Frontrunning Expansion",
+      "severity": "MEDIUM",
+      "description": "After a large swap moves the price on one DEX, arbitrageurs atomically backrun by buying cheap on the moved DEX and selling on others at the pre-swap price. While arbitrage itself is market-neutral, it extracts value from the original swapper via worse execution price. DEX aggregators that split routes are particularly vulnerable to route-specific backrunning.",
+      "affected_patterns": [
+        "DEX aggregator splitting order across venues where individual legs are backrunnable",
+        "AMM swap creating price discrepancy with other venues in same block",
+        "no MEV protection mechanism (commit-reveal/batch auction) on DEX",
+        "swap router executing multiple legs sequentially rather than atomically",
+        "large swap without slippage protection against backrun-induced price impact"
+      ],
+      "references": [
+        "https://arxiv.org/abs/2101.05511",
+        "https://docs.flashbots.net/",
+        "https://ethereum.org/en/developers/docs/mev/"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-135",
+      "title": "Diamond Storage Layout Collision Across Facets",
+      "category": "Diamond Proxy (EIP-2535)",
+      "severity": "CRITICAL",
+      "description": "In EIP-2535 Diamond proxy, multiple facets share the same contract storage via delegatecall. If two facets use the same storage slot for different purposes (e.g., both declare a state variable at slot 0), they will silently corrupt each other's data. Unlike single-implementation proxies, diamonds have N facets that must all coordinate storage, making collision risk multiplicative.",
+      "affected_patterns": [
+        "multiple facets using standard storage layout (slot 0, 1, 2...) instead of diamond storage pattern",
+        "facet not using unique storage position via keccak256 hash",
+        "new facet added without auditing storage overlap with existing facets",
+        "facet upgrade changing storage layout without migration",
+        "struct packing differences between facets sharing storage namespace"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-2535",
+        "https://dev.to/mudgen/understanding-diamonds-on-ethereum-1fb",
+        "https://github.com/mudgen/diamond-3-hardhat"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-136",
+      "title": "Diamond Facet Initialization Ordering Attack",
+      "category": "Diamond Proxy (EIP-2535)",
+      "severity": "HIGH",
+      "description": "Diamonds require each facet to be initialized separately. If facets have initialization dependencies (e.g., facet B depends on state set by facet A's initializer), the order matters. An attacker who can call initializers out of order, or re-call an initializer, can set facet B to depend on uninitialized or attacker-controlled state from facet A.",
+      "affected_patterns": [
+        "facet initializer callable more than once (missing initialized flag)",
+        "no enforcement of facet initialization ordering",
+        "facet B reading state from facet A before A is initialized",
+        "diamondCut adding and initializing facets in separate transactions",
+        "facet initializer not checking that dependent facets are already initialized"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-2535",
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#Initializable",
+        "https://github.com/mudgen/diamond-3-hardhat"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-137",
+      "title": "Diamond Facet Removal Leaving Dangling State",
+      "category": "Diamond Proxy (EIP-2535)",
+      "severity": "MEDIUM",
+      "description": "When a facet is removed from a diamond via diamondCut, its function selectors are unregistered but its storage state remains. If a new facet is later added that reuses the same storage slots, it inherits the stale state from the removed facet. This can lead to privilege escalation if the removed facet stored admin addresses or access control flags.",
+      "affected_patterns": [
+        "facet removal not clearing associated storage slots",
+        "new facet deployment reusing storage namespace of removed facet",
+        "diamond not implementing storage cleanup on facet removal",
+        "removed facet's initializer flag preventing re-initialization of replacement",
+        "admin/role storage persisting after facet that set it is removed"
+      ],
+      "references": [
+        "https://eips.ethereum.org/EIPS/eip-2535",
+        "https://dev.to/mudgen/understanding-diamonds-on-ethereum-1fb",
+        "https://github.com/mudgen/diamond-3-hardhat"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-138",
+      "title": "Unprotected Implementation Contract Initialization",
+      "category": "Initializer Frontrunning",
+      "severity": "CRITICAL",
+      "description": "When a proxy and its implementation are deployed separately, the implementation contract's initialize() function is callable by anyone. An attacker who monitors deployment transactions can call initialize() on the implementation contract directly, setting themselves as owner. While this doesn't affect the proxy, it creates a confusing state and in some cases (UUPS) can be used to selfdestruct the implementation.",
+      "affected_patterns": [
+        "implementation contract deployed without calling _disableInitializers() in constructor",
+        "initialize() on implementation callable by any address",
+        "UUPS implementation where direct initialization enables upgradeToAndCall",
+        "implementation deployment and proxy linking in separate transactions",
+        "no check in initialize() that msg.sender is a proxy contract"
+      ],
+      "references": [
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#Initializable",
+        "https://blog.openzeppelin.com/the-transparent-proxy-pattern/",
+        "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-5vp3-v4hc-gx76"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-139",
+      "title": "Re-Initialization via Reinitializer Version Gap",
+      "category": "Initializer Frontrunning",
+      "severity": "HIGH",
+      "description": "OpenZeppelin's reinitializer(version) allows initialization to be called again at a higher version number. If a contract skips version numbers (e.g., goes from v1 to v3), an attacker can call reinitializer(2) to execute initialization at the skipped version. This is particularly dangerous when upgrade paths are not carefully planned.",
+      "affected_patterns": [
+        "reinitializer version number skipping integers in upgrade path",
+        "no governance control over which reinitializer versions can be called",
+        "reinitializer function granting admin/owner roles at intermediate versions",
+        "contract not tracking which reinitializer versions have been executed",
+        "upgrade calling reinitializer(N+2) leaving reinitializer(N+1) open"
+      ],
+      "references": [
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#Initializable-reinitializer-uint8-",
+        "https://blog.openzeppelin.com/proxy-upgrade-pattern/",
+        "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/utils/Initializable.sol"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
+    },
+    {
+      "id": "TI-140",
+      "title": "Proxy Deployment Race Between Deploy and Initialize",
+      "category": "Initializer Frontrunning",
+      "severity": "HIGH",
+      "description": "The window between proxy deployment and initialization is a critical vulnerability window. In this gap, the proxy exists with no owner, no access controls, and potentially dangerous default state. An attacker with a bot monitoring contract deployments can call initialize() in the same block but in a later transaction position.",
+      "affected_patterns": [
+        "proxy deployment and initialize() in separate transactions",
+        "factory contract not atomically deploying and initializing proxy",
+        "initialize() not restricted to factory/deployer address",
+        "deployment transaction in public mempool visible before confirmation",
+        "no constructor-based initialization (relying solely on initialize())"
+      ],
+      "references": [
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#Initializable",
+        "https://blog.openzeppelin.com/the-transparent-proxy-pattern/",
+        "https://swcregistry.io/docs/SWC-118"
+      ],
+      "cve": null,
+      "last_updated": "2026-04-21"
     }
   ]
 }
