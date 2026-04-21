@@ -60,6 +60,17 @@ garrison-engine --target ./contracts --config garrison-bounty.toml  # bug bounty
 
 ---
 
+## Security & Privacy (Data Sovereignty)
+
+Garrison Engine is built for environments where source-code confidentiality is non-negotiable — bank compliance teams, Web3 audit firms, and air-gapped infrastructure.
+
+- **Zero code exfiltration** — No source code, bytecode, or contract artifacts ever leave the host machine during a scan. All analysis is performed locally.
+- **Local-first AI inference** — The AI Copilot defaults to local inference via [Ollama](https://ollama.com) when configured (`garrison.toml → [ai] provider = "ollama"`). If OpenAI is selected, only a one-paragraph natural-language summary of each finding is sent to the OpenAI API — never raw source code.
+- **Bundled threat intelligence** — Vulnerability databases and protocol signatures ship with the package and are queried locally. Network access only occurs if you explicitly run `garrison --update-signatures`. For fully air-gapped environments, use `garrison --update-from-file <path>` to import pre-downloaded signature packs.
+- **No telemetry** — The CLI contains zero usage telemetry, analytics callbacks, tracking pixels, or phone-home behavior. Period.
+
+---
+
 ## Pricing
 
 | Feature | Community (Free) | Developer ($49/mo) | Professional ($149/mo) | Team ($399/mo) |
