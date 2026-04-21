@@ -7,7 +7,7 @@ services:
   
   audit:
     build: .
-    image: tokenaudit/garrison-engine:latest
+    image: tokenaudit/garrison-engine:4.3.0
     container_name: garrison-engine
     
     volumes:
@@ -53,7 +53,7 @@ services:
   # Heuristic Scanner Only
   heuristic-scan:
     build: .
-    image: tokenaudit/garrison-engine:latest
+    image: tokenaudit/garrison-engine:4.3.0
     container_name: garrison-heuristic
     volumes:
       - .:/scan
@@ -62,7 +62,7 @@ services:
   # Threat Intelligence (Auto-detects EVM vs Solana)
   threat-intel:
     build: .
-    image: tokenaudit/garrison-engine:latest
+    image: tokenaudit/garrison-engine:4.3.0
     container_name: garrison-intel
     volumes:
       - .:/scan
@@ -72,7 +72,7 @@ services:
   # Liar Detector (Intent Checker)
   liar-detector:
     build: .
-    image: tokenaudit/garrison-engine:latest
+    image: tokenaudit/garrison-engine:4.3.0
     container_name: garrison-intent
     volumes:
       - .:/scan
@@ -82,7 +82,7 @@ services:
   # Access Matrix (God Mode Detector)
   access-matrix:
     build: .
-    image: tokenaudit/garrison-engine:latest
+    image: tokenaudit/garrison-engine:4.3.0
     container_name: garrison-access
     volumes:
       - .:/scan

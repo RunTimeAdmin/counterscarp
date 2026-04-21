@@ -3,7 +3,7 @@
 # Multi-Chain Smart Contract Security Auditing Toolkit
 # ------------------------------------------------------------------------------
 # Stage 1: Build stage for Rust/Go tools
-FROM python:3.10-slim-bullseye AS builder
+FROM python:3.10.14-slim-bullseye AS builder
 
 # Install build dependencies for Rust and Go
 RUN apt-get update && apt-get install -y \
@@ -30,7 +30,7 @@ RUN go install github.com/crytic/medusa/cmd/medusa@v0.1.8
 
 # ------------------------------------------------------------------------------
 # Stage 2: Final runtime image
-FROM python:3.10-slim-bullseye
+FROM python:3.10.14-slim-bullseye
 
 # Metadata
 LABEL maintainer="CyberShield Austin / TokenAudit"
@@ -54,6 +54,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libxml2 \
     ca-certificates \
+    libcairo2-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. INSTALL PYTHON TOOLS
@@ -61,9 +63,11 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir \
     slither-analyzer==0.11.5 \
     mythril==0.24.8 \
-    solc-select \
-    requests \
-    packaging
+    solc-select==1.2.0 \
+    requests==2.31.0 \
+    packaging==23.0
+
+RUN pip install --no-cache-dir xhtml2pdf>=0.2.11 colorama>=0.4.6
 
 # Initialize solc-select (install commonly used versions)
 # Legacy versions
@@ -140,6 +144,8 @@ RUN python3 --version && \
     aderyn --version && \
     medusa --version && \
     echo "✓ Garrison Engine core dependencies installed"
+
+RUN python3 -c "from xhtml2pdf import pisa; print('xhtml2pdf OK')"
 
 # 8. HEALTHCHECK DIRECTIVE
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \

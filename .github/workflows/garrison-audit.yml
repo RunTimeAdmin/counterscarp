@@ -85,6 +85,14 @@ jobs:
           import plugin_manager, exploit_generator, pipeline_generator
           print('All modules importable')
           "
+      - name: Install system deps for PDF extras
+        run: |
+          sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config
+      - name: Test optional extras
+        run: |
+          pip install -e ".[pdf]"
+          python -c "from xhtml2pdf import pisa; print('xhtml2pdf OK')"
+          python -c "from report_generator import generate_pdf_report; print('PDF generator OK')"
       - name: Run mypy
         run: |
           mypy orchestrator.py config_loader.py report_generator.py heuristic_scanner.py plugin_manager.py --ignore-missing-imports --no-error-summary || true

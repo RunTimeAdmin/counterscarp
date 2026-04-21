@@ -28,6 +28,7 @@ dependencies = [
     "packaging>=23.0",
     "tomli>=2.0.0; python_version < '3.11'",
     "solc-select>=1.0.4",
+    "colorama>=0.4.6",
 ]
 
 [project.urls]
