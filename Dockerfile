@@ -101,7 +101,7 @@ COPY --from=builder /root/go/bin/medusa /usr/local/bin/medusa
 # 6. SETUP WORKSPACE
 WORKDIR /app
 
-# Copy all Garrison Engine scripts
+# Copy all Counterscarp Engine scripts
 COPY orchestrator.py .
 COPY red_team_scan.py .
 COPY supply_chain_check.py .
@@ -172,5 +172,5 @@ CMD ["--help"]
 #   docker run --rm -v $(pwd):/scan counterscarp-engine python3 solana_intel.py /scan/programs/lib.rs
 #
 # Interactive shell:
-#   docker run --rm -it -v $(pwd):/scan garrison-engine /bin/bash
+#   docker run --rm -it -v $(pwd):/scan counterscarp-engine /bin/bash
 # ------------------------------------------------------------------------------

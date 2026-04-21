@@ -11,8 +11,8 @@ ExecStart=/opt/counterscarp-engine/venv/bin/uvicorn webapp.main:app --host 127.0
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-Environment=SENTINEL_UPLOAD_DIR=/opt/counterscarp-engine/uploads
-Environment=SENTINEL_RESULTS_DIR=/opt/counterscarp-engine/results
+Environment=COUNTERSCARP_UPLOAD_DIR=/opt/counterscarp-engine/uploads
+Environment=COUNTERSCARP_RESULTS_DIR=/opt/counterscarp-engine/results
 # Stripe keys - set these on the VPS directly, not in version control
 # Environment=STRIPE_SECRET_KEY=sk_live_YOUR_KEY_HERE
 # Environment=STRIPE_PUBLISHABLE_KEY=pk_live_YOUR_KEY_HERE
