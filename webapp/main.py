@@ -77,7 +77,7 @@ from visualizer import generate_attack_graph_html
 app = FastAPI(
     title="Garrison Engine",
     description="Smart Contract Security Audit Platform",
-    version="2.3.0",
+    version="4.4.0",
 )
 
 # Include license validation API routes
