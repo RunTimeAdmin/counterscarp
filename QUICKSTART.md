@@ -1,252 +1,1096 @@
-# 🚀 Garrison Engine - Quick Start Guide
+# Garrison Engine — Quick Start Guide
 
-> Get started with security scanning in 5 minutes
-> 
-> Website: [garrisonsec.com](https://garrisonsec.com)
+> **Version 4.4.0** | Smart contract security auditing for EVM + Solana
 
-## Zero-to-Audit in 3 Commands
+---
 
-### **1. Install the Engine**
+## Table of Contents
 
-**Option A: pip install (Recommended)**
+1. [Installation](#installation)
+2. [Quick Scan](#quick-scan)
+3. [Configuration](#configuration)
+4. [Report Formats](#report-formats)
+5. [CI/CD Integration](#cicd-integration)
+6. [Execution Profiles](#execution-profiles)
+7. [Advanced Features](#advanced-features)
+8. [Offline / Air-Gapped Setup](#offline--air-gapped-setup)
+9. [License Tiers](#license-tiers)
+10. [Environment Variables](#environment-variables)
+11. [Updating](#updating)
+12. [Troubleshooting](#troubleshooting)
+
+---
+
+## Installation
+
+### Basic (CLI scanner — no extra dependencies)
+
 ```bash
-# Install from PyPI
 pip install garrison-engine
+```
 
-# Verify installation
+Requires Python 3.10+. Includes heuristic scanning, Markdown/JSON reports, and CLI usage.
+
+### With web interface
+
+```bash
+pip install "garrison-engine[web]"
+```
+
+Adds FastAPI + Uvicorn server, Jinja2 templates, Stripe integration, and file upload support.
+
+### With PDF reports (Pro)
+
+```bash
+pip install "garrison-engine[pdf]"
+```
+
+Adds `xhtml2pdf` for printable PDF audit documents (pure Python, no system deps).
+
+### With AI / RAG features
+
+```bash
+pip install "garrison-engine[ai,advanced]"
+```
+
+Adds `sentence-transformers`, `numpy`, and `openai` for local vector embeddings and LLM analysis.
+
+### Full installation
+
+```bash
+pip install "garrison-engine[web,pdf,ai,advanced]"
+```
+
+### Development / testing
+
+```bash
+pip install "garrison-engine[dev]"
+```
+
+Adds `pytest`, `pytest-cov`, `mypy`, `pytest-benchmark`.
+
+### Docker
+
+```bash
+# Pull official image
+docker pull tokenaudit/garrison-engine:4.4.0
+
+# Run scan (bind-mount your project)
+docker run --rm -v $(pwd):/scan tokenaudit/garrison-engine:4.4.0 \
+  --target /scan --report
+
+# With docker-compose
+docker-compose run --rm audit --target /scan --config /scan/garrison-audit.toml --report
+```
+
+The Docker image includes Python 3.10, Slither, Mythril, and `solc` 0.8.19/0.8.20/0.8.23 (~600 MB).
+
+### Optional external tools
+
+These are not required for basic scanning but unlock additional analyzers:
+
+```bash
+# Slither — Trail of Bits static analyzer
+pip install slither-analyzer
+solc-select install 0.8.19 && solc-select use 0.8.19
+
+# Aderyn — Cyfrin Rust-based analyzer
+cargo install aderyn
+
+# Medusa — coverage-guided fuzzing (requires Go)
+go install github.com/crytic/medusa/cmd/medusa@latest
+
+# Mythril — symbolic execution (requires pipx or pip)
+pip install mythril
+
+# Foundry — forge/anvil for fuzzing and compilation
+# macOS/Linux: curl -L https://foundry.paradigm.xyz | bash && foundryup
+# Windows: download from https://github.com/foundry-rs/foundry/releases
+forge --version
+```
+
+### Verify installation
+
+```bash
 garrison-engine --help
-```
-
-**Optional extras:**
-```bash
-# With web UI support
-pip install garrison-engine[web]
-
-# With AI/RAG features
-pip install garrison-engine[ai]
-
-# With development dependencies
-pip install garrison-engine[dev]
-```
-
-**Option B: Docker (For isolated environments)**
-```bash
-docker build -t garrison-engine .
-```
-**Expected output:**
-```
-[+] Building 120.5s (15/15) FINISHED
- => [internal] load build definition
- => [internal] load .dockerignore
- => [5/10] RUN pip install slither-analyzer solc-select...
- => [8/10] RUN curl -L https://foundry.paradigm.xyz | bash
- => [10/10] RUN python3 -c "import slither; print('✓ Slither OK')"
-✓ Garrison Engine initialized
-```
-
-**⏱️ Build time:** ~3-5 minutes (one-time setup)  
-**📦 Image size:** ~600MB
-
-**Configuration Profiles:**
-Garrison Engine includes three pre-built configuration profiles:
-- `garrison-pr.toml` - Fast PR checks (< 2 min)
-- `garrison-audit.toml` - Full audit mode (10-30 min)
-- `garrison-bounty.toml` - Bug bounty hunting (1-2 hours)
-
-**Try it online:** [https://garrisonsec.com](https://garrisonsec.com) — No installation required
-
----
-
-### **2. Run Your First Scan**
-
-**Method A: Full Pipeline (Orchestrator)**
-```bash
-# Scan all contracts in current directory
-docker run --rm -v $(pwd):/scan garrison-engine --target /scan
-```
-
-**Method B: Single Module (Liar Detector)**
-```bash
-# Check one specific file for intent mismatches
-docker run --rm -v $(pwd):/scan garrison-engine python3 intent_check.py /scan/contracts/MyVault.sol
-```
-
-**Method C: Threat Intelligence**
-```bash
-# Auto-detect EVM/Solana and query vulnerability databases
-docker run --rm -v $(pwd):/scan garrison-engine python3 threat_intel.py /scan/contracts/Token.sol
+garrison --help          # short alias
 ```
 
 ---
 
-### **3. Get Your Report**
+## Quick Scan
 
-**Output locations:**
-- **Console:** Immediate findings printed to terminal
-- **File:** `ACTION_PLAN_YYYYMMDD_HHMMSS.md` in your scanned directory
+### CLI — scan a contracts directory
 
-**Example report structure:**
-```markdown
-# 🚨 SECURITY AUDIT REPORT
+```bash
+garrison-engine --target ./contracts --report
+```
 
-## Executive Summary
-- **Critical:** 2 findings
-- **High:** 5 findings  
-- **Medium:** 12 findings
+### Scan a single Solidity file
 
-## Heuristic Scanner
-[CRITICAL] UNCHECKED_EXTERNAL_CALL (Line 142)
-  • External call without return value check
-  • 💡 FIX: Wrap in require() or check success boolean
+```bash
+garrison-engine --target ./contracts/Vault.sol --report
+```
 
-## Liar Detector
-[MISMATCH] Line 67: emergencyWithdraw
-  • Comment says "admin" but function is public with NO modifier
-  • 💡 FIX: Add onlyOwner modifier
+### With a specific output format
 
-## Threat Intelligence
-Found 3 similar exploits in Code4rena:
-  • ERC4626 Inflation Attack ($50K bounty)
-  • Oracle Staleness Bug ($120K bounty)
+```bash
+garrison-engine --target ./contracts --report --format html
+garrison-engine --target ./contracts --report --format sarif
+garrison-engine --target ./contracts --report --format json
+```
+
+### With a named project
+
+```bash
+garrison-engine --target ./contracts --report --project-name "MyDeFi Protocol"
+```
+
+### With a custom config profile
+
+```bash
+garrison-engine --target ./contracts --config garrison-pr.toml      # fast PR check
+garrison-engine --target ./contracts --config garrison-audit.toml   # full audit
+garrison-engine --target ./contracts --config garrison-bounty.toml  # bug bounty
+```
+
+### Resume an interrupted scan
+
+```bash
+garrison-engine --resume <SESSION_ID>
+```
+
+Session IDs are printed at scan start and stored in `.garrison/`.
+
+### Run preflight tool check
+
+```bash
+garrison-engine --preflight --target ./contracts
+```
+
+Verifies that Slither, Foundry, Mythril, and Medusa are available before scanning.
+
+### Filter by severity or confidence
+
+```bash
+garrison-engine --target ./contracts --min-severity HIGH
+garrison-engine --target ./contracts --min-confidence 7
 ```
 
 ---
 
-## 📚 Common Workflows
+## Configuration
 
-### **For Bug Bounty Hunters**
+### Auto-discovery
+
+Garrison Engine automatically searches for `garrison.toml` starting from the target directory, walking up to 5 parent directories. If no config is found, safe defaults are used.
+
 ```bash
-# 1. Quick heuristic scan (finds 90% of high-value bugs)
-docker-compose run --rm heuristic-scan
-
-# 2. Check for intent mismatches (catches "forgot modifier" bugs)
-docker-compose run --rm liar-detector /scan/contracts/Vault.sol
-
-# 3. Query historical exploits
-docker-compose run --rm threat-intel /scan/contracts/Vault.sol
+# Explicit config path
+garrison-engine --target ./contracts --config /path/to/garrison.toml
 ```
 
-### **For Professional Auditors**
-```bash
-# Full pipeline with all modules enabled
-docker run --rm -v $(pwd):/scan garrison-engine \
-  --target /scan \
-  --heuristic \
-  --symbolic \
-  --fuzz InvariantTest
+### garrison.toml Reference
+
+Below are all supported sections. Copy and paste the sections you need.
+
+#### `[engine]` — Core Settings
+
+```toml
+[engine]
+name = "Garrison Security Engine"
+version = "4.4.0"
+
+# Minimum severity that causes a non-zero exit code (CI gate)
+# Values: CRITICAL, HIGH, MEDIUM, LOW, INFO
+fail_on_severity = "HIGH"
+
+# Stop scanning after this many findings (0 = unlimited)
+max_findings = 0
 ```
 
-### **For Learning/Education (TokenAudit YouTube)**
-```bash
-# Interactive shell to explore tools
-docker run --rm -it -v $(pwd):/scan garrison-engine /bin/bash
+#### `[heuristics]` — Pattern-Based Scanner (34 rules)
 
-# Inside container:
-root@abc:/app# python3 intent_check.py /scan/examples/VulnerableVault.sol
-root@abc:/app# python3 access_matrix.py /scan/examples/Token.sol
-root@abc:/app# python3 threat_intel.py /scan/examples/AMM.sol
+```toml
+[heuristics]
+enabled = true
+min_confidence = 0       # 1-10; 0 = include all findings
+min_severity = "INFO"    # CRITICAL, HIGH, MEDIUM, LOW, INFO
+
+# Downgrade or upgrade individual rule severities
+[heuristics.severity_overrides]
+BLOCK_TIMESTAMP_RANDOMNESS = "LOW"   # safe for timelocks
+
+# Disable noisy rules for this project
+[heuristics.disabled_rules]
+HARDCODED_ADDRESS = true             # expected for oracle contracts
+DIVIDE_BEFORE_MULTIPLY = true        # project uses safe precision patterns
+```
+
+#### `[[suppressions]]` — False Positive Management
+
+```toml
+# Suppress by rule + file + line
+[[suppressions]]
+rule_id = "DELEGATECALL_IN_LOOP"
+file = "contracts/Proxy.sol"
+line = 88
+reason = "Proxy pattern — delegatecall is safe via strict access control"
+expires = "2027-01-01"   # optional: suppression auto-expires
+
+# Suppress all occurrences of a rule in one file
+[[suppressions]]
+rule_id = "HARDCODED_ADDRESS"
+file = "contracts/Oracle.sol"
+reason = "Oracle address is intentionally hardcoded per deployment spec"
+
+# Suppress a rule project-wide
+[[suppressions]]
+rule_id = "EMERGENCY_WITHDRAW_PUBLIC"
+reason = "All emergency functions have onlyOwner — false positive"
+```
+
+#### `[static_analysis]` — Slither + Aderyn
+
+```toml
+[static_analysis.slither]
+enabled = true
+exclude_detectors = "solc-version,naming-convention"
+include_impact = "High,Medium"
+
+[static_analysis.aderyn]
+enabled = false     # opt-in
+scope = ""          # limit to specific paths
+```
+
+#### `[fuzzing]` — Foundry + Medusa
+
+```toml
+[fuzzing.foundry]
+enabled = false
+runs = 10000
+max_test_rejects = 100000
+
+[fuzzing.medusa]
+enabled = false
+test_limit = 100000
+timeout = 300    # seconds
+workers = 10
+```
+
+#### `[reporting]` — Output Format and Sections
+
+```toml
+[reporting]
+# Options: markdown, json, sarif, html, pdf
+format = "markdown"
+verbosity = "standard"    # minimal, standard, verbose
+group_by = "severity"     # severity, file, rule
+
+[reporting.sections]
+executive_summary = true
+supply_chain = true
+static_analysis = true
+heuristic_scan = true
+fuzzing = false            # opt-in
+threat_intel = false       # opt-in
+access_matrix = true
+```
+
+#### `[ci]` — CI/CD Settings and Path Exclusions
+
+```toml
+[ci]
+fail_on_findings = true
+post_pr_comment = true
+upload_sarif = false
+
+# Glob patterns to skip entirely
+exclude_paths = [
+    "test/**",
+    "script/**",
+    "node_modules/**",
+    "lib/**",
+    ".git/**",
+]
+```
+
+#### `[threat_intel]` — Threat Intelligence APIs
+
+```toml
+[threat_intel]
+c4_timeout = 10
+immunefi_timeout = 10
+api_rate_limit = 5
+offline_mode = false
+bundled_db_path = "data/threat_intel_db.json"
+```
+
+#### `[ai]` — RAG + LLM Analysis
+
+```toml
+[ai]
+embedding_backend = "local"   # local, openai
+llm_backend = "none"          # none, openai, ollama
+llm_model = "gpt-4o-mini"
+
+# Ollama (local LLM)
+ollama_url = "http://localhost:11434"
+
+rag_index_path = ".garrison/rag_index.json"
+top_k = 5
+auto_enrich = false
+llm_enrichment = false
+```
+
+#### `[license]` — Pro License Key
+
+```toml
+[license]
+# Set here or via GARRISON_PRO_LICENSE environment variable
+key = "your-license-key-here"
+```
+
+### Path exclusions
+
+Exclude directories to reduce noise and speed up scans:
+
+```toml
+[ci]
+exclude_paths = [
+    "test/**",
+    "tests/**",
+    "script/**",
+    "scripts/**",
+    "lib/**",
+    "node_modules/**",
+    "mocks/**",
+    ".git/**",
+]
+```
+
+### Rule configuration
+
+Disable, downgrade, or suppress rules for your project:
+
+```toml
+# Disable individual rules
+[heuristics.disabled_rules]
+BLOCK_TIMESTAMP_RANDOMNESS = true   # project uses timestamp for vesting, not randomness
+TX_ORIGIN_USAGE = true              # legacy compatibility layer
+
+# Override severity levels
+[heuristics.severity_overrides]
+MISSING_ZERO_ADDRESS_CHECK = "LOW"  # contract validates in constructor
+
+# Suppress a specific line as accepted risk
+[[suppressions]]
+rule_id = "UNCHECKED_EXTERNAL_CALL"
+file = "contracts/Bridge.sol"
+line = 204
+reason = "Return value intentionally ignored — token transfer reverts on failure"
+expires = "2026-12-31"
+```
+
+### Common configuration scenarios
+
+**DeFi project with oracle integration:**
+
+```toml
+[heuristics.disabled_rules]
+HARDCODED_ADDRESS = true
+BLOCK_TIMESTAMP_RANDOMNESS = true
+
+[chains.evm]
+trusted_contracts = [
+    "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",  # Chainlink ETH/USD
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",  # USDC
+]
+```
+
+**Upgradeable proxy with known patterns:**
+
+```toml
+[[suppressions]]
+rule_id = "DELEGATECALL_IN_LOOP"
+file = "contracts/Proxy.sol"
+reason = "Proxy pattern — safe via access control"
+
+[upgrade_diff]
+old_implementation_path = "contracts/old/Implementation.sol"
+new_implementation_path = "contracts/Implementation.sol"
+```
+
+**Strict audit-ready mode:**
+
+```toml
+[engine]
+fail_on_severity = "MEDIUM"
+
+[reporting]
+verbosity = "verbose"
+[reporting.sections]
+fuzzing = true
+threat_intel = true
 ```
 
 ---
 
-## 🔧 Environment Variables
+## Report Formats
 
-Configure Garrison Engine behavior using these environment variables:
+### Free Tier
+
+| Format | Flag | Notes |
+|--------|------|-------|
+| **Markdown** | `--format markdown` (default) | GitHub-friendly, human-readable |
+| **JSON** | `--format json` | Machine-parseable findings array |
+
+### Pro Tier (requires license key)
+
+| Format | Flag | Notes |
+|--------|------|-------|
+| **HTML** | `--format html` | Styled report with severity badges, code snippets |
+| **SARIF** | `--format sarif` | SARIF 2.1.0 for GitHub Advanced Security |
+| **PDF** | `--format pdf` | Printable document; requires `pip install "garrison-engine[pdf]"` |
+
+### Generating multiple formats
+
+```bash
+# HTML + Markdown
+garrison-engine --target ./contracts --report --format html
+
+# SARIF for GitHub Code Scanning
+garrison-engine --target ./contracts --report --format sarif
+```
+
+Report output files are created in the working directory with timestamped filenames:
+- `audit_report_YYYYMMDD_HHMMSS.html`
+- `audit_report_YYYYMMDD_HHMMSS.md`
+- `audit_report_YYYYMMDD_HHMMSS.sarif`
+
+---
+
+## CI/CD Integration
+
+### GitHub Actions — minimal workflow
+
+```yaml
+# .github/workflows/garrison.yml
+name: Garrison Security Audit
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  garrison-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Garrison Engine
+        run: pip install garrison-engine
+
+      - name: Install Slither
+        run: |
+          pip install slither-analyzer
+          pip install solc-select
+          solc-select install 0.8.19 && solc-select use 0.8.19
+
+      - name: Run Garrison PR Check
+        run: garrison-engine --target ./contracts --config garrison-pr.toml
+        env:
+          GARRISON_PRO_LICENSE: ${{ secrets.GARRISON_PRO_LICENSE }}
+```
+
+### GitHub Actions — with SARIF upload
+
+```yaml
+      - name: Run Garrison Scan (SARIF)
+        run: garrison-engine --target ./contracts --report --format sarif
+        env:
+          GARRISON_PRO_LICENSE: ${{ secrets.GARRISON_PRO_LICENSE }}
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: audit_report_*.sarif
+```
+
+### Generate a pipeline automatically
+
+```bash
+# GitHub Actions
+garrison-generate-pipeline --platform github --output .github/workflows/
+
+# GitLab CI
+garrison-generate-pipeline --platform gitlab --output .gitlab-ci.yml
+
+# Azure DevOps
+garrison-generate-pipeline --platform azure --output azure-pipelines.yml
+
+# Jenkins
+garrison-generate-pipeline --platform jenkins --output Jenkinsfile
+```
+
+Or via the main CLI:
+
+```bash
+garrison-engine --generate-pipeline github
+```
+
+Configure the generator in `garrison.toml`:
+
+```toml
+[ci.generator]
+platform = "github"          # github, gitlab, azure, jenkins
+triggers = ["push", "pull_request"]
+notifications = []           # "slack", "discord"
+```
+
+### GitLab CI — minimal example
+
+```yaml
+# .gitlab-ci.yml
+garrison-security:
+  image: python:3.11
+  stage: test
+  script:
+    - pip install garrison-engine slither-analyzer
+    - solc-select install 0.8.19 && solc-select use 0.8.19
+    - garrison-engine --target ./contracts --config garrison-pr.toml
+  only:
+    - merge_requests
+    - main
+```
+
+### SARIF → GitHub Security Tab
+
+To surface findings directly in the GitHub Security tab:
+
+1. Generate SARIF: `garrison-engine --target ./contracts --report --format sarif`
+2. Upload via `github/codeql-action/upload-sarif@v3` (see workflow above)
+3. View findings under **Security → Code scanning alerts**
+
+Requires a Pro license key for SARIF output.
+
+---
+
+## Execution Profiles
+
+Three pre-built `*.toml` profiles ship with Garrison Engine:
+
+| Profile | Config File | Scan Time | Fail Threshold | Use Case |
+|---------|-------------|-----------|----------------|----------|
+| **PR Mode** | `garrison-pr.toml` | < 2 min | HIGH+ | Block bad PRs fast |
+| **Audit Mode** | `garrison-audit.toml` | 10–30 min | MEDIUM+ | Client deliverables |
+| **Bounty Mode** | `garrison-bounty.toml` | 1–2 hours | Never fails | Max exploit coverage |
+
+```bash
+garrison-engine --target ./contracts --config garrison-pr.toml
+garrison-engine --target ./contracts --config garrison-audit.toml --report
+garrison-engine --target ./contracts --config garrison-bounty.toml --medusa --aderyn --report
+```
+
+---
+
+## Advanced Features
+
+### Time-Travel Scanner (git history)
+
+Scans commit history to find when vulnerabilities were introduced or fixed.
+
+```bash
+# Scan last 50 commits on main
+garrison-engine --target ./contracts --history --commits 50 --branch main
+
+# Scan since a specific date
+garrison-engine --target ./contracts --history --since 2025-01-01
+
+# Alias
+garrison-engine --target ./contracts --time-travel
+```
+
+Configure in `garrison.toml`:
+
+```toml
+[history]
+max_commits = 50
+scan_branches = ["main"]
+include_fixed = true
+output_dir = "."
+```
+
+### AI Audit Copilot (RAG + LLM)
+
+RAG-based knowledge retrieval enriches findings with context from past audits.
+
+```bash
+# Enable RAG enrichment
+garrison-engine --target ./contracts --rag
+
+# Enable RAG + LLM analysis
+garrison-engine --target ./contracts --rag --llm
+
+# Rebuild the RAG knowledge base from historical reports
+garrison-engine --build-rag-index
+
+# Use OpenAI as LLM backend
+export OPENAI_API_KEY="sk-..."
+garrison-engine --target ./contracts --rag --llm
+```
+
+Configure in `garrison.toml`:
+
+```toml
+[ai]
+embedding_backend = "local"
+llm_backend = "openai"       # none, openai, ollama
+llm_model = "gpt-4o-mini"
+auto_enrich = false
+llm_enrichment = false
+```
+
+### Protocol Fingerprint Scanner
+
+Identifies which known protocol (Uniswap, Compound, Aave, etc.) a contract resembles and flags inherited vulnerabilities.
+
+```bash
+garrison-engine --target ./contracts --fingerprint
+garrison-engine --target ./contracts --fingerprint --verbose
+```
+
+Configure in `garrison.toml`:
+
+```toml
+[fingerprint]
+enabled = false
+min_similarity = 0.7
+database_path = "data/protocol_fingerprints.json"
+include_risk_assessment = true
+```
+
+### Upgrade Diff Analysis
+
+Detects storage collisions and removed access control in proxy upgrades.
+
+```bash
+garrison-engine --upgrade-old ./VaultV1.sol --upgrade-new ./VaultV2.sol
+```
+
+Configure in `garrison.toml`:
+
+```toml
+[upgrade_diff]
+old_implementation_path = "contracts/old/Implementation.sol"
+new_implementation_path = "contracts/Implementation.sol"
+
+[upgrade_diff.ignore_patterns]
+ignore_new_view_functions = true
+ignore_comment_changes = true
+```
+
+### Exploit PoC Generator
+
+Generates Foundry test exploits for detected findings using local templates (+ optional LLM enhancement).
+
+```bash
+# Included templates: reentrancy, flash_loan, oracle_manipulation,
+#                     access_control, integer_overflow, front_running
+```
+
+Configure in `garrison.toml`:
+
+```toml
+[exploit_generation]
+auto_generate = false
+min_severity = "HIGH"
+validate_compilation = true
+output_dir = "exploits/"
+llm_backend = "none"       # none, openai, anthropic
+template_dir = "exploit_templates/"
+```
+
+### Solana / Anchor Analysis
+
+35 security rules for Rust/Anchor programs, plus IDL constraint validation and CPI flow tracing.
+
+```bash
+garrison-engine --solana-root ./programs
+```
+
+Configure in `garrison.toml`:
+
+```toml
+[chains.solana]
+enabled = false
+project_root = "./programs"
+
+[chains.solana.idl]
+idl_path = "target/idl"
+validate_constraints = true
+trace_cpi = true
+```
+
+### Attack Graph Visualization
+
+Generates interactive D3.js HTML showing cross-contract attack paths.
+
+```toml
+[visualization]
+enabled = false
+include_source_analysis = true
+trace_attack_paths = true
+output_format = "html"   # html, json, both
+max_path_depth = 10
+```
+
+### Plugin System
+
+Drop custom analyzer plugins into `.garrison/plugins/`:
+
+```toml
+[plugins]
+enabled = true
+dirs = [".garrison/plugins"]
+```
+
+---
+
+## Offline / Air-Gapped Setup
+
+### Step 1 — Update signatures before going offline
+
+```bash
+garrison-engine --update-signatures
+```
+
+Downloads the latest threat intel databases from GitHub and stores them in `data/`.
+
+### Step 2 — Or import from a pre-downloaded file
+
+```bash
+garrison-engine --update-from-file /path/to/threat_intel_db.json
+```
+
+### Step 3 — Configure for air-gapped use
+
+```toml
+[threat_intel]
+offline_mode = true
+bundled_db_path = "data/threat_intel_db.json"
+
+[ai]
+embedding_backend = "local"
+llm_backend = "ollama"
+llm_model = "deepseek-coder"
+ollama_url = "http://localhost:11434"
+```
+
+### Local LLM with Ollama
+
+1. Install Ollama: https://ollama.ai
+2. Pull a code model:
+   ```bash
+   ollama pull deepseek-coder
+   # or
+   ollama pull codellama
+   ```
+3. Update `garrison.toml`:
+   ```toml
+   [ai]
+   llm_backend = "ollama"
+   llm_model = "deepseek-coder"
+   ollama_url = "http://localhost:11434"
+   ```
+4. Run with LLM enrichment:
+   ```bash
+   garrison-engine --target ./contracts --rag --llm
+   ```
+
+---
+
+## License Tiers
+
+Garrison Engine ships as a single package. Pro features are gated by a license key.
+
+| Feature | Community (Free) | Developer ($49/mo) | Professional ($149/mo) | Team ($399/mo) |
+|---------|:---:|:---:|:---:|:---:|
+| Heuristic scanning (34 rules) | ✅ | ✅ | ✅ | ✅ |
+| Markdown / JSON reports | ✅ | ✅ | ✅ | ✅ |
+| CLI usage | ✅ | ✅ | ✅ | ✅ |
+| Supply chain scanning | ✅ | ✅ | ✅ | ✅ |
+| HTML / SARIF / PDF reports | — | ✅ | ✅ | ✅ |
+| Slither integration | — | ✅ | ✅ | ✅ |
+| Solana analyzer (35 rules) | — | ✅ | ✅ | ✅ |
+| Protocol fingerprinting | — | ✅ | ✅ | ✅ |
+| Web app access | — | 5 scans/mo | Unlimited | Unlimited |
+| AI Copilot (RAG + LLM) | — | — | ✅ | ✅ |
+| Exploit PoC generator | — | — | ✅ | ✅ |
+| Time-travel git scanner | — | — | ✅ | ✅ |
+| Attack graph visualization | — | — | ✅ | ✅ |
+| Machine activations | — | 1 | 3 | 10 |
+| Support | GitHub | Email | Priority (24 hr) | Dedicated |
+
+Get your license at **https://garrisonsec.com/pricing**
+
+### Activating a Pro license
+
+**Option A — environment variable (recommended for CI):**
+
+```bash
+export GARRISON_PRO_LICENSE=your-license-key-here
+garrison-engine --target ./contracts --report --format html
+```
+
+**Option B — `garrison.toml`:**
+
+```toml
+[license]
+key = "your-license-key-here"
+```
+
+**Option C — GitHub Actions secret:**
+
+```yaml
+env:
+  GARRISON_PRO_LICENSE: ${{ secrets.GARRISON_PRO_LICENSE }}
+```
+
+---
+
+## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GARRISON_LOG_LEVEL` | Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL | INFO |
-| `GARRISON_LOG_FORMAT` | Output format: "text" or "json" | text |
-| `GARRISON_LOG_FILE` | Optional file path for log output | (none) |
-| `OPENAI_API_KEY` | OpenAI API key for exploit generation | (none) |
+| `GARRISON_PRO_LICENSE` | Pro license key | — |
+| `GARRISON_LOG_LEVEL` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO` |
+| `GARRISON_LOG_FORMAT` | Output format: `text` or `json` | `text` |
+| `GARRISON_LOG_FILE` | File path for log output | — |
+| `OPENAI_API_KEY` | OpenAI API key for GPT-based LLM analysis | — |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude-based analysis | — |
 
-### Quick Examples
+### Examples
 
 ```bash
-# Enable debug logging
+# Debug logging to a file
 export GARRISON_LOG_LEVEL=DEBUG
+export GARRISON_LOG_FILE=/var/log/garrison.log
 garrison-engine --target ./contracts
 
-# Structured JSON logging
+# Structured JSON logs (pipe to jq)
 export GARRISON_LOG_FORMAT=json
 garrison-engine --target ./contracts 2>&1 | jq
 
-# Log to file
-export GARRISON_LOG_FILE=/tmp/garrison.log
-garrison-engine --target ./contracts
+# OpenAI for LLM-enriched findings
+export OPENAI_API_KEY="sk-..."
+garrison-engine --target ./contracts --rag --llm
 ```
 
 ---
 
-## 🛠️ Troubleshooting
+## Updating
 
-### **Issue: "Cannot find contract file"**
+### Update threat intelligence signatures
+
 ```bash
-# Make sure you're mounting the correct directory
-# Windows PowerShell:
-docker run --rm -v ${PWD}:/scan garrison-engine --target /scan
-
-# Linux/Mac:
-docker run --rm -v $(pwd):/scan garrison-engine --target /scan
+garrison-engine --update-signatures
 ```
 
-### **Issue: "Slither failed to compile"**
-This is normal if:
-- Contract uses newer Solidity version (add to Dockerfile: `RUN solc-select install 0.8.25`)
-- Missing dependencies (run from Foundry/Hardhat project root)
+Fetches the latest vulnerability databases from GitHub. Safe to run in CI pre-scan.
 
-**Workaround:**
+### Update the engine
+
 ```bash
-# Use modules that don't need compilation
-docker-compose run --rm heuristic-scan      # Regex-based (always works)
-docker-compose run --rm liar-detector       # Comment parsing (always works)
-docker-compose run --rm threat-intel        # API-based (always works)
+pip install --upgrade garrison-engine
 ```
 
-### **Issue: Docker build fails on Foundry**
-If `foundryup` times out during build:
-```dockerfile
-# In Dockerfile, add timeout to RUN command:
-RUN curl -L https://foundry.paradigm.xyz | bash || true
-RUN timeout 300 /root/.foundry/bin/foundryup || echo "Foundry install partial"
+### Check current version
+
+```bash
+garrison-engine --help   # version shown in header
+python -c "import importlib.metadata; print(importlib.metadata.version('garrison-engine'))"
 ```
 
 ---
 
-## 🎯 Next Steps
+## Troubleshooting
 
-1. **Customize for your needs:**
-   - Edit `heuristic_scanner.py` to add custom vulnerability patterns
-   - Edit `intent_check.py` to add project-specific trust keywords
-   - Edit `docker-compose.yml` to set default contract paths
-   - Choose a configuration profile: `garrison-pr.toml`, `garrison-audit.toml`, or `garrison-bounty.toml`
+### Slither not found
 
-2. **Integrate into CI/CD:**
-   ```yaml
-   # .github/workflows/security.yml
-   - name: Install Garrison Engine
-     run: pip install garrison-engine
-   - name: Security Scan
-     run: |
-       garrison-engine --target ./contracts --config garrison-pr.toml
-   ```
+```bash
+pip install slither-analyzer
 
-3. **Deploy Forta Watchtower:**
-   - See README "Phase 5: The Watchtower" section
-   - Convert your invariant tests to runtime monitors
+# Verify
+slither --version
+```
 
-4. **Learn More:**
-   - Visit [garrisonsec.com](https://garrisonsec.com) for full documentation
-   - See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines
-   - Add new heuristic patterns or threat intelligence sources
+### Solc version mismatch
+
+```bash
+pip install solc-select
+solc-select install 0.8.19
+solc-select use 0.8.19
+
+# List installed versions
+solc-select versions
+```
+
+### Aderyn not found
+
+```bash
+# Requires Rust
+cargo install aderyn
+
+# Or install via Foundry
+foundryup
+aderyn --version
+```
+
+### Medusa not found
+
+```bash
+# Requires Go ≥ 1.21
+go install github.com/crytic/medusa/cmd/medusa@latest
+```
+
+### Docker permission errors (Linux)
+
+```bash
+# Add your user to the docker group
+sudo usermod -aG docker $USER
+
+# Or run with --user flag
+docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan \
+  tokenaudit/garrison-engine:4.4.0 --target /scan --report
+```
+
+### OpenAI API key not set
+
+```bash
+export OPENAI_API_KEY="sk-..."
+
+# Windows PowerShell
+$env:OPENAI_API_KEY = "sk-..."
+```
+
+### RAG dependencies missing
+
+```bash
+pip install "garrison-engine[ai,advanced]"
+```
+
+### Web server fails to start
+
+```bash
+pip install "garrison-engine[web]"
+```
+
+### Config not found
+
+Garrison Engine searches up to 5 parent directories for `garrison.toml`. To specify an explicit path:
+
+```bash
+garrison-engine --target ./contracts --config /path/to/garrison.toml
+```
+
+### Scan fails immediately with "target does not exist"
+
+- Use an absolute path: `garrison-engine --target /full/path/to/contracts`
+- If targeting a single file, it must end in `.sol`
+- Check that the path exists: `ls ./contracts`
+
+### False positives
+
+Use suppressions to mark findings as accepted risks:
+
+```toml
+[[suppressions]]
+rule_id = "BLOCK_TIMESTAMP_RANDOMNESS"
+file = "contracts/Vesting.sol"
+reason = "Timestamp used for vesting schedule, not randomness"
+```
+
+Or downgrade severity:
+
+```toml
+[heuristics.severity_overrides]
+BLOCK_TIMESTAMP_RANDOMNESS = "LOW"
+```
 
 ---
 
-**🎓 Educational Use:** Perfect for TokenAudit YouTube tutorials  
-**💼 Professional Use:** CyberShield Austin client deliverables  
-**🏆 Bug Bounties:** Immunefi/Code4rena hunting toolkit
+## Complete CLI Reference
 
-**Questions?** 
-- Open an issue on [GitHub](https://github.com/RunTimeAdmin/garrison-engine/issues)
-- Visit [garrisonsec.com](https://garrisonsec.com)
-- Contact: [@defiauditccie](https://twitter.com/defiauditccie)
+```
+garrison-engine [OPTIONS]
+
+Scan options:
+  --target PATH            Path to project root or .sol file (required for scanning)
+  --config PATH            Path to garrison.toml (auto-discovered if not set)
+  --report                 Generate audit report
+  --format FORMAT          Report format: markdown, json, sarif, html, pdf
+  --project-name NAME      Project name for report header
+  --resume SESSION_ID      Resume an interrupted scan
+
+Analyzer flags:
+  --aderyn                 Run Aderyn static analyzer
+  --medusa                 Run Medusa coverage-guided fuzzing
+  --symbolic               Run Mythril symbolic execution
+  --fuzz-contract NAME     Foundry invariant test contract name
+  --solana-root PATH       Solana/Anchor project root for Solana analysis
+  --fingerprint            Run protocol fingerprint similarity scan
+  --history / --time-travel  Run time-travel git history scan
+  --commits N              Max commits for history mode (default: 50)
+  --since DATE             Scan commits since date (ISO: 2025-01-01)
+  --branch BRANCH          Branch for history scan (default: main)
+
+Upgrade diff:
+  --upgrade-old PATH       Path to old contract version
+  --upgrade-new PATH       Path to new contract version
+
+AI / RAG:
+  --rag                    Enable RAG knowledge enrichment
+  --llm                    Enable LLM-powered analysis
+  --build-rag-index        Rebuild the RAG knowledge base index
+
+Filtering:
+  --min-severity LEVEL     Minimum severity: CRITICAL, HIGH, MEDIUM, LOW, INFO
+  --min-confidence N       Minimum confidence score (1-10, default: 0 = all)
+
+Operations:
+  --update-signatures      Update threat intel databases from GitHub
+  --update-from-file PATH  Import threat intel from a local JSON file
+  --preflight              Check external tool versions before scanning
+  --generate-pipeline PLATFORM  Generate CI pipeline: github, gitlab, azure, jenkins
+```
+
+---
+
+## Further Reading
+
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — Complete `garrison.toml` reference
+- **[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)** — All flags with examples
+- **[docs/WEB_APP_GUIDE.md](docs/WEB_APP_GUIDE.md)** — Self-hosted web interface
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Production server setup
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Adding rules and integrations
+- **Web app:** https://garrisonsec.com
+- **Pricing:** https://garrisonsec.com/pricing
+- **Issues:** https://github.com/RunTimeAdmin/garrison-engine/issues
+
+---
+
+*Garrison Engine v4.4.0 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*
