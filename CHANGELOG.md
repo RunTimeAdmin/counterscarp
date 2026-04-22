@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2026-04-22
+
+### Added
+- Complete rebrand from Garrison Engine to Counterscarp Engine
+- User authentication with Google OAuth 2.0 and email/password registration
+- Per-user license management — licenses linked to user accounts instead of server-wide
+- Automatic license auto-linking at Stripe checkout for logged-in users
+- Automatic license discovery on registration (links pre-purchased licenses by email)
+- Auto-apply user license on login across any device
+- Enhanced `/admin/users` endpoint with license key (masked), tier, auth method, and last login
+- Login/register pages with dark theme matching existing UI
+- Session-based authentication with cookie management
+- Protected settings page (requires login)
+- Conditional navigation bar (logged-in vs guest)
+
+### Changed
+- License activation moved from server-wide environment variable to per-user account storage
+- Settings page license management now per-user with backward-compatible env var fallback
+- Checkout success page shows auto-link confirmation for logged-in users or login prompt for guests
+
+### Dependencies
+- Added `authlib>=1.3.0`, `httpx>=0.25.0`, `itsdangerous>=2.1.0`, `passlib[bcrypt]>=1.7.4`
+
+## [4.0.0] - 2026-04-21
+
+### Added
+- Stripe Checkout integration with automatic license key provisioning
+- Pricing page with Pro Monthly and Pro Annual plans
+- Webhook handler for `checkout.session.completed` events
+- GUI-based license key management on settings page
+
 ## [3.4.0] - 2026-04-21
 
 ### Added

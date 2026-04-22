@@ -25,6 +25,7 @@
   - [fingerprint](#fingerprint)
   - [ai](#ai)
   - [plugins](#plugins)
+  - [Authentication Settings](#authentication-settings)
 - [Example Configs](#example-configs)
 
 ---
@@ -564,6 +565,19 @@ dirs = [".counterscarp/plugins", "/opt/counterscarp-plugins"]
 ```
 
 See the [Plugin Development Guide](PLUGIN_DEVELOPMENT.md) for writing custom plugins.
+
+---
+
+### Authentication Settings
+
+Authentication is configured via environment variables (not the TOML config file):
+
+- `SESSION_SECRET` — Secret key for cookie-based session encryption
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth credentials
+- `GOOGLE_REDIRECT_URI` — OAuth callback URL
+- `ADMIN_EMAIL` — Admin user email for `/admin/users` access
+
+**Note:** Authentication settings are intentionally kept in environment variables (not config files) for security. Never commit OAuth credentials to version control.
 
 ---
 

@@ -10,6 +10,9 @@
 - [Understanding the Results Page](#understanding-the-results-page)
 - [Downloading Reports](#downloading-reports)
 - [Attack Graph Visualization](#attack-graph-visualization)
+- [User Authentication](#user-authentication)
+- [Per-User License Management](#per-user-license-management)
+- [Admin Dashboard](#admin-dashboard)
 - [API Endpoints Reference](#api-endpoints-reference)
 
 ---
@@ -147,6 +150,41 @@ Access the attack graph at: `/results/{audit_id}/attack-graph`
 The attack graph is generated automatically when findings are detected. If no findings exist, the graph is skipped.
 
 **Configuration:** Attack graph behavior can be customized in `counterscarp.toml` under the `[visualization]` section. See the [Configuration Guide](CONFIGURATION.md#visualization) for details.
+
+---
+
+## User Authentication
+
+The web application supports two authentication methods:
+
+**Google OAuth 2.0:**
+- Click "Sign in with Google" on the login page
+- First-time users are automatically registered
+- Uses OpenID Connect for secure token exchange
+
+**Email/Password:**
+- Register at `/auth/register` with name, email, and password
+- Passwords are hashed with bcrypt
+- Log in at `/auth/login`
+
+---
+
+## Per-User License Management
+
+Licenses are linked to individual user accounts:
+
+- **Automatic linking at purchase:** When a logged-in user completes a Stripe checkout, their license is automatically linked to their account
+- **Automatic linking at registration:** If a user purchases before creating an account, the license is automatically discovered and linked when they register with the same email
+- **Manual activation:** Users can enter a license key manually on the Settings page
+- **Cross-device:** Licenses persist with the account and activate on login from any device
+
+---
+
+## Admin Dashboard
+
+The `/admin/users` endpoint (JSON API) is restricted to the configured `ADMIN_EMAIL` and returns:
+- User list with email, name, auth method, registration date, last login
+- License key (masked) and current tier for each user
 
 ---
 

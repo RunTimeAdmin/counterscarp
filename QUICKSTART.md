@@ -1,6 +1,6 @@
 # Counterscarp Engine — Quick Start Guide
 
-> **Version 4.4.0** | Smart contract security auditing for EVM + Solana
+> **Version 5.0.0** | Smart contract security auditing for EVM + Solana
 
 ---
 
@@ -15,9 +15,10 @@
 7. [Advanced Features](#advanced-features)
 8. [Offline / Air-Gapped Setup](#offline--air-gapped-setup)
 9. [License Tiers](#license-tiers)
-10. [Environment Variables](#environment-variables)
-11. [Updating](#updating)
-12. [Troubleshooting](#troubleshooting)
+10. [Web Application Authentication](#web-application-authentication)
+11. [Environment Variables](#environment-variables)
+12. [Updating](#updating)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -73,10 +74,10 @@ Adds `pytest`, `pytest-cov`, `mypy`, `pytest-benchmark`.
 
 ```bash
 # Pull official image
-docker pull tokenaudit/counterscarp-engine:4.4.0
+docker pull tokenaudit/counterscarp-engine:5.0.0
 
 # Run scan (bind-mount your project)
-docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:4.4.0 \
+docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:5.0.0 \
   --target /scan --report
 
 # With docker-compose
@@ -199,7 +200,7 @@ Below are all supported sections. Copy and paste the sections you need.
 ```toml
 [engine]
 name = "Counterscarp Security Engine"
-version = "4.4.0"
+version = "5.0.0"
 
 # Minimum severity that causes a non-zero exit code (CI gate)
 # Values: CRITICAL, HIGH, MEDIUM, LOW, INFO
@@ -872,6 +873,47 @@ env:
 
 ---
 
+## Web Application Authentication
+
+The Counterscarp Engine web application supports user accounts for personalized license management and access control.
+
+### Creating an Account
+
+Visit [app.counterscarp.io](https://app.counterscarp.io) and choose one of:
+
+- **Google Sign-In** — Click "Sign in with Google" for one-click authentication
+- **Email Registration** — Create an account with your name, email, and password at `/auth/register`
+
+### Automatic License Linking
+
+When you purchase a Pro license through Stripe Checkout:
+
+1. **If logged in** — Your license is automatically linked to your account. No manual key entry needed.
+2. **If not logged in** — The checkout success page prompts you to log in or create an account. Once you register with the same email used for purchase, your license is automatically discovered and linked.
+3. **Manual entry** — You can always enter a license key manually on the Settings page (`/settings`).
+
+### Cross-Device Access
+
+Your license is stored with your account. Log in from any device or browser and your Pro features activate automatically.
+
+### Settings Page
+
+Access `/settings` (requires login) to:
+
+- View your current license tier and features
+- Manually activate or remove a license key
+- Configure API keys and scan settings
+
+### Admin Dashboard
+
+The admin endpoint at `/admin/users` (restricted to the configured `ADMIN_EMAIL`) displays:
+
+- All registered users with email, name, and auth method
+- License key (masked) and tier for each user
+- Registration date and last login timestamp
+
+---
+
 ## Environment Variables
 
 | Variable | Description | Default |
@@ -975,7 +1017,7 @@ sudo usermod -aG docker $USER
 
 # Or run with --user flag
 docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan \
-  tokenaudit/counterscarp-engine:4.4.0 --target /scan --report
+  tokenaudit/counterscarp-engine:5.0.0 --target /scan --report
 ```
 
 ### OpenAI API key not set
@@ -1093,4 +1135,4 @@ Operations:
 
 ---
 
-*Counterscarp Engine v4.4.0 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*
+*Counterscarp Engine v5.0.0 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*

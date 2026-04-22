@@ -6,7 +6,7 @@
 [engine]
 # Engine-wide settings
 name = "Counterscarp Security Engine"
-version = "4.4.0"
+version = "5.0.0"
 
 # Minimum severity to fail CI/CD (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 fail_on_severity = "HIGH"

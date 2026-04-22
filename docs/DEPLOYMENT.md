@@ -7,6 +7,7 @@
 - [Nginx Reverse Proxy Configuration](#nginx-reverse-proxy-configuration)
 - [SSL Certificate Setup](#ssl-certificate-setup-lets-encrypt)
 - [Systemd Service Management](#systemd-service-management)
+  - [Authentication & Session Configuration](#authentication--session-configuration)
 - [Installing External Tools](#installing-external-tools)
 - [Update Procedure](#update-procedure)
 - [Monitoring and Troubleshooting](#monitoring-and-troubleshooting)
@@ -220,6 +221,36 @@ Environment=COUNTERSCARP_RESULTS_DIR=/opt/counterscarp-engine/results
 [Install]
 WantedBy=multi-user.target
 ```
+
+### Authentication & Session Configuration
+
+The following environment variables must be set for user authentication:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SESSION_SECRET` | Yes | Random secret key for session encryption (min 32 chars). Generate with: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `ADMIN_EMAIL` | Yes | Email address of the admin user (grants access to `/admin/users`) |
+| `GOOGLE_CLIENT_ID` | No | Google OAuth 2.0 client ID (from Google Cloud Console) |
+| `GOOGLE_CLIENT_SECRET` | No | Google OAuth 2.0 client secret |
+| `GOOGLE_REDIRECT_URI` | No | OAuth callback URL (default: `http://localhost:8001/auth/google/callback`). Set to `https://app.counterscarp.io/auth/google/callback` in production |
+
+Add these to the systemd unit file under `[Service]`:
+
+```ini
+Environment=SESSION_SECRET=<your-generated-secret>
+Environment=ADMIN_EMAIL=you@example.com
+Environment=GOOGLE_CLIENT_ID=<your-client-id>
+Environment=GOOGLE_CLIENT_SECRET=<your-client-secret>
+Environment=GOOGLE_REDIRECT_URI=https://app.counterscarp.io/auth/google/callback
+```
+
+**Google OAuth Setup:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create an OAuth 2.0 Client ID (Web Application type)
+3. Add authorized redirect URI: `https://your-domain.com/auth/google/callback`
+4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in your systemd service or environment
+
+---
 
 ### Service Commands
 

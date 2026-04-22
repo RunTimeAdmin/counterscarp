@@ -90,6 +90,14 @@ export COUNTERSCARP_PRO_LICENSE=your-key-here
 counterscarp-engine --target ./contracts --report --format html
 ```
 
+### Account-Based Licensing
+
+Create an account at [app.counterscarp.io](https://app.counterscarp.io) using Google or email to manage your license:
+
+- **Automatic linking** — Purchase Pro and your license is automatically linked to your account
+- **Cross-device access** — Log in on any device and your Pro features activate automatically
+- **Admin dashboard** — View registered users and license status at `/admin/users`
+
 ---
 
 ## Documentation
@@ -122,6 +130,6 @@ Threat intelligence: Code4rena · Immunefi · Solodit · Neodyme · OtterSec · 
 
 ---
 
-**Version:** 4.4.0 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
+**Version:** 5.0.0 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
 
 **⭐ If this helped you find bugs, please star the repo!**
