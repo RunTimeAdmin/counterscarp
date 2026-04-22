@@ -132,6 +132,9 @@ class UserManager:
                 "created_at": now,
                 "last_login": now,
                 "auth_method": auth_method,
+                "license_key": None,
+                "stripe_customer_id": None,
+                "stripe_subscription_id": None,
             }
 
             db["users"].append(user)
@@ -146,6 +149,9 @@ class UserManager:
             db = self._load_db()
         for user in db["users"]:
             if user["email"] == email:
+                user.setdefault("license_key", None)
+                user.setdefault("stripe_customer_id", None)
+                user.setdefault("stripe_subscription_id", None)
                 return user
         return None
 
@@ -155,6 +161,9 @@ class UserManager:
             db = self._load_db()
         for user in db["users"]:
             if user.get("google_id") == google_id:
+                user.setdefault("license_key", None)
+                user.setdefault("stripe_customer_id", None)
+                user.setdefault("stripe_subscription_id", None)
                 return user
         return None
 
@@ -164,6 +173,9 @@ class UserManager:
             db = self._load_db()
         for user in db["users"]:
             if user["id"] == user_id:
+                user.setdefault("license_key", None)
+                user.setdefault("stripe_customer_id", None)
+                user.setdefault("stripe_subscription_id", None)
                 return user
         return None
 
@@ -211,6 +223,76 @@ class UserManager:
             }
             for u in db["users"]
         ]
+
+    def set_license_key(
+        self,
+        user_id: str,
+        license_key: str,
+        stripe_customer_id: str = None,
+        stripe_subscription_id: str = None,
+    ) -> bool:
+        """Attach a license key (and optional Stripe IDs) to a user.
+
+        Args:
+            user_id: The user's UUID.
+            license_key: The license key string to store.
+            stripe_customer_id: Optional Stripe customer ID.
+            stripe_subscription_id: Optional Stripe subscription ID.
+
+        Returns:
+            True if the user was found and updated, False otherwise.
+        """
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user["license_key"] = license_key
+                    if stripe_customer_id is not None:
+                        user["stripe_customer_id"] = stripe_customer_id
+                    if stripe_subscription_id is not None:
+                        user["stripe_subscription_id"] = stripe_subscription_id
+                    self._write_db(db)
+                    return True
+        return False
+
+    def clear_license_key(self, user_id: str) -> bool:
+        """Remove the license key and Stripe IDs from a user.
+
+        Args:
+            user_id: The user's UUID.
+
+        Returns:
+            True if the user was found and updated, False otherwise.
+        """
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user["license_key"] = None
+                    user["stripe_customer_id"] = None
+                    user["stripe_subscription_id"] = None
+                    self._write_db(db)
+                    return True
+        return False
+
+    def find_by_license_key(self, license_key: str) -> Optional[Dict]:
+        """Return the user dict whose ``license_key`` matches, or None.
+
+        Useful for checking whether a license key is already linked to an
+        existing account.
+
+        Args:
+            license_key: The license key to search for.
+
+        Returns:
+            The matching user dict, or None if no match is found.
+        """
+        with self._file_lock:
+            db = self._load_db()
+        for user in db["users"]:
+            if user.get("license_key") == license_key:
+                return user
+        return None
 
 
 # ---------------------------------------------------------------------------

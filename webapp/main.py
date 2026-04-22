@@ -9,7 +9,7 @@ import subprocess
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
@@ -24,6 +24,7 @@ from fastapi.templating import Jinja2Templates
 
 from starlette.middleware.sessions import SessionMiddleware
 from webapp.auth import auth_router, admin_router, get_current_user
+from webapp.user_manager import user_manager
 from webapp.config import (
     ALLOWED_EXTENSIONS,
     BASE_DIR,
@@ -668,6 +669,30 @@ async def checkout_success(request: Request):
     """Show the checkout success page with the license key."""
     session_id = request.query_params.get("session_id", "")
     license_info = get_session_license_key(session_id)
+
+    auto_linked = False
+    prompt_login = False
+
+    if license_info:
+        current_user = get_current_user(request)
+        if current_user:
+            # Auto-link the license to the logged-in user's account
+            license_key = license_info.get("key", "")
+            if license_key and not current_user.get("license_key"):
+                from webapp.user_manager import user_manager
+                user_manager.set_license_key(
+                    current_user["id"],
+                    license_key,
+                    stripe_customer_id=license_info.get("stripe_customer_id"),
+                    stripe_subscription_id=license_info.get("stripe_subscription_id")
+                )
+                # Set env var for immediate session use
+                os.environ["COUNTERSCARP_PRO_LICENSE"] = license_key
+                request.session["user_license"] = license_key
+                auto_linked = True
+        else:
+            prompt_login = True
+
     return templates.TemplateResponse(
         request, "checkout_success.html",
         context={
@@ -682,6 +707,8 @@ async def checkout_success(request: Request):
                 license_info.get("customer_email", "")
                 if license_info else ""
             ),
+            "auto_linked": auto_linked,
+            "prompt_login": prompt_login,
         },
     )
 
@@ -862,9 +889,12 @@ async def settings_page(request: Request):
 
     # License context for the template
     license_tier = _license.get_tier()
-    license_key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
-    license_key_set = bool(license_key)
-    license_masked_key = _mask_license_key(license_key) if license_key else ""
+    user_license_key = current_user.get("license_key") if current_user else None
+    # Fallback to env var for backward compatibility
+    if not user_license_key:
+        user_license_key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
+    license_key_set = bool(user_license_key)
+    license_masked_key = _mask_license_key(user_license_key) if user_license_key else ""
     license_features = _get_tier_features(license_tier)
 
     return templates.TemplateResponse(
@@ -947,6 +977,19 @@ async def license_status(request: Request):
 LICENSE_PREFIXES = ("SE-DEV-", "SE-PRO-", "SE-TEAM-", "SE-ENT-")
 
 
+def find_license_in_db(license_key: str) -> Optional[Dict]:
+    """Look up a license entry in licenses.json by key."""
+    licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
+    if not licenses_path.exists():
+        return None
+    with open(licenses_path, "r") as f:
+        data = json.load(f)
+    for lic in data.get("licenses", []):
+        if lic.get("key") == license_key:
+            return lic
+    return None
+
+
 def _mask_license_key(key: str) -> str:
     """Mask a license key for display (show first 7 chars and last 4)."""
     if not key or len(key) < 12:
@@ -970,7 +1013,8 @@ def _get_tier_features(tier: str) -> list[str]:
 @app.post("/settings/license-key")
 async def save_license_key(request: Request):
     """Save the license key to env and persist it."""
-    if not get_current_user(request):
+    current_user = get_current_user(request)
+    if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     form = await request.form()
     license_key = form.get("license_key", "").strip()
@@ -991,25 +1035,43 @@ async def save_license_key(request: Request):
             status_code=400,
         )
 
-    # Set environment variable
+    # Verify the key exists in licenses.json, is not revoked, and is not expired
+    lic_entry = find_license_in_db(license_key)
+    if not lic_entry:
+        return JSONResponse(
+            {"success": False, "error": "License key not found. Please check your key and try again."},
+            status_code=400,
+        )
+    if lic_entry.get("revoked"):
+        return JSONResponse(
+            {"success": False, "error": "This license key has been revoked."},
+            status_code=400,
+        )
+    expires_at = lic_entry.get("expires_at")
+    if expires_at:
+        from datetime import date
+        try:
+            if date.fromisoformat(expires_at) < date.today():
+                return JSONResponse(
+                    {"success": False, "error": "This license key has expired."},
+                    status_code=400,
+                )
+        except ValueError:
+            pass
+
+    # Ensure the key is not already linked to a different user
+    existing_owner = user_manager.find_by_license_key(license_key)
+    if existing_owner and existing_owner["id"] != current_user["id"]:
+        return JSONResponse(
+            {"success": False, "error": "This license key is already linked to another account."},
+            status_code=400,
+        )
+
+    # Persist the key to the user's account record
+    user_manager.set_license_key(current_user["id"], license_key)
+
+    # Also set in the current session's env for LicenseManager compatibility
     os.environ["COUNTERSCARP_PRO_LICENSE"] = license_key
-
-    # Persist to data/.env.local
-    env_file = Path(__file__).parent.parent / "data" / ".env.local"
-    env_file.parent.mkdir(parents=True, exist_ok=True)
-
-    # Read existing vars, update, write back
-    env_vars: dict[str, str] = {}
-    if env_file.exists():
-        for line in env_file.read_text().splitlines():
-            if "=" in line and not line.startswith("#"):
-                k, v = line.split("=", 1)
-                env_vars[k.strip()] = v.strip()
-
-    env_vars["COUNTERSCARP_PRO_LICENSE"] = license_key
-    env_file.write_text(
-        "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n"
-    )
 
     # Clear LicenseManager cache so it picks up the new key
     _license.clear_cache()
@@ -1030,29 +1092,15 @@ async def save_license_key(request: Request):
 @app.post("/settings/remove-license")
 async def remove_license(request: Request):
     """Remove the license key from env and persistence."""
-    if not get_current_user(request):
+    current_user = get_current_user(request)
+    if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
-    # Remove from environment
-    if "COUNTERSCARP_PRO_LICENSE" in os.environ:
-        del os.environ["COUNTERSCARP_PRO_LICENSE"]
 
-    # Remove from data/.env.local
-    env_file = Path(__file__).parent.parent / "data" / ".env.local"
-    if env_file.exists():
-        env_vars: dict[str, str] = {}
-        for line in env_file.read_text().splitlines():
-            if "=" in line and not line.startswith("#"):
-                k, v = line.split("=", 1)
-                if k.strip() != "COUNTERSCARP_PRO_LICENSE":
-                    env_vars[k.strip()] = v.strip()
+    # Clear the license key from the user's account record
+    user_manager.clear_license_key(current_user["id"])
 
-        if env_vars:
-            env_file.write_text(
-                "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n"
-            )
-        else:
-            # No vars left, remove file or keep empty
-            env_file.write_text("")
+    # Remove from current session's environment
+    os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
 
     # Clear LicenseManager cache
     _license.clear_cache()
@@ -1068,9 +1116,15 @@ async def remove_license(request: Request):
 @app.get("/settings/license-status")
 async def get_license_status(request: Request):
     """Return current license status for the settings page."""
-    tier = _license.get_tier()
-    key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
+    current_user = get_current_user(request)
+    # Read license key from user record, fall back to env var
+    key = ""
+    if current_user:
+        key = current_user.get("license_key") or ""
+    if not key:
+        key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
 
+    tier = _license.get_tier()
     masked_key = _mask_license_key(key) if key else ""
     features = _get_tier_features(tier)
 

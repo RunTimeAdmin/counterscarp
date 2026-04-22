@@ -378,9 +378,9 @@
 
         <!-- License Configuration Card (visible to all users) -->
         <div class="settings-card" id="licenseCard">
-            <h2><span class="card-icon">&#128274;</span> License Configuration</h2>
+            <h2><span class="card-icon">&#128274;</span> Your License</h2>
             <p class="card-desc">
-                Activate your Developer, Pro, Team, or Enterprise license to unlock premium features.
+                Activate your Developer, Pro, Team, or Enterprise license to unlock premium features for your account.
             </p>
 
             <!-- Current license status -->
@@ -399,6 +399,12 @@
                 <span class="masked-key" id="licenseMaskedKey">{{ license_masked_key }}</span>
                 {% endif %}
             </div>
+
+            {% if license_key_set %}
+            <p style="color: #666; font-size: 0.85rem; margin-top: 0.5rem;">
+                Your license is linked to your account and will be automatically activated when you log in.
+            </p>
+            {% endif %}
 
             <!-- Features unlocked display -->
             {% if license_key_set %}

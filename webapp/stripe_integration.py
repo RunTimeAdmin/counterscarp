@@ -15,6 +15,8 @@ try:
 except ImportError:
     stripe = None  # type: ignore
 
+from webapp.user_manager import user_manager
+
 # ---------------------------------------------------------------------------
 # Stripe configuration — loaded from environment variables
 # ---------------------------------------------------------------------------
@@ -266,6 +268,19 @@ def handle_checkout_completed(session: Dict[str, Any]) -> Dict[str, Any]:
     entry["stripe_subscription_id"] = session.get("subscription", "")
     entry["stripe_customer_id"] = session.get("customer", "")
     entry["billing_interval"] = product_info["interval"]
+
+    # Auto-link license to user account if registered
+    customer_email = entry.get("customer_email", "").lower()
+    if customer_email:
+        existing_user = user_manager.get_by_email(customer_email)
+        if existing_user:
+            entry["user_id"] = existing_user["id"]
+            user_manager.set_license_key(
+                existing_user["id"],
+                entry["key"],
+                stripe_customer_id=entry.get("stripe_customer_id"),
+                stripe_subscription_id=entry.get("stripe_subscription_id")
+            )
 
     # Persist to license DB
     license_manager._save_license_to_db(entry)

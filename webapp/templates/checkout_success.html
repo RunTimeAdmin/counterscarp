@@ -191,6 +191,20 @@ key = "{{ license_key }}"</div>
                 </p>
             </div>
 
+            {% if auto_linked %}
+            <div style="background: rgba(40, 167, 69, 0.15); border: 1px solid #28a745; border-radius: 8px; padding: 1rem 1.5rem; margin-top: 1.5rem;">
+                <p style="color: #28a745; margin: 0; font-weight: 600;">License automatically linked to your account!</p>
+                <p style="color: #a0a0a0; margin: 0.5rem 0 0 0; font-size: 0.9rem;">Your Pro features are now active. You can manage your license in <a href="/settings" style="color: #00d4ff;">Settings</a>.</p>
+            </div>
+            {% endif %}
+
+            {% if prompt_login %}
+            <div style="background: rgba(0, 212, 255, 0.1); border: 1px solid #00d4ff; border-radius: 8px; padding: 1rem 1.5rem; margin-top: 1.5rem;">
+                <p style="color: #00d4ff; margin: 0; font-weight: 600;">Want to link this license to your account?</p>
+                <p style="color: #a0a0a0; margin: 0.5rem 0 0 0; font-size: 0.9rem;"><a href="/auth/login" style="color: #00d4ff;">Log in</a> or <a href="/auth/register" style="color: #00d4ff;">create an account</a> to automatically activate your license on any device.</p>
+            </div>
+            {% endif %}
+
             <a href="/" class="btn-continue">
                 Start using your features
             </a>

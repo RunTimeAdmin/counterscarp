@@ -83,6 +83,11 @@ async def login_submit(
     if user:
         request.session["user_id"] = user["id"]
         user_manager.update_last_login(user["id"])
+        # Auto-apply user's license if they have one
+        if user.get("license_key"):
+            import os
+            os.environ["COUNTERSCARP_PRO_LICENSE"] = user["license_key"]
+            request.session["user_license"] = user["license_key"]
         return RedirectResponse(url="/", status_code=302)
     return templates.TemplateResponse(
         request,
@@ -148,6 +153,35 @@ async def register_submit(
         )
 
     request.session["user_id"] = user["id"]
+
+    # Check for any existing license purchased with this email
+    import json
+    from pathlib import Path
+    licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
+    if licenses_path.exists():
+        with open(licenses_path, "r") as f:
+            licenses_data = json.load(f)
+        for lic in licenses_data.get("licenses", []):
+            if lic.get("customer_email", "").lower() == email.lower() and not lic.get("user_id"):
+                user_manager.set_license_key(
+                    user["id"],
+                    lic["key"],
+                    stripe_customer_id=lic.get("stripe_customer_id"),
+                    stripe_subscription_id=lic.get("stripe_subscription_id")
+                )
+                # Also update the license entry with user_id
+                lic["user_id"] = user["id"]
+                with open(licenses_path, "w") as f:
+                    json.dump(licenses_data, f, indent=2)
+                break
+
+    # Refresh user data after potential license link
+    user = user_manager.get_by_id(user["id"])
+    if user.get("license_key"):
+        import os
+        os.environ["COUNTERSCARP_PRO_LICENSE"] = user["license_key"]
+        request.session["user_license"] = user["license_key"]
+
     return RedirectResponse(url="/", status_code=302)
 
 
@@ -201,9 +235,34 @@ async def google_callback(request: Request):
                     google_id=sub,
                     auth_method="google",
                 )
+                # Check for any existing license purchased with this email
+                import json
+                from pathlib import Path
+                licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
+                if licenses_path.exists():
+                    with open(licenses_path, "r") as f:
+                        licenses_data = json.load(f)
+                    for lic in licenses_data.get("licenses", []):
+                        if lic.get("customer_email", "").lower() == email.lower() and not lic.get("user_id"):
+                            user_manager.set_license_key(
+                                user["id"],
+                                lic["key"],
+                                stripe_customer_id=lic.get("stripe_customer_id"),
+                                stripe_subscription_id=lic.get("stripe_subscription_id")
+                            )
+                            lic["user_id"] = user["id"]
+                            with open(licenses_path, "w") as f:
+                                json.dump(licenses_data, f, indent=2)
+                            break
 
         request.session["user_id"] = user["id"]
         user_manager.update_last_login(user["id"])
+        # Auto-apply user's license if they have one
+        user = user_manager.get_by_id(user["id"])
+        if user.get("license_key"):
+            import os
+            os.environ["COUNTERSCARP_PRO_LICENSE"] = user["license_key"]
+            request.session["user_license"] = user["license_key"]
         return RedirectResponse(url="/", status_code=302)
 
     except Exception as exc:  # pylint: disable=broad-except
@@ -217,6 +276,10 @@ async def google_callback(request: Request):
 @auth_router.get("/logout")
 async def logout(request: Request):
     """Clear session and redirect to home."""
+    # Clear user's license from env if it was set
+    if request.session.get("user_license"):
+        import os
+        os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
     request.session.clear()
     return RedirectResponse(url="/", status_code=302)
 
