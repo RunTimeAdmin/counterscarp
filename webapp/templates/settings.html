@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
-{% block title %}Settings - Garrison Engine{% endblock %}
+{% block title %}Settings - Counterscarp Engine{% endblock %}
 
 {% block content %}
 <style>
@@ -278,7 +278,7 @@
         position: relative;
     }
     .features-list li::before {
-        content: "✓";
+        content: "Γ£ô";
         position: absolute;
         left: 0;
         color: #28a745;
@@ -359,7 +359,7 @@
 <div class="container">
     <div class="settings-container">
         <h1>Settings</h1>
-        <p class="settings-subtitle">Configure API keys and integrations for Garrison Engine.</p>
+        <p class="settings-subtitle">Configure API keys and integrations for Counterscarp Engine.</p>
 
         <!-- License Configuration Card (visible to all users) -->
         <div class="settings-card" id="licenseCard">
@@ -495,7 +495,7 @@
                 <span class="note-icon">&#128274;</span>
                 <span class="note-text">
                     <strong>Your API key is stored locally on this server and never shared.</strong>
-                    LLM costs are billed directly to your OpenAI account. Garrison Engine does
+                    LLM costs are billed directly to your OpenAI account. Counterscarp Engine does
                     not proxy or pay for your API usage. If you set <code>OPENAI_API_KEY</code>
                     as a system environment variable (e.g. via systemd), it takes priority over
                     the key saved here.

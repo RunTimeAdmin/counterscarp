@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
-{% block title %}Purchase Complete - Garrison Engine{% endblock %}
+{% block title %}Purchase Complete - Counterscarp Engine{% endblock %}
 
 {% block content %}
 <style>
@@ -152,11 +152,11 @@
             <div class="success-icon">&#10004;</div>
             <h1 class="success-header">Purchase Complete!</h1>
             <p class="success-subtitle">
-                Your Garrison Engine license is ready.
+                Your Counterscarp Engine license is ready.
             </p>
 
             <div class="license-card">
-                <h3>Your Garrison Engine License</h3>
+                <h3>Your Counterscarp Engine License</h3>
                 <div class="license-tier">{{ tier|upper }} Tier</div>
 
                 <div class="license-key-box">
@@ -173,12 +173,12 @@
                         <div class="option-label">
                             Option 1: Environment Variable
                         </div>
-                        <div class="option-code" id="envCmd">export GARRISON_PRO_LICENSE={{ license_key }}</div>
+                        <div class="option-code" id="envCmd">export COUNTERSCARP_PRO_LICENSE={{ license_key }}</div>
                     </div>
 
                     <div class="activation-option">
                         <div class="option-label">
-                            Option 2: Config File (garrison.toml)
+                            Option 2: Config File (counterscarp.toml)
                         </div>
                         <div class="option-code">[license]
 key = "{{ license_key }}"</div>
@@ -186,7 +186,7 @@ key = "{{ license_key }}"</div>
                 </div>
 
                 <p class="email-note">
-                    <strong>Save your license key now</strong> — this is the only time it will be displayed.
+                    <strong>Save your license key now</strong> ΓÇö this is the only time it will be displayed.
                     Copy it to a safe location before closing this page.
                 </p>
             </div>
@@ -205,9 +205,9 @@ key = "{{ license_key }}"</div>
                 </p>
                 <p>
                     If the issue persists, contact
-                    <a href="mailto:support@garrisonsec.com"
+                    <a href="mailto:contact@counterscarp.io"
                        style="color:#667eea">
-                        support@garrisonsec.com
+                        contact@counterscarp.io
                     </a>.
                 </p>
             </div>
