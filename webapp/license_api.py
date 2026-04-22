@@ -75,19 +75,32 @@ class LicenseInfoResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+_DEFAULT_DB: dict = {"licenses": [], "version": 1}
+
+
 def _load_db() -> dict:
     """Load the licenses database from disk."""
     if not _LICENSE_DB_PATH.exists():
         return {"licenses": [], "version": 1}
     with open(_LICENSE_DB_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        db = json.load(f)
+    # Validate structure — guard against corrupted files
+    if not isinstance(db.get("licenses"), list):
+        logger.error(
+            "licenses.json has invalid structure (expected 'licenses' list); "
+            "returning default empty database"
+        )
+        return {"licenses": [], "version": 1}
+    return db
 
 
 def _save_db(db: dict) -> None:
-    """Persist the licenses database to disk."""
+    """Persist the licenses database to disk (atomic write)."""
     _LICENSE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(_LICENSE_DB_PATH, "w", encoding="utf-8") as f:
+    temp_path = _LICENSE_DB_PATH.with_suffix(".tmp")
+    with open(temp_path, "w", encoding="utf-8") as f:
         json.dump(db, f, indent=2)
+    temp_path.replace(_LICENSE_DB_PATH)
 
 
 def _mask_key(key: str) -> str:
@@ -111,101 +124,115 @@ license_router = APIRouter(prefix="/api/license", tags=["license"])
 @license_router.post("/validate", response_model=ValidateResponse)
 def validate_license(req: ValidateRequest):
     """Validate a license key and manage machine activations."""
-    with _file_lock:
-        db = _load_db()
-
-        # 1. Key exists
-        license_entry = None
-        for entry in db["licenses"]:
-            if entry["key"] == req.license_key:
-                license_entry = entry
-                break
-
-        if license_entry is None:
-            return ValidateResponse(valid=False, error="Invalid license key")
-
-        # 2. Key not revoked
-        if license_entry.get("revoked", False):
-            return ValidateResponse(valid=False, error="License revoked")
-
-        # 3. Key not expired (with Stripe subscription fallback)
-        expires_at = license_entry.get("expires_at", "")
-        license_appears_expired = False
-        if expires_at:
+    try:
+        with _file_lock:
             try:
-                exp_dt = datetime.fromisoformat(
-                    expires_at.replace("Z", "+00:00")
+                db = _load_db()
+            except json.JSONDecodeError as exc:
+                logger.error("License database JSON is corrupted: %s", exc)
+                return ValidateResponse(valid=False, error="License database error")
+            except (OSError, PermissionError) as exc:
+                logger.error("License database file error: %s", exc)
+                return ValidateResponse(
+                    valid=False, error="License service temporarily unavailable"
                 )
-                if exp_dt < datetime.now(timezone.utc):
-                    license_appears_expired = True
-            except (ValueError, TypeError):
-                pass  # If we can't parse, allow through
 
-        if license_appears_expired and license_entry.get("stripe_subscription_id"):
-            # Missed renewal webhook — check Stripe directly
-            try:
-                import stripe
-                stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
-                if stripe.api_key:
-                    sub = stripe.Subscription.retrieve(
-                        license_entry["stripe_subscription_id"]
+            # 1. Key exists
+            license_entry = None
+            for entry in db["licenses"]:
+                if entry["key"] == req.license_key:
+                    license_entry = entry
+                    break
+
+            if license_entry is None:
+                return ValidateResponse(valid=False, error="Invalid license key")
+
+            # 2. Key not revoked
+            if license_entry.get("revoked", False):
+                return ValidateResponse(valid=False, error="License revoked")
+
+            # 3. Key not expired (with Stripe subscription fallback)
+            expires_at = license_entry.get("expires_at", "")
+            license_appears_expired = False
+            if expires_at:
+                try:
+                    exp_dt = datetime.fromisoformat(
+                        expires_at.replace("Z", "+00:00")
                     )
-                    if sub.status == "active":
-                        # Stripe says still active — extend local expiry
-                        interval = license_entry.get("billing_interval", "month")
-                        now = datetime.now(timezone.utc)
-                        new_expiry = now + timedelta(
-                            days=365 if interval == "year" else 30
-                        )
-                        from webapp.stripe_integration import update_license_in_db
-                        update_license_in_db(
-                            license_entry["key"],
-                            {"expires_at": new_expiry.strftime("%Y-%m-%d")},
-                        )
-                        logger.info(
-                            "License %s... renewed via Stripe status check",
-                            license_entry["key"][:12],
-                        )
-                        license_appears_expired = False
-            except Exception as e:
-                logger.warning("Stripe subscription check failed: %s", e)
-                # Fall through to expiry decision below
+                    if exp_dt < datetime.now(timezone.utc):
+                        license_appears_expired = True
+                except (ValueError, TypeError):
+                    pass  # If we can't parse, allow through
 
-        if license_appears_expired:
-            return ValidateResponse(valid=False, error="License expired")
+            if license_appears_expired and license_entry.get("stripe_subscription_id"):
+                # Missed renewal webhook — check Stripe directly
+                try:
+                    import stripe
+                    stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+                    if stripe.api_key:
+                        sub = stripe.Subscription.retrieve(
+                            license_entry["stripe_subscription_id"]
+                        )
+                        if sub.status == "active":
+                            # Stripe says still active — extend local expiry
+                            interval = license_entry.get("billing_interval", "month")
+                            now = datetime.now(timezone.utc)
+                            new_expiry = now + timedelta(
+                                days=365 if interval == "year" else 30
+                            )
+                            from webapp.stripe_integration import update_license_in_db
+                            update_license_in_db(
+                                license_entry["key"],
+                                {"expires_at": new_expiry.strftime("%Y-%m-%d")},
+                            )
+                            logger.info(
+                                "License %s... renewed via Stripe status check",
+                                license_entry["key"][:12],
+                            )
+                            license_appears_expired = False
+                except Exception as e:
+                    logger.warning("Stripe subscription check failed: %s", e)
+                    # Fall through to expiry decision below
 
-        # 4. Machine activation
-        activated: list = license_entry.get("activated_machines", [])
-        max_act = license_entry.get("max_activations", 1)
+            if license_appears_expired:
+                return ValidateResponse(valid=False, error="License expired")
 
-        if req.machine_id in activated:
-            # Existing activation — still valid
-            pass
-        elif len(activated) < max_act:
-            # New activation slot available
-            activated.append(req.machine_id)
-            license_entry["activated_machines"] = activated
-            _save_db(db)
-        else:
+            # 4. Machine activation
+            activated: list = license_entry.get("activated_machines", [])
+            max_act = license_entry.get("max_activations", 1)
+
+            if req.machine_id in activated:
+                # Existing activation — still valid
+                pass
+            elif len(activated) < max_act:
+                # New activation slot available
+                activated.append(req.machine_id)
+                license_entry["activated_machines"] = activated
+                _save_db(db)
+            else:
+                return ValidateResponse(
+                    valid=False, error="Maximum activations reached"
+                )
+
+            # Determine features based on tier
+            tier = license_entry.get("tier", "pro")
+            if tier in ("pro", "enterprise"):
+                features = list(ALL_PRO_FEATURES)
+            else:
+                features = []
+
             return ValidateResponse(
-                valid=False, error="Maximum activations reached"
+                valid=True,
+                tier=tier,
+                expires_at=license_entry.get("expires_at"),
+                features=features,
+                max_activations=max_act,
+                current_activations=len(activated),
             )
 
-        # Determine features based on tier
-        tier = license_entry.get("tier", "pro")
-        if tier in ("pro", "enterprise"):
-            features = list(ALL_PRO_FEATURES)
-        else:
-            features = []
-
-        return ValidateResponse(
-            valid=True,
-            tier=tier,
-            expires_at=license_entry.get("expires_at"),
-            features=features,
-            max_activations=max_act,
-            current_activations=len(activated),
-        )
+    except Exception as exc:
+        logger.exception("Unexpected error in validate_license: %s", exc)
+        return ValidateResponse(valid=False, error="License validation failed")
 
 
 @license_router.post("/deactivate", response_model=DeactivateResponse)
