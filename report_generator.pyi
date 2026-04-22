@@ -69,6 +69,11 @@ def save_sarif_report(
     findings: List[Finding], output_path: str, metadata: Optional[Dict[str, Any]] = None
 ) -> str: ...
 def generate_markdown_report(report: AuditReport, output_path: str) -> str: ...
+def generate_pdf_report(
+    report: AuditReport,
+    output_path: Optional[str] = None,
+    logo_path: Optional[str] = None,
+) -> Optional[Any]: ...
 def aggregate_findings_from_orchestrator(
     static_results: List[Dict[str, Any]],
     heuristic_results: List[Dict[str, Any]],

@@ -34,7 +34,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          pip install -e ".[dev,web]"
           solc-select install 0.8.19
           solc-select use 0.8.19
       
@@ -85,7 +85,7 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          pip install -e ".[dev,web]"
       - name: Import smoke test
         run: |
           python -c "
