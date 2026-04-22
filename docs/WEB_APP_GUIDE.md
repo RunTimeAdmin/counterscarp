@@ -14,6 +14,8 @@
 - [Per-User License Management](#per-user-license-management)
 - [Admin Dashboard](#admin-dashboard)
 - [API Endpoints Reference](#api-endpoints-reference)
+- [API Rate Limiting](#api-rate-limiting)
+- [CORS Policy](#cors-policy)
 
 ---
 
@@ -136,6 +138,25 @@ When the AI Audit Copilot is available, it provides:
 
 **Note:** The AI Copilot uses local sentence-transformers embeddings by default. No API keys are required. Install with `pip install "counterscarp-engine[ai]"`.
 
+### Per-Scan Report Directory
+
+Each scan creates an isolated output directory so multiple scans of the same project never overwrite each other:
+
+```
+reports/{ProjectName}_{YYYY-MM-DD}_{session}/
+├── audit_report.md
+├── audit_report.html
+├── ACTION_PLAN.md
+├── scan.log
+└── exploits/          ← Exploit PoC files (Pro+ only)
+```
+
+- `{ProjectName}` is the name entered at upload time
+- `{YYYY-MM-DD}` is the scan date
+- `{session}` is a short unique identifier for the run
+
+Running the same project on different days (or multiple times in a day) creates separate directories; no results are overwritten.
+
 ### Exploit PoC Files
 
 When scanning with a Pro (or higher) license, the results page includes auto-generated Foundry exploit test files for critical and high-severity findings.
@@ -143,6 +164,7 @@ When scanning with a Pro (or higher) license, the results page includes auto-gen
 - Each CRITICAL or HIGH finding includes a link to a `.t.sol` Foundry test that demonstrates the attack vector
 - The test file is runnable with `forge test` against a local Anvil fork — no manual scaffolding required
 - Individual PoC files can be downloaded from the finding detail panel, or you can download the full `exploits/` directory as a ZIP from the results page footer
+- Exploit PoCs are stored in the `exploits/` subdirectory within the per-scan report folder
 
 **Requirements:** Foundry must be installed locally to execute the generated tests. See [foundry.paradigm.xyz](https://foundry.paradigm.xyz) for installation instructions.
 
@@ -212,6 +234,8 @@ Licenses are linked to individual user accounts:
 The `/admin/users` endpoint (JSON API) is restricted to the configured `ADMIN_EMAIL` and returns:
 - User list with email, name, auth method, registration date, last login
 - License key (masked) and current tier for each user
+
+**Authentication required:** `/api/license/info` requires an active session **and** the logged-in user's email must match the `ADMIN_EMAIL` environment variable. All other authenticated users receive `403 Forbidden`.
 
 ---
 
@@ -293,6 +317,38 @@ Health check endpoint.
   "timestamp": "2024-01-15T10:30:00.000000"
 }
 ```
+
+---
+
+### API Rate Limiting
+
+Rate limiting is enforced per IP address on license and webhook endpoints to protect against abuse.
+
+| Endpoint | Method | Limit |
+|----------|--------|-------|
+| `/api/license/validate` | POST | 10 requests per minute |
+| `/api/license/deactivate` | POST | 5 requests per minute |
+| `/api/stripe/webhook` | POST | 30 requests per minute |
+
+**Response when exceeded:** `HTTP 429`
+
+```json
+{"detail": "Rate limit exceeded. Try again later."}
+```
+
+Rate limit windows reset after **60 seconds**. If you are hitting limits from a CI/CD pipeline, consider caching validation results locally rather than re-validating on every run.
+
+---
+
+### CORS Policy
+
+The API accepts cross-origin requests only from the following origins:
+
+- `https://app.counterscarp.io`
+- `https://counterscarp.io`
+- `http://localhost` (any port, for local development)
+
+Requests from any other origin are rejected with `HTTP 403`. If you are self-hosting and need to add a custom origin, configure the `ALLOWED_ORIGINS` environment variable before starting the server.
 
 ---
 

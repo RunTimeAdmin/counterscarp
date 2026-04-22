@@ -101,6 +101,18 @@ counterscarp --target ./contracts --report --project-name "MyProtocol"
 
 This produces both an HTML and Markdown audit report with risk scoring.
 
+**Output location:** Reports are organized into per-scan directories under `reports/`:
+
+```
+reports/MyProtocol_2026-04-22_{session}/
+├── audit_report.md
+├── audit_report.html
+├── ACTION_PLAN.md
+└── scan.log
+```
+
+Each scan creates a new isolated directory — previous results are never overwritten. See [Report Formats](REPORT_FORMATS.md#per-scan-report-directories) for full details.
+
 ### 3. Use a config file
 
 ```bash
@@ -145,6 +157,12 @@ Open **http://localhost:8001** in your browser.
 ### Production Deployment
 
 For production deployment with nginx + SSL, see the [Deployment Guide](DEPLOYMENT.md).
+
+> **SESSION_SECRET requirement:** Production web deployments must set the `SESSION_SECRET` environment variable to a strong random string (minimum 32 characters). This secret signs session cookies. Without it, the server will refuse to start or fall back to an insecure default. Generate one with:
+>
+> ```bash
+> python -c "import secrets; print(secrets.token_hex(32))"
+> ```
 
 ---
 

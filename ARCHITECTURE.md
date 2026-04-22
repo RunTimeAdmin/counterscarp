@@ -930,6 +930,72 @@ flowchart LR
 
 ---
 
+## 9. v5.0.1 API Security Architecture
+
+This section documents the security hardening layer introduced in v5.0.1 for the web application API (`webapp/`).
+
+### 9.1 Rate Limiting
+
+The web app uses a **thread-safe in-memory sliding window** rate limiter (`webapp/rate_limiter.py`) with per-IP tracking. Each incoming request's client IP is extracted from the `X-Forwarded-For` header (with fallback to the direct connection IP). A rolling window of timestamps is maintained per IP per endpoint bucket; requests exceeding the limit within the window receive an immediate `HTTP 429 Too Many Requests` response.
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `/api/validate-license` | 10 req | 60 s |
+| `/api/deactivate-license` | 5 req | 60 s |
+| `/api/webhook` (Stripe) | 30 req | 60 s |
+
+```mermaid
+flowchart LR
+    REQ["Incoming Request"] --> IP["Extract Client IP"]
+    IP --> BUCKET["Endpoint Bucket Lookup"]
+    BUCKET --> WINDOW["Sliding Window Check"]
+    WINDOW -->|Under limit| PASS["Pass to Handler"]
+    WINDOW -->|Over limit| R429["HTTP 429"]
+    PASS --> HANDLER["API Handler"]
+    HANDLER --> RESP["Response"]
+```
+
+**Key design properties:**
+- Window state is held in a `threading.Lock`-protected `defaultdict`; no Redis dependency required.
+- Expired timestamps are pruned on each check to bound memory growth.
+- Rate-limit state is cleared on application startup via a startup hook (also clears stale `reports/` and `uploads/` directories).
+
+### 9.2 Input Validation Layer
+
+All API request bodies are modelled with **Pydantic v2** using `StringConstraints` to enforce length and pattern rules before business logic executes. This prevents oversized payloads, injection via abnormally long strings, and missing-field errors reaching the engine core.
+
+Examples of enforced constraints:
+
+| Field | Constraint |
+|-------|-----------|
+| License key | `max_length=128`, `strip_whitespace=True` |
+| Project name | `max_length=64`, regex `[A-Za-z0-9_\-]+` |
+| File path inputs | `max_length=512` |
+| Webhook payload | validated against Stripe signature before deserialization |
+
+### 9.3 Security Event Logging
+
+All security-relevant events are emitted to the dedicated **`counterscarp.security`** logger (a child of the root `counterscarp` logger). This logger writes to both the standard structured log stream and, in production, to the systemd journal under the `counterscarp-engine` unit, from where `logrotate-counterscarp` manages rotation.
+
+Events captured include:
+
+- Rate-limit hits (IP, endpoint, window count)
+- License validation failures and grace-period activations
+- Stripe webhook signature verification failures
+- Startup cleanup actions (files removed, directories reset)
+
+### 9.4 Startup Cleanup Automation
+
+On every application startup the web server registers an async startup hook that:
+
+1. Removes scan artefacts older than 24 h from `uploads/` and `results/`
+2. Truncates orphaned per-session `reports/` subdirectories with no associated scan record
+3. Resets in-memory rate-limit state (ensures a clean slate after a restart/redeploy)
+
+This prevents unbounded disk growth on long-running VPS deployments without requiring a separate cron job.
+
+---
+
 ## Appendix: Module Reference
 
 | Module | Purpose | Key Classes/Functions |
@@ -966,3 +1032,5 @@ flowchart LR
 | `pipeline_generator.py` | CI/CD pipeline gen | `generate_github_actions()`, `generate_gitlab_ci()` |
 | `fingerprint_scanner.py` | Protocol similarity | `fingerprint_contract()`, `find_inherited_vulns()` |
 | `protocol_db.py` | Protocol fingerprint DB | `ProtocolFingerprint`, `SimilarityEngine` |
+| `webapp/rate_limiter.py` | Thread-safe sliding window rate limiter for API endpoints. Enforces per-IP request limits on license validation (10/min), deactivation (5/min), and webhook (30/min) endpoints. | `RateLimiter`, `check_rate_limit()` |
+| `deploy/logrotate-counterscarp` | System-level log rotation configuration for production deployments. Daily rotation, 7 rotations, compressed. | *(config file — no classes)* |

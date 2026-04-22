@@ -107,6 +107,36 @@ The fingerprint is a SHA-256 hash of these combined values. This means:
 4. A successful response is cached locally at `~/.counterscarp/license_cache.json` with a 24-hour TTL
 5. If the server is unreachable, the cached validation is used as a grace period for up to **7 days**
 
+### Rate Limiting on License Endpoints
+
+License API endpoints enforce per-IP rate limits to prevent abuse:
+
+| Endpoint | Limit |
+|----------|-------|
+| `POST /api/license/validate` | 10 requests per minute |
+| `POST /api/license/deactivate` | 5 requests per minute |
+
+When a limit is exceeded, the server returns `HTTP 429`:
+
+```json
+{"detail": "Rate limit exceeded. Try again later."}
+```
+
+Rate limit windows reset after 60 seconds. The local 24-hour validation cache means that most normal use cases never approach these limits.
+
+### Input Validation
+
+License keys submitted to the API must conform to the following rules:
+
+- **Format:** `SE-(DEV|PRO|TEAM|ENT)-{32 hex characters}` — e.g., `SE-PRO-a1b2c3d4...` (32 lowercase hex chars after the prefix)
+- **`machine_id`** — maximum 255 characters
+
+Requests that fail format validation are rejected with `HTTP 422` before any database lookup occurs.
+
+### Stripe Webhook — License Provisioning via Payment
+
+When a Stripe checkout session is completed, Counterscarp Engine receives a webhook event to provision the new license automatically. **Signature verification is mandatory:** every incoming webhook request is validated against the `STRIPE_WEBHOOK_SECRET` (`whsec_...`) to confirm it originates from Stripe. Requests with an invalid or missing signature are rejected with `HTTP 400` and no license is provisioned.
+
 ### Offline / Air-Gapped Use
 
 The 7-day grace period supports offline and air-gapped deployments:

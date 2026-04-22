@@ -26,6 +26,8 @@
   - [ai](#ai)
   - [plugins](#plugins)
   - [Authentication Settings](#authentication-settings)
+  - [Session and Authentication](#session-and-authentication)
+  - [Cleanup Retention Periods](#cleanup-retention-periods)
 - [Example Configs](#example-configs)
 
 ---
@@ -428,6 +430,31 @@ fuzzing = true
 threat_intel = true
 ```
 
+#### Per-Scan Output Directory Structure
+
+Each scan produces an isolated output directory with the following naming pattern:
+
+```
+reports/{project_name}_{YYYY-MM-DD}_{session_id}/
+```
+
+**Example:**
+
+```
+reports/myprotocol_2026-04-22_a3f9b12c/
+├── audit_report.md       # Full Markdown audit report
+├── audit_report.html     # HTML version with styling
+├── ACTION_PLAN.md        # Prioritised remediation action plan
+├── scan.log              # Full scan log for this session
+└── exploits/             # Auto-generated exploit PoCs (if enabled)
+    ├── exploit_REENTRANCY_001.sol
+    └── exploit_ACCESS_CONTROL_002.sol
+```
+
+Each scan is fully self-contained — reports from different scans never overwrite each other. The `session_id` is a short random identifier appended to prevent collisions when scanning the same project multiple times on the same day.
+
+> **Cleanup:** Report directories older than **90 days** are automatically purged on service startup. See [Cleanup Retention Periods](#cleanup-retention-periods) below.
+
 ---
 
 ### `[ci]`
@@ -603,6 +630,60 @@ Authentication is configured via environment variables (not the TOML config file
 - `ADMIN_EMAIL` — Admin user email for `/admin/users` access
 
 **Note:** Authentication settings are intentionally kept in environment variables (not config files) for security. Never commit OAuth credentials to version control.
+
+---
+
+### Session and Authentication
+
+#### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SESSION_SECRET` | **REQUIRED** in production | — | Secret key for cookie-based session encryption. A warning is logged on startup if not set. Generate with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `ADMIN_EMAIL` | **REQUIRED** in production | — | Email address of the admin user. Restricts access to `/api/license/info` to this account. |
+| `STRIPE_WEBHOOK_SECRET` | **REQUIRED** if accepting payments | — | Stripe webhook signing secret (`whsec_...`). Service returns HTTP 500 on webhook receipt if not configured. |
+| `GOOGLE_CLIENT_ID` | No | — | Google OAuth 2.0 client ID (from Google Cloud Console) |
+| `GOOGLE_CLIENT_SECRET` | No | — | Google OAuth 2.0 client secret |
+| `GOOGLE_REDIRECT_URI` | No | `http://localhost:8001/auth/google/callback` | OAuth callback URL. Set to `https://app.counterscarp.io/auth/google/callback` in production. |
+
+#### CORS Allowed Origins
+
+The web application allows cross-origin requests from the following origins:
+
+| Origin | Purpose |
+|--------|---------|
+| `https://app.counterscarp.io` | Production web app |
+| `https://counterscarp.io` | Marketing site |
+| `http://localhost:8000` | Local development (default port) |
+| `http://localhost:8001` | Local development (alternate port) |
+
+Additional origins can be added by modifying `webapp/main.py`. Never add wildcard origins (`*`) in production.
+
+#### Security Notes
+
+- `SESSION_SECRET` should be at least 32 characters of cryptographically random data. A warning is issued at startup if the variable is missing or too short, but the service will still start (for local development convenience).
+- In production, always set `SESSION_SECRET` in the systemd unit file under `[Service]` — not in a `.env` file that could be world-readable.
+- `ADMIN_EMAIL` gates access to `/api/license/info`. Without it set, the endpoint is inaccessible.
+
+---
+
+### Cleanup Retention Periods
+
+The service automatically purges stale working data on startup. The following retention periods are currently hardcoded (configurable via `counterscarp.toml` is planned for a future release):
+
+| Data Type | Location | Retention |
+|-----------|----------|-----------|
+| State / cache files | `.counterscarp/` | **30 days** |
+| Report directories | `reports/` | **90 days** |
+| Upload directories | `uploads/` | **7 days** |
+
+**Behavior:**
+- Cleanup runs once on service startup, before the first request is handled.
+- Only directories and files older than the threshold (based on last-modified time) are removed.
+- Files actively in use (e.g., open file handles) are skipped safely.
+- A startup log entry is written for each directory purged.
+
+> These values are hardcoded in the current release. A `[cleanup]` TOML section with per-type retention keys is planned for v5.1.0.
 
 ---
 

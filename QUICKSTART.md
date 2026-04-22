@@ -1,6 +1,6 @@
 # Counterscarp Engine — Quick Start Guide
 
-> **Version 5.0.0** | Smart contract security auditing for EVM + Solana
+> **Version 5.0.1** | Smart contract security auditing for EVM + Solana
 
 ---
 
@@ -75,10 +75,10 @@ Adds `pytest`, `pytest-cov`, `mypy`, `pytest-benchmark`.
 
 ```bash
 # Pull official image
-docker pull tokenaudit/counterscarp-engine:5.0.0
+docker pull tokenaudit/counterscarp-engine:5.0.1
 
 # Run scan (bind-mount your project)
-docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:5.0.0 \
+docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:5.0.1 \
   --target /scan --report
 
 # With docker-compose
@@ -506,6 +506,25 @@ Report output files are created in the working directory with timestamped filena
 - `audit_report_YYYYMMDD_HHMMSS.html`
 - `audit_report_YYYYMMDD_HHMMSS.md`
 - `audit_report_YYYYMMDD_HHMMSS.sarif`
+
+### Per-Scan Report Directories
+
+Each scan produces its own isolated output folder so that successive scans never overwrite previous results:
+
+```
+reports/{ProjectName}_{YYYY-MM-DD}_{session}/
+├── audit_report.md
+├── audit_report.html
+├── ACTION_PLAN.md
+├── scan.log
+└── exploits/
+```
+
+- `{ProjectName}` is taken from `--project-name` or inferred from the target directory.
+- `{YYYY-MM-DD}` is the scan date.
+- `{session}` is a short unique identifier for the run.
+
+This means you can run multiple audits against the same project on the same day and each set of results is preserved independently.
 
 ---
 
@@ -982,6 +1001,25 @@ The admin endpoint at `/admin/users` (restricted to the configured `ADMIN_EMAIL`
 - License key (masked) and tier for each user
 - Registration date and last login timestamp
 
+### Session Secret (Production Required)
+
+The web application signs session cookies using the `SESSION_SECRET` environment variable. If this variable is not set, the app falls back to an insecure hardcoded default and prints a warning at startup.
+
+> **Production deployments must set `SESSION_SECRET`** — leaving it unset exposes session data to forgery.
+
+Generate a secure value and export it before starting the server:
+
+```bash
+# Generate a cryptographically secure secret
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# Export for the current shell session
+export SESSION_SECRET="<paste-generated-value-here>"
+
+# Or add to your systemd environment file / .env
+SESSION_SECRET=<paste-generated-value-here>
+```
+
 ---
 
 ## Environment Variables
@@ -1087,7 +1125,7 @@ sudo usermod -aG docker $USER
 
 # Or run with --user flag
 docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan \
-  tokenaudit/counterscarp-engine:5.0.0 --target /scan --report
+  tokenaudit/counterscarp-engine:5.0.1 --target /scan --report
 ```
 
 ### OpenAI API key not set
@@ -1142,6 +1180,18 @@ Or downgrade severity:
 [heuristics.severity_overrides]
 BLOCK_TIMESTAMP_RANDOMNESS = "LOW"
 ```
+
+### Rate Limiting
+
+The web API enforces per-endpoint rate limits. If you exceed a limit you will receive an **HTTP 429** response.
+
+| Endpoint | Limit |
+|----------|-------|
+| License validation (`POST /api/license/validate`) | 10 req/min |
+| License deactivation (`POST /api/license/deactivate`) | 5 req/min |
+| Stripe webhooks (`POST /webhook/stripe`) | 30 req/min |
+
+Wait for the current minute window to reset, then retry. In automated pipelines, add a back-off/retry loop around license validation calls.
 
 ---
 
@@ -1205,4 +1255,4 @@ Operations:
 
 ---
 
-*Counterscarp Engine v5.0.0 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*
+*Counterscarp Engine v5.0.1 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*

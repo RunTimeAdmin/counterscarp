@@ -8,8 +8,10 @@
 - [All Flags Reference](#all-flags-reference)
 - [Execution Profiles](#execution-profiles)
 - [Usage Examples](#usage-examples)
+- [Output Directory Structure](#output-directory-structure)
 - [Environment Variables](#environment-variables)
 - [Exit Codes](#exit-codes)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -218,6 +220,52 @@ Uses local sentence-transformers embeddings (no API key needed) to enrich findin
 
 ---
 
+## Output Directory Structure
+
+When `--report` is used, Counterscarp Engine writes all scan artefacts into a structured per-session directory under `reports/`.
+
+### Directory Naming
+
+The output directory name is derived from the `--project-name` flag and the current date/session token:
+
+```
+reports/{project-name}_{YYYY-MM-DD}_{session}/
+```
+
+| Component | Source | Example |
+|-----------|--------|---------|
+| `{project-name}` | Value of `--project-name` (sanitised); falls back to the target directory basename | `UniswapV4` |
+| `{YYYY-MM-DD}` | Date at scan start (UTC) | `2026-04-22` |
+| `{session}` | Short random hex token scoped to the process | `a3f1c9` |
+
+**Example:** running
+```bash
+counterscarp --target ./contracts --report --project-name "UniswapV4"
+```
+produces:
+```
+reports/
+└── UniswapV4_2026-04-22_a3f1c9/
+    ├── audit_report.md       # Markdown audit report
+    ├── audit_report.html     # HTML audit report (if HTML output enabled)
+    ├── ACTION_PLAN.md        # Prioritised remediation action plan
+    ├── scan.log              # Full scan log for this session
+    └── exploits/             # Generated PoC exploit scripts (Bounty mode)
+        ├── exploit_reentrancy.py
+        └── ...
+```
+
+### `--project-name` flag
+
+| Behaviour | Detail |
+|-----------|--------|
+| **Controls directory prefix** | The sanitised project name is used verbatim as the directory prefix |
+| **Appears in report headers** | The raw value is embedded in the HTML/Markdown report title |
+| **Default** | If omitted, the basename of the `--target` path is used |
+| **Sanitisation** | Non-alphanumeric characters (except `_` and `-`) are replaced with `_` |
+
+---
+
 ## Environment Variables
 
 | Variable | Description |
@@ -239,6 +287,35 @@ Uses local sentence-transformers embeddings (no API key needed) to enrich findin
 | `2` | Fatal error (missing module, invalid config, etc.) |
 
 **Note:** The exit code is determined by the `engine.fail_on_severity` config setting. With the default of `HIGH`, any HIGH or CRITICAL finding causes exit code 1.
+
+---
+
+## Troubleshooting
+
+### HTTP 429 — Rate Limit Exceeded (Web App API)
+
+When running scans via the **web app API** (i.e., `counterscarp --gui` or calls to the FastAPI backend), per-IP rate limits are enforced on sensitive endpoints:
+
+| Endpoint | Limit |
+|----------|-------|
+| `/api/validate-license` | 10 requests / 60 s |
+| `/api/deactivate-license` | 5 requests / 60 s |
+| `/api/webhook` | 30 requests / 60 s |
+
+If you receive `HTTP 429 Too Many Requests`, wait for the 60-second window to expire before retrying. Automated tooling that calls these endpoints in a tight loop should add appropriate back-off delays.
+
+> **Note:** Rate limits are per-IP and are reset on server restart. They do not apply to CLI invocations (non-GUI mode).
+
+### Other Common Issues
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| `slither: command not found` | Slither not installed | `pip install slither-analyzer` |
+| `aderyn: command not found` | Aderyn not installed | See [Aderyn install guide](https://github.com/Cyfrin/aderyn) |
+| `myth: command not found` | Mythril not installed | `pip install mythril` |
+| Exit code 2 with config error | Invalid TOML syntax | Validate with `python -c "import tomllib; tomllib.load(open('counterscarp.toml','rb'))"` |
+| Empty `reports/` directory | `--report` flag not passed | Add `--report` to your command |
+| License validation fails offline | DNS for `api.counterscarp.io` unreachable | Engine falls back to 72-hour grace-period cache |
 
 ---
 

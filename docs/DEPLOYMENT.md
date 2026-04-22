@@ -224,12 +224,13 @@ WantedBy=multi-user.target
 
 ### Authentication & Session Configuration
 
-The following environment variables must be set for user authentication:
+The following environment variables must be set for user authentication. Variables marked **REQUIRED** must be configured before starting the service in production.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SESSION_SECRET` | Yes | Random secret key for session encryption (min 32 chars). Generate with: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
-| `ADMIN_EMAIL` | Yes | Email address of the admin user (grants access to `/admin/users`) |
+| `SESSION_SECRET` | **REQUIRED** | Random secret key for session encryption (min 32 chars). Generate with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `STRIPE_WEBHOOK_SECRET` | **REQUIRED** (if accepting payments) | Stripe webhook signing secret. Retrieve from Stripe Dashboard > Webhooks > Signing secret. Service returns 500 if not set when a webhook is received. |
+| `ADMIN_EMAIL` | **REQUIRED** | Email address of the admin user. Restricts access to `/api/license/info` to this user. |
 | `GOOGLE_CLIENT_ID` | No | Google OAuth 2.0 client ID (from Google Cloud Console) |
 | `GOOGLE_CLIENT_SECRET` | No | Google OAuth 2.0 client secret |
 | `GOOGLE_REDIRECT_URI` | No | OAuth callback URL (default: `http://localhost:8001/auth/google/callback`). Set to `https://app.counterscarp.io/auth/google/callback` in production |
@@ -238,11 +239,23 @@ Add these to the systemd unit file under `[Service]`:
 
 ```ini
 Environment=SESSION_SECRET=<your-generated-secret>
+Environment=STRIPE_WEBHOOK_SECRET=whsec_<your-signing-secret>
 Environment=ADMIN_EMAIL=you@example.com
 Environment=GOOGLE_CLIENT_ID=<your-client-id>
 Environment=GOOGLE_CLIENT_SECRET=<your-client-secret>
 Environment=GOOGLE_REDIRECT_URI=https://app.counterscarp.io/auth/google/callback
 ```
+
+**Generating SESSION_SECRET:**
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+**Retrieving STRIPE_WEBHOOK_SECRET:**
+1. Go to [Stripe Dashboard](https://dashboard.stripe.com) > Developers > Webhooks
+2. Select your webhook endpoint
+3. Click "Reveal" under **Signing secret** — it starts with `whsec_`
 
 **Google OAuth Setup:**
 1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
@@ -393,6 +406,9 @@ Expected response:
 | SSL errors | Certificate expired | `certbot renew && systemctl reload nginx` |
 | Slow responses | Analysis taking long | Increase `proxy_read_timeout` in nginx |
 | Upload fails | Permissions wrong | `chown -R counterscarp:counterscarp /opt/counterscarp-engine/uploads` |
+| Webhook returns 500 | `STRIPE_WEBHOOK_SECRET` not set | Set `STRIPE_WEBHOOK_SECRET` in systemd unit and reload |
+
+> **Security:** Stripe webhook signature verification is **mandatory** in v5.0.1. If `STRIPE_WEBHOOK_SECRET` is not configured, the `/api/stripe/webhook` endpoint will return HTTP 500. Retrieve the signing secret from Stripe Dashboard > Developers > Webhooks > Signing secret (`whsec_...`).
 
 ### Check Disk Space
 
@@ -455,6 +471,48 @@ sudo journalctl --vacuum-time=7d
 ```
 
 Nginx logs are rotated by `logrotate` (installed by default on Ubuntu).
+
+---
+
+### Log Management and Cleanup
+
+#### Python Application Log Rotation
+
+The web application uses Python's `RotatingFileHandler` for automatic log rotation:
+
+- **Max file size:** 10 MB per file
+- **Backup count:** 7 files retained (approx. 70 MB max total)
+- Rotation is handled entirely within the Python process — no external cron job required for application logs.
+
+#### System-Level Log Rotation (logrotate)
+
+For system-level management of the application's on-disk log files, install the bundled logrotate config:
+
+```bash
+sudo cp deploy/logrotate-counterscarp /etc/logrotate.d/counterscarp
+```
+
+This handles compressed rotation, postrotate reloads, and log directory cleanup in coordination with the OS logrotate daemon.
+
+#### Automatic Startup Cleanup
+
+On every service startup, the application automatically purges stale working data based on the following retention policy:
+
+| Data Type | Directory | Retention Period |
+|-----------|-----------|-----------------|
+| State / cache files | `.counterscarp/` | 30 days |
+| Report directories | `reports/` | 90 days |
+| Upload directories | `uploads/` | 7 days |
+
+> **Note:** These retention periods are currently hardcoded. Configurable retention via `counterscarp.toml` is planned for a future release.
+
+No additional cron jobs are needed for routine cleanup; however, you can still manually purge data if needed:
+
+```bash
+# Manual cleanup example (adjust paths as needed)
+find /opt/counterscarp-engine/uploads -type d -mtime +7 -exec rm -rf {} +
+find /opt/counterscarp-engine/reports -type d -mtime +90 -exec rm -rf {} +
+```
 
 ---
 

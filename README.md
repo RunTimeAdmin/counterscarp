@@ -70,6 +70,7 @@ Counterscarp Engine is built for environments where source-code confidentiality 
 - **Local-first AI inference** — The AI Copilot defaults to local inference via [Ollama](https://ollama.com) when configured (`counterscarp.toml → [ai] provider = "ollama"`). If OpenAI is selected, only a one-paragraph natural-language summary of each finding is sent to the OpenAI API — never raw source code.
 - **Bundled threat intelligence** — Vulnerability databases and protocol signatures ship with the package and are queried locally. Network access only occurs if you explicitly run `counterscarp --update-signatures`. For fully air-gapped environments, use `counterscarp --update-from-file <path>` to import pre-downloaded signature packs.
 - **No telemetry** — The CLI contains zero usage telemetry, analytics callbacks, tracking pixels, or phone-home behavior. Period.
+- **API security hardening** — The web API enforces rate limiting (10 req/min on license validation, 5 req/min on deactivation, 30 req/min on webhooks), Pydantic input validation on all request fields, mandatory Stripe webhook signature verification, admin endpoint authentication, CORS restricted to known origins, and a dedicated `counterscarp.security` logger for all auth and validation events.
 
 ---
 
@@ -134,6 +135,6 @@ Threat intelligence: Code4rena · Immunefi · Solodit · Neodyme · OtterSec · 
 
 ---
 
-**Version:** 5.0.0 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
+**Version:** 5.0.1 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
 
 **⭐ If this helped you find bugs, please star the repo!**

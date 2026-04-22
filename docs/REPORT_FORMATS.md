@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [Overview](#overview)
+- [Per-Scan Report Directories](#per-scan-report-directories)
 - [HTML Report](#html-report)
 - [Markdown Report](#markdown-report)
 - [SARIF 2.1.0 Format](#sarif-21-format)
@@ -25,6 +26,38 @@ Counterscarp Engine generates audit reports in four formats, each serving a diff
 | JSON | `.json` | Programmatic processing, custom tooling | Automation, scripts |
 
 All reports share the same underlying data (findings, severity counts, risk scores) but present it differently.
+
+---
+
+## Per-Scan Report Directories
+
+Each scan creates an isolated output directory, ensuring that multiple scans of the same project never overwrite previous results.
+
+### Directory Structure
+
+```
+reports/{ProjectName}_{YYYY-MM-DD}_{session}/
+├── audit_report.md
+├── audit_report.html
+├── ACTION_PLAN.md
+├── scan.log
+└── exploits/               ← Exploit PoC .t.sol files (Pro+ only)
+```
+
+| Component | Description |
+|-----------|-------------|
+| `{ProjectName}` | The project name provided at scan time |
+| `{YYYY-MM-DD}` | The date the scan was run |
+| `{session}` | Short unique identifier for the specific run |
+
+### Key Behaviors
+
+- **Isolation:** Each scan has its own directory — no report files are overwritten by subsequent scans
+- **Multiple scans of the same project** create separate directories (e.g., `MyProtocol_2026-04-22_a1b2c3/`, `MyProtocol_2026-04-22_d4e5f6/`)
+- **Exploit PoCs** are placed in the `exploits/` subdirectory within the per-scan folder, not in the engine root directory
+- **Web uploads** follow the same structure; files are accessible via the results page download links
+
+> **Note:** Prior to v5.0, reports were written directly to the engine root directory (e.g., `audit_report.md`, `audit_report.html`). From v5.0.1 onward, all output is scoped to per-scan subdirectories under `reports/`.
 
 ---
 
