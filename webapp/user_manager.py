@@ -275,6 +275,34 @@ class UserManager:
                     return True
         return False
 
+    def list_users(self) -> List[Dict]:
+        """Return all users without sensitive fields.
+
+        Each entry includes: email, name, created_at, auth_method, last_login,
+        license_key, stripe_customer_id, stripe_subscription_id.
+        ``password_hash`` and ``google_id`` are excluded for security.
+        """
+        with self._file_lock:
+            db = self._load_db()
+        result = []
+        for u in db["users"]:
+            u.setdefault("auth_method", "email")
+            u.setdefault("last_login", u.get("created_at"))
+            u.setdefault("license_key", None)
+            u.setdefault("stripe_customer_id", None)
+            u.setdefault("stripe_subscription_id", None)
+            result.append(
+                {
+                    "email": u["email"],
+                    "name": u["name"],
+                    "created_at": u["created_at"],
+                    "auth_method": u["auth_method"],
+                    "last_login": u["last_login"],
+                    "license_key": u["license_key"],
+                }
+            )
+        return result
+
     def find_by_license_key(self, license_key: str) -> Optional[Dict]:
         """Return the user dict whose ``license_key`` matches, or None.
 

@@ -291,11 +291,49 @@ async def logout(request: Request):
 
 @admin_router.get("/admin/users")
 async def admin_users(request: Request):
-    """Return mailing list for admin only."""
+    """Return enriched user list with license info for admin only."""
+    import json
+    from pathlib import Path
+
     current_user = get_current_user(request)
     if not current_user or current_user["email"] != ADMIN_EMAIL:
         return JSONResponse({"error": "Unauthorized"}, status_code=403)
-    return JSONResponse({"users": user_manager.list_emails()})
+
+    def _get_user_tier(license_key: str | None) -> str:
+        if not license_key:
+            return "community"
+        licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
+        if not licenses_path.exists():
+            return "community"
+        with open(licenses_path, "r") as f:
+            data = json.load(f)
+        for lic in data.get("licenses", []):
+            if lic.get("key") == license_key:
+                return lic.get("tier", "community")
+        return "community"
+
+    def _mask_key(license_key: str | None) -> str | None:
+        if not license_key:
+            return None
+        return license_key[:10] + "..." if len(license_key) > 10 else license_key
+
+    users = user_manager.list_users()
+    enriched = []
+    for u in users:
+        raw_key = u.get("license_key")
+        enriched.append(
+            {
+                "email": u["email"],
+                "name": u["name"],
+                "created_at": u["created_at"],
+                "auth_method": u.get("auth_method", "email"),
+                "last_login": u.get("last_login"),
+                "license_key": _mask_key(raw_key),
+                "tier": _get_user_tier(raw_key),
+            }
+        )
+
+    return JSONResponse({"users": enriched})
 
 
 # ---------------------------------------------------------------------------
