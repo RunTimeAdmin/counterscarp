@@ -1,13 +1,13 @@
 {
-  "name": "garrison-security",
-  "displayName": "Garrison Security - Smart Contract Auditor",
-  "description": "Real-time security analysis for Solidity contracts powered by Garrison Engine",
+  "name": "counterscarp-security",
+  "displayName": "Counterscarp Security - Smart Contract Auditor",
+  "description": "Real-time security analysis for Solidity contracts powered by Counterscarp Engine",
   "version": "1.0.0",
   "publisher": "CyberShieldAustin",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RunTimeAdmin/garrison-engine"
+    "url": "https://github.com/RunTimeAdmin/counterscarp-engine"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -27,43 +27,43 @@
   ],
   "activationEvents": [
     "onLanguage:solidity",
-    "onCommand:garrison.analyze"
+    "onCommand:counterscarp.analyze"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "garrison.analyze",
-        "title": "Garrison: Analyze Contract"
+        "command": "counterscarp.analyze",
+        "title": "Counterscarp: Analyze Contract"
       },
       {
-        "command": "garrison.liarDetector",
-        "title": "Garrison: Run Liar Detector"
+        "command": "counterscarp.liarDetector",
+        "title": "Counterscarp: Run Liar Detector"
       },
       {
-        "command": "garrison.accessMatrix",
-        "title": "Garrison: Show Access Matrix"
+        "command": "counterscarp.accessMatrix",
+        "title": "Counterscarp: Show Access Matrix"
       }
     ],
     "configuration": {
-      "title": "Garrison Security",
+      "title": "Counterscarp Security",
       "properties": {
-        "garrison.pythonPath": {
+        "counterscarp.pythonPath": {
           "type": "string",
           "default": "python3",
           "description": "Path to Python interpreter"
         },
-        "garrison.enginePath": {
+        "counterscarp.enginePath": {
           "type": "string",
           "default": "",
-          "description": "Path to Garrison Engine installation"
+          "description": "Path to Counterscarp Engine installation"
         },
-        "garrison.enableRealtime": {
+        "counterscarp.enableRealtime": {
           "type": "boolean",
           "default": true,
           "description": "Enable real-time analysis on file save"
         },
-        "garrison.openaiApiKey": {
+        "counterscarp.openaiApiKey": {
           "type": "string",
           "default": "",
           "description": "OpenAI API key for AI exploit generation (optional)"

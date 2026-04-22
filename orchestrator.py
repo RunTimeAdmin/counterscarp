@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version as _pkg_version
     _ENGINE_VERSION = _pkg_version("counterscarp-engine")
 except Exception:
-    _ENGINE_VERSION = "4.4.0"
+    _ENGINE_VERSION = "5.0.0"
 
 from license_manager import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,

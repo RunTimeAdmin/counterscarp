@@ -7,7 +7,7 @@ services:
   
   audit:
     build: .
-    image: tokenaudit/counterscarp-engine:4.3.0
+    image: tokenaudit/counterscarp-engine:5.0.0
     container_name: counterscarp-engine
     
     volumes:
@@ -53,7 +53,7 @@ services:
   # Heuristic Scanner Only
   heuristic-scan:
     build: .
-    image: tokenaudit/counterscarp-engine:4.3.0
+    image: tokenaudit/counterscarp-engine:5.0.0
     container_name: counterscarp-heuristic
     volumes:
       - .:/scan
@@ -62,7 +62,7 @@ services:
   # Threat Intelligence (Auto-detects EVM vs Solana)
   threat-intel:
     build: .
-    image: tokenaudit/counterscarp-engine:4.3.0
+    image: tokenaudit/counterscarp-engine:5.0.0
     container_name: counterscarp-intel
     volumes:
       - .:/scan
@@ -72,7 +72,7 @@ services:
   # Liar Detector (Intent Checker)
   liar-detector:
     build: .
-    image: tokenaudit/counterscarp-engine:4.3.0
+    image: tokenaudit/counterscarp-engine:5.0.0
     container_name: counterscarp-intent
     volumes:
       - .:/scan
@@ -82,7 +82,7 @@ services:
   # Access Matrix (God Mode Detector)
   access-matrix:
     build: .
-    image: tokenaudit/counterscarp-engine:4.3.0
+    image: tokenaudit/counterscarp-engine:5.0.0
     container_name: counterscarp-access
     volumes:
       - .:/scan

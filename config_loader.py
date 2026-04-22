@@ -57,7 +57,7 @@ class EngineConfig:
         max_findings: Maximum number of findings to report (0 = unlimited).
     """
     name: str = "Counterscarp Security Engine"
-    version: str = "4.4.0"
+    version: str = "5.0.0"
     fail_on_severity: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW, INFO
     max_findings: int = 0  # 0 = unlimited
 
@@ -719,7 +719,7 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
         eng = data['engine']
         config.engine = EngineConfig(
             name=eng.get('name', 'Counterscarp Security Engine'),
-            version=eng.get('version', '4.4.0'),
+            version=eng.get('version', '5.0.0'),
             fail_on_severity=eng.get('fail_on_severity', 'HIGH'),
             max_findings=eng.get('max_findings', 0)
         )

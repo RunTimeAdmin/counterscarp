@@ -566,7 +566,7 @@ class TestDataclassDefaults:
         """Test EngineConfig default values."""
         config = EngineConfig()
         assert config.name == "Counterscarp Security Engine"
-        assert config.version == "4.4.0"
+        assert config.version == "5.0.0"
         assert config.fail_on_severity == "HIGH"
         assert config.max_findings == 0
 
