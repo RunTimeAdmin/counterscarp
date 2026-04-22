@@ -255,6 +255,7 @@
         background: rgba(40, 167, 69, 0.05);
         border: 1px solid rgba(40, 167, 69, 0.2);
         border-radius: 10px;
+        overflow-x: hidden;
     }
     .features-list h4 {
         color: #28a745;
@@ -342,6 +343,7 @@
     @media (max-width: 768px) {
         .settings-container {
             padding: 0 1rem;
+            max-width: 100%;
         }
         .input-row {
             flex-direction: column;
@@ -352,6 +354,15 @@
         .btn-save, .btn-test {
             width: 100%;
             text-align: center;
+        }
+        .features-list ul {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        }
+    }
+
+    @media (max-width: 480px) {
+        .features-list ul {
+            grid-template-columns: 1fr;
         }
     }
 </style>
