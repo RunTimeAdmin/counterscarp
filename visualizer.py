@@ -249,13 +249,13 @@ def _generate_html_template(
         Complete HTML string.
     """
     # Count node types for statistics
-    node_counts = {}
+    node_counts: dict[str, int] = {}
     for node in graph_data.get('nodes', []):
         node_type = node.get('type', 'Unknown')
         node_counts[node_type] = node_counts.get(node_type, 0) + 1
     
     # Count severities
-    severity_counts = {}
+    severity_counts: dict[str, int] = {}
     for node in graph_data.get('nodes', []):
         if node.get('type') == 'Vulnerability':
             sev = node.get('severity', 'UNKNOWN')

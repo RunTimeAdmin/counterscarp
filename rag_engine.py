@@ -16,11 +16,15 @@ import json
 import os
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable, Tuple, Type, Union, cast, TYPE_CHECKING
+from logging import Logger
+if TYPE_CHECKING:
+    from exceptions import CounterscarpError as _CounterscarpErrorType
 from dataclasses import dataclass, field
 from datetime import datetime
 
 # Network error types for graceful offline handling
+_NETWORK_ERRORS: Tuple[Type[Exception], ...] = (ConnectionError, TimeoutError, OSError)
 try:
     import requests.exceptions as _req_exc
     _NETWORK_ERRORS = (
@@ -32,7 +36,7 @@ try:
         OSError,
     )
 except ImportError:
-    _NETWORK_ERRORS = (ConnectionError, TimeoutError, OSError)
+    pass
 
 _OFFLINE_RESULT: Dict[str, Any] = {
     "rag_status": "offline",
@@ -45,24 +49,29 @@ _OFFLINE_RESULT: Dict[str, Any] = {
 }
 
 # Import logger and exceptions
+get_logger: Optional[Callable[[str], Logger]] = None
+CounterscarpConfigError: Type[Exception] = Exception
+LOGGER_AVAILABLE = False
 try:
     from logger import get_logger
     from exceptions import CounterscarpError, CounterscarpConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
-    LOGGER_AVAILABLE = False
-    get_logger = None
-    CounterscarpError = Exception
-    CounterscarpConfigError = Exception
+    CounterscarpError = Exception  # type: ignore[misc,assignment]
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
+if LOGGER_AVAILABLE and get_logger is not None:
     logger = get_logger(__name__)
 else:
     import logging
     logger = logging.getLogger(__name__)
 
 # Try importing embeddings module
+get_embeddings: Optional[Callable[..., Any]] = None
+cosine_similarity: Optional[Callable[[List[float], List[float]], float]] = None
+embed_local: Optional[Callable[[List[str]], List[List[float]]]] = None
+EMBEDDINGS_AVAILABLE = False
+NUMPY_AVAILABLE = False
 try:
     from embeddings import (
         get_embeddings,
@@ -72,17 +81,13 @@ try:
     )
     EMBEDDINGS_AVAILABLE = True
 except ImportError:
-    EMBEDDINGS_AVAILABLE = False
-    get_embeddings = None
-    cosine_similarity = None
-    embed_local = None
-    NUMPY_AVAILABLE = False
+    pass
 
 # Try importing numpy
+import types as _types
+np: Optional[_types.ModuleType] = None
 if NUMPY_AVAILABLE:
     import numpy as np
-else:
-    np = None
 
 # Default configuration
 DEFAULT_INDEX_PATH = ".counterscarp/rag_index.json"
@@ -144,6 +149,7 @@ class VectorStore:
         """
         if not EMBEDDINGS_AVAILABLE:
             raise RAGError("Embeddings module not available")
+        assert embed_local is not None
         
         try:
             embeddings = embed_local([text])
@@ -177,6 +183,7 @@ class VectorStore:
         
         if not EMBEDDINGS_AVAILABLE:
             raise RAGError("Embeddings module not available")
+        assert embed_local is not None
         
         try:
             texts = [item.get("text", "") for item in items]
@@ -218,6 +225,8 @@ class VectorStore:
         
         if not EMBEDDINGS_AVAILABLE:
             raise RAGError("Embeddings module not available")
+        assert embed_local is not None
+        assert cosine_similarity is not None
         
         try:
             # Generate query embedding
@@ -237,7 +246,7 @@ class VectorStore:
                 })
             
             # Sort by similarity (descending)
-            results.sort(key=lambda x: x["similarity"], reverse=True)
+            results.sort(key=lambda x: float(cast(Any, x["similarity"])), reverse=True)
             
             return results[:top_k]
             
@@ -328,8 +337,8 @@ class VectorStore:
         Returns:
             Dict with index statistics.
         """
-        sources = {}
-        severities = {}
+        sources: Dict[str, int] = {}
+        severities: Dict[str, int] = {}
         
         for entry in self.entries:
             source = entry.metadata.get("source", "unknown")
@@ -679,7 +688,7 @@ def _call_ollama(
         }
         response = _requests.post(url, json=payload, timeout=120)
         response.raise_for_status()
-        result = response.json().get("response", "")
+        result: str = str(response.json().get("response", ""))
         logger.debug(
             f"Ollama ({model}) returned {len(result)} chars"
         )
@@ -928,7 +937,7 @@ class AuditCopilot:
             
             return enriched
 
-        except _NETWORK_ERRORS as e:  # type: ignore[misc]
+        except _NETWORK_ERRORS as e:
             logger.warning(
                 f"AI Copilot unavailable (offline mode): {e}"
             )
@@ -1043,7 +1052,7 @@ class AuditCopilot:
                     sources["remediation_db"]
                 )
                 counts["remediation_db"] = count
-            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+            except _NETWORK_ERRORS as e:
                 logger.warning(
                     "AI Copilot unavailable (offline mode)"
                     f" during index build: {e}"
@@ -1060,7 +1069,7 @@ class AuditCopilot:
                     sources["findings"]
                 )
                 counts["findings"] = count
-            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+            except _NETWORK_ERRORS as e:
                 logger.warning(
                     "AI Copilot unavailable (offline mode)"
                     f" during index build: {e}"
@@ -1077,7 +1086,7 @@ class AuditCopilot:
                     sources["threat_intel"]
                 )
                 counts["threat_intel"] = count
-            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+            except _NETWORK_ERRORS as e:
                 logger.warning(
                     "AI Copilot unavailable (offline mode)"
                     f" during index build: {e}"
@@ -1094,7 +1103,7 @@ class AuditCopilot:
                     sources["audit_reports_dir"]
                 )
                 counts["audit_reports"] = count
-            except _NETWORK_ERRORS as e:  # type: ignore[misc]
+            except _NETWORK_ERRORS as e:
                 logger.warning(
                     "AI Copilot unavailable (offline mode)"
                     f" during index build: {e}"
@@ -1186,13 +1195,16 @@ def main():
     if args.build_index:
         print("\n=== Building RAG Index ===")
         
-        sources = {}
+        sources: Dict[str, Any] = {}
         source_list = [s.strip() for s in args.sources.split(",")]
         
         # Import REMEDIATION_DB from orchestrator if available
         if "remediation" in source_list:
             try:
-                from orchestrator import REMEDIATION_DB
+                import orchestrator as _orc
+                REMEDIATION_DB = getattr(_orc, "REMEDIATION_DB", None)
+                if REMEDIATION_DB is None:
+                    raise ImportError("REMEDIATION_DB not found in orchestrator")
                 sources["remediation_db"] = REMEDIATION_DB
                 count = len(REMEDIATION_DB)
                 print(f"  - Including remediation_db ({count} entries)")

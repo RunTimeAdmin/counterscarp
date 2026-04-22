@@ -16,17 +16,17 @@ from pathlib import Path
 
 # Import logger and exceptions
 try:
-    from logger import get_logger
+    from logger import get_logger as _get_logger
     from exceptions import CounterscarpValidationError
     LOGGER_AVAILABLE = True
 except ImportError:
+    _get_logger = None  # type: ignore[assignment]
+    CounterscarpValidationError = None  # type: ignore[assignment,misc]
     LOGGER_AVAILABLE = False
-    get_logger = None
-    CounterscarpValidationError = None
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
-    logger = get_logger(__name__)
+if LOGGER_AVAILABLE and _get_logger is not None:
+    logger = _get_logger(__name__)
 else:
     import logging
     logger = logging.getLogger(__name__)

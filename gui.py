@@ -5,7 +5,7 @@ import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import scrolledtext
-from typing import Any
+from typing import Any, cast
 
 from logger import get_logger
 from exceptions import (
@@ -33,13 +33,12 @@ import upgrade_diff
 
 # Optional config loader
 try:
-    from config_loader import load_config, CounterscarpConfig
+    from config_loader import load_config
     CONFIG_AVAILABLE = True
     logger.debug("Config loader available")
 except ImportError as e:
     logger.warning(f"Config loader not available: {e}")
     CONFIG_AVAILABLE = False
-    CounterscarpConfig = None
 
 
 def append_output(widget: scrolledtext.ScrolledText, text: str) -> None:
@@ -258,7 +257,7 @@ def create_gui() -> None:
                     # Prevent sys.exit() from killing the GUI
                     import sys
                     old_exit = sys.exit
-                    sys.exit = lambda code=0: None
+                    sys.exit = cast(Any, lambda code=0: None)
 
                     raw = red_team_scan.run_slither(contract_path)
                     findings = red_team_scan.filter_vulnerabilities(raw)
@@ -292,7 +291,7 @@ def create_gui() -> None:
                     try:
                         import sys as _sys
                         old_exit = _sys.exit
-                        _sys.exit = lambda code=0: None
+                        _sys.exit = cast(Any, lambda code=0: None)
 
                         results = aderyn_wrapper.run_aderyn(project_root)
                     except FileNotFoundError as e:
@@ -380,7 +379,7 @@ def create_gui() -> None:
                         # Prevent sys.exit() from killing the GUI
                         import sys
                         old_exit = sys.exit
-                        sys.exit = lambda code=0: None
+                        sys.exit = cast(Any, lambda code=0: None)
                         
                         cwd = os.getcwd()
                         os.chdir(project_root)
@@ -423,7 +422,7 @@ def create_gui() -> None:
                     try:
                         import sys as _sys
                         old_exit = _sys.exit
-                        _sys.exit = lambda code=0: None
+                        _sys.exit = cast(Any, lambda code=0: None)
 
                         medusa_root = project_root
                         results = medusa_wrapper.run_medusa_fuzz(medusa_root, target_contract=fuzz_contract_name or None)
@@ -468,10 +467,10 @@ def create_gui() -> None:
                     # Prevent sys.exit() from killing the GUI
                     import sys
                     old_exit = sys.exit
-                    sys.exit = lambda code=0: None
+                    sys.exit = cast(Any, lambda code=0: None)
                     
-                    raw = symbolic_wrapper.run_mythril(contract_path)
-                    issues = symbolic_wrapper.parse_issues(raw)
+                    mythril_raw = symbolic_wrapper.run_mythril(contract_path)
+                    issues = symbolic_wrapper.parse_issues(mythril_raw)
                     if not issues:
                         append_output(output, "[+] No issues reported by Mythril.")
                     else:
@@ -519,9 +518,9 @@ def create_gui() -> None:
                     if not target_for_heuristics:
                         append_output(output, "[!] No contract or project root; skipping heuristic scan.")
                     else:
-                        findings = heuristic_scanner.scan_target(target_for_heuristics, config)
-                        active_findings = [f for f in findings if not f.suppressed]
-                        suppressed_findings = [f for f in findings if f.suppressed]
+                        heuristic_findings = heuristic_scanner.scan_target(target_for_heuristics, config)
+                        active_findings = [f for f in heuristic_findings if not f.suppressed]
+                        suppressed_findings = [f for f in heuristic_findings if f.suppressed]
 
                         if not active_findings:
                             append_output(output, "[+] No heuristic flags detected.")

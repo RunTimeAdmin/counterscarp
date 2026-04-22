@@ -50,7 +50,7 @@ def get_rate_limiter() -> RateLimiter:
 def get_github_timeout() -> int:
     """Get GitHub API timeout from config or use default."""
     try:
-        return get_config().threat_intel.solana_github_timeout
+        return int(get_config().threat_intel.solana_github_timeout)
     except Exception:
         return 10
 
@@ -124,7 +124,8 @@ def fetch_github_issues(api_url: str) -> List[Dict[str, Any]]:
             max_retries=3,
             rate_limiter=get_rate_limiter()
         )
-        return resp.json().get("items", [])
+        items: List[Dict[str, Any]] = resp.json().get("items", [])
+        return items
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning(f"Failed to parse GitHub API response: {e}")
     except Exception as e:

@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
-def load_bundled_db(db_path: str = None) -> list:
+def load_bundled_db(db_path: str | None = None) -> list:
     """Load the bundled offline threat intelligence database.
 
     Args:
@@ -44,7 +44,7 @@ def load_bundled_db(db_path: str = None) -> list:
         )
     try:
         with open(db_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            data: list = json.load(f)
         logger.info(
             f"Loaded bundled threat intel database: {len(data)} entries"
         )

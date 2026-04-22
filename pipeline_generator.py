@@ -20,8 +20,11 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any, TYPE_CHECKING
 from pathlib import Path
+
+if TYPE_CHECKING:
+    from config_loader import CounterscarpConfig
 
 # Import logger and exceptions
 try:
@@ -34,13 +37,13 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
-    CounterscarpConfigError = Exception
-    CounterscarpValidationError = ValueError
-    CounterscarpError = Exception
+    get_logger: Optional[Callable[..., Any]] = None  # type: ignore[no-redef]
+    CounterscarpConfigError = Exception  # type: ignore[misc,assignment]
+    CounterscarpValidationError = ValueError  # type: ignore[misc,assignment]
+    CounterscarpError = Exception  # type: ignore[misc,assignment]
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
+if LOGGER_AVAILABLE and get_logger is not None:
     logger = get_logger(__name__)
 else:
     import logging
@@ -48,12 +51,11 @@ else:
 
 # Try to import config loader
 try:
-    from config_loader import load_config, CounterscarpConfig
+    from config_loader import load_config
     CONFIG_LOADER_AVAILABLE = True
 except ImportError:
     CONFIG_LOADER_AVAILABLE = False
-    load_config = None
-    CounterscarpConfig = None
+    load_config: Optional[Any] = None  # type: ignore[no-redef]
 
 
 # =============================================================================
@@ -515,7 +517,7 @@ def _get_analyzer_steps(config: Optional[CounterscarpConfig], platform: str, tar
         # GitLab uses script blocks
         if slither_enabled:
             steps.append("    - slither {target_path} --filter-paths \"test|script|node_modules\" || true".format(
-                target_path=target_path, config_path=config_path
+                target_path=target_path
             ))
         if heuristics_enabled:
             steps.append("    - python heuristic_scanner.py {target_path} --config {config_path} || true".format(
@@ -526,7 +528,7 @@ def _get_analyzer_steps(config: Optional[CounterscarpConfig], platform: str, tar
         # Azure uses script tasks
         if slither_enabled:
             steps.append("- script: |\n    slither {target_path} --filter-paths \"test|script|node_modules\" || true\n  displayName: 'Run Slither'".format(
-                target_path=target_path, config_path=config_path
+                target_path=target_path
             ))
         if heuristics_enabled:
             steps.append("- script: |\n    python heuristic_scanner.py {target_path} --config {config_path} || true\n  displayName: 'Run Heuristics'".format(
@@ -667,7 +669,7 @@ def generate_pipeline(
     
     # Load configuration
     config = None
-    if CONFIG_LOADER_AVAILABLE and load_config:
+    if CONFIG_LOADER_AVAILABLE and load_config is not None:
         try:
             config = load_config(config_path)
             logger.info(f"Loaded configuration from: {config_path}")

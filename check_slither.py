@@ -1,6 +1,8 @@
 """Check Slither results from the scan."""
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+import io
+if isinstance(sys.stdout, io.TextIOWrapper):
+    sys.stdout.reconfigure(encoding='utf-8')
 from red_team_scan import run_slither, filter_vulnerabilities
 
 try:
@@ -9,7 +11,7 @@ try:
     print(f"Slither raw success: {raw.get('success', 'N/A')}")
     print(f"Slither raw detectors: {len(raw.get('results', {}).get('detectors', []))}")
     print(f"Filtered vulnerabilities: {len(filtered)}")
-    by_impact = {}
+    by_impact: dict[str, int] = {}
     for f in filtered:
         impact = f.get('impact', 'Unknown')
         by_impact[impact] = by_impact.get(impact, 0) + 1

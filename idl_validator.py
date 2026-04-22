@@ -305,7 +305,7 @@ class ConstraintValidator:
         Returns:
             List of findings for potentially missing mutability constraints.
         """
-        findings = []
+        findings: List[Dict[str, Any]] = []
 
         # Instructions that typically mutate state
         mutating_prefixes = (
@@ -680,7 +680,7 @@ class AccountPermissionMatrix:
         Returns:
             Dictionary containing the permission matrix.
         """
-        matrix = {
+        matrix: Dict[str, Any] = {
             "program_name": program.name,
             "program_version": program.version,
             "instructions": {},
@@ -692,7 +692,7 @@ class AccountPermissionMatrix:
         account_usage: Dict[str, Dict[str, Any]] = {}
 
         for instruction in program.instructions:
-            instr_matrix = {
+            instr_matrix: Dict[str, Any] = {
                 "accounts": {},
                 "signer_required": False,
                 "mutable_accounts": [],

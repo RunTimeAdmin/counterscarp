@@ -51,7 +51,7 @@ def get_rate_limiter() -> RateLimiter:
 def get_c4_timeout() -> int:
     """Get Code4rena API timeout from config or use default."""
     try:
-        return get_config().threat_intel.c4_timeout
+        return int(get_config().threat_intel.c4_timeout)
     except Exception:
         return 10
 
@@ -59,7 +59,7 @@ def get_c4_timeout() -> int:
 def get_immunefi_timeout() -> int:
     """Get Immunefi RSS timeout from config or use default."""
     try:
-        return get_config().threat_intel.immunefi_timeout
+        return int(get_config().threat_intel.immunefi_timeout)
     except Exception:
         return 10
 
@@ -112,7 +112,7 @@ def get_contract_context(filepath: str) -> List[str]:
 # Backwards compatibility alias
 scan_file_for_context = get_contract_context
 
-def _filter_bundled_db(query: str, source: str = None) -> List[Dict[str, Any]]:
+def _filter_bundled_db(query: str, source: str | None = None) -> List[Dict[str, Any]]:
     """Filter bundled threat intel entries by query keywords.
 
     Args:
@@ -190,7 +190,8 @@ def fetch_c4_findings(keywords: List[str]) -> List[Dict[str, Any]]:
             max_retries=3,
             rate_limiter=get_rate_limiter()
         )
-        return resp.json().get("items", [])
+        c4_items: List[Dict[str, Any]] = resp.json().get("items", [])
+        return c4_items
     except Exception as e:
         logger.warning(
             f"Network unavailable for Code4rena — using bundled threat "
@@ -247,8 +248,8 @@ def fetch_immunefi_reports(keywords: List[str]) -> List[Dict[str, Any]]:
             if title_elem is None or link_elem is None:
                 continue
 
-            title = title_elem.text
-            link = link_elem.text
+            title = title_elem.text or ""
+            link = link_elem.text or ""
             categories = [c.text.lower() for c in item.findall("category") if c.text]
 
             # Filter: We only want "Spotlights" or "Breakdowns", not generic PR news

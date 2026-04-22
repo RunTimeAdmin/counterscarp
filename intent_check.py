@@ -37,13 +37,13 @@ except ImportError:
     def get_logger(name: str) -> logging.Logger:
         return logging.getLogger(name)
 
-    class CounterscarpAnalysisError(Exception):
+    class CounterscarpAnalysisError(Exception):  # type: ignore[no-redef]
         def __init__(self, message: str, details: Optional[Dict] = None):
             super().__init__(message)
             self.message = message
             self.details = details or {}
 
-    class CounterscarpValidationError(Exception):
+    class CounterscarpValidationError(Exception):  # type: ignore[no-redef]
         def __init__(self, message: str, details: Optional[Dict] = None):
             super().__init__(message)
             self.message = message
@@ -460,7 +460,7 @@ class FunctionParser:
     @classmethod
     def _parse_params(cls, params_str: str) -> List[Tuple[str, str]]:
         """Parse function parameters."""
-        params = []
+        params: List[Tuple[str, str]] = []
         if not params_str.strip():
             return params
         
@@ -499,7 +499,7 @@ class FunctionParser:
     @classmethod
     def _parse_modifiers(cls, modifiers_str: str) -> List[ModifierInfo]:
         """Parse modifier list."""
-        modifiers = []
+        modifiers: List[ModifierInfo] = []
         if not modifiers_str:
             return modifiers
         
@@ -541,7 +541,7 @@ class IntentComparator:
         
         Returns a list of findings for any mismatches.
         """
-        findings = []
+        findings: List[IntentFinding] = []
         
         if not func.natspec:
             return findings
@@ -562,7 +562,7 @@ class IntentComparator:
         cls, func: FunctionInfo, file_path: str
     ) -> List[IntentFinding]:
         """Check for access control mismatches."""
-        findings = []
+        findings: List[IntentFinding] = []
         natspec = func.natspec
         
         if not natspec:
@@ -623,7 +623,7 @@ class IntentComparator:
         cls, func: FunctionInfo, file_path: str
     ) -> List[IntentFinding]:
         """Check for state mutability mismatches."""
-        findings = []
+        findings: List[IntentFinding] = []
         natspec = func.natspec
         
         if not natspec:
@@ -663,7 +663,7 @@ class IntentComparator:
         cls, func: FunctionInfo, file_path: str
     ) -> List[IntentFinding]:
         """Check for visibility-related mismatches."""
-        findings = []
+        findings: List[IntentFinding] = []
         natspec = func.natspec
         
         if not natspec:

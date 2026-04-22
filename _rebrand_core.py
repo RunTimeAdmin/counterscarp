@@ -129,16 +129,16 @@ for fname in TARGET_FILES:
         unchanged.append(fname)
 
 print("=== CHANGED ===")
-for f in changed:
-    print(f"  [+] {f}")
+for fname_c in changed:
+    print(f"  [+] {fname_c}")
 
 print("\n=== UNCHANGED (no garrison refs) ===")
-for f in unchanged:
-    print(f"  [-] {f}")
+for fname_u in unchanged:
+    print(f"  [-] {fname_u}")
 
 if missing:
     print("\n=== MISSING (file not found) ===")
-    for f in missing:
-        print(f"  [!] {f}")
+    for fname_m in missing:
+        print(f"  [!] {fname_m}")
 
 print(f"\nDone. {len(changed)} files updated, {len(unchanged)} had no garrison refs, {len(missing)} missing.")

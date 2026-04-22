@@ -54,7 +54,7 @@ def get_osv_rate_limiter() -> RateLimiter:
 def get_ecosystem() -> str:
     """Get ecosystem from config or use default."""
     try:
-        return get_config().supply_chain.ecosystem
+        return str(get_config().supply_chain.ecosystem)
     except Exception:
         return "npm"
 
@@ -62,7 +62,7 @@ def get_ecosystem() -> str:
 def get_osv_timeout() -> int:
     """Get OSV API timeout from config or use default."""
     try:
-        return get_config().supply_chain.osv_timeout
+        return int(get_config().supply_chain.osv_timeout)
     except Exception:
         return 10
 
@@ -70,7 +70,7 @@ def get_osv_timeout() -> int:
 def get_osv_max_retries() -> int:
     """Get OSV API max retries from config or use default."""
     try:
-        return get_config().supply_chain.osv_max_retries
+        return int(get_config().supply_chain.osv_max_retries)
     except Exception:
         return 3
 
@@ -122,7 +122,8 @@ def check_osv_api(package_name: str, version: str) -> List[Dict[str, Any]]:
             rate_limiter=get_osv_rate_limiter()
         )
         data = response.json()
-        return data.get("vulns", [])
+        vulns: List[Dict[str, Any]] = data.get("vulns", [])
+        return vulns
 
     except CounterscarpAPIError as e:
         # Log the failure but don't abort the entire scan
@@ -189,7 +190,7 @@ def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
     found_vulns: List[Dict[str, Any]] = []
 
     total = len(all_deps)
-    failed_packages = []
+    failed_packages: List[str] = []
 
     for i, (lib, version_str) in enumerate(all_deps.items(), 1):
         # Clean the version string (e.g. "^4.3.0" -> "4.3.0")

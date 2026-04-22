@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import os
 import json
-from typing import Dict, List, Any, Optional
+from typing import Callable, Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -33,10 +33,10 @@ try:
     ATTACK_GRAPH_AVAILABLE = True
 except ImportError:
     ATTACK_GRAPH_AVAILABLE = False
-    build_graph = None
-    export_graph_json = None
-    trace_attack_paths = None
-    generate_attack_graph_html = None
+    build_graph: Optional[Callable[..., Any]] = None  # type: ignore[no-redef]
+    export_graph_json: Optional[Callable[..., Any]] = None  # type: ignore[no-redef]
+    trace_attack_paths: Optional[Callable[..., Any]] = None  # type: ignore[no-redef]
+    generate_attack_graph_html: Optional[Callable[..., Any]] = None  # type: ignore[no-redef]
 
 
 @dataclass
@@ -266,11 +266,13 @@ def enrich_finding(finding: Finding) -> Finding:
     
     if kb_entry:
         if not finding.remediation:
-            finding.remediation = kb_entry.get("fix", "")
+            finding.remediation = str(kb_entry.get("fix", ""))
         if not finding.references:
-            finding.references = kb_entry.get("references", [])
+            refs = kb_entry.get("references", [])
+            finding.references = list(refs) if isinstance(refs, list) else []
         if not finding.cwe:
-            finding.cwe = kb_entry.get("cwe")
+            cwe_val = kb_entry.get("cwe")
+            finding.cwe = str(cwe_val) if cwe_val is not None else None
     
     # Fallback generic remediation
     if not finding.remediation:
@@ -649,7 +651,7 @@ a { color: #667eea !important; }
     # Step 3 – Convert HTML to PDF via xhtml2pdf (pisa).                  #
     # ------------------------------------------------------------------ #
     try:
-        from xhtml2pdf import pisa  # type: ignore[import]
+        from xhtml2pdf import pisa
 
         result_buffer = io.BytesIO()
         pisa_status = pisa.CreatePDF(pdf_html, dest=result_buffer)
@@ -732,7 +734,7 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
         # Build results from findings
         results = []
         for finding in findings:
-            result = {
+            result: Dict[str, Any] = {
                 "ruleId": finding.rule_id,
                 "level": SARIF_LEVEL_MAP.get(finding.severity, "warning"),
                 "message": {
@@ -743,7 +745,7 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
             
             # Add location if file path is available
             if finding.file:
-                location = {
+                location: Dict[str, Any] = {
                     "physicalLocation": {
                         "artifactLocation": {
                             "uri": finding.file
@@ -806,7 +808,7 @@ def generate_sarif_report(findings: List[Finding], metadata: Optional[Dict[str, 
             results.append(result)
         
         # Build the SARIF document - ALWAYS has valid runs array
-        sarif_doc = {
+        sarif_doc: Dict[str, Any] = {
             "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
             "version": "2.1.0",
             "runs": [
@@ -966,7 +968,7 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
 """
 
     # Collect top 10 findings across all sections (already sorted by severity)
-    _top_findings = []
+    _top_findings: List[Finding] = []
     for _section in report.sections:
         for _finding in _section.findings:
             if len(_top_findings) < 10:
@@ -1285,7 +1287,7 @@ def create_audit_report(
     findings = deduplicate_findings(findings)
 
     # Group by category
-    sections = {}
+    sections: Dict[str, List[Finding]] = {}
     for finding in findings:
         if finding.category not in sections:
             sections[finding.category] = []

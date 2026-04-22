@@ -10,6 +10,7 @@ import json
 import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+import logging
 from typing import List, Dict, Any, Optional
 
 # Import logger and exceptions
@@ -19,16 +20,13 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
-    CounterscarpConfigError = None
-    CounterscarpValidationError = None
+    def get_logger(name: str) -> logging.Logger:
+        return logging.getLogger(name)
+    CounterscarpConfigError = Exception  # type: ignore[assignment,misc]
+    CounterscarpValidationError = Exception  # type: ignore[assignment,misc]
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
-    logger = get_logger(__name__)
-else:
-    import logging
-    logger = logging.getLogger(__name__)
+logger: logging.Logger = get_logger(__name__)
 
 
 @dataclass
@@ -685,9 +683,7 @@ def save_fingerprint_db(fingerprints: List[ProtocolFingerprint], path: str) -> N
     except (IOError, OSError) as e:
         error_msg = f"Failed to save fingerprint database to {path}"
         logger.error(error_msg)
-        if CounterscarpConfigError:
-            raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
-        raise
+        raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
 
 
 def load_fingerprint_db(path: str) -> List[ProtocolFingerprint]:
@@ -711,15 +707,11 @@ def load_fingerprint_db(path: str) -> List[ProtocolFingerprint]:
     except (IOError, OSError) as e:
         error_msg = f"Failed to load fingerprint database from {path}"
         logger.error(error_msg)
-        if CounterscarpConfigError:
-            raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
-        raise
+        raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
     except json.JSONDecodeError as e:
         error_msg = f"Invalid JSON in fingerprint database: {path}"
         logger.error(error_msg)
-        if CounterscarpConfigError:
-            raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
-        raise
+        raise CounterscarpConfigError(error_msg, details={"path": path, "error": str(e)})
 
 
 def get_fingerprint_by_name(
@@ -743,7 +735,7 @@ def get_fingerprint_by_name(
     return None
 
 
-def load_community_signatures(community_dir: str = None) -> List[ProtocolFingerprint]:
+def load_community_signatures(community_dir: str | None = None) -> List[ProtocolFingerprint]:
     """Load community-contributed protocol signatures from data/community_signatures/*.json
 
     Args:
@@ -756,7 +748,7 @@ def load_community_signatures(community_dir: str = None) -> List[ProtocolFingerp
     if community_dir is None:
         community_dir = os.path.join(os.path.dirname(__file__), "data", "community_signatures")
 
-    signatures = []
+    signatures: List[ProtocolFingerprint] = []
     if not os.path.isdir(community_dir):
         return signatures
 

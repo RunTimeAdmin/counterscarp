@@ -174,7 +174,7 @@ def _load_toml_license_key() -> str:
                         config = tomli.load(f)
 
                 license_section = config.get("license", {})
-                key = license_section.get("key", "")
+                key = str(license_section.get("key", ""))
                 if key:
                     return key
             except (OSError, KeyError, TypeError):
@@ -197,8 +197,9 @@ def _get_license_key() -> str:
 class LicenseManager:
     """Singleton license manager for Counterscarp Engine."""
 
-    _instance = None
+    _instance: "LicenseManager | None" = None
     _lock = threading.Lock()
+    _initialized: bool
 
     def __new__(cls):
         if cls._instance is None:

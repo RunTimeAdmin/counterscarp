@@ -52,7 +52,7 @@ def get_config() -> CounterscarpConfig:
 def get_aderyn_timeout() -> int:
     """Get Aderyn timeout from config or use default."""
     try:
-        return get_config().external_tools.aderyn_timeout
+        return int(get_config().external_tools.aderyn_timeout)
     except Exception:
         return 120
 
@@ -147,13 +147,14 @@ def run_aderyn(
             timeout=timeout
         )
         if result.stderr:
-            append_stderr_log(result.stderr, "aderyn", stderr_log)
+            append_stderr_log(result.stderr, "aderyn", stderr_log or "")
         # Aderyn writes to file, read it back
         output_file = os.path.join(project_root, f"aderyn-report.{output_format}")
         
         if output_format == "json" and os.path.exists(output_file):
             with open(output_file, 'r') as f:
-                return json.load(f)
+                result_data: Dict[str, Any] = json.load(f)
+                return result_data
         else:
             # Parse stdout if file not found
             return parse_aderyn_output(result.stdout, result.stderr)
@@ -203,7 +204,7 @@ def parse_aderyn_output(stdout: str, stderr: str) -> Dict[str, Any]:
     Returns:
         Parsed findings dictionary.
     """
-    findings = {
+    findings: Dict[str, Any] = {
         "high": [],
         "low": [],
         "nc": [],  # Non-critical
@@ -217,9 +218,9 @@ def parse_aderyn_output(stdout: str, stderr: str) -> Dict[str, Any]:
             data = json.loads(stdout[json_start:])
             
             # Extract issues
-            findings["high"] = data.get("high_issues", {}).get("issues", [])
-            findings["low"] = data.get("low_issues", {}).get("issues", [])
-            findings["nc"] = data.get("nc_issues", {}).get("issues", [])
+            findings["high"] = list(data.get("high_issues", {}).get("issues", []))
+            findings["low"] = list(data.get("low_issues", {}).get("issues", []))
+            findings["nc"] = list(data.get("nc_issues", {}).get("issues", []))
             
             findings["total"] = (
                 len(findings["high"]) +
@@ -318,7 +319,7 @@ def compare_with_slither(
     Returns:
         Dict with comparison results including aderyn_only, slither_only, and both.
     """
-    comparison = {
+    comparison: Dict[str, Any] = {
         "aderyn_only": [],
         "slither_only": [],
         "both": [],

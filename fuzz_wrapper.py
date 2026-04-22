@@ -54,9 +54,9 @@ def get_fuzz_runs() -> int:
         if hasattr(config, 'external_tools') and config.external_tools:
             runs = config.external_tools.foundry_fuzz_runs
             if runs:
-                return runs
+                return int(runs)
         # Fallback to fuzzing config
-        return config.fuzzing.foundry_runs
+        return int(config.fuzzing.foundry_runs)
     except Exception:
         return DEFAULT_FUZZ_RUNS
 
@@ -112,7 +112,7 @@ def run_foundry_fuzz(
             timeout=3600,
         )
         if result.stderr:
-            append_stderr_log(result.stderr, "forge-fuzz", stderr_log)
+            append_stderr_log(result.stderr, "forge-fuzz", stderr_log or "")
         return result.stdout
     except FileNotFoundError as e:
         logger.error("Foundry (forge) not found")

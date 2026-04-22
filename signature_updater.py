@@ -5,7 +5,7 @@ import os
 import shutil
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 try:
     import requests as _requests
@@ -125,6 +125,7 @@ def _update_threat_intel(db_path: str, config=None) -> int:
     # Merge and save
     if new_entries:
         existing_entries.extend(new_entries)
+        payload: Any
         if db_wrapper is not None:
             db_wrapper["entries"] = existing_entries
             db_wrapper["last_updated"] = datetime.now().strftime("%Y-%m-%d")

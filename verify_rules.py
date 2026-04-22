@@ -1,6 +1,8 @@
 """Verify specific heuristic rules against Ethernaut contracts."""
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+import io
+if isinstance(sys.stdout, io.TextIOWrapper):
+    sys.stdout.reconfigure(encoding='utf-8')
 from heuristic_scanner import scan_file
 
 # 1. CoinFlip - should catch blockhash

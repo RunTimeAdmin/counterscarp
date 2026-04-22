@@ -43,7 +43,7 @@ def get_config() -> CounterscarpConfig:
 def get_mythril_timeout() -> int:
     """Get Mythril timeout from config or use default."""
     try:
-        return get_config().external_tools.mythril_timeout
+        return int(get_config().external_tools.mythril_timeout)
     except Exception:
         return 600
 
@@ -122,7 +122,7 @@ def run_mythril(
 
     # Mythril may return non-zero when issues are found; we still care about stdout
     if result and result.stderr:
-        append_stderr_log(result.stderr, "mythril", stderr_log)
+        append_stderr_log(result.stderr, "mythril", stderr_log or "")
     return result.stdout if result else ""
 
 

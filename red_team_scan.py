@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import json
@@ -7,7 +8,7 @@ import shutil
 import sys
 import argparse
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, cast
 
 # Import logger and exceptions
 try:
@@ -19,10 +20,12 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
-    append_stderr_log = None
-    CounterscarpAnalysisError = None
-    CounterscarpToolNotFoundError = None
+    def get_logger(name: str) -> logging.Logger:
+        return logging.getLogger(name)
+    def append_stderr_log(stderr_text: str, tool_name: str, stderr_log_path: str) -> None:  # noqa: E501
+        pass
+    CounterscarpAnalysisError = Exception  # type: ignore[assignment,misc]
+    CounterscarpToolNotFoundError = Exception  # type: ignore[assignment,misc]
 
 # Import config loader
 try:
@@ -32,11 +35,7 @@ except ImportError:
     CONFIG_AVAILABLE = False
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
-    logger = get_logger(__name__)
-else:
-    import logging
-    logger = logging.getLogger(__name__)
+logger: logging.Logger = get_logger(__name__)
 
 # Load configuration with fallback to defaults
 _config = None
@@ -296,7 +295,7 @@ def _slither_per_file_fallback(
                 timeout=300,
                 env=_env,
             )
-            if result.stderr and stderr_log and append_stderr_log:
+            if result.stderr and stderr_log:
                 append_stderr_log(result.stderr, "slither-per-file", stderr_log)
             output = result.stdout
             json_start = output.find("{")
@@ -532,7 +531,7 @@ def run_slither(
             env=_slither_env,
         )
 
-        if result.stderr and stderr_log and append_stderr_log:
+        if result.stderr and stderr_log:
             append_stderr_log(result.stderr, "slither", stderr_log)
 
         # Slither may mix logs in stdout, but --json -
@@ -592,7 +591,7 @@ def run_slither(
                     " analysis for target directory"
                 )
                 fallback = _slither_per_file_fallback(
-                    target, project_root, slither_bin, cmd, stderr_log
+                    target, project_root or target, slither_bin, cmd, stderr_log
                 )
                 if fallback is not None:
                     return fallback
@@ -610,7 +609,7 @@ def run_slither(
                     " (analysis error prevented detection)"
                 )
 
-        return parsed
+        return cast(Dict[str, Any], parsed)
 
     except FileNotFoundError as e:
         logger.error("Slither command not found")
@@ -784,7 +783,7 @@ def parse_location(elements: List[Dict[str, Any]]) -> str:
     
     if lines:
         return f"{filename} (Lines: {lines})"
-    return filename
+    return cast(str, filename)
 
 
 def print_report(findings: List[Dict[str, Any]]) -> None:

@@ -51,7 +51,7 @@ def get_config() -> CounterscarpConfig:
 def get_medusa_timeout() -> int:
     """Get Medusa timeout from config or use default."""
     try:
-        return get_config().fuzzing.medusa_timeout
+        return int(get_config().fuzzing.medusa_timeout)
     except Exception:
         return 300
 
@@ -59,7 +59,7 @@ def get_medusa_timeout() -> int:
 def get_medusa_test_limit() -> int:
     """Get Medusa test limit from config or use default."""
     try:
-        return get_config().fuzzing.medusa_test_limit
+        return int(get_config().fuzzing.medusa_test_limit)
     except Exception:
         return 100000
 
@@ -161,7 +161,7 @@ def run_medusa_fuzz(
             timeout=timeout + 30
         )
         if result.stderr:
-            append_stderr_log(result.stderr, "medusa", stderr_log)
+            append_stderr_log(result.stderr, "medusa", stderr_log or "")
         return parse_medusa_output(result.stdout, result.stderr)
         
     except subprocess.TimeoutExpired as e:

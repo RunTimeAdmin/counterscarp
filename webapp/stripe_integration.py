@@ -108,7 +108,8 @@ def _load_session_map() -> Dict[str, Any]:
     if not _SESSION_MAP_PATH.exists():
         return {}
     try:
-        return json.loads(_SESSION_MAP_PATH.read_text(encoding="utf-8"))
+        result: Dict[str, Any] = json.loads(_SESSION_MAP_PATH.read_text(encoding="utf-8"))
+        return result
     except (json.JSONDecodeError, OSError):
         return {}
 
@@ -135,7 +136,7 @@ def find_license_by_subscription(subscription_id: str) -> Optional[Dict[str, Any
         return None
     for entry in db.get("licenses", []):
         if entry.get("stripe_subscription_id") == subscription_id:
-            return entry
+            return dict(entry)
     return None
 
 
@@ -265,9 +266,15 @@ def handle_checkout_completed(session: Dict[str, Any]) -> Dict[str, Any]:
         or ""
     )
 
+    from datetime import datetime, timedelta, timezone as _tz
+    _interval = product_info.get("interval", "month")
+    _now = datetime.now(_tz.utc)
+    _expires = (_now + timedelta(days=365 if _interval == "year" else 30)).strftime("%Y-%m-%d")
+
     entry: Dict[str, Any] = license_manager.generate_license_key(
         tier=product_info["tier"],
         email=email,
+        expires=_expires,
         max_activations=product_info["max_activations"],
     )
 
@@ -285,8 +292,8 @@ def handle_checkout_completed(session: Dict[str, Any]) -> Dict[str, Any]:
             user_manager.set_license_key(
                 existing_user["id"],
                 entry["key"],
-                stripe_customer_id=entry.get("stripe_customer_id"),
-                stripe_subscription_id=entry.get("stripe_subscription_id")
+                stripe_customer_id=str(entry.get("stripe_customer_id") or ""),
+                stripe_subscription_id=str(entry.get("stripe_subscription_id") or "")
             )
 
     # Persist to license DB
@@ -310,4 +317,7 @@ def handle_checkout_completed(session: Dict[str, Any]) -> Dict[str, Any]:
 def get_session_license_key(session_id: str) -> Optional[Dict[str, Any]]:
     """Return the license info stored for *session_id*, or None."""
     session_map = _load_session_map()
-    return session_map.get(session_id)
+    val = session_map.get(session_id)
+    if val is None:
+        return None
+    return dict(val)

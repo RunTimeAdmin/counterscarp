@@ -4,7 +4,8 @@ import sys
 import os
 import argparse
 import datetime
-from typing import List, Dict, Optional, Any
+import types as _types
+from typing import List, Dict, Optional, Any, Type, cast
 
 from logger import get_logger, setup_logging
 
@@ -47,6 +48,7 @@ except ImportError as e:
     FINGERPRINT_AVAILABLE = False
 
 # Optional advanced analyzers (best-effort imports)
+aderyn_wrapper: Optional[_types.ModuleType] = None
 try:
     import aderyn_wrapper
     logger.debug("Aderyn wrapper imported successfully")
@@ -54,6 +56,7 @@ except ImportError as e:
     logger.info(f"Aderyn wrapper not available: {e}")
     aderyn_wrapper = None
 
+medusa_wrapper: Optional[_types.ModuleType] = None
 try:
     import medusa_wrapper
     logger.debug("Medusa wrapper imported successfully")
@@ -61,6 +64,7 @@ except ImportError as e:
     logger.info(f"Medusa wrapper not available: {e}")
     medusa_wrapper = None
 
+solana_analyzer: Optional[_types.ModuleType] = None
 try:
     import solana_analyzer
     logger.debug("Solana analyzer imported successfully")
@@ -68,6 +72,7 @@ except ImportError as e:
     logger.info(f"Solana analyzer not available: {e}")
     solana_analyzer = None
 
+upgrade_diff: Optional[_types.ModuleType] = None
 try:
     import upgrade_diff
     logger.debug("Upgrade diff module imported successfully")
@@ -75,6 +80,7 @@ except ImportError as e:
     logger.info(f"Upgrade diff module not available: {e}")
     upgrade_diff = None
 
+history_scanner: Optional[_types.ModuleType] = None
 try:
     import history_scanner
     logger.debug("History scanner imported successfully")
@@ -82,6 +88,8 @@ except ImportError as e:
     logger.info(f"History scanner not available: {e}")
     history_scanner = None
 
+CounterscarpConfig: Optional[Type[Any]] = None
+load_config: Optional[Any] = None
 try:
     from config_loader import load_config, CounterscarpConfig
     CONFIG_AVAILABLE = True
@@ -89,9 +97,9 @@ try:
 except ImportError as e:
     logger.info(f"Config loader not available: {e}")
     CONFIG_AVAILABLE = False
-    CounterscarpConfig = None
 
 # Optional plugin manager
+PluginManager: Optional[Type[Any]] = None
 try:
     from plugin_manager import PluginManager
     PLUGIN_MANAGER_AVAILABLE = True
@@ -99,7 +107,6 @@ try:
 except ImportError as e:
     logger.info(f"Plugin manager not available: {e}")
     PLUGIN_MANAGER_AVAILABLE = False
-    PluginManager = None
 
 try:
     from report_generator import (
@@ -116,6 +123,7 @@ except ImportError as e:
     REPORT_GENERATOR_AVAILABLE = False
 
 # Optional RAG engine
+AuditCopilot: Optional[Type[Any]] = None
 try:
     from rag_engine import AuditCopilot
     RAG_AVAILABLE = True
@@ -123,7 +131,6 @@ try:
 except ImportError as e:
     logger.info(f"RAG engine not available: {e}")
     RAG_AVAILABLE = False
-    AuditCopilot = None
 
 # --- KNOWLEDGE BASE: HOW TO FIX THINGS ---
 # Maps specific vulnerability types to concrete code actions.
@@ -889,6 +896,7 @@ def main() -> None:
     config = None
     if CONFIG_AVAILABLE:
         try:
+            assert load_config is not None
             config = load_config(args.config)
             if config:
                 logger.info("Loaded config: %s v%s", config.engine.name, config.engine.version)
@@ -923,6 +931,7 @@ def main() -> None:
     plugin_mgr = None
     if PLUGIN_MANAGER_AVAILABLE and config and config.plugins.enabled:
         try:
+            assert PluginManager is not None
             plugin_mgr = PluginManager()
             plugin_count = plugin_mgr.discover_plugins(config.plugins.dirs)
             if plugin_count > 0:
@@ -956,6 +965,7 @@ def main() -> None:
                     "top_k": config.ai.top_k
                 }
             
+            assert AuditCopilot is not None
             copilot = AuditCopilot(rag_config)
             
             # Build from remediation DB
@@ -1105,7 +1115,7 @@ def main() -> None:
                 import sys as _sys
 
                 old_exit = _sys.exit
-                _sys.exit = lambda code=0: None
+                _sys.exit = cast(Any, lambda code=0: None)
                 aderyn_results = aderyn_wrapper.run_aderyn(args.target, stderr_log=stderr_log)
                 logger.info("Aderyn analysis complete")
             except Exception as e:
@@ -1156,7 +1166,7 @@ def main() -> None:
                 import sys as _sys
 
                 old_exit = _sys.exit
-                _sys.exit = lambda code=0: None
+                _sys.exit = cast(Any, lambda code=0: None)
                 medusa_results = medusa_wrapper.run_medusa_fuzz(
                     medusa_target, target_contract=args.fuzz_contract, stderr_log=stderr_log
                 )
@@ -1392,6 +1402,7 @@ def main() -> None:
                 elif args.llm:
                     rag_config = {"llm_enrichment": True}
                 
+                assert AuditCopilot is not None
                 copilot = AuditCopilot(rag_config)
                 
                 # Check if index exists
@@ -1524,7 +1535,7 @@ def main() -> None:
                 # to ensure exploits land inside the per-scan report directory)
                 _default_exploit_dir = str(scan_output_dir / "exploits")
                 exploit_config: Dict[str, Any] = {}
-                if hasattr(config, 'exploit_generation'):
+                if config is not None and hasattr(config, 'exploit_generation'):
                     eg = config.exploit_generation
                     exploit_config = {
                         'min_severity': getattr(eg, 'min_severity', 'HIGH'),
@@ -1858,8 +1869,9 @@ def main() -> None:
             if _license.check_pro_feature(BRANDED_REPORTS):
                 html_file = str(scan_output_dir / "audit_report.html")
                 html_path = generate_html_report(audit_report, html_file)
-                print(f"   HTML: {os.path.abspath(html_path)}")
-                logger.info("Professional HTML report: %s", os.path.abspath(html_path))
+                if html_path:
+                    print(f"   HTML: {os.path.abspath(html_path)}")
+                    logger.info("Professional HTML report: %s", os.path.abspath(html_path))
 
                 # PDF report (Pro feature, requires xhtml2pdf)
                 pdf_file = str(scan_output_dir / "audit_report.pdf")

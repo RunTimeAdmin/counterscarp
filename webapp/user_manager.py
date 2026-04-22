@@ -11,7 +11,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from passlib.hash import bcrypt
 
@@ -37,6 +37,7 @@ class UserManager:
 
     _instance: Optional["UserManager"] = None
     _class_lock = threading.Lock()
+    _initialized: bool
 
     # ------------------------------------------------------------------
     # Singleton construction
@@ -52,7 +53,7 @@ class UserManager:
         return cls._instance
 
     def __init__(self) -> None:
-        if self._initialized:  # type: ignore[has-type]
+        if self._initialized:
             return
         with self._class_lock:
             if self._initialized:
@@ -71,12 +72,13 @@ class UserManager:
         if not _USERS_DB_PATH.exists():
             self._write_db({"users": [], "version": 1})
 
-    def _load_db(self) -> Dict:
+    def _load_db(self) -> Dict[str, Any]:
         """Load the users database from disk."""
         if not _USERS_DB_PATH.exists():
             return {"users": [], "version": 1}
         with open(_USERS_DB_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            result: Dict[str, Any] = json.load(f)
+            return result
 
     def _write_db(self, db: Dict) -> None:
         """Persist the users database to disk."""
@@ -95,7 +97,7 @@ class UserManager:
         password: Optional[str] = None,
         google_id: Optional[str] = None,
         auth_method: str = "email",
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """Create a new user and return the user dict.
 
         Args:
@@ -118,12 +120,12 @@ class UserManager:
             db = self._load_db()
 
             # Uniqueness check
-            for user in db["users"]:
-                if user["email"] == email:
+            for existing_user in db["users"]:
+                if existing_user["email"] == email:
                     raise ValueError(f"Email already registered: {email}")
 
             now = datetime.now(timezone.utc).isoformat()
-            user: Dict = {
+            user: Dict[str, Any] = {
                 "id": str(uuid.uuid4()),
                 "email": email,
                 "name": name,
@@ -142,7 +144,7 @@ class UserManager:
 
         return user
 
-    def get_by_email(self, email: str) -> Optional[Dict]:
+    def get_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Return the user dict for *email*, or None if not found."""
         email = email.strip().lower()
         with self._file_lock:
@@ -152,10 +154,10 @@ class UserManager:
                 user.setdefault("license_key", None)
                 user.setdefault("stripe_customer_id", None)
                 user.setdefault("stripe_subscription_id", None)
-                return user
+                return dict(user)
         return None
 
-    def get_by_google_id(self, google_id: str) -> Optional[Dict]:
+    def get_by_google_id(self, google_id: str) -> Optional[Dict[str, Any]]:
         """Return the user dict for *google_id*, or None if not found."""
         with self._file_lock:
             db = self._load_db()
@@ -164,10 +166,10 @@ class UserManager:
                 user.setdefault("license_key", None)
                 user.setdefault("stripe_customer_id", None)
                 user.setdefault("stripe_subscription_id", None)
-                return user
+                return dict(user)
         return None
 
-    def get_by_id(self, user_id: str) -> Optional[Dict]:
+    def get_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Return the user dict for *user_id*, or None if not found."""
         with self._file_lock:
             db = self._load_db()
@@ -176,10 +178,10 @@ class UserManager:
                 user.setdefault("license_key", None)
                 user.setdefault("stripe_customer_id", None)
                 user.setdefault("stripe_subscription_id", None)
-                return user
+                return dict(user)
         return None
 
-    def verify_password(self, email: str, password: str) -> Optional[Dict]:
+    def verify_password(self, email: str, password: str) -> Optional[Dict[str, Any]]:
         """Verify *password* against the stored hash for *email*.
 
         Returns:
@@ -228,8 +230,8 @@ class UserManager:
         self,
         user_id: str,
         license_key: str,
-        stripe_customer_id: str = None,
-        stripe_subscription_id: str = None,
+        stripe_customer_id: Optional[str] = None,
+        stripe_subscription_id: Optional[str] = None,
     ) -> bool:
         """Attach a license key (and optional Stripe IDs) to a user.
 
@@ -303,7 +305,7 @@ class UserManager:
             )
         return result
 
-    def find_by_license_key(self, license_key: str) -> Optional[Dict]:
+    def find_by_license_key(self, license_key: str) -> Optional[Dict[str, Any]]:
         """Return the user dict whose ``license_key`` matches, or None.
 
         Useful for checking whether a license key is already linked to an
@@ -319,7 +321,7 @@ class UserManager:
             db = self._load_db()
         for user in db["users"]:
             if user.get("license_key") == license_key:
-                return user
+                return dict(user)
         return None
 
 

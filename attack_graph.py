@@ -265,7 +265,7 @@ def _parse_solidity_file(file_path: str) -> Dict[str, Any]:
         logger.warning(f"Could not read file {file_path}: {e}")
         return {}
 
-    result = {
+    result: Dict[str, Any] = {
         'contracts': [],
         'functions': [],
         'external_calls': [],
@@ -356,7 +356,7 @@ def _parse_rust_file(file_path: str) -> Dict[str, Any]:
         logger.warning(f"Could not read file {file_path}: {e}")
         return {}
 
-    result = {
+    result: Dict[str, Any] = {
         'programs': [],
         'functions': [],
         'cpi_calls': [],
@@ -579,10 +579,10 @@ def _process_solidity_parsed(
 
         # Link function to its contract (if we can determine it)
         for contract in parsed.get('contracts', []):
-            contract_id = contract_nodes.get(contract['name'])
-            if contract_id:
+            linked_contract_id = contract_nodes.get(contract['name'])
+            if linked_contract_id:
                 graph.add_edge(GraphEdge(
-                    source_id=contract_id,
+                    source_id=linked_contract_id,
                     target_id=func_id,
                     type='contains',
                     metadata={'relationship': 'has_function'}
@@ -614,11 +614,11 @@ def _process_solidity_parsed(
         for func in parsed.get('functions', []):
             if func['line'] <= line_no:
                 func_key = f"{file_path}:{func['name']}"
-                func_id = function_nodes.get(func_key)
-                if func_id:
+                linked_func_id = function_nodes.get(func_key)
+                if linked_func_id:
                     edge_type = 'delegates' if call_type == 'delegatecall' else 'calls'
                     graph.add_edge(GraphEdge(
-                        source_id=func_id,
+                        source_id=linked_func_id,
                         target_id=call_id,
                         type=edge_type,
                         metadata={'call_type': call_type}
@@ -634,10 +634,10 @@ def _process_solidity_parsed(
             if vuln_file == file_path:
                 for func in parsed.get('functions', []):
                     func_key = f"{file_path}:{func['name']}"
-                    func_id = function_nodes.get(func_key)
-                    if func_id and func['line'] <= vuln_line:
+                    vuln_func_id = function_nodes.get(func_key)
+                    if vuln_func_id and func['line'] <= vuln_line:
                         graph.add_edge(GraphEdge(
-                            source_id=func_id,
+                            source_id=vuln_func_id,
                             target_id=node.id,
                             type='triggers',
                             metadata={'relationship': 'vulnerability_in_function'}
@@ -702,10 +702,10 @@ def _process_rust_parsed(
 
         # Link to program
         program_name = Path(file_path).stem
-        program_id = contract_nodes.get(program_name)
-        if program_id:
+        linked_program_id = contract_nodes.get(program_name)
+        if linked_program_id:
             graph.add_edge(GraphEdge(
-                source_id=program_id,
+                source_id=linked_program_id,
                 target_id=func_id,
                 type='contains',
                 metadata={'relationship': 'has_function'}
@@ -736,10 +736,10 @@ def _process_rust_parsed(
         for func in parsed.get('functions', []):
             if func['line'] <= line_no:
                 func_key = f"{file_path}:{func['name']}"
-                func_id = function_nodes.get(func_key)
-                if func_id:
+                cpi_func_id = function_nodes.get(func_key)
+                if cpi_func_id:
                     graph.add_edge(GraphEdge(
-                        source_id=func_id,
+                        source_id=cpi_func_id,
                         target_id=cpi_id,
                         type='calls',
                         metadata={'call_type': cpi_type, 'is_cpi': True}
@@ -835,7 +835,7 @@ def export_graph_json(graph: AttackGraph) -> Dict[str, Any]:
     """
     nodes = []
     for node in graph.nodes:
-        node_data = {
+        node_data: Dict[str, Any] = {
             'id': node.id,
             'type': node.type,
             'name': node.name,

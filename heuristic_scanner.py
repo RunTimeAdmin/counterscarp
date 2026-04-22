@@ -4,9 +4,10 @@ import fnmatch
 import os
 import re
 import argparse
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 # Import logger
 try:
@@ -14,13 +15,14 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
+    def get_logger(name: str) -> logging.Logger:
+        return logging.getLogger(name)
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
+logger: logging.Logger
+if LOGGER_AVAILABLE:
     logger = get_logger(__name__)
 else:
-    import logging
     logger = logging.getLogger(__name__)
 
 # Optional config loader (graceful fallback if not available)
@@ -29,15 +31,17 @@ try:
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
-    CounterscarpConfig = None
+    CounterscarpConfig = None  # type: ignore[assignment,misc]
+    load_config = None  # type: ignore[assignment]
 
 # Optional plugin manager (graceful fallback if not available)
 try:
     from plugin_manager import PluginManager
+    _PluginManager = PluginManager
     PLUGIN_MANAGER_AVAILABLE = True
 except ImportError:
     PLUGIN_MANAGER_AVAILABLE = False
-    PluginManager = None
+    PluginManager = None  # type: ignore[misc,assignment]
 
 
 # Compiled regex for inline suppression pragmas (counterscarp-suppress).

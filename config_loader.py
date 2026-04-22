@@ -8,23 +8,24 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import ClassVar, Dict, List, Optional, Any
+from typing import TYPE_CHECKING, Callable, ClassVar, Dict, List, Optional, Any, Type
+from logging import Logger
 from dataclasses import dataclass, field
 from pathlib import Path
 
 # Import logger and exceptions
+get_logger: Optional[Callable[[str], Logger]] = None
+CounterscarpValidationError: Optional[Type[Exception]] = None
+CounterscarpConfigError: Optional[Type[Exception]] = None
 try:
     from logger import get_logger
     from exceptions import CounterscarpValidationError, CounterscarpConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
-    CounterscarpValidationError = None
-    CounterscarpConfigError = None
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
+if LOGGER_AVAILABLE and get_logger is not None:
     logger = get_logger(__name__)
 else:
     import logging
@@ -38,7 +39,7 @@ except ImportError:
         import tomllib as toml  # Python 3.11+
     except ImportError:
         try:
-            import toml  # Fallback to older toml package
+            import toml  # type: ignore[import-untyped]  # Fallback to older toml package
         except ImportError:
             logger.error(
                 "TOML parser not available. Install: pip install tomli"
@@ -684,22 +685,22 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
     except (PermissionError, IOError) as e:
         logger.error("Cannot read config file '%s': %s", config_path, e)
         return CounterscarpConfig()
-    except _toml_decode_error as e:
+    except _toml_decode_error as e:  # type: ignore[misc]
         logger.error(
             "TOML syntax error in config file '%s': %s",
             config_path,
             e,
         )
-        if CounterscarpConfigError:
-            raise CounterscarpConfigError(
+        if CounterscarpConfigError is not None:
+            raise CounterscarpConfigError(  # type: ignore[call-arg]
                 "Failed to parse configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
         return CounterscarpConfig()
     except Exception as e:
         logger.error("Unexpected error reading config '%s' (%s): %s", config_path, type(e).__name__, e)
-        if CounterscarpConfigError:
-            raise CounterscarpConfigError(
+        if CounterscarpConfigError is not None:
+            raise CounterscarpConfigError(  # type: ignore[call-arg]
                 "Failed to read configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e

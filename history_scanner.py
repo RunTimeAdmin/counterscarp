@@ -13,6 +13,7 @@ Example:
 
 from __future__ import annotations
 
+import logging
 import os
 import json
 import subprocess
@@ -31,18 +32,16 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
-    append_stderr_log = None
-    CounterscarpError = Exception
-    CounterscarpAnalysisError = Exception
-    CounterscarpValidationError = Exception
+    def get_logger(name: str) -> logging.Logger:
+        return logging.getLogger(name)
+    def append_stderr_log(stderr_text: str, tool_name: str, stderr_log_path: str) -> None:
+        pass
+    CounterscarpError = Exception  # type: ignore[assignment,misc]
+    CounterscarpAnalysisError = Exception  # type: ignore[assignment,misc]
+    CounterscarpValidationError = Exception  # type: ignore[assignment,misc]
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
-    logger = get_logger(__name__)
-else:
-    import logging
-    logger = logging.getLogger(__name__)
+logger: logging.Logger = get_logger(__name__)
 
 # Import heuristic scanner
 try:
@@ -51,10 +50,10 @@ try:
     HEURISTIC_AVAILABLE = True
 except ImportError:
     HEURISTIC_AVAILABLE = False
-    scan_file = None
-    HeuristicFinding = None
-    CounterscarpConfig = None
-    load_config = None
+    scan_file = None  # type: ignore[assignment]
+    HeuristicFinding = None  # type: ignore[assignment,misc]
+    CounterscarpConfig = None  # type: ignore[assignment,misc]
+    load_config = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -193,7 +192,7 @@ def parse_git_history(
             timeout=300
         )
         
-        if result.stderr and append_stderr_log:
+        if result.stderr and stderr_log:
             append_stderr_log(result.stderr, "git-log", stderr_log)
 
         if result.returncode != 0:
@@ -322,7 +321,7 @@ def scan_commit(
                     errors="replace",
                     timeout=30
                 )
-                if result.stderr and append_stderr_log:
+                if result.stderr and stderr_log:
                     append_stderr_log(result.stderr, "git-show", stderr_log)
                 
                 if result.returncode != 0:
@@ -918,7 +917,7 @@ def main() -> None:
     
     # Load config if provided
     config = None
-    if args.config and load_config:
+    if args.config and load_config is not None:
         try:
             config = load_config(args.config)
             print(f"[*] Loaded config: {config.engine.name} v{config.engine.version}")

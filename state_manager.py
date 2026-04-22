@@ -15,7 +15,7 @@ import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, cast
 
 from exceptions import CounterscarpError
 
@@ -48,9 +48,9 @@ class StateError(CounterscarpError):
 class _CounterscarpJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles dataclasses, datetime, and Path."""
 
-    def default(self, obj: Any) -> Any:  # type: ignore[override]
+    def default(self, obj: Any) -> Any:
         if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-            return dataclasses.asdict(obj)  # type: ignore[arg-type]
+            return dataclasses.asdict(obj)
         if isinstance(obj, datetime):
             return obj.isoformat()
         if isinstance(obj, Path):
@@ -326,7 +326,7 @@ class ScanStateManager:
             )
         try:
             with self._state_file.open("r", encoding="utf-8") as fh:
-                return json.load(fh)  # type: ignore[return-value]
+                return cast(Dict[str, Any], json.load(fh))
         except json.JSONDecodeError as exc:
             raise StateError(
                 f"State file is corrupt for session '{self._session_id}'.",

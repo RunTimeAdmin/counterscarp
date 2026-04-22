@@ -12,7 +12,7 @@ import re
 import os
 import sys
 import argparse
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, cast
 
 from dataclasses import dataclass
 
@@ -53,7 +53,7 @@ class SolanaFinding:
 
 # Anchor-specific vulnerability patterns
 # Expanded to 31 patterns for comprehensive Solana/Anchor security coverage
-ANCHOR_PATTERNS = [
+ANCHOR_PATTERNS: List[Dict[str, Any]] = [
     # ========== ACCOUNT VALIDATION (8 patterns) ==========
     {
         "id": "MISSING_SIGNER_CHECK",
@@ -400,7 +400,7 @@ def run_cargo_audit(project_root: str) -> Dict[str, Any]:
         
         if result.returncode == 0:
             import json
-            return json.loads(result.stdout)
+            return cast(Dict[str, Any], json.loads(result.stdout))
         else:
             return {"vulnerabilities": [], "warnings": result.stderr}
     
@@ -510,7 +510,7 @@ def analyze_solana_program(
     print("="*60)
     print(f"\n[*] Analyzing Solana program: {project_root}")
 
-    results = {
+    results: Dict[str, Any] = {
         "dependency_vulns": [],
         "pattern_findings": [],
         "account_analysis": [],

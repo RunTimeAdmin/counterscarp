@@ -176,11 +176,11 @@ async def register_submit(
                 break
 
     # Refresh user data after potential license link
-    user = user_manager.get_by_id(user["id"])
-    if user.get("license_key"):
+    refreshed_user = user_manager.get_by_id(user["id"])
+    if refreshed_user and refreshed_user.get("license_key"):
         import os
-        os.environ["COUNTERSCARP_PRO_LICENSE"] = user["license_key"]
-        request.session["user_license"] = user["license_key"]
+        os.environ["COUNTERSCARP_PRO_LICENSE"] = refreshed_user["license_key"]
+        request.session["user_license"] = refreshed_user["license_key"]
 
     return RedirectResponse(url="/", status_code=302)
 
@@ -259,7 +259,7 @@ async def google_callback(request: Request):
         user_manager.update_last_login(user["id"])
         # Auto-apply user's license if they have one
         user = user_manager.get_by_id(user["id"])
-        if user.get("license_key"):
+        if user and user.get("license_key"):
             import os
             os.environ["COUNTERSCARP_PRO_LICENSE"] = user["license_key"]
             request.session["user_license"] = user["license_key"]
@@ -309,7 +309,7 @@ async def admin_users(request: Request):
             data = json.load(f)
         for lic in data.get("licenses", []):
             if lic.get("key") == license_key:
-                return lic.get("tier", "community")
+                return str(lic.get("tier", "community"))
         return "community"
 
     def _mask_key(license_key: str | None) -> str | None:

@@ -22,7 +22,7 @@ from __future__ import annotations
 import os
 import math
 import re
-from typing import List, Optional
+from typing import List, Optional, Any
 from collections import Counter
 
 # Import logger and exceptions
@@ -32,12 +32,12 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
-    CounterscarpError = Exception
-    CounterscarpConfigError = Exception
+    get_logger = None  # type: ignore[assignment]
+    CounterscarpError = Exception  # type: ignore[misc,assignment]
+    CounterscarpConfigError = Exception  # type: ignore[misc,assignment]
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
+if LOGGER_AVAILABLE and get_logger is not None:
     logger = get_logger(__name__)
 else:
     import logging
@@ -54,7 +54,7 @@ try:
     import numpy as np
     NUMPY_AVAILABLE = True
 except ImportError:
-    np = None
+    np = None  # type: ignore[assignment]
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -173,10 +173,10 @@ class SimpleBagOfWords:
 
 
 # Global cache for models
-_local_model_cache: Optional[object] = None
+_local_model_cache: Optional[Any] = None
 
 
-def _get_local_model() -> Optional[object]:
+def _get_local_model() -> Optional[Any]:
     """Get or load the local sentence-transformers model.
     
     Returns:
@@ -576,5 +576,5 @@ if __name__ == "__main__":
     bow = SimpleBagOfWords(max_features=100)
     vectors = bow.fit_transform(test_texts)
     print(f"   Generated {len(vectors)} vectors")
-    print(f"   Vocabulary size: {len(bow.vocabulary)}")
+    print(f"   Vocabulary size: {bow.max_features}")
     print(f"   Dimension: {len(vectors[0])}")

@@ -7,6 +7,7 @@ assess inherited vulnerabilities.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import argparse
@@ -20,9 +21,10 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
-    get_logger = None
-    CounterscarpAnalysisError = None
-    CounterscarpValidationError = None
+    def get_logger(name: str) -> logging.Logger:
+        return logging.getLogger(name)
+    CounterscarpAnalysisError = None  # type: ignore[assignment,misc]
+    CounterscarpValidationError = None  # type: ignore[assignment,misc]
 
 # Import protocol database
 try:
@@ -42,7 +44,7 @@ try:
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
-    CounterscarpConfig = None
+    CounterscarpConfig = None  # type: ignore[assignment,misc]
 
 # Import fork-specific logic checks
 try:
@@ -53,11 +55,7 @@ except ImportError:
     run_fork_checks = None  # type: ignore[assignment]
 
 # Initialize logger
-if LOGGER_AVAILABLE and get_logger:
-    logger = get_logger(__name__)
-else:
-    import logging
-    logger = logging.getLogger(__name__)
+logger: logging.Logger = get_logger(__name__)
 
 
 @dataclass
@@ -216,7 +214,7 @@ def extract_contract_features(source_path: str) -> ContractFeatures:
     except (IOError, OSError) as e:
         error_msg = f"Failed to read contract file: {source_path}"
         logger.error(error_msg)
-        if CounterscarpValidationError:
+        if CounterscarpValidationError is not None:
             raise CounterscarpValidationError(error_msg, details={"path": source_path})
         raise
 
@@ -224,7 +222,7 @@ def extract_contract_features(source_path: str) -> ContractFeatures:
     in_contract = False
     brace_depth = 0
     current_function = None
-    function_body_lines = []
+    function_body_lines: list[str] = []
 
     for line in lines:
         stripped = line.strip()

@@ -82,9 +82,16 @@ from report_generator import (
     create_audit_report,
     generate_html_report,
     generate_markdown_report,
-    generate_pdf_report,
     save_sarif_report,
 )
+
+try:
+    from report_generator import generate_pdf_report as _generate_pdf_report_impl
+    def generate_pdf_report(report: AuditReport, output_path: str, logo_path: str | None = None) -> None:
+        _generate_pdf_report_impl(report, output_path, logo_path=logo_path)
+except (ImportError, AttributeError):
+    def generate_pdf_report(report: AuditReport, output_path: str, logo_path: str | None = None) -> None:
+        raise RuntimeError("generate_pdf_report is not available in this environment")
 from attack_graph import build_graph, export_graph_json
 from visualizer import generate_attack_graph_html
 
@@ -421,14 +428,14 @@ async def audit(
         safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', Path(file.filename or "unnamed").name)[:100]
         file_path = upload_dir / safe_name
 
-        with open(file_path, "wb") as f:
-            f.write(content)
+        with open(file_path, "wb") as fw:
+            fw.write(content)
         uploaded_paths.append(str(file_path))
 
     # Run heuristic scanner
     findings: List[Finding] = []
-    for file_path in uploaded_paths:
-        heuristic_findings = scan_target(file_path)
+    for fp_str in uploaded_paths:
+        heuristic_findings = scan_target(fp_str)
         for hf in heuristic_findings:
             findings.append(heuristic_finding_to_finding(hf))
 
@@ -437,9 +444,9 @@ async def audit(
     # Run Slither static analysis on Solidity files
     slither_findings: list[Finding] = []
     slither_status = "skipped"
-    for file_path in uploaded_paths:
-        if file_path.endswith(".sol"):
-            sf, status = run_slither_analysis(file_path)
+    for fp_str in uploaded_paths:
+        if fp_str.endswith(".sol"):
+            sf, status = run_slither_analysis(fp_str)
             slither_findings.extend(sf)
             if status != "completed" and slither_status == "skipped":
                 slither_status = status
@@ -492,7 +499,7 @@ async def audit(
         json.dump(findings_data, f, indent=2)
 
     # Generate HTML report (PRO feature)
-    html_path = results_dir / "report.html"
+    html_path: Path | None = results_dir / "report.html"
     if _license.check_pro_feature(BRANDED_REPORTS):
         generate_html_report(
             report, str(html_path),
@@ -618,7 +625,7 @@ async def audit(
         ),
         "analyzers": analyzers_list,
         "rules_triggered": sorted(
-            set(f["rule_id"] for f in findings_data)
+            str(fd["rule_id"]) for fd in findings_data
         ),
     }
 
@@ -740,7 +747,7 @@ async def terms_page(request: Request):
 async def create_checkout(request: Request):
     """Create a Stripe Checkout Session and redirect."""
     form = await request.form()
-    product_key = form.get("product", "pro_monthly")
+    product_key = str(form.get("product", "pro_monthly"))
     base_url = str(request.base_url).rstrip("/")
     success_url = (
         f"{base_url}/checkout/success"
@@ -771,8 +778,8 @@ async def checkout_success(request: Request):
                 user_manager.set_license_key(
                     current_user["id"],
                     license_key,
-                    stripe_customer_id=license_info.get("stripe_customer_id"),
-                    stripe_subscription_id=license_info.get("stripe_subscription_id")
+                    stripe_customer_id=str(license_info.get("stripe_customer_id") or ""),
+                    stripe_subscription_id=str(license_info.get("stripe_subscription_id") or "")
                 )
                 # Set env var for immediate session use
                 os.environ["COUNTERSCARP_PRO_LICENSE"] = license_key
@@ -1016,7 +1023,7 @@ async def save_api_key(request: Request):
     if not get_current_user(request):
         return RedirectResponse(url="/auth/login", status_code=302)
     form = await request.form()
-    api_key = form.get("openai_api_key", "").strip()
+    api_key = str(form.get("openai_api_key", "")).strip()
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
         # Persist to data/.env.local so it survives restarts
@@ -1085,7 +1092,7 @@ def find_license_in_db(license_key: str) -> Optional[Dict]:
         data = json.load(f)
     for lic in data.get("licenses", []):
         if lic.get("key") == license_key:
-            return lic
+            return dict(lic)
     return None
 
 
@@ -1116,7 +1123,7 @@ async def save_license_key(request: Request):
     if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     form = await request.form()
-    license_key = form.get("license_key", "").strip()
+    license_key = str(form.get("license_key", "")).strip()
 
     if not license_key:
         return JSONResponse(

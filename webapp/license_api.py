@@ -11,7 +11,7 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field, StringConstraints
@@ -96,12 +96,12 @@ class LicenseInfoResponse(BaseModel):
 _DEFAULT_DB: dict = {"licenses": [], "version": 1}
 
 
-def _load_db() -> dict:
+def _load_db() -> dict[str, Any]:
     """Load the licenses database from disk."""
     if not _LICENSE_DB_PATH.exists():
         return {"licenses": [], "version": 1}
     with open(_LICENSE_DB_PATH, "r", encoding="utf-8") as f:
-        db = json.load(f)
+        db: dict[str, Any] = json.load(f)
     # Validate structure — guard against corrupted files
     if not isinstance(db.get("licenses"), list):
         logger.error(

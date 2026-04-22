@@ -42,7 +42,8 @@ def _load_expected(json_path: Path | None = None) -> dict[str, str]:
     for path in candidates:
         if path and path.exists():
             with path.open() as f:
-                return json.load(f)
+                data: dict[str, str] = json.load(f)
+                return data
     raise FileNotFoundError(
         "tool-versions.json not found in any expected location"
     )
