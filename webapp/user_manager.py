@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from passlib.hash import bcrypt
+import bcrypt as _bcrypt
 
 from webapp.config import BASE_DIR
 
@@ -130,7 +130,7 @@ class UserManager:
                 "email": email,
                 "name": name,
                 "google_id": google_id,
-                "password_hash": bcrypt.hash(password[:72]) if password else None,
+                "password_hash": _bcrypt.hashpw(password.encode("utf-8")[:72], _bcrypt.gensalt()).decode("utf-8") if password else None,
                 "created_at": now,
                 "last_login": now,
                 "auth_method": auth_method,
@@ -195,7 +195,7 @@ class UserManager:
         if not stored_hash:
             return None
         try:
-            valid = bcrypt.verify(password[:72], stored_hash)
+            valid = _bcrypt.checkpw(password.encode("utf-8")[:72], stored_hash.encode("utf-8"))
         except Exception:
             return None
         return user if valid else None
