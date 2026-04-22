@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -13,6 +14,17 @@ try:
     import stripe  # noqa: F401
 except ImportError:
     stripe = None  # type: ignore
+
+# ---------------------------------------------------------------------------
+# Stripe configuration — loaded from environment variables
+# ---------------------------------------------------------------------------
+
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+if stripe and STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
 
 # ---------------------------------------------------------------------------
 # Product catalogue
@@ -135,6 +147,91 @@ def update_license_in_db(key: str, updates: Dict[str, Any]) -> bool:
                 json.dump(db, fh, indent=2)
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Price cache (avoids redundant Stripe API calls)
+# ---------------------------------------------------------------------------
+
+_price_cache: Dict[str, str] = {}
+_price_cache_lock = threading.Lock()
+
+
+def get_or_create_price(product_key: str) -> str:
+    """Return a Stripe Price ID for *product_key*, creating it if necessary."""
+    with _price_cache_lock:
+        if product_key in _price_cache:
+            return _price_cache[product_key]
+
+    if stripe is None:
+        raise RuntimeError("stripe package is not installed")
+
+    product_info = PRODUCTS[product_key]
+
+    # Check if the product already exists in Stripe
+    existing = stripe.Product.search(
+        query=f"metadata['product_key']:'{product_key}'"
+    )
+
+    if existing.data:
+        product = existing.data[0]
+        prices = stripe.Price.list(product=product.id, active=True, limit=1)
+        if prices.data:
+            price_id = prices.data[0].id
+            with _price_cache_lock:
+                _price_cache[product_key] = price_id
+            return price_id
+
+    # Create a new Product + Price
+    product = stripe.Product.create(
+        name=product_info["name"],
+        description=product_info["description"],
+        metadata={"product_key": product_key},
+    )
+
+    price = stripe.Price.create(
+        product=product.id,
+        unit_amount=product_info["price_cents"],
+        currency="usd",
+        recurring={"interval": product_info["interval"]},
+        metadata={"product_key": product_key},
+    )
+
+    price_id = price.id
+    with _price_cache_lock:
+        _price_cache[product_key] = price_id
+    return price_id
+
+
+# ---------------------------------------------------------------------------
+# Checkout session creation
+# ---------------------------------------------------------------------------
+
+
+def create_checkout_session(
+    product_key: str,
+    success_url: str,
+    cancel_url: str,
+) -> Any:
+    """Create a Stripe Checkout Session and return the session object.
+
+    *success_url* should contain the literal ``{CHECKOUT_SESSION_ID}``
+    placeholder — Stripe replaces it after payment.
+    """
+    if stripe is None:
+        raise RuntimeError("stripe package is not installed")
+
+    price_id = get_or_create_price(product_key)
+
+    session = stripe.checkout.Session.create(
+        mode="subscription",
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        payment_method_types=["card"],
+        metadata={"product_key": product_key},
+    )
+    return session
 
 
 # ---------------------------------------------------------------------------
