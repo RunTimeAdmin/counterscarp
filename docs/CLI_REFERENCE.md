@@ -79,12 +79,19 @@ Counterscarp Engine provides three CLI commands:
 |------|------|---------|-------------|
 | `--fingerprint` | flag | `false` | Run protocol fingerprint similarity scan |
 
+### Web Interface
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--gui` | flag | `false` | Launch the local web interface (FastAPI/Uvicorn on http://localhost:8000). Opens an interactive browser-based dashboard for uploading contracts, running scans, viewing results, and downloading reports. |
+
 ### RAG / AI
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--rag` | flag | `false` | Enable RAG enrichment for findings |
-| `--build-rag-index` | flag | `false` | Rebuild the RAG knowledge base index |
+| `--build-rag-index` | flag | `false` | Build a vector index of the target codebase for RAG-powered AI enrichment. Required before using `--rag` on a new project. Uses sentence-transformers locally or OpenAI embeddings if OPENAI_API_KEY is set. |
+| `--llm` | flag | `false` | Enable LLM-powered analysis insights. Requires OPENAI_API_KEY or local Ollama server. |
 
 ---
 

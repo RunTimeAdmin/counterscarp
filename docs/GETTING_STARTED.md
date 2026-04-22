@@ -9,6 +9,8 @@
 - [Installation](#installation)
 - [Your First Audit in 60 Seconds](#your-first-audit-in-60-seconds)
 - [Web UI Quick Start](#web-ui-quick-start)
+- [Docker Quick Start](#docker-quick-start)
+- [Local Web Interface](#local-web-interface)
 - [Pro License Activation](#pro-license-activation)
 - [Next Steps](#next-steps)
 
@@ -146,6 +148,47 @@ For production deployment with nginx + SSL, see the [Deployment Guide](DEPLOYMEN
 
 ---
 
+## Docker Quick Start
+
+Pull the official image and mount your contracts directory:
+
+```bash
+docker pull counterscarp/engine:latest
+docker run -v $(pwd)/contracts:/scan counterscarp/engine --target /scan --report
+```
+
+Reports are written inside the container at `/scan`. To retrieve them, mount an output directory:
+
+```bash
+docker run \
+  -v $(pwd)/contracts:/scan \
+  -v $(pwd)/output:/output \
+  counterscarp/engine --target /scan --report --output /output
+```
+
+**Environment variables** (pass with `-e`):
+
+```bash
+docker run -e COUNTERSCARP_PRO_LICENSE=SE-PRO-xxx \
+  -v $(pwd)/contracts:/scan \
+  counterscarp/engine --target /scan --report
+```
+
+---
+
+## Local Web Interface
+
+The `--gui` flag launches the full web UI without manually starting uvicorn:
+
+```bash
+counterscarp --gui
+# Opens http://localhost:8000 in your browser
+```
+
+This is the quickest way to use the browser interface for one-off audits. To keep it running persistently, use the uvicorn command in the [Web UI Quick Start](#web-ui-quick-start) section above or follow the [Deployment Guide](DEPLOYMENT.md) for production use.
+
+---
+
 ## Pro License Activation
 
 Counterscarp Engine ships with both free and pro features in a single package. Pro features require a valid license key to unlock.
@@ -181,7 +224,7 @@ Counterscarp Engine offers five license tiers:
 | **Developer** | $49/mo | `SE-DEV-xxx` | Web app, Solana Analyzer, HTML/SARIF reports |
 | **Pro** | $149/mo | `SE-PRO-xxx` | AI Copilot, Attack Graph, Exploit PoC, Time-Travel, Fingerprinting |
 | **Team** | $399/mo | `SE-TEAM-xxx` | 10 seats, shared workspace, API access |
-| **Enterprise** | Custom | `SE-ENT-xxx` | Unlimited seats, custom integrations, priority support |
+| **Enterprise** | Custom | `SE-ENT-xxx` | Unlimited seats, unlimited activations, custom integrations, priority support, dedicated account manager |
 
 ### Tier Features
 
@@ -204,6 +247,14 @@ Counterscarp Engine offers five license tiers:
 - **10 Seats** — Shared team access with centralized management
 - **Shared Workspace** — Collaborative audit projects and findings
 - **API Access** — Programmatic integration with CI/CD pipelines
+
+**Enterprise tier** unlocks (includes all Team features):
+
+- **Unlimited Seats** — No per-seat restrictions, organisation-wide deployment
+- **Unlimited Activations** — Deploy across any number of machines or CI runners
+- **Custom Integrations** — Bespoke connectors and workflow automation
+- **Priority Support** — Direct engineering escalation and SLA guarantees
+- **Dedicated Account Manager** — Onboarding, quarterly reviews, and renewal management
 
 ### Getting a License
 

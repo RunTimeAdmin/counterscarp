@@ -128,6 +128,31 @@ reason = "All emergency functions have onlyOwner, heuristic is false positive"
 expires = "2025-12-31"
 ```
 
+### Inline Comment Suppressions
+
+You can suppress findings directly in your source code using special comments:
+
+```solidity
+// counterscarp-suppress: RULE_ID reason: explanation
+function riskyOperation() external {
+    // This line will not trigger RULE_ID
+}
+```
+
+**Supported formats:**
+- `// counterscarp-suppress: RULE_ID` — suppress without reason
+- `// counterscarp-suppress: RULE_ID reason: explanation` — suppress with documented reason
+- `// counterscarp-suppress: RULE_ID_1, RULE_ID_2` — suppress multiple rules on one line
+
+Inline suppressions take precedence over TOML suppressions for the same file and line.
+
+### Migrating from Garrison Engine (pre-v5.0.0)
+
+If upgrading from Garrison Engine, rename your config file and update references:
+1. Rename `garrison.toml` → `counterscarp.toml`
+2. Update environment variables: `GARRISON_*` → `COUNTERSCARP_*`
+3. Update data directory: `.garrison/` → `.counterscarp/`
+
 ---
 
 ### `[static_analysis]`

@@ -8,17 +8,18 @@
 
 1. [Installation](#installation)
 2. [Quick Scan](#quick-scan)
-3. [Configuration](#configuration)
-4. [Report Formats](#report-formats)
-5. [CI/CD Integration](#cicd-integration)
-6. [Execution Profiles](#execution-profiles)
-7. [Advanced Features](#advanced-features)
-8. [Offline / Air-Gapped Setup](#offline--air-gapped-setup)
-9. [License Tiers](#license-tiers)
-10. [Web Application Authentication](#web-application-authentication)
-11. [Environment Variables](#environment-variables)
-12. [Updating](#updating)
-13. [Troubleshooting](#troubleshooting)
+3. [Local GUI Mode](#local-gui-mode)
+4. [Configuration](#configuration)
+5. [Report Formats](#report-formats)
+6. [CI/CD Integration](#cicd-integration)
+7. [Execution Profiles](#execution-profiles)
+8. [Advanced Features](#advanced-features)
+9. [Offline / Air-Gapped Setup](#offline--air-gapped-setup)
+10. [License Tiers](#license-tiers)
+11. [Web Application Authentication](#web-application-authentication)
+12. [Environment Variables](#environment-variables)
+13. [Updating](#updating)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -177,6 +178,28 @@ Verifies that Slither, Foundry, Mythril, and Medusa are available before scannin
 counterscarp-engine --target ./contracts --min-severity HIGH
 counterscarp-engine --target ./contracts --min-confidence 7
 ```
+
+---
+
+## Local GUI Mode
+
+Launch the built-in web interface for a visual scanning experience:
+
+```bash
+counterscarp --gui
+```
+
+This starts a local FastAPI/Uvicorn server at `http://localhost:8000` with:
+- Drag-and-drop contract upload
+- Visual scan configuration
+- Interactive results dashboard with severity breakdown and risk score
+- Report downloads (HTML, Markdown, SARIF, JSON)
+- License key management via Settings page
+- Attack graph visualization
+
+No external server required — everything runs on your machine.
+
+> **Requires the web extras:** `pip install "counterscarp-engine[web]"`
 
 ---
 
@@ -392,6 +415,21 @@ line = 204
 reason = "Return value intentionally ignored — token transfer reverts on failure"
 expires = "2026-12-31"
 ```
+
+### Inline Comment Suppressions
+
+Suppress specific rules directly in your Solidity source code:
+
+```solidity
+// counterscarp-suppress: TX_ORIGIN_USAGE reason: Used intentionally for gas relay pattern
+function relay() external {
+    require(tx.origin == msg.sender);
+}
+```
+
+Format: `// counterscarp-suppress: RULE_ID [reason: explanation]`
+
+Inline suppressions apply only to the finding on the immediately following line. They do not require changes to `counterscarp.toml` and are useful for one-off accepted risks within the contract source.
 
 ### Common configuration scenarios
 
@@ -639,6 +677,8 @@ output_dir = "."
 
 RAG-based knowledge retrieval enriches findings with context from past audits.
 
+**How RAG enrichment works:** The `--rag` flag performs a vector similarity search over your indexed codebase (or a pre-built knowledge base of past audit reports). For each finding, the top-K most similar code patterns and remediation examples are retrieved and appended to the finding's context — giving you better explanations and fix suggestions without sending your source code to any external service.
+
 ```bash
 # Enable RAG enrichment
 counterscarp-engine --target ./contracts --rag
@@ -646,13 +686,22 @@ counterscarp-engine --target ./contracts --rag
 # Enable RAG + LLM analysis
 counterscarp-engine --target ./contracts --rag --llm
 
-# Rebuild the RAG knowledge base from historical reports
+# Build a vector index of your codebase for similarity search
 counterscarp-engine --build-rag-index
 
 # Use OpenAI as LLM backend
 export OPENAI_API_KEY="sk-..."
 counterscarp-engine --target ./contracts --rag --llm
 ```
+
+**`--build-rag-index`** scans all `.sol` files in the project, computes local embeddings, and writes a vector index to `.counterscarp/rag_index.json`. Re-run this command whenever your codebase changes significantly. The index is used by `--rag` at scan time to find similar patterns.
+
+**Model recommendations:**
+
+| Option | Model | Cost | Privacy | Best For |
+|--------|-------|------|---------|----------|
+| **Local (recommended)** | Ollama + `deepseek-coder` | Free | Full — nothing leaves your machine | Air-gapped environments, confidential audits |
+| **Cloud** | OpenAI `gpt-4o-mini` | ~$0.15 / 1M tokens | Only finding summaries sent (never source code) | Better accuracy, faster setup |
 
 Configure in `counterscarp.toml`:
 
@@ -708,16 +757,33 @@ ignore_comment_changes = true
 
 Generates Foundry test exploits for detected findings using local templates (+ optional LLM enhancement).
 
+**What it generates:** Foundry test files (`.t.sol`) that attempt to reproduce each detected vulnerability. For common rule categories (reentrancy, flash loan, oracle manipulation, access control, integer overflow, front-running), purpose-built templates are used. For other findings, a generic fallback template is applied.
+
+**Pro tier required** — the Exploit PoC generator is available on Professional, Team, and Enterprise plans.
+
+**Running the exploits:**
+
+```bash
+# Generate exploits alongside your scan report
+counterscarp-engine --target ./contracts --report
+
+# This creates an exploits/ directory with .t.sol files
+# Run them with Foundry:
+forge test --match-path "exploits/*.t.sol" -vvv
+```
+
+**Available templates:**
+
 ```bash
 # Included templates: reentrancy, flash_loan, oracle_manipulation,
 #                     access_control, integer_overflow, front_running
 ```
 
-Configure in `counterscarp.toml`:
+**Enable in `counterscarp.toml`:**
 
 ```toml
 [exploit_generation]
-auto_generate = false
+auto_generate = true
 min_severity = "HIGH"
 validate_compilation = true
 output_dir = "exploits/"
@@ -828,23 +894,27 @@ ollama_url = "http://localhost:11434"
 
 Counterscarp Engine ships as a single package. Pro features are gated by a license key.
 
-| Feature | Community (Free) | Developer ($49/mo) | Professional ($149/mo) | Team ($399/mo) |
-|---------|:---:|:---:|:---:|:---:|
-| Heuristic scanning (34 rules) | ✅ | ✅ | ✅ | ✅ |
-| Markdown / JSON reports | ✅ | ✅ | ✅ | ✅ |
-| CLI usage | ✅ | ✅ | ✅ | ✅ |
-| Supply chain scanning | ✅ | ✅ | ✅ | ✅ |
-| HTML / SARIF / PDF reports | — | ✅ | ✅ | ✅ |
-| Slither integration | — | ✅ | ✅ | ✅ |
-| Solana analyzer (35 rules) | — | ✅ | ✅ | ✅ |
-| Protocol fingerprinting | — | ✅ | ✅ | ✅ |
-| Web app access | — | 5 scans/mo | Unlimited | Unlimited |
-| AI Copilot (RAG + LLM) | — | — | ✅ | ✅ |
-| Exploit PoC generator | — | — | ✅ | ✅ |
-| Time-travel git scanner | — | — | ✅ | ✅ |
-| Attack graph visualization | — | — | ✅ | ✅ |
-| Machine activations | — | 1 | 3 | 10 |
-| Support | GitHub | Email | Priority (24 hr) | Dedicated |
+| Feature | Community (Free) | Developer ($49/mo) | Professional ($149/mo) | Team ($399/mo) | Enterprise (Custom) |
+|---------|:---:|:---:|:---:|:---:|:---:|
+| Heuristic scanning (34 rules) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Markdown / JSON reports | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CLI usage | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Supply chain scanning | ✅ | ✅ | ✅ | ✅ | ✅ |
+| HTML / SARIF / PDF reports | — | ✅ | ✅ | ✅ | ✅ |
+| Slither integration | — | ✅ | ✅ | ✅ | ✅ |
+| Solana analyzer (35 rules) | — | ✅ | ✅ | ✅ | ✅ |
+| Protocol fingerprinting | — | ✅ | ✅ | ✅ | ✅ |
+| Web app access | — | 5 scans/mo | Unlimited | Unlimited | Unlimited |
+| AI Copilot (RAG + LLM) | — | — | ✅ | ✅ | ✅ |
+| Exploit PoC generator | — | — | ✅ | ✅ | ✅ |
+| Time-travel git scanner | — | — | ✅ | ✅ | ✅ |
+| Attack graph visualization | — | — | ✅ | ✅ | ✅ |
+| Machine activations | — | 1 | 3 | 10 | Unlimited |
+| Support | GitHub | Email | Priority (24 hr) | Dedicated | Dedicated + SLA |
+| Custom integrations | — | — | — | — | ✅ |
+| Dedicated account manager | — | — | — | — | ✅ |
+
+> **Enterprise (SE-ENT-xxx):** Custom pricing, unlimited seats, unlimited activations, custom integrations, priority support, and a dedicated account manager. All Pro features included. Contact [contact@counterscarp.io](mailto:contact@counterscarp.io) for a quote.
 
 Get your license at **https://counterscarp.io/pricing**
 

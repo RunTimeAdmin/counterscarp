@@ -7,6 +7,7 @@
 - [Markdown Report](#markdown-report)
 - [SARIF 2.1.0 Format](#sarif-21-format)
 - [JSON Format](#json-format)
+- [PDF Report](#pdf-report)
 - [Customizing Reports via Configuration](#customizing-reports-via-configuration)
 - [Logo Branding](#logo-branding)
 
@@ -302,6 +303,31 @@ Download from the results page at `/results/{audit_id}/report/json`.
 
 ---
 
+## PDF Report
+
+Professional-quality PDF reports for formal audit deliverables.
+
+**Requirements:**
+- Pro tier license or above
+- PDF extras: `pip install "counterscarp-engine[pdf]"`
+- Backend: xhtml2pdf
+
+**Generation:**
+```bash
+counterscarp --target ./contracts --report --format pdf
+```
+
+**Features:**
+- Branded cover page with project name and date
+- Executive summary with risk score and severity breakdown
+- Full findings with code snippets and remediation guidance
+- Table of contents with page numbers
+- Custom logo support via `[reporting].logo_path`
+
+**Note:** PDF generation requires the `xhtml2pdf` library. Install it with the pdf extras package.
+
+---
+
 ## Customizing Reports via Configuration
 
 Control report generation in `counterscarp.toml`:
@@ -337,6 +363,15 @@ access_matrix = true
 | `severity` | Group findings by severity level (default) |
 | `file` | Group findings by source file |
 | `rule` | Group findings by rule ID |
+
+### Executive Summary Section
+
+All report formats (except JSON) include an executive summary:
+
+- **Total Findings:** count by severity
+- **Risk Score:** 0-100 with PASS/WARNING/FAIL assessment
+- **Top 10 Critical Issues:** highest-severity findings with one-line descriptions
+- **Scan Coverage:** analyzers run, files processed, time elapsed
 
 ---
 

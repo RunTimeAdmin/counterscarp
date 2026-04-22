@@ -769,7 +769,18 @@ def main() -> None:
         default=None,
         help="Resume a previous scan by session ID",
     )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Launch the local web interface (FastAPI/Uvicorn on http://localhost:8000)",
+    )
     args = parser.parse_args()
+
+    # --- GUI mode (no --target needed) ---
+    if args.gui:
+        from gui import create_gui
+        create_gui()
+        return
 
     # --- Update signatures (no --target needed) ---
     if args.update_signatures:

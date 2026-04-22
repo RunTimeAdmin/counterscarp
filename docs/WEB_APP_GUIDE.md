@@ -54,13 +54,30 @@ See the [Deployment Guide](DEPLOYMENT.md) for instructions on setting up your ow
 
 1. **Open the upload page** — Navigate to the root URL (`/`)
 2. **Enter project name** — Provide a descriptive name for the audit (e.g., "MyProtocol V2")
-3. **Select files** — Click to browse or drag-and-drop `.sol` and/or `.rs` files
+3. **Select files** — Click to browse or drag-and-drop `.sol` or `.rs` files
    - Maximum file size: **10 MB** per file
-   - Supported extensions: `.sol`, `.rs`
+   - Supported formats: **individual `.sol` (Solidity) or `.rs` (Rust/Anchor) source files** — ZIP archives are not currently supported
+   - To upload a multi-file project, select all source files at once using your OS file picker (Ctrl+click or Shift+click)
 4. **Click "Run Audit"** — The analysis pipeline starts immediately
-5. **Wait for results** — You'll be redirected to the results page when complete
+5. **Wait for results** — You'll be redirected to the results page when complete (120-second timeout for web uploads)
 
-**Tip:** Upload all related contract files at once for cross-contract analysis and accurate attack graph generation.
+### Cross-File Analysis
+
+Upload all related contract files together in a single submission. The engine analyses the full file set as one project, enabling detection of:
+
+- **Cross-contract reentrancy** — attack paths that span multiple contracts
+- **Shared state issues** — storage variables and proxy patterns across inheritance hierarchies
+- **Inter-contract access control** — privilege escalation paths through delegatecall chains
+
+Uploading contracts in separate sessions creates isolated audits and will miss vulnerabilities that only emerge from contract interactions.
+
+### Server Limits
+
+| Constraint | Limit |
+|------------|-------|
+| Max file size | 10 MB per file |
+| Scan timeout | 120 seconds |
+| Supported formats | `.sol` (Solidity) and `.rs` (Rust/Anchor) source files |
 
 ---
 
@@ -118,6 +135,16 @@ When the AI Audit Copilot is available, it provides:
 - **Context enrichment** — Adds relevant references and CWE classifications
 
 **Note:** The AI Copilot uses local sentence-transformers embeddings by default. No API keys are required. Install with `pip install "counterscarp-engine[ai]"`.
+
+### Exploit PoC Files
+
+When scanning with a Pro (or higher) license, the results page includes auto-generated Foundry exploit test files for critical and high-severity findings.
+
+- Each CRITICAL or HIGH finding includes a link to a `.t.sol` Foundry test that demonstrates the attack vector
+- The test file is runnable with `forge test` against a local Anvil fork — no manual scaffolding required
+- Individual PoC files can be downloaded from the finding detail panel, or you can download the full `exploits/` directory as a ZIP from the results page footer
+
+**Requirements:** Foundry must be installed locally to execute the generated tests. See [foundry.paradigm.xyz](https://foundry.paradigm.xyz) for installation instructions.
 
 ---
 

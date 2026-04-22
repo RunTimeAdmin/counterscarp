@@ -21,6 +21,7 @@
   - [Token Security (4)](#token-security-4)
   - [General Validation (4)](#general-validation-4)
 - [Bug Bounty Payout Reference](#bug-bounty-payout-reference)
+- [Confidence Scoring](#confidence-scoring)
 - [Slither Detector Categories](#slither-detector-categories)
 
 ---
@@ -175,6 +176,30 @@ These rules complement deeper analysis tools (Slither, Mythril, Aderyn) by catch
 | `UNCONSTRAINED_SYSTEM_PROGRAM` | MEDIUM | System program CPI without program ID verification | Verify system_program account matches `system_program::ID` |
 | `MISSING_CLOCK_VALIDATION` | LOW | Clock usage without timestamp/slot validation | Document clock dependency and drift tolerance |
 | `DUPLICATE_MUTABLE_ACCOUNTS` | HIGH | Multiple mutable borrows of same account | Ensure accounts are distinct |
+
+---
+
+## Confidence Scoring
+
+Each finding includes a confidence score from 1-10:
+
+| Score | Level | Meaning |
+|-------|-------|---------|
+| 9-10 | Very High | Near-certain vulnerability, minimal false positive risk |
+| 7-8 | High | Strong indicators, worth investigating |
+| 5-6 | Medium | Possible issue, context-dependent |
+| 3-4 | Low | Weak signal, likely informational |
+| 1-2 | Very Low | Heuristic match only, high false positive chance |
+
+Filter findings by confidence using:
+```toml
+[engine]
+min_confidence = 5  # Only report findings with confidence >= 5
+```
+
+Or via CLI: `counterscarp --target ./contracts --min-confidence 5`
+
+> **Inline Suppressions:** You can suppress individual findings directly in Solidity source using `// counterscarp-suppress: RULE_ID` comments. See [CONFIGURATION.md](CONFIGURATION.md#inline-comment-suppressions) for full syntax and examples.
 
 ---
 
