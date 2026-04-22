@@ -38,6 +38,7 @@ from webapp.config import (
     TEMPLATES_DIR,
     UPLOAD_DIR,
     SESSION_SECRET,
+    validate_production_config,
 )
 
 from license_manager import (
@@ -304,6 +305,7 @@ def _cleanup_old_directories(base_dir: Path, max_age_days: int, logger, label: s
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup."""
+    validate_production_config()
     ensure_directories()
 
 

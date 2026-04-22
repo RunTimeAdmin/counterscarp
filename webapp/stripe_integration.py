@@ -5,6 +5,7 @@ Stripe integration for Counterscarp Engine — payment processing and license pr
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from pathlib import Path
@@ -24,6 +25,12 @@ from webapp.user_manager import user_manager
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+logger = logging.getLogger("counterscarp.security")
+if not STRIPE_SECRET_KEY:
+    logger.warning("STRIPE_SECRET_KEY not set — payment features will be unavailable")
+if not STRIPE_WEBHOOK_SECRET:
+    logger.warning("STRIPE_WEBHOOK_SECRET not set — webhook signature verification will fail")
 
 if stripe and STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY

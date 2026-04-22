@@ -88,6 +88,25 @@ def get_ignore_checks() -> List[str]:
         return DEFAULT_IGNORE_CHECKS
 
 
+def _validate_path_containment(file_path: str, project_root: str) -> Path:
+    """Ensure file_path is contained within project_root to prevent path traversal.
+
+    Args:
+        file_path: The file or directory path to validate.
+        project_root: The expected root directory that must contain file_path.
+
+    Returns:
+        Resolved Path object for file_path.
+
+    Raises:
+        ValueError: If file_path resolves outside of project_root.
+    """
+    resolved = Path(file_path).resolve()
+    root = Path(project_root).resolve()
+    resolved.relative_to(root)  # Raises ValueError if path escapes root
+    return resolved
+
+
 def find_project_root(target_path: str) -> Optional[str]:
     """Walk up from target to find Foundry/Hardhat project root.
 
@@ -254,6 +273,17 @@ def _slither_per_file_fallback(
             file_cmd.extend(["--solc-remaps", remaps])
 
         try:
+            # Security: validate sol_file is contained within project_root
+            try:
+                _validate_path_containment(sol_file, project_root)
+            except ValueError:
+                logger.warning(
+                    f"[SECURITY] Path traversal rejected for per-file"
+                    f" slither: {sol_file!r} escapes root {project_root!r}"
+                )
+                fail_count += 1
+                errors.append(f"{sol_name}: path traversal rejected")
+                continue
             _env = os.environ.copy()
             _env["PYTHONWARNINGS"] = "ignore"
             _env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -476,6 +506,18 @@ def run_slither(
     print(f"[*] Working directory: {cwd}")
 
     try:
+        # Security: validate target is within cwd before invoking slither
+        try:
+            _validate_path_containment(target, cwd)
+        except ValueError:
+            logger.warning(
+                f"[SECURITY] Path traversal rejected for run_slither:"
+                f" {target!r} escapes cwd {cwd!r}"
+            )
+            raise CounterscarpAnalysisError(
+                "Path traversal detected: target escapes working directory",
+                details={"target": target, "cwd": cwd},
+            )
         # Run slither and capture stdout/stderr
         _slither_env = os.environ.copy()
         _slither_env["PYTHONWARNINGS"] = "ignore"

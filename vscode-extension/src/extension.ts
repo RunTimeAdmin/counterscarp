@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import * as path from 'path';
 
 let diagnosticCollection: vscode.DiagnosticCollection;
@@ -58,9 +58,8 @@ async function analyzeContract(document?: vscode.TextDocument) {
     
     // Run heuristic scanner
     const scannerPath = path.join(enginePath, 'heuristic_scanner.py');
-    const command = `${pythonPath} ${scannerPath} ${filePath}`;
-    
-    exec(command, (error, stdout, stderr) => {
+
+    execFile(pythonPath, [scannerPath, filePath], (error, stdout, stderr) => {
         if (error && error.code !== 1) {  // Code 1 = findings detected
             vscode.window.showErrorMessage(`Sentinel Error: ${stderr}`);
             return;
@@ -137,11 +136,10 @@ async function runLiarDetector() {
     const enginePath = config.get<string>('enginePath') || '';
     
     const liarPath = path.join(enginePath, 'intent_check.py');
-    const command = `${pythonPath} ${liarPath} ${filePath}`;
-    
+
     vscode.window.showInformationMessage('🤥 Running Liar Detector...');
-    
-    exec(command, (error, stdout, stderr) => {
+
+    execFile(pythonPath, [liarPath, filePath], (error, stdout, stderr) => {
         // Show results in output panel
         const outputChannel = vscode.window.createOutputChannel('Sentinel Liar Detector');
         outputChannel.clear();
@@ -169,11 +167,10 @@ async function showAccessMatrix() {
     const enginePath = config.get<string>('enginePath') || '';
     
     const matrixPath = path.join(enginePath, 'access_matrix.py');
-    const command = `${pythonPath} ${matrixPath} ${filePath}`;
-    
+
     vscode.window.showInformationMessage('🛡️ Generating Access Matrix...');
-    
-    exec(command, (error, stdout, stderr) => {
+
+    execFile(pythonPath, [matrixPath, filePath], (error, stdout, stderr) => {
         // Create webview panel
         const panel = vscode.window.createWebviewPanel(
             'sentinelAccessMatrix',

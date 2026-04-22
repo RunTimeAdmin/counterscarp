@@ -40,8 +40,17 @@ jobs:
       
       - name: Run pytest
         run: |
-          pytest --tb=short -v --cov=. --cov-report=xml --cov-report=term-missing --cov-fail-under=60 -m "not benchmark"
+          pytest --tb=short -v --cov=. --cov-report=xml --cov-report=term-missing --cov-fail-under=65 -m "not benchmark"
       
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Run performance benchmarks
         if: success()
         run: |
@@ -95,7 +104,7 @@ jobs:
           python -c "from report_generator import generate_pdf_report; print('PDF generator OK')"
       - name: Run mypy
         run: |
-          mypy orchestrator.py config_loader.py report_generator.py heuristic_scanner.py plugin_manager.py --ignore-missing-imports --no-error-summary || true
+          mypy *.py webapp/*.py --ignore-missing-imports
 
   # ========================================
   # BLOCKER CHECKS (Fail PR on issues)

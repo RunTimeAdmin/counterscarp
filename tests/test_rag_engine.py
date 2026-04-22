@@ -6,7 +6,6 @@ import pytest
 import sys
 import os
 import json
-import pickle
 from unittest.mock import patch
 
 sys.path.insert(
@@ -163,32 +162,30 @@ class TestVectorStore:
         
         assert store.entries == []
 
-    def test_migrate_from_pickle(self, tmp_path):
-        """Test migration from legacy pickle format."""
-        # Create a pickle file with legacy format
+    def test_pkl_file_logs_warning(self, tmp_path):
+        """Test that a .pkl file alongside the index path logs a warning."""
         pkl_path = str(tmp_path / "legacy_index.pkl")
         json_path = str(tmp_path / "legacy_index.json")
-        legacy_data = {
-            "entries": [
-                {"text": "Legacy entry", "embedding": [0.1] * 384,
-                 "metadata": {"source": "legacy"}}
-            ],
-            "embedding_dim": 384
-        }
-        
+
+        # Create a dummy .pkl file (content doesn't matter)
         with open(pkl_path, 'wb') as f:
-            pickle.dump(legacy_data, f)
-        
-        # Load should detect pickle and migrate to JSON
+            f.write(b"")
+
         store = VectorStore()
-        
-        # Load from JSON path (which doesn't exist yet)
-        # The load method should find the .pkl and migrate
-        store.load(json_path)
-        
-        # After migration, entries should be loaded
-        assert len(store.entries) == 1
-        assert store.entries[0].text == "Legacy entry"
+
+        # Load from JSON path (which doesn't exist) — should log a warning
+        # and then raise FileNotFoundError (caught internally → empty store)
+        with patch('rag_engine.logger') as mock_logger:
+            store.load(json_path)
+            # Warning should mention the .pkl path
+            assert mock_logger.warning.called, "Expected a warning about legacy .pkl file"
+            call_args = mock_logger.warning.call_args
+            # The pkl_path should appear in one of the positional args (format string args)
+            assert any(
+                pkl_path in str(arg) for arg in call_args[0]
+            ), f"Expected warning to reference {pkl_path}"
+
+        assert store.entries == []
 
     def test_get_stats(self):
         """Test getting store statistics."""

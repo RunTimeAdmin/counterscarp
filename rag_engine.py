@@ -112,7 +112,7 @@ class VectorStore:
     """Simple vector store for RAG with similarity search.
     
     Stores text entries with their embeddings and supports similarity-based
-    retrieval. Uses pickle for serialization.
+    retrieval. Uses JSON for serialization.
     
     Attributes:
         entries: List of indexed entries.
@@ -289,16 +289,12 @@ class VectorStore:
             RAGError: If deserialization fails.
         """
         try:
-            # Backward-compatible migration from pickle
             pkl_path = path.replace('.json', '.pkl')
-            if not Path(path).exists() and Path(pkl_path).exists():
+            if os.path.exists(pkl_path):
                 logger.warning(
-                    "Found legacy pickle index at %s — "
-                    "migrating to JSON format. "
-                    "The .pkl file will be preserved but is no longer used.",
-                    pkl_path,
+                    "Legacy .pkl index found at %s — manual migration required. "
+                    "Convert to JSON format. See documentation for details.", pkl_path
                 )
-                self._migrate_from_pickle(pkl_path, path)
 
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -326,27 +322,6 @@ class VectorStore:
         except Exception as e:
             raise RAGError(f"Failed to load index: {e}") from e
 
-    def _migrate_from_pickle(self, pkl_path: str, json_path: str) -> None:
-        """One-time migration from legacy pickle format to JSON."""
-        import pickle  # Only imported for migration
-        with open(pkl_path, 'rb') as f:
-            data = pickle.load(f)
-        # Convert dict entries to IndexEntry objects
-        raw_entries = data.get("entries", [])
-        self.entries = []
-        for entry in raw_entries:
-            if isinstance(entry, dict):
-                self.entries.append(IndexEntry(
-                    text=entry.get("text", ""),
-                    embedding=entry.get("embedding", []),
-                    metadata=entry.get("metadata", {})
-                ))
-            else:
-                # Already an IndexEntry
-                self.entries.append(entry)
-        self.embedding_dim = data.get("embedding_dim", self.embedding_dim)
-        self.save(json_path)
-    
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the store.
         

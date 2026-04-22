@@ -205,6 +205,10 @@ def validate_license(req: ValidateRequest, request: Request):
                 try:
                     import stripe
                     stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+                    if not stripe.api_key:
+                        security_logger.warning(
+                            "STRIPE_SECRET_KEY not set — cannot verify subscription status via Stripe"
+                        )
                     if stripe.api_key:
                         sub = stripe.Subscription.retrieve(
                             license_entry["stripe_subscription_id"]

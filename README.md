@@ -8,6 +8,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/counterscarp-engine)](https://pypi.org/project/counterscarp-engine/)
 [![License](https://img.shields.io/pypi/l/counterscarp-engine)](https://pypi.org/project/counterscarp-engine/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![codecov](https://codecov.io/gh/RunTimeAdmin/counterscarp/branch/main/graph/badge.svg)](https://codecov.io/gh/RunTimeAdmin/counterscarp)
 
 ---
 
