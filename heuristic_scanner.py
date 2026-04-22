@@ -81,6 +81,9 @@ RULE_CATEGORIES: dict[str, list[str]] = {
     "Other": [
         "HARDCODED_ADDRESS", "BOOLEAN_TRANSFER_CHECK",
     ],
+    "Hook Vulnerabilities": [
+        "TI-084", "TI-085", "TI-086",
+    ],
 }
 
 
@@ -356,6 +359,55 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"\.transfer\s*\(|\.send\s*\("),
         hint="Prefer pull-payment pattern or use call() with reentrancy guards instead of transfer()/send().",
         confidence=3,
+    ),
+
+    # ========== UNISWAP V4 HOOK VULNERABILITY PATTERNS (TI-084, TI-085, TI-086) ==========
+
+    HeuristicRule(
+        id="TI-084",
+        description="[TI-084] PoolManager Access Control Bypass: Uniswap V4 hook callback function missing msg.sender == poolManager guard",
+        severity="CRITICAL",
+        pattern=re.compile(
+            r"function\s+(?:beforeSwap|afterSwap|beforeAddLiquidity|afterAddLiquidity|"
+            r"beforeRemoveLiquidity|afterRemoveLiquidity|beforeDonate|afterDonate)\s*\(",
+            re.IGNORECASE,
+        ),
+        hint="[TI-084] CRITICAL: All V4 hook callbacks must restrict callers to the official PoolManager via "
+             "require(msg.sender == address(poolManager)). Without this guard an attacker can invoke the hook "
+             "directly to corrupt fee accumulators, LP reward points, or governance state without executing a "
+             "real pool operation. Add an onlyPoolManager modifier or inline require check.",
+        confidence=9,
+    ),
+
+    HeuristicRule(
+        id="TI-085",
+        description="[TI-085] Flash Accounting Delta Settlement Failure: Uniswap V4 hook after-liquidity callback accepts BalanceDelta parameter — verify poolManager.settle()/take() are called to resolve transient storage debt",
+        severity="CRITICAL",
+        pattern=re.compile(
+            r"function\s+(?:afterAddLiquidity|afterRemoveLiquidity)\s*\(",
+            re.IGNORECASE,
+        ),
+        hint="[TI-085] CRITICAL: Uniswap V4 uses EIP-1153 transient storage for flash accounting — all "
+             "BalanceDelta values MUST settle to zero before the transaction ends. A hook that accepts a "
+             "BalanceDelta parameter and returns without calling poolManager.settle() or take() leaves the "
+             "pool's transient debt imbalanced and can be exploited to drain tokens. Ensure every "
+             "afterAddLiquidity / afterRemoveLiquidity callback calls poolManager.settle() or properly "
+             "accounts for any take() calls before returning.",
+        confidence=9,
+    ),
+
+    HeuristicRule(
+        id="TI-086",
+        description="[TI-086] Custom Oracle Manipulation: Uniswap V4 hook updates price state in beforeSwap without TWAP protection",
+        severity="HIGH",
+        pattern=re.compile(
+            r"function\s+beforeSwap\s*\([^)]*\)[^{]*\{[^}]*(?:price|oracle|lastPrice|priceAccumulator|reserve)\s*[+\-*]?=",
+            re.DOTALL,
+        ),
+        hint="[TI-086] HIGH: Updating an oracle/price variable inside beforeSwap() without time-weighted "
+             "smoothing allows single-transaction flash loan manipulation. Add a minimum observation window, "
+             "TWAP accumulator, or multi-block validation before recording price state.",
+        confidence=7,
     ),
 ]
 

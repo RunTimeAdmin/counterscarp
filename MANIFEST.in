@@ -3,6 +3,12 @@ recursive-include data *.json
 recursive-include assets *.png
 recursive-include webapp/templates *.html
 recursive-include webapp/static *.css *.png
-include garrison.toml
+include counterscarp.toml
+include counterscarp-audit.toml
+include counterscarp-bounty.toml
+include counterscarp-pr.toml
 include LICENSE
+include LICENSE-PRO
 include README.md
+include CHANGELOG.md
+include SECURITY.md

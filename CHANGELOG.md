@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.1] - 2026-04-22
+
+### Fixed
+- License validation API hardened against 500 errors with top-level exception handling, atomic database writes, and JSON structure validation
+- Exploit PoC files now correctly land inside per-scan report directories instead of root exploits/ folder
+- License validation URL path corrected to include /api prefix matching FastAPI router mount
+- Per-scan report directories organize scan outputs by project name, date, and session ID to prevent overwrites
+- Auth dependencies (passlib, authlib, httpx, itsdangerous) added to core dependencies for CI compatibility
+- Input validation added to all API request models (license key format, machine ID length, version format)
+- Rate limiting added to license validation and deactivation endpoints
+- Stripe webhook signature verification made mandatory
+- Admin endpoint /api/license/info now requires authentication
+- CORS middleware configured for production origins
+- Security event logging added for failed validations, deactivations, and webhook failures
+- MANIFEST.in updated from garrison.toml to counterscarp.toml references
+- Automated cleanup for state files, reports, uploads, and log rotation
+
+### Security
+- API hardening: input validation, rate limiting, authentication controls
+- Stripe webhook: unsigned payloads now rejected when webhook secret is not configured
+- Session secret: warning issued when using insecure default
+- Path traversal protection on report download endpoints
+- File upload validation ensures UTF-8 text content only
+
 ## [5.0.0] - 2026-04-22
 
 ### Added

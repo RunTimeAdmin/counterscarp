@@ -18,6 +18,7 @@ import sys
 import json
 import threading
 import logging
+from logging.handlers import RotatingFileHandler
 from typing import Optional, Dict, Any, Union
 from datetime import datetime
 
@@ -226,9 +227,14 @@ def setup_logging(
         root_logger.addHandler(console_handler)
         _root_handlers.append(console_handler)
 
-        # File handler (optional)
+        # File handler (optional) — uses RotatingFileHandler for log rotation
         if log_file:
-            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=10 * 1024 * 1024,  # 10 MB per file
+                backupCount=7,
+                encoding="utf-8",
+            )
             file_handler.setLevel(level)
 
             # Use JSON for file logs if specified, otherwise plain text

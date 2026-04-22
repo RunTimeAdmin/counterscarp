@@ -1,0 +1,10 @@
+/opt/counterscarp-engine/*.log
+/opt/counterscarp-engine/counterscarp_scan_*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

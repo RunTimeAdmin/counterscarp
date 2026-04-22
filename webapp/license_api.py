@@ -11,14 +11,16 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field, StringConstraints
 
 from license_manager import ALL_PRO_FEATURES
+from webapp.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
+security_logger = logging.getLogger("counterscarp.security")
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -33,10 +35,21 @@ _file_lock = threading.Lock()
 
 
 class ValidateRequest(BaseModel):
-    license_key: str
-    machine_id: str
-    product_version: str
-    timestamp: str
+    license_key: Annotated[str, StringConstraints(
+        pattern=r'^SE-(DEV|PRO|TEAM|ENT)-[0-9a-f]{32}$'
+    )]
+    machine_id: Annotated[str, StringConstraints(
+        max_length=255,
+        pattern=r'^[a-zA-Z0-9\-_:.]{1,255}$'
+    )]
+    product_version: Annotated[str, StringConstraints(
+        pattern=r'^\d+\.\d+\.\d+.*$',
+        max_length=20
+    )]
+    timestamp: Annotated[str, StringConstraints(
+        pattern=r'^\d{4}-\d{2}-\d{2}T[\d:.]+[Z+\-\d:]*$',
+        max_length=40
+    )]
 
 
 class ValidateResponse(BaseModel):
@@ -50,8 +63,13 @@ class ValidateResponse(BaseModel):
 
 
 class DeactivateRequest(BaseModel):
-    license_key: str
-    machine_id: str
+    license_key: Annotated[str, StringConstraints(
+        pattern=r'^SE-(DEV|PRO|TEAM|ENT)-[0-9a-f]{32}$'
+    )]
+    machine_id: Annotated[str, StringConstraints(
+        max_length=255,
+        pattern=r'^[a-zA-Z0-9\-_:.]{1,255}$'
+    )]
 
 
 class DeactivateResponse(BaseModel):
@@ -120,10 +138,20 @@ def _mask_key(key: str) -> str:
 
 license_router = APIRouter(prefix="/api/license", tags=["license"])
 
+# Rate limiters — module-level singletons (in-memory, no extra deps)
+_validate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+_deactivate_limiter = RateLimiter(max_requests=5, window_seconds=60)
+
 
 @license_router.post("/validate", response_model=ValidateResponse)
-def validate_license(req: ValidateRequest):
+def validate_license(req: ValidateRequest, request: Request):
     """Validate a license key and manage machine activations."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not _validate_limiter.is_allowed(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Try again later.",
+        )
     try:
         with _file_lock:
             try:
@@ -145,10 +173,18 @@ def validate_license(req: ValidateRequest):
                     break
 
             if license_entry is None:
+                security_logger.warning(
+                    "License validation failed: key=%s ip=%s reason=%s",
+                    req.license_key[:10] + "...", client_ip, "invalid_key",
+                )
                 return ValidateResponse(valid=False, error="Invalid license key")
 
             # 2. Key not revoked
             if license_entry.get("revoked", False):
+                security_logger.warning(
+                    "License validation failed: key=%s ip=%s reason=%s",
+                    req.license_key[:10] + "...", client_ip, "key_revoked",
+                )
                 return ValidateResponse(valid=False, error="License revoked")
 
             # 3. Key not expired (with Stripe subscription fallback)
@@ -195,6 +231,10 @@ def validate_license(req: ValidateRequest):
                     # Fall through to expiry decision below
 
             if license_appears_expired:
+                security_logger.warning(
+                    "License validation failed: key=%s ip=%s reason=%s",
+                    req.license_key[:10] + "...", client_ip, "key_expired",
+                )
                 return ValidateResponse(valid=False, error="License expired")
 
             # 4. Machine activation
@@ -210,6 +250,10 @@ def validate_license(req: ValidateRequest):
                 license_entry["activated_machines"] = activated
                 _save_db(db)
             else:
+                security_logger.warning(
+                    "License validation failed: key=%s ip=%s reason=%s",
+                    req.license_key[:10] + "...", client_ip, "max_activations_reached",
+                )
                 return ValidateResponse(
                     valid=False, error="Maximum activations reached"
                 )
@@ -236,8 +280,14 @@ def validate_license(req: ValidateRequest):
 
 
 @license_router.post("/deactivate", response_model=DeactivateResponse)
-def deactivate_license(req: DeactivateRequest):
+def deactivate_license(req: DeactivateRequest, request: Request):
     """Remove a machine activation from a license key."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not _deactivate_limiter.is_allowed(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Try again later.",
+        )
     with _file_lock:
         db = _load_db()
 
@@ -259,6 +309,10 @@ def deactivate_license(req: DeactivateRequest):
             activated.remove(req.machine_id)
             license_entry["activated_machines"] = activated
             _save_db(db)
+            security_logger.info(
+                "License deactivation: key=%s machine=%s ip=%s",
+                req.license_key[:10] + "...", req.machine_id, client_ip,
+            )
 
         return DeactivateResponse(
             success=True,
@@ -267,8 +321,19 @@ def deactivate_license(req: DeactivateRequest):
 
 
 @license_router.get("/info", response_model=LicenseInfoResponse)
-def license_info(key: str = Query(..., description="License key to look up")):
-    """Admin endpoint: look up license details (key is masked in response)."""
+def license_info(request: Request, key: str = Query(..., description="License key to look up")):
+    """Admin endpoint: look up license details (requires admin authentication)."""
+    # --- Admin authentication check ---
+    user_id = request.session.get("user_id") if hasattr(request, "session") else None
+    if not user_id:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    from webapp.config import ADMIN_EMAIL
+    from webapp.user_manager import UserManager
+    um = UserManager()
+    user = um.get_by_id(user_id)
+    if not user or user.get("email") != ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    # --- License lookup ---
     with _file_lock:
         db = _load_db()
 
@@ -282,6 +347,12 @@ def license_info(key: str = Query(..., description="License key to look up")):
             raise HTTPException(
                 status_code=404, detail="License key not found"
             )
+
+        client_ip = request.client.host if request.client else "unknown"
+        security_logger.info(
+            "Admin license info accessed: key=%s ip=%s user=%s",
+            _mask_key(key), client_ip, user.get("email", "unknown"),
+        )
 
         return LicenseInfoResponse(
             key_masked=_mask_key(license_entry["key"]),

@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
 import shutil
 import subprocess
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -44,6 +48,7 @@ from license_manager import (
 )
 
 from webapp.license_api import license_router
+from webapp.rate_limiter import RateLimiter
 from webapp.stripe_integration import (
     create_checkout_session,
     handle_checkout_completed,
@@ -56,6 +61,10 @@ import stripe as _stripe
 from logger import get_logger
 
 logger = get_logger(__name__)
+
+# Rate limiter for the Stripe webhook endpoint (30 req/min per IP)
+_stripe_webhook_limiter = RateLimiter(max_requests=30, window_seconds=60)
+security_logger = logging.getLogger("counterscarp.security")
 
 _license = LicenseManager()
 
@@ -85,6 +94,19 @@ app = FastAPI(
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://app.counterscarp.io",
+        "https://counterscarp.io",
+        "http://localhost:8000",
+        "http://localhost:8001",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
 
 # Include auth and admin routes
 app.include_router(auth_router)
@@ -265,10 +287,62 @@ if _env_local.exists():
                 os.environ[_k] = _v
 
 
+def _cleanup_old_directories(base_dir: Path, max_age_days: int, logger, label: str):
+    """Remove subdirectories older than max_age_days."""
+    if not base_dir.exists():
+        return
+    cutoff = time.time() - (max_age_days * 86400)
+    removed = 0
+    for entry in base_dir.iterdir():
+        if entry.is_dir() and entry.stat().st_mtime < cutoff:
+            shutil.rmtree(entry, ignore_errors=True)
+            removed += 1
+    if removed:
+        logger.info("Removed %d old %s directories (>%d days)", removed, label, max_age_days)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup."""
     ensure_directories()
+
+
+@app.on_event("startup")
+async def startup_cleanup():
+    """Run housekeeping cleanup on app startup."""
+    import logging as _logging
+    _cleanup_logger = _logging.getLogger("counterscarp.cleanup")
+
+    # 1. Clean old scan state files (>30 days)
+    try:
+        from state_manager import ScanStateManager
+        sm = ScanStateManager()
+        sm.cleanup_old_sessions(max_age_days=30)
+        _cleanup_logger.info("Cleaned old scan state files (>30 days)")
+    except Exception as e:
+        _cleanup_logger.warning("State cleanup failed: %s", e)
+
+    # 2. Clean old report directories (>90 days)
+    try:
+        _cleanup_old_directories(
+            Path(__file__).parent.parent / "reports",
+            max_age_days=90,
+            logger=_cleanup_logger,
+            label="reports",
+        )
+    except Exception as e:
+        _cleanup_logger.warning("Report cleanup failed: %s", e)
+
+    # 3. Clean old uploads (>7 days)
+    try:
+        _cleanup_old_directories(
+            Path(__file__).parent.parent / "uploads",
+            max_age_days=7,
+            logger=_cleanup_logger,
+            label="uploads",
+        )
+    except Exception as e:
+        _cleanup_logger.warning("Upload cleanup failed: %s", e)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -323,7 +397,6 @@ async def audit(
     # Save uploaded files
     uploaded_paths = []
     for file in valid_files:
-        file_path = upload_dir / file.filename
         content = await file.read()
 
         # Check file size
@@ -332,6 +405,19 @@ async def audit(
                 status_code=400,
                 detail=f"File too large: {file.filename} (max {MAX_FILE_SIZE // 1024 // 1024}MB)"
             )
+
+        # Validate content is valid UTF-8 text (not binary)
+        try:
+            content.decode('utf-8', errors='strict')
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File {file.filename} is not valid text"
+            )
+
+        # Sanitize filename: strip path separators, allow only safe chars, limit length
+        safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', Path(file.filename or "unnamed").name)[:100]
+        file_path = upload_dir / safe_name
 
         with open(file_path, "wb") as f:
             f.write(content)
@@ -725,20 +811,31 @@ async def stripe_webhook(request: Request):
     # - customer.subscription.updated: Tier/interval change, updates license
     # - customer.subscription.resumed: Paused subscription resumed, un-revokes license
     """
+    ip = request.client.host if request.client else "unknown"
+
+    if not _stripe_webhook_limiter.is_allowed(ip):
+        return JSONResponse(
+            {"error": "Rate limit exceeded. Try again later."}, status_code=429
+        )
+
+    if not STRIPE_WEBHOOK_SECRET:
+        logger.error("Stripe webhook secret not configured — rejecting request")
+        raise HTTPException(
+            status_code=500,
+            detail="Stripe webhook secret not configured",
+        )
+
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
-    if STRIPE_WEBHOOK_SECRET:
-        try:
-            event = _stripe.Webhook.construct_event(
-                payload, sig_header, STRIPE_WEBHOOK_SECRET,
-            )
-        except (ValueError, _stripe.error.SignatureVerificationError):
-            return JSONResponse(
-                {"error": "Invalid signature"}, status_code=400,
-            )
-    else:
-        event = json.loads(payload)
+    try:
+        event = _stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET,
+        )
+    except (ValueError, _stripe.error.SignatureVerificationError) as e:
+        security_logger.warning("Stripe webhook signature invalid: ip=%s", ip)
+        logger.warning("Invalid Stripe webhook signature: %s", e)
+        return JSONResponse({"error": "Invalid signature"}, status_code=400)
 
     event_type = event.get("type")
 
@@ -1038,11 +1135,21 @@ async def save_license_key(request: Request):
     # Verify the key exists in licenses.json, is not revoked, and is not expired
     lic_entry = find_license_in_db(license_key)
     if not lic_entry:
+        ip = request.client.host if request.client else "unknown"
+        security_logger.warning(
+            "License validation failed: key=%s ip=%s reason=%s",
+            license_key[:10] + "...", ip, "key_not_found",
+        )
         return JSONResponse(
             {"success": False, "error": "License key not found. Please check your key and try again."},
             status_code=400,
         )
     if lic_entry.get("revoked"):
+        ip = request.client.host if request.client else "unknown"
+        security_logger.warning(
+            "License validation failed: key=%s ip=%s reason=%s",
+            license_key[:10] + "...", ip, "key_revoked",
+        )
         return JSONResponse(
             {"success": False, "error": "This license key has been revoked."},
             status_code=400,
@@ -1052,6 +1159,11 @@ async def save_license_key(request: Request):
         from datetime import date
         try:
             if date.fromisoformat(expires_at) < date.today():
+                ip = request.client.host if request.client else "unknown"
+                security_logger.warning(
+                    "License validation failed: key=%s ip=%s reason=%s",
+                    license_key[:10] + "...", ip, "key_expired",
+                )
                 return JSONResponse(
                     {"success": False, "error": "This license key has expired."},
                     status_code=400,
@@ -1062,6 +1174,11 @@ async def save_license_key(request: Request):
     # Ensure the key is not already linked to a different user
     existing_owner = user_manager.find_by_license_key(license_key)
     if existing_owner and existing_owner["id"] != current_user["id"]:
+        ip = request.client.host if request.client else "unknown"
+        security_logger.warning(
+            "License validation failed: key=%s ip=%s reason=%s",
+            license_key[:10] + "...", ip, "key_already_linked",
+        )
         return JSONResponse(
             {"success": False, "error": "This license key is already linked to another account."},
             status_code=400,
@@ -1095,6 +1212,15 @@ async def remove_license(request: Request):
     current_user = get_current_user(request)
     if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
+
+    # Log deactivation attempt
+    ip = request.client.host if request.client else "unknown"
+    user_key = current_user.get("license_key") or os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
+    if user_key:
+        security_logger.info(
+            "License deactivation: key=%s machine=%s ip=%s",
+            user_key[:10] + "...", current_user.get("id", "unknown"), ip,
+        )
 
     # Clear the license key from the user's account record
     user_manager.clear_license_key(current_user["id"])
@@ -1140,6 +1266,17 @@ async def get_license_status(request: Request):
 @app.get("/results/{audit_id}/report/{format}")
 async def download_report(audit_id: str, format: str):
     """Download a report file."""
+    # Validate audit_id is a valid UUID to prevent path traversal
+    try:
+        uuid.UUID(audit_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid audit ID format")
+
+    # Path containment check — ensure resolved path stays within RESULTS_DIR
+    resolved = (RESULTS_DIR / audit_id).resolve()
+    if not str(resolved).startswith(str(RESULTS_DIR.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     results_dir = RESULTS_DIR / audit_id
 
     format_map = {
