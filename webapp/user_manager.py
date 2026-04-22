@@ -130,7 +130,7 @@ class UserManager:
                 "email": email,
                 "name": name,
                 "google_id": google_id,
-                "password_hash": bcrypt.hash(password.encode("utf-8")[:72]) if password else None,
+                "password_hash": bcrypt.hash(password[:72]) if password else None,
                 "created_at": now,
                 "last_login": now,
                 "auth_method": auth_method,
@@ -195,7 +195,7 @@ class UserManager:
         if not stored_hash:
             return None
         try:
-            valid = bcrypt.verify(password.encode("utf-8")[:72], stored_hash)
+            valid = bcrypt.verify(password[:72], stored_hash)
         except Exception:
             return None
         return user if valid else None
