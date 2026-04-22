@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Tuple
 try:
     import requests as _requests
 except ImportError:  # pragma: no cover
-    _requests = None  # type: ignore
+    _requests = None  # type: ignore[assignment]
 
 logger = logging.getLogger("counterscarp.signature_updater")
 

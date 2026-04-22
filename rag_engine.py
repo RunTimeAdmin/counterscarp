@@ -87,7 +87,7 @@ except ImportError:
 import types as _types
 np: Optional[_types.ModuleType] = None
 if NUMPY_AVAILABLE:
-    import numpy as np
+    import numpy as np  # noqa
 
 # Default configuration
 DEFAULT_INDEX_PATH = ".counterscarp/rag_index.json"

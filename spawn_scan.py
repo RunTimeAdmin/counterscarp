@@ -30,7 +30,7 @@ with open(OUTPUT_FILE, "w", encoding="utf-8") as out_fh:
         env=env,
         stdout=out_fh,
         stderr=subprocess.STDOUT,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+        creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
     )
 
 print(f"PID: {proc.pid}")
