@@ -1520,7 +1520,8 @@ def main() -> None:
             from exploit_generator import ExploitGenerator, ExploitResult as _ExploitResult
 
             if _license.check_pro_feature(EXPLOIT_GEN):
-                # Use per-scan output dir for exploits; respect config override
+                # Always use per-scan output dir for exploits (config output_dir is ignored
+                # to ensure exploits land inside the per-scan report directory)
                 _default_exploit_dir = str(scan_output_dir / "exploits")
                 exploit_config: Dict[str, Any] = {}
                 if hasattr(config, 'exploit_generation'):
@@ -1528,7 +1529,7 @@ def main() -> None:
                     exploit_config = {
                         'min_severity': getattr(eg, 'min_severity', 'HIGH'),
                         'validate_compilation': getattr(eg, 'validate_compilation', True),
-                        'output_dir': getattr(eg, 'output_dir', _default_exploit_dir),
+                        'output_dir': _default_exploit_dir,
                         'llm_backend': getattr(eg, 'llm_backend', 'none'),
                         'template_dir': getattr(eg, 'template_dir', 'exploit_templates/'),
                     }
