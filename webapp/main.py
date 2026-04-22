@@ -22,6 +22,8 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from starlette.middleware.sessions import SessionMiddleware
+from webapp.auth import auth_router, admin_router, get_current_user
 from webapp.config import (
     ALLOWED_EXTENSIONS,
     BASE_DIR,
@@ -30,6 +32,7 @@ from webapp.config import (
     RESULTS_DIR,
     TEMPLATES_DIR,
     UPLOAD_DIR,
+    SESSION_SECRET,
 )
 
 from license_manager import (
@@ -79,6 +82,12 @@ app = FastAPI(
     description="Smart Contract Security Audit Platform",
     version="5.0.0",
 )
+
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# Include auth and admin routes
+app.include_router(auth_router)
+app.include_router(admin_router)
 
 # Include license validation API routes
 app.include_router(license_router)
@@ -267,7 +276,7 @@ async def index(request: Request):
     license_tier = _license.get_tier()
     return templates.TemplateResponse(
         request, "upload.html",
-        context={"license_tier": license_tier},
+        context={"current_user": get_current_user(request), "license_tier": license_tier},
     )
 
 
@@ -600,6 +609,7 @@ async def results(request: Request, audit_id: str):
         request,
         "results.html",
         context={
+            "current_user": get_current_user(request),
             "audit_id": audit_id,
             "findings": findings_data,
             "severity_counts": severity_counts,
@@ -621,6 +631,7 @@ async def pricing_page(request: Request):
     return templates.TemplateResponse(
         request, "pricing.html",
         context={
+            "current_user": get_current_user(request),
             "stripe_key": STRIPE_PUBLISHABLE_KEY,
             "products": PRODUCTS,
         },
@@ -629,12 +640,12 @@ async def pricing_page(request: Request):
 
 @app.get("/privacy")
 async def privacy_page(request: Request):
-    return templates.TemplateResponse(request, "privacy.html", context={})
+    return templates.TemplateResponse(request, "privacy.html", context={"current_user": get_current_user(request)})
 
 
 @app.get("/terms")
 async def terms_page(request: Request):
-    return templates.TemplateResponse(request, "terms.html", context={})
+    return templates.TemplateResponse(request, "terms.html", context={"current_user": get_current_user(request)})
 
 @app.post("/checkout/create-session")
 async def create_checkout(request: Request):
@@ -660,6 +671,7 @@ async def checkout_success(request: Request):
     return templates.TemplateResponse(
         request, "checkout_success.html",
         context={
+            "current_user": get_current_user(request),
             "license_key": (
                 license_info.get("key", "") if license_info else ""
             ),
@@ -838,6 +850,10 @@ async def stripe_webhook(request: Request):
 @app.get("/settings")
 async def settings_page(request: Request):
     """Render the API key settings page."""
+    current_user = get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=302)
+
     has_key = bool(os.environ.get("OPENAI_API_KEY", ""))
     masked_key = ""
     if has_key:
@@ -854,6 +870,7 @@ async def settings_page(request: Request):
     return templates.TemplateResponse(
         request, "settings.html",
         context={
+            "current_user": current_user,
             "has_key": has_key,
             "masked_key": masked_key,
             "license_tier": license_tier,
@@ -867,6 +884,8 @@ async def settings_page(request: Request):
 @app.post("/settings/api-key")
 async def save_api_key(request: Request):
     """Save the OpenAI API key to env and persist it."""
+    if not get_current_user(request):
+        return RedirectResponse(url="/auth/login", status_code=302)
     form = await request.form()
     api_key = form.get("openai_api_key", "").strip()
     if api_key:
@@ -891,6 +910,8 @@ async def save_api_key(request: Request):
 @app.post("/settings/test-key")
 async def test_api_key(request: Request):
     """Quick test that the OpenAI key works."""
+    if not get_current_user(request):
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
     # Accept optional key from JSON body (for testing a new key before saving)
     body_key = None
     try:
@@ -949,6 +970,8 @@ def _get_tier_features(tier: str) -> list[str]:
 @app.post("/settings/license-key")
 async def save_license_key(request: Request):
     """Save the license key to env and persist it."""
+    if not get_current_user(request):
+        return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     form = await request.form()
     license_key = form.get("license_key", "").strip()
 
@@ -1007,6 +1030,8 @@ async def save_license_key(request: Request):
 @app.post("/settings/remove-license")
 async def remove_license(request: Request):
     """Remove the license key from env and persistence."""
+    if not get_current_user(request):
+        return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     # Remove from environment
     if "COUNTERSCARP_PRO_LICENSE" in os.environ:
         del os.environ["COUNTERSCARP_PRO_LICENSE"]

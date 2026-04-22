@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Create Account - Counterscarp Engine{% endblock %}
+
+{% block content %}
+<style>
+    .auth-container {
+        max-width: 450px;
+        margin: 3rem auto;
+        padding: 0 1rem;
+    }
+    .auth-card {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 16px;
+        padding: 2rem;
+    }
+    .auth-card h1 {
+        font-size: 1.75rem;
+        color: #fff;
+        margin-bottom: 0.4rem;
+    }
+    .auth-subtitle {
+        color: #a0a0b0;
+        font-size: 0.95rem;
+        margin-bottom: 1.75rem;
+    }
+    .auth-error {
+        background: rgba(220, 53, 69, 0.1);
+        border: 1px solid rgba(220, 53, 69, 0.3);
+        color: #dc3545;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        margin-bottom: 1.25rem;
+    }
+    .auth-field {
+        margin-bottom: 1.25rem;
+    }
+    .auth-field label {
+        display: block;
+        color: #a0a0a0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.4rem;
+    }
+    .auth-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        border-radius: 8px;
+        color: #e0e0e0;
+        font-size: 1rem;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+    }
+    .auth-input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    .auth-input::placeholder {
+        color: #555;
+    }
+    .auth-input.input-error {
+        border-color: rgba(220, 53, 69, 0.6);
+    }
+    .field-hint {
+        font-size: 0.8rem;
+        color: #666;
+        margin-top: 0.3rem;
+    }
+    .field-hint.hint-error {
+        color: #dc3545;
+    }
+    .btn-auth-submit {
+        width: 100%;
+        padding: 0.8rem 1.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+        margin-top: 0.25rem;
+    }
+    .btn-auth-submit:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+    .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1.5rem 0;
+        color: #555;
+        font-size: 0.875rem;
+    }
+    .auth-divider::before,
+    .auth-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: #2a2a4e;
+    }
+    .btn-google {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6rem;
+        width: 100%;
+        padding: 0.75rem 1.5rem;
+        background: #fff;
+        color: #1a1a2e;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.2s, transform 0.2s;
+        box-sizing: border-box;
+    }
+    .btn-google:hover {
+        background: #f0f0f0;
+        transform: translateY(-1px);
+    }
+    .btn-google .google-icon {
+        flex-shrink: 0;
+        line-height: 1;
+    }
+    .auth-footer {
+        margin-top: 1.5rem;
+        text-align: center;
+        color: #888;
+        font-size: 0.9rem;
+    }
+    .auth-footer a {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .auth-footer a:hover {
+        text-decoration: underline;
+    }
+
+    @media (max-width: 480px) {
+        .auth-container {
+            margin: 1.5rem auto;
+        }
+        .auth-card {
+            padding: 1.5rem;
+        }
+    }
+</style>
+
+<div class="auth-container">
+    <div class="auth-card">
+        <h1>Create Account</h1>
+        <p class="auth-subtitle">Get started with Counterscarp Engine</p>
+
+        {% if error %}
+        <div class="auth-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/auth/register" id="registerForm">
+            <div class="auth-field">
+                <label for="name">Name</label>
+                <input type="text"
+                       id="name"
+                       name="name"
+                       class="auth-input"
+                       placeholder="Your name"
+                       required
+                       autocomplete="name">
+            </div>
+            <div class="auth-field">
+                <label for="email">Email</label>
+                <input type="email"
+                       id="email"
+                       name="email"
+                       class="auth-input"
+                       placeholder="you@company.com"
+                       required
+                       autocomplete="email">
+            </div>
+            <div class="auth-field">
+                <label for="password">Password</label>
+                <input type="password"
+                       id="password"
+                       name="password"
+                       class="auth-input"
+                       placeholder="Create a password"
+                       minlength="8"
+                       required
+                       autocomplete="new-password">
+                <p class="field-hint" id="passwordHint">Minimum 8 characters</p>
+            </div>
+            <div class="auth-field">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password"
+                       id="confirm_password"
+                       name="confirm_password"
+                       class="auth-input"
+                       placeholder="Confirm password"
+                       required
+                       autocomplete="new-password">
+                <p class="field-hint" id="confirmHint" style="display:none;"></p>
+            </div>
+            <button type="submit" class="btn-auth-submit">Create Account</button>
+        </form>
+
+        <div class="auth-divider">or</div>
+
+        <a href="/auth/google" class="btn-google">
+            <span class="google-icon">
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+                    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                </svg>
+            </span>
+            Continue with Google
+        </a>
+
+        <p class="auth-footer">
+            Already have an account? <a href="/auth/login">Sign in</a>
+        </p>
+    </div>
+</div>
+
+<script>
+    const passwordInput = document.getElementById('password');
+    const confirmInput = document.getElementById('confirm_password');
+    const confirmHint = document.getElementById('confirmHint');
+    const passwordHint = document.getElementById('passwordHint');
+    const form = document.getElementById('registerForm');
+
+    function validatePasswords() {
+        const pw = passwordInput.value;
+        const confirm = confirmInput.value;
+
+        // Password length hint
+        if (pw.length > 0 && pw.length < 8) {
+            passwordHint.className = 'field-hint hint-error';
+            passwordHint.textContent = 'Password must be at least 8 characters';
+        } else if (pw.length >= 8) {
+            passwordHint.className = 'field-hint';
+            passwordHint.textContent = 'Minimum 8 characters';
+        }
+
+        // Confirm match hint
+        if (confirm.length === 0) {
+            confirmHint.style.display = 'none';
+            confirmInput.classList.remove('input-error');
+            return true;
+        }
+
+        if (pw !== confirm) {
+            confirmHint.style.display = 'block';
+            confirmHint.className = 'field-hint hint-error';
+            confirmHint.textContent = 'Passwords do not match';
+            confirmInput.classList.add('input-error');
+            return false;
+        } else {
+            confirmHint.style.display = 'block';
+            confirmHint.className = 'field-hint';
+            confirmHint.textContent = 'Passwords match';
+            confirmInput.classList.remove('input-error');
+            return true;
+        }
+    }
+
+    confirmInput.addEventListener('input', validatePasswords);
+    passwordInput.addEventListener('input', function() {
+        if (confirmInput.value.length > 0) {
+            validatePasswords();
+        } else {
+            if (passwordInput.value.length > 0 && passwordInput.value.length < 8) {
+                passwordHint.className = 'field-hint hint-error';
+                passwordHint.textContent = 'Password must be at least 8 characters';
+            } else {
+                passwordHint.className = 'field-hint';
+                passwordHint.textContent = 'Minimum 8 characters';
+            }
+        }
+    });
+
+    form.addEventListener('submit', function(e) {
+        if (!validatePasswords()) {
+            e.preventDefault();
+            confirmInput.focus();
+        }
+    });
+</script>
+{% endblock %}

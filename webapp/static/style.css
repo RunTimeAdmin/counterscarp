@@ -61,6 +61,32 @@ nav a:hover {
     color: #667eea;
 }
 
+.nav-user {
+    color: #666;
+    font-size: 0.8rem;
+    margin: 0 0.25rem;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nav-signup {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff !important;
+    padding: 0.3rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: opacity 0.2s, transform 0.2s !important;
+}
+
+.nav-signup:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+    color: #fff !important;
+}
+
 /* Main Content */
 main {
     flex: 1;
