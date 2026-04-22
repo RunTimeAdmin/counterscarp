@@ -50,11 +50,14 @@ NUMPY_AVAILABLE = False
 OPENAI_AVAILABLE = False
 
 # Try importing optional dependencies with graceful fallback
+import types as _types
+np: Optional[_types.ModuleType] = None
 try:
-    import numpy as np
+    import numpy as _np
+    np = _np
     NUMPY_AVAILABLE = True
 except ImportError:
-    np = None  # type: ignore[assignment]
+    pass
 
 try:
     from sentence_transformers import SentenceTransformer
