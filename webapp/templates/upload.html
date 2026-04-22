@@ -5,7 +5,7 @@
 {% block content %}
 <style>
     /* ============================================
-       UPLOAD PAGE ΓÇö ENHANCED LAYOUT
+       UPLOAD PAGE — ENHANCED LAYOUT
        ============================================ */
 
     .upload-hero {
@@ -51,7 +51,7 @@
         margin-left: 2px;
     }
 
-    /* Upload card ΓÇö wider to breathe */
+    /* Upload card — wider to breathe */
     .upload-card {
         max-width: 680px;
         margin: 0 auto 1.5rem;
@@ -93,7 +93,7 @@
     }
 
     /* ============================================
-       SECTION ΓÇö WHAT YOU GET
+       SECTION — WHAT YOU GET
        ============================================ */
     .section-heading {
         text-align: center;
@@ -150,7 +150,7 @@
     }
 
     /* ============================================
-       SECTION ΓÇö SAMPLE OUTPUT PREVIEW
+       SECTION — SAMPLE OUTPUT PREVIEW
        ============================================ */
     .sample-section {
         max-width: 1000px;
@@ -301,7 +301,7 @@
     }
 
     /* ============================================
-       SECTION ΓÇö PRO FEATURE CTAs
+       SECTION — PRO FEATURE CTAs
        ============================================ */
     .pro-cta-section {
         max-width: 1000px;
@@ -505,12 +505,12 @@
         <div class="wyg-card">
             <span class="wyg-icon">&#127919;</span>
             <h3>Risk Score</h3>
-            <p>Overall contract risk assessment rated Critical, High, Medium, or Low ΓÇö giving you an instant summary of your security posture.</p>
+            <p>Overall contract risk assessment rated Critical, High, Medium, or Low — giving you an instant summary of your security posture.</p>
         </div>
         <div class="wyg-card">
             <span class="wyg-icon">&#9881;</span>
             <h3>Multi-Engine Analysis</h3>
-            <p>Results from 6+ security engines including Heuristic Scanner, Slither, Aderyn, Mythril, Medusa, and Foundry ΓÇö cross-verified for accuracy.</p>
+            <p>Results from 6+ security engines including Heuristic Scanner, Slither, Aderyn, Mythril, Medusa, and Foundry — cross-verified for accuracy.</p>
         </div>
         <div class="wyg-card">
             <span class="wyg-icon">&#128736;</span>
@@ -519,12 +519,12 @@
         </div>
         <div class="wyg-card">
             <span class="wyg-icon">&#128196;</span>
-            <h3>Export ΓÇö Markdown &amp; JSON</h3>
-            <p>Download reports in Markdown and JSON formats ΓÇö free for every user. Easy to integrate into CI pipelines and documentation.</p>
+            <h3>Export — Markdown &amp; JSON</h3>
+            <p>Download reports in Markdown and JSON formats — free for every user. Easy to integrate into CI pipelines and documentation.</p>
         </div>
         <div class="wyg-card">
             <span class="wyg-icon">&#127775;</span>
-            <h3>Export ΓÇö HTML &amp; SARIF</h3>
+            <h3>Export — HTML &amp; SARIF</h3>
             <p>Professional branded HTML reports and SARIF output for GitHub Advanced Security integration.</p>
             <span class="pro-badge wyg-pro-tag">DEV</span>
         </div>
@@ -633,7 +633,7 @@
                 </div>
                 <p class="pro-cta-desc">
                     Interactive D3.js attack-path diagrams showing how vulnerabilities chain together
-                    ΓÇö so you can prioritize fixes that break exploit paths.
+                    — so you can prioritize fixes that break exploit paths.
                 </p>
                 <a href="/pricing" class="btn-unlock-pro">Unlock with Pro &mdash; $149/mo</a>
             </div>
@@ -691,7 +691,7 @@
         }
     });
 
-    // Click to browse ΓÇö avoid double-trigger when clicking the file input itself
+    // Click to browse — avoid double-trigger when clicking the file input itself
     uploadZone.addEventListener('click', (e) => {
         if (e.target !== fileInput) {
             fileInput.click();
@@ -747,7 +747,7 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Form submission ΓÇö use FormData + fetch for reliable file upload
+    // Form submission — use FormData + fetch for reliable file upload
     auditForm.addEventListener('submit', (e) => {
         e.preventDefault();
 
