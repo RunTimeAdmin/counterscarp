@@ -181,6 +181,7 @@ def generate_markdown_report(
     upgrade_results: Optional[Dict[str, Any]] = None,
     fingerprint_results: Optional[List[Dict[str, Any]]] = None,
     exploit_results: Optional[List] = None,
+    output_dir: Optional[str] = None,
 ) -> str:
     """Generates a report focused on REMEDIATION (Fixing the bugs).
 
@@ -202,7 +203,13 @@ def generate_markdown_report(
         Path to the generated markdown report file.
     """
 
-    filename = f"ACTION_PLAN_{datetime.date.today()}.md"
+    _action_plan_name = "ACTION_PLAN.md"
+    if output_dir:
+        from pathlib import Path as _Path
+        _Path(output_dir).mkdir(parents=True, exist_ok=True)
+        filename = str(_Path(output_dir) / _action_plan_name)
+    else:
+        filename = f"ACTION_PLAN_{datetime.date.today()}.md"
 
     # Risk Calculation
     critical_count = (
@@ -839,6 +846,22 @@ def main() -> None:
         logger.info(f"New scan session: {session_id}")
 
     stderr_log = str(Path(".counterscarp") / f"scan_stderr_{state_mgr._session_id}.log")
+
+    # --- Per-scan output directory (prevents overwriting previous reports) ---
+    # Resolved after session is established so we have the session ID.
+    # Format: reports/{ProjectName}_{YYYY-MM-DD}_{session[:8]}/
+    # The project name is derived from the target path at this stage; it may be
+    # overridden later if --project-name is supplied, but the directory is named
+    # from the target basename to keep it stable across resumes.
+    _scan_date_str = datetime.date.today().strftime("%Y-%m-%d")
+    _raw_proj = args.project_name or (os.path.basename(os.path.abspath(args.target)) if args.target else "scan")
+    # Sanitise for use as directory component
+    _proj_slug = "".join(c if c.isalnum() or c in "-_." else "_" for c in _raw_proj)
+    _session_short = str(state_mgr._session_id)[:8]
+    _engine_root = Path(os.path.dirname(os.path.abspath(__file__)))
+    scan_output_dir = _engine_root / "reports" / f"{_proj_slug}_{_scan_date_str}_{_session_short}"
+    scan_output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("Per-scan output directory: %s", scan_output_dir)
 
     # --- Path validation (fast-fail before any scan work) ---
     if not os.path.exists(args.target):
@@ -1497,21 +1520,25 @@ def main() -> None:
             from exploit_generator import ExploitGenerator, ExploitResult as _ExploitResult
 
             if _license.check_pro_feature(EXPLOIT_GEN):
+                # Use per-scan output dir for exploits; respect config override
+                _default_exploit_dir = str(scan_output_dir / "exploits")
                 exploit_config: Dict[str, Any] = {}
                 if hasattr(config, 'exploit_generation'):
                     eg = config.exploit_generation
                     exploit_config = {
                         'min_severity': getattr(eg, 'min_severity', 'HIGH'),
                         'validate_compilation': getattr(eg, 'validate_compilation', True),
-                        'output_dir': getattr(eg, 'output_dir', 'exploits/'),
+                        'output_dir': getattr(eg, 'output_dir', _default_exploit_dir),
                         'llm_backend': getattr(eg, 'llm_backend', 'none'),
                         'template_dir': getattr(eg, 'template_dir', 'exploit_templates/'),
                     }
+                else:
+                    exploit_config['output_dir'] = _default_exploit_dir
 
                 generator = ExploitGenerator(
                     config=exploit_config,
                     template_dir=exploit_config.get('template_dir', 'exploit_templates/'),
-                    output_dir=exploit_config.get('output_dir', 'exploits/'),
+                    output_dir=exploit_config.get('output_dir', _default_exploit_dir),
                     llm_backend=exploit_config.get('llm_backend', 'none'),
                 )
 
@@ -1538,7 +1565,7 @@ def main() -> None:
                     print(f"\n>>> Generating exploit PoCs for {len(critical_findings)} critical/high findings...")
                     exploit_results = generator.batch_generate(
                         critical_findings,
-                        output_dir=exploit_config.get('output_dir', 'exploits/'),
+                        output_dir=exploit_config.get('output_dir', _default_exploit_dir),
                     )
                     successful = [r for r in exploit_results if r.status == "success"]
                     logger.info("Generated %d exploit PoCs out of %d findings", len(successful), len(critical_findings))
@@ -1568,7 +1595,7 @@ def main() -> None:
         exploit_results = None
 
     report_file = generate_markdown_report(
-        "Target Protocol",
+        args.project_name or os.path.basename(os.path.abspath(args.target)),
         static_issues,
         supply_issues,
         fuzz_issues,
@@ -1580,6 +1607,7 @@ def main() -> None:
         upgrade_results,
         fingerprint_results if args.fingerprint else None,
         exploit_results=exploit_results,
+        output_dir=str(scan_output_dir),
     )
 
     print("\n" + "=" * 60)
@@ -1818,7 +1846,7 @@ def main() -> None:
             )
             
             # Generate Markdown report (always free)
-            md_file = f"audit_report_{datetime.date.today()}.md"
+            md_file = str(scan_output_dir / "audit_report.md")
             md_path = generate_audit_markdown_report(audit_report, md_file)
 
             print(f"\n[*] Professional Report Generated:")
@@ -1827,13 +1855,13 @@ def main() -> None:
 
             # HTML/SARIF reports require Pro license
             if _license.check_pro_feature(BRANDED_REPORTS):
-                html_file = f"audit_report_{datetime.date.today()}.html"
+                html_file = str(scan_output_dir / "audit_report.html")
                 html_path = generate_html_report(audit_report, html_file)
                 print(f"   HTML: {os.path.abspath(html_path)}")
                 logger.info("Professional HTML report: %s", os.path.abspath(html_path))
 
                 # PDF report (Pro feature, requires xhtml2pdf)
-                pdf_file = f"audit_report_{datetime.date.today()}.pdf"
+                pdf_file = str(scan_output_dir / "audit_report.pdf")
                 pdf_path = generate_pdf_report(audit_report, pdf_file)
                 if pdf_path:
                     print(f"   PDF:  {os.path.abspath(pdf_path)}")
@@ -1866,15 +1894,24 @@ def main() -> None:
     state_mgr.mark_session_complete()
     logger.info(f"Scan session complete: {state_mgr._session_id}")
 
-    # Final log file reference — always printed so users know where to find results
+    # Copy scan log into the per-scan output directory
+    _scan_log_dest = str(scan_output_dir / "scan.log")
+    try:
+        import shutil as _shutil
+        _shutil.copy2(_log_file, _scan_log_dest)
+    except Exception:
+        pass  # Non-fatal — original log is still accessible
+
+    # Final summary — always printed so users know where to find results
     logger.info("Scan complete. Log file: %s", _log_file)
     print(f"\n{'=' * 60}")
     print(f" Log file: {_log_file}")
+    print(f" Reports saved to: {scan_output_dir.resolve()}")
     print(f"{'=' * 60}")
 
     # Add log file reference to the ACTION_PLAN and audit_report files
-    for _report_name in [report_file, f"audit_report_{datetime.date.today()}.md"]:
-        _report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _report_name)
+    _audit_md_in_dir = str(scan_output_dir / "audit_report.md")
+    for _report_path in [report_file, _audit_md_in_dir]:
         if os.path.exists(_report_path):
             try:
                 with open(_report_path, "a", encoding="utf-8", errors="replace") as _rf:

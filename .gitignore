@@ -40,6 +40,9 @@ test_contracts/
 # Sample reports (generated)
 sample_reports/
 
+# Per-scan report output directories
+reports/
+
 # Runtime data
 .sentinel/
 vulnerability_timeline.json

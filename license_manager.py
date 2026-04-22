@@ -96,7 +96,8 @@ FEATURE_NAMES = {
     WEB_APP: "Web Application",
 }
 
-LICENSE_SERVER_URL = "https://api.counterscarp.io/license/validate"
+LICENSE_SERVER_URL = "https://api.counterscarp.io/api/license/validate"
+LICENSE_DEACTIVATE_URL = "https://api.counterscarp.io/api/license/deactivate"
 CACHE_TTL_HOURS = 24
 GRACE_PERIOD_DAYS = 7
 try:
