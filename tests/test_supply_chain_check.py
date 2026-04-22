@@ -126,8 +126,8 @@ class TestPartialFailureRecovery:
     @patch('supply_chain_check.resilient_post')
     def test_handles_api_error_gracefully(self, mock_post):
         """Test API errors are handled gracefully."""
-        from exceptions import GarrisonAPIError
-        mock_post.side_effect = GarrisonAPIError("API Error")
+        from exceptions import CounterscarpAPIError
+        mock_post.side_effect = CounterscarpAPIError("API Error")
         
         result = check_osv_api("test-lib", "1.0.0")
         

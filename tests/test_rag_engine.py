@@ -422,13 +422,13 @@ class TestAuditCopilot:
         """Test initialization with custom config."""
         config = {
             "embedding_backend": "openai",
-            "rag_index_path": ".garrison/custom_index.json",
+            "rag_index_path": ".counterscarp/custom_index.json",
             "top_k": 10,
             "auto_enrich": True
         }
         copilot = AuditCopilot(config)
         assert copilot.embedding_backend == "openai"
-        assert copilot.index_path == ".garrison/custom_index.json"
+        assert copilot.index_path == ".counterscarp/custom_index.json"
         assert copilot.top_k == 10
         assert copilot.auto_enrich is True
 

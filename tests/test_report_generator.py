@@ -354,7 +354,7 @@ class TestGenerateSARIFReport:
         sarif = generate_sarif_report(findings)
         
         tool = sarif["runs"][0]["tool"]["driver"]
-        assert tool["name"] == "Garrison Engine"
+        assert tool["name"] == "Counterscarp Engine"
         assert "version" in tool
         assert "informationUri" in tool
 

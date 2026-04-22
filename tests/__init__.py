@@ -1,2 +1,3 @@
-# Garrison Engine Test Suite
+# Counterscarp Engine Test Suite
 # Part 1: Core Module Tests
+

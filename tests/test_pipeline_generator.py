@@ -28,7 +28,7 @@ from pipeline_generator import (
 # Try to import config_loader
 try:
     from config_loader import (
-        GarrisonConfig,
+        CounterscarpConfig,
         CIConfig,
         CIGeneratorConfig,
         EngineConfig,
@@ -47,13 +47,13 @@ class TestPipelineGenerator(unittest.TestCase):
     def test_generate_pipeline_github(self):
         """Test generating a GitHub Actions pipeline."""
         content = generate_pipeline(
-            config_path="garrison.toml",
+            config_path="counterscarp.toml",
             platform="github",
             target_path="./contracts"
         )
         
         # Verify basic structure
-        self.assertIn("name: Garrison Security Audit", content)
+        self.assertIn("name: Counterscarp Security Audit", content)
         self.assertIn("on:", content)
         self.assertIn("jobs:", content)
         self.assertIn("runs-on: ubuntu-latest", content)
@@ -62,7 +62,7 @@ class TestPipelineGenerator(unittest.TestCase):
     def test_generate_pipeline_gitlab(self):
         """Test generating a GitLab CI pipeline."""
         content = generate_pipeline(
-            config_path="garrison.toml",
+            config_path="counterscarp.toml",
             platform="gitlab",
             target_path="./contracts"
         )
@@ -70,13 +70,13 @@ class TestPipelineGenerator(unittest.TestCase):
         # Verify basic structure
         self.assertIn("stages:", content)
         self.assertIn("- security", content)
-        self.assertIn("garrison-security-scan:", content)
+        self.assertIn("counterscarp-security-scan:", content)
         self.assertIn("image: python:3.10-slim", content)
         
     def test_generate_pipeline_azure(self):
         """Test generating an Azure DevOps pipeline."""
         content = generate_pipeline(
-            config_path="garrison.toml",
+            config_path="counterscarp.toml",
             platform="azure",
             target_path="./contracts"
         )
@@ -90,7 +90,7 @@ class TestPipelineGenerator(unittest.TestCase):
     def test_generate_pipeline_jenkins(self):
         """Test generating a Jenkinsfile."""
         content = generate_pipeline(
-            config_path="garrison.toml",
+            config_path="counterscarp.toml",
             platform="jenkins",
             target_path="./contracts"
         )
@@ -105,7 +105,7 @@ class TestPipelineGenerator(unittest.TestCase):
         """Test that invalid platform raises an error."""
         with self.assertRaises(Exception) as context:
             generate_pipeline(
-                config_path="garrison.toml",
+                config_path="counterscarp.toml",
                 platform="invalid_platform"
             )
         
@@ -117,7 +117,7 @@ class TestPipelineGenerator(unittest.TestCase):
             output_path = os.path.join(tmpdir, "test-workflow.yml")
             
             content = generate_pipeline(
-                config_path="garrison.toml",
+                config_path="counterscarp.toml",
                 platform="github",
                 output_path=output_path
             )
@@ -148,7 +148,7 @@ class TestPipelineGenerator(unittest.TestCase):
     @unittest.skipUnless(CONFIG_LOADER_AVAILABLE, "Config loader not available")
     def test_get_triggers_with_config(self):
         """Test trigger generation with config object."""
-        config = GarrisonConfig()
+        config = CounterscarpConfig()
         config.ci = CIConfig()
         config.ci.generator = CIGeneratorConfig(
             triggers=["schedule", "workflow_dispatch"]
@@ -162,7 +162,7 @@ class TestPipelineGenerator(unittest.TestCase):
     @unittest.skipUnless(CONFIG_LOADER_AVAILABLE, "Config loader not available")
     def test_get_analyzer_steps_with_config(self):
         """Test analyzer steps with config."""
-        config = GarrisonConfig()
+        config = CounterscarpConfig()
         config.static_analysis = StaticAnalysisConfig(
             slither_enabled=True,
             aderyn_enabled=True
@@ -170,7 +170,7 @@ class TestPipelineGenerator(unittest.TestCase):
         config.fuzzing = FuzzingConfig(medusa_enabled=False)
         config.heuristics = HeuristicConfig(enabled=True)
         
-        steps = _get_analyzer_steps(config, "github", "./contracts", "garrison.toml")
+        steps = _get_analyzer_steps(config, "github", "./contracts", "counterscarp.toml")
         
         # Should include enabled analyzers
         self.assertIn("slither", steps.lower())
@@ -178,7 +178,7 @@ class TestPipelineGenerator(unittest.TestCase):
     @unittest.skipUnless(CONFIG_LOADER_AVAILABLE, "Config loader not available")
     def test_get_notification_steps_with_slack(self):
         """Test notification steps with Slack enabled."""
-        config = GarrisonConfig()
+        config = CounterscarpConfig()
         config.ci = CIConfig()
         config.ci.generator = CIGeneratorConfig(
             notifications=["slack"]
@@ -219,7 +219,7 @@ class TestPipelineGenerator(unittest.TestCase):
         """Test that platform names are case insensitive."""
         for platform in ["GITHUB", "GitLab", "Azure", "JENKINS"]:
             content = generate_pipeline(
-                config_path="garrison.toml",
+                config_path="counterscarp.toml",
                 platform=platform,
                 target_path="./contracts"
             )
@@ -233,7 +233,7 @@ class TestPipelineGeneratorIntegration(unittest.TestCase):
     @unittest.skipUnless(CONFIG_LOADER_AVAILABLE, "Config loader not available")
     def test_full_config_integration(self):
         """Test pipeline generation with full configuration."""
-        config = GarrisonConfig()
+        config = CounterscarpConfig()
         config.engine = EngineConfig(
             fail_on_severity="MEDIUM",
             name="Test Engine",
@@ -256,13 +256,13 @@ class TestPipelineGeneratorIntegration(unittest.TestCase):
         )
         
         content = generate_pipeline(
-            config_path="garrison.toml",
+            config_path="counterscarp.toml",
             platform="github",
             target_path="./contracts"
         )
         
         # Verify content is generated
-        self.assertIn("Garrison Security Audit", content)
+        self.assertIn("Counterscarp Security Audit", content)
         
     def test_output_directory_creation(self):
         """Test that output directory is created if it doesn't exist."""
@@ -271,7 +271,7 @@ class TestPipelineGeneratorIntegration(unittest.TestCase):
             output_path = os.path.join(nested_dir, "workflow.yml")
             
             content = generate_pipeline(
-                config_path="garrison.toml",
+                config_path="counterscarp.toml",
                 platform="github",
                 output_path=output_path
             )

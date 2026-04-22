@@ -139,19 +139,19 @@ class TestIDLParser:
 
     def test_parse_missing_file(self, tmp_path):
         """Test parsing a non-existent file."""
-        from exceptions import GarrisonValidationError
+        from exceptions import CounterscarpValidationError
         
-        with pytest.raises(GarrisonValidationError):
+        with pytest.raises(CounterscarpValidationError):
             IDLParser.parse(str(tmp_path / "nonexistent.json"))
 
     def test_parse_invalid_json(self, tmp_path):
         """Test parsing invalid JSON."""
-        from exceptions import GarrisonValidationError
+        from exceptions import CounterscarpValidationError
         
         idl_file = tmp_path / "invalid.json"
         idl_file.write_text("not valid json")
         
-        with pytest.raises(GarrisonValidationError):
+        with pytest.raises(CounterscarpValidationError):
             IDLParser.parse(str(idl_file))
 
     def test_parse_instruction_accounts(self, tmp_path, sample_idl_json):
@@ -400,9 +400,9 @@ class TestValidateIdl:
 
     def test_invalid_idl_file(self, tmp_path):
         """Test validating invalid IDL file."""
-        from exceptions import GarrisonValidationError
+        from exceptions import CounterscarpValidationError
         
-        with pytest.raises(GarrisonValidationError):
+        with pytest.raises(CounterscarpValidationError):
             validate_idl(str(tmp_path / "nonexistent.json"))
 
 

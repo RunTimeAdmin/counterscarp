@@ -1,5 +1,5 @@
 """
-Shared fixtures for Garrison Engine test suite.
+Shared fixtures for Counterscarp Engine test suite.
 """
 
 import pytest
@@ -275,10 +275,10 @@ pub enum ErrorCode {
 
 @pytest.fixture
 def sample_config():
-    """A valid garrison.toml config dict."""
+    """A valid counterscarp.toml config dict."""
     return {
         "engine": {
-            "name": "Garrison Security Engine",
+            "name": "Counterscarp Security Engine",
             "version": "3.4.0",
             "fail_on_severity": "HIGH",
             "max_findings": 100
@@ -636,11 +636,11 @@ contract UpgradeableToken {
 # =============================================================================
 
 @pytest.fixture
-def sample_garrison_toml():
-    """Sample garrison.toml content."""
+def sample_counterscarp_toml():
+    """Sample counterscarp.toml content."""
     return """
 [engine]
-name = "Garrison Security Engine"
+name = "Counterscarp Security Engine"
 version = "3.4.0"
 fail_on_severity = "HIGH"
 max_findings = 100

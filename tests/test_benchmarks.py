@@ -1,4 +1,4 @@
-"""Performance benchmarks for Garrison Engine.
+"""Performance benchmarks for Counterscarp Engine.
 
 Run with: pytest tests/test_benchmarks.py --benchmark-only
 Skip during normal test runs with: pytest -m "not benchmark"

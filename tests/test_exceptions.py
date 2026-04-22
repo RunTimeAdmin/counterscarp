@@ -9,31 +9,31 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from exceptions import (
-    GarrisonError,
-    GarrisonConfigError,
-    GarrisonAnalysisError,
-    GarrisonAPIError,
-    GarrisonReportError,
-    GarrisonToolNotFoundError,
-    GarrisonValidationError,
-    GarrisonTimeoutError,
+    CounterscarpError,
+    CounterscarpConfigError,
+    CounterscarpAnalysisError,
+    CounterscarpAPIError,
+    CounterscarpReportError,
+    CounterscarpToolNotFoundError,
+    CounterscarpValidationError,
+    CounterscarpTimeoutError,
     format_exception_chain,
-    is_garrison_error,
+    is_counterscarp_error,
 )
 
 
-class TestGarrisonError:
-    """Test base GarrisonError class."""
+class TestCounterscarpError:
+    """Test base CounterscarpError class."""
 
     def test_creation_with_message(self):
         """Test exception can be created with message."""
-        exc = GarrisonError("Test error message")
+        exc = CounterscarpError("Test error message")
         assert str(exc) == "Test error message"
         assert exc.message == "Test error message"
 
     def test_creation_with_details(self):
         """Test exception can be created with details."""
-        exc = GarrisonError(
+        exc = CounterscarpError(
             "Test error",
             details={"key": "value", "code": 500}
         )
@@ -42,7 +42,7 @@ class TestGarrisonError:
 
     def test_str_with_details(self):
         """Test string representation includes details."""
-        exc = GarrisonError(
+        exc = CounterscarpError(
             "Test error",
             details={"path": "/test"}
         )
@@ -52,38 +52,38 @@ class TestGarrisonError:
 
     def test_str_without_details(self):
         """Test string representation without details."""
-        exc = GarrisonError("Simple error")
+        exc = CounterscarpError("Simple error")
         assert str(exc) == "Simple error"
 
     def test_to_dict_basic(self):
         """Test to_dict with basic error."""
-        exc = GarrisonError("Test error")
+        exc = CounterscarpError("Test error")
         d = exc.to_dict()
-        assert d["type"] == "GarrisonError"
+        assert d["type"] == "CounterscarpError"
         assert d["message"] == "Test error"
 
     def test_to_dict_with_details(self):
         """Test to_dict includes details."""
-        exc = GarrisonError("Test", details={"code": 500})
+        exc = CounterscarpError("Test", details={"code": 500})
         d = exc.to_dict()
         assert d["details"]["code"] == 500
 
     def test_to_dict_with_cause(self):
         """Test to_dict includes cause when chained."""
         original = ValueError("Original error")
-        exc = GarrisonError("Wrapped error")
+        exc = CounterscarpError("Wrapped error")
         exc.__cause__ = original
         d = exc.to_dict()
         assert "cause" in d
         assert "Original error" in d["cause"]
 
 
-class TestGarrisonConfigError:
-    """Test GarrisonConfigError class."""
+class TestCounterscarpConfigError:
+    """Test CounterscarpConfigError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = GarrisonConfigError(
+        exc = CounterscarpConfigError(
             "Config load failed",
             details={"path": "config.toml", "line": 10}
         )
@@ -91,17 +91,17 @@ class TestGarrisonConfigError:
         assert exc.details["path"] == "config.toml"
 
     def test_inheritance(self):
-        """Test inheritance from GarrisonError."""
-        exc = GarrisonConfigError("Test")
-        assert isinstance(exc, GarrisonError)
+        """Test inheritance from CounterscarpError."""
+        exc = CounterscarpConfigError("Test")
+        assert isinstance(exc, CounterscarpError)
 
 
-class TestGarrisonAnalysisError:
-    """Test GarrisonAnalysisError class."""
+class TestCounterscarpAnalysisError:
+    """Test CounterscarpAnalysisError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = GarrisonAnalysisError(
+        exc = CounterscarpAnalysisError(
             "Slither failed",
             details={"tool": "slither", "contract": "test.sol"}
         )
@@ -109,17 +109,17 @@ class TestGarrisonAnalysisError:
         assert exc.details["tool"] == "slither"
 
     def test_inheritance(self):
-        """Test inheritance from GarrisonError."""
-        exc = GarrisonAnalysisError("Test")
-        assert isinstance(exc, GarrisonError)
+        """Test inheritance from CounterscarpError."""
+        exc = CounterscarpAnalysisError("Test")
+        assert isinstance(exc, CounterscarpError)
 
 
-class TestGarrisonAPIError:
-    """Test GarrisonAPIError class."""
+class TestCounterscarpAPIError:
+    """Test CounterscarpAPIError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = GarrisonAPIError(
+        exc = CounterscarpAPIError(
             "OSV API failed",
             details={"status_code": 503, "endpoint": "/v1/query"}
         )
@@ -127,17 +127,17 @@ class TestGarrisonAPIError:
         assert exc.details["status_code"] == 503
 
     def test_inheritance(self):
-        """Test inheritance from GarrisonError."""
-        exc = GarrisonAPIError("Test")
-        assert isinstance(exc, GarrisonError)
+        """Test inheritance from CounterscarpError."""
+        exc = CounterscarpAPIError("Test")
+        assert isinstance(exc, CounterscarpError)
 
 
-class TestGarrisonReportError:
-    """Test GarrisonReportError class."""
+class TestCounterscarpReportError:
+    """Test CounterscarpReportError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = GarrisonReportError(
+        exc = CounterscarpReportError(
             "Failed to write report",
             details={"format": "html", "output_path": "/reports"}
         )
@@ -145,17 +145,17 @@ class TestGarrisonReportError:
         assert exc.details["format"] == "html"
 
     def test_inheritance(self):
-        """Test inheritance from GarrisonError."""
-        exc = GarrisonReportError("Test")
-        assert isinstance(exc, GarrisonError)
+        """Test inheritance from CounterscarpError."""
+        exc = CounterscarpReportError("Test")
+        assert isinstance(exc, CounterscarpError)
 
 
-class TestGarrisonToolNotFoundError:
-    """Test GarrisonToolNotFoundError class."""
+class TestCounterscarpToolNotFoundError:
+    """Test CounterscarpToolNotFoundError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = GarrisonToolNotFoundError(
+        exc = CounterscarpToolNotFoundError(
             "Slither not found",
             details={"tool": "slither", "install_cmd": "pip install slither"}
         )
@@ -163,17 +163,17 @@ class TestGarrisonToolNotFoundError:
         assert exc.details["tool"] == "slither"
 
     def test_inheritance(self):
-        """Test inheritance from GarrisonError."""
-        exc = GarrisonToolNotFoundError("Test")
-        assert isinstance(exc, GarrisonError)
+        """Test inheritance from CounterscarpError."""
+        exc = CounterscarpToolNotFoundError("Test")
+        assert isinstance(exc, CounterscarpError)
 
 
-class TestGarrisonValidationError:
-    """Test GarrisonValidationError class."""
+class TestCounterscarpValidationError:
+    """Test CounterscarpValidationError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = GarrisonValidationError(
+        exc = CounterscarpValidationError(
             "Invalid input",
             details={"field": "address", "value": "0x123"}
         )
@@ -181,17 +181,17 @@ class TestGarrisonValidationError:
         assert exc.details["field"] == "address"
 
     def test_inheritance(self):
-        """Test inheritance from GarrisonError."""
-        exc = GarrisonValidationError("Test")
-        assert isinstance(exc, GarrisonError)
+        """Test inheritance from CounterscarpError."""
+        exc = CounterscarpValidationError("Test")
+        assert isinstance(exc, CounterscarpError)
 
 
-class TestGarrisonTimeoutError:
-    """Test GarrisonTimeoutError class."""
+class TestCounterscarpTimeoutError:
+    """Test CounterscarpTimeoutError class."""
 
     def test_creation(self):
         """Test exception creation."""
-        exc = GarrisonTimeoutError(
+        exc = CounterscarpTimeoutError(
             "Analysis timed out",
             details={"operation": "fuzzing", "timeout_seconds": 300}
         )
@@ -199,9 +199,9 @@ class TestGarrisonTimeoutError:
         assert exc.details["timeout_seconds"] == 300
 
     def test_inheritance(self):
-        """Test inheritance from GarrisonError."""
-        exc = GarrisonTimeoutError("Test")
-        assert isinstance(exc, GarrisonError)
+        """Test inheritance from CounterscarpError."""
+        exc = CounterscarpTimeoutError("Test")
+        assert isinstance(exc, CounterscarpError)
 
 
 class TestExceptionChaining:
@@ -210,7 +210,7 @@ class TestExceptionChaining:
     def test_explicit_chaining(self):
         """Test explicit exception chaining with 'from'."""
         original = ValueError("Original error")
-        exc = GarrisonConfigError("Config failed")
+        exc = CounterscarpConfigError("Config failed")
         exc.__cause__ = original
         assert exc.__cause__ is original
         assert str(exc.__cause__) == "Original error"
@@ -221,8 +221,8 @@ class TestExceptionChaining:
             try:
                 raise ValueError("Inner error")
             except ValueError:
-                raise GarrisonError("Outer error")
-        except GarrisonError as exc:
+                raise CounterscarpError("Outer error")
+        except CounterscarpError as exc:
             # Implicit chaining sets __context__, not __cause__
             # __cause__ is only set with explicit 'from' syntax
             assert exc.__context__ is not None or exc.__cause__ is not None
@@ -233,8 +233,8 @@ class TestExceptionChaining:
             raise RuntimeError("Root cause")
         except RuntimeError as root:
             try:
-                raise GarrisonAnalysisError("Analysis failed") from root
-            except GarrisonAnalysisError as analysis:
+                raise CounterscarpAnalysisError("Analysis failed") from root
+            except CounterscarpAnalysisError as analysis:
                 d = analysis.to_dict()
                 assert "cause" in d
 
@@ -244,14 +244,14 @@ class TestFormatExceptionChain:
 
     def test_single_exception(self):
         """Test formatting single exception."""
-        exc = GarrisonError("Single error")
+        exc = CounterscarpError("Single error")
         result = format_exception_chain(exc)
         assert result == "Single error"
 
     def test_chained_exceptions(self):
         """Test formatting chained exceptions."""
         root = ValueError("Root cause")
-        exc = GarrisonError("Wrapped")
+        exc = CounterscarpError("Wrapped")
         exc.__cause__ = root
         result = format_exception_chain(exc)
         assert "Wrapped" in result
@@ -261,9 +261,9 @@ class TestFormatExceptionChain:
     def test_triple_chained_exceptions(self):
         """Test formatting triple chained exceptions."""
         e1 = Exception("Level 1")
-        e2 = GarrisonError("Level 2")
+        e2 = CounterscarpError("Level 2")
         e2.__cause__ = e1
-        e3 = GarrisonConfigError("Level 3")
+        e3 = CounterscarpConfigError("Level 3")
         e3.__cause__ = e2
         result = format_exception_chain(e3)
         assert "Level 3" in result
@@ -271,63 +271,63 @@ class TestFormatExceptionChain:
         assert "Level 1" in result
 
 
-class TestIsGarrisonError:
-    """Test is_garrison_error function."""
+class TestIsCounterscarpError:
+    """Test is_counterscarp_error function."""
 
-    def test_garrison_error_returns_true(self):
-        """Test GarrisonError returns True."""
-        exc = GarrisonError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_error_returns_true(self):
+        """Test CounterscarpError returns True."""
+        exc = CounterscarpError("Test")
+        assert is_counterscarp_error(exc) is True
 
-    def test_garrison_config_error_returns_true(self):
-        """Test GarrisonConfigError returns True."""
-        exc = GarrisonConfigError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_config_error_returns_true(self):
+        """Test CounterscarpConfigError returns True."""
+        exc = CounterscarpConfigError("Test")
+        assert is_counterscarp_error(exc) is True
 
-    def test_garrison_analysis_error_returns_true(self):
-        """Test GarrisonAnalysisError returns True."""
-        exc = GarrisonAnalysisError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_analysis_error_returns_true(self):
+        """Test CounterscarpAnalysisError returns True."""
+        exc = CounterscarpAnalysisError("Test")
+        assert is_counterscarp_error(exc) is True
 
-    def test_garrison_api_error_returns_true(self):
-        """Test GarrisonAPIError returns True."""
-        exc = GarrisonAPIError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_api_error_returns_true(self):
+        """Test CounterscarpAPIError returns True."""
+        exc = CounterscarpAPIError("Test")
+        assert is_counterscarp_error(exc) is True
 
-    def test_garrison_report_error_returns_true(self):
-        """Test GarrisonReportError returns True."""
-        exc = GarrisonReportError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_report_error_returns_true(self):
+        """Test CounterscarpReportError returns True."""
+        exc = CounterscarpReportError("Test")
+        assert is_counterscarp_error(exc) is True
 
-    def test_garrison_tool_not_found_error_returns_true(self):
-        """Test GarrisonToolNotFoundError returns True."""
-        exc = GarrisonToolNotFoundError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_tool_not_found_error_returns_true(self):
+        """Test CounterscarpToolNotFoundError returns True."""
+        exc = CounterscarpToolNotFoundError("Test")
+        assert is_counterscarp_error(exc) is True
 
-    def test_garrison_validation_error_returns_true(self):
-        """Test GarrisonValidationError returns True."""
-        exc = GarrisonValidationError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_validation_error_returns_true(self):
+        """Test CounterscarpValidationError returns True."""
+        exc = CounterscarpValidationError("Test")
+        assert is_counterscarp_error(exc) is True
 
-    def test_garrison_timeout_error_returns_true(self):
-        """Test GarrisonTimeoutError returns True."""
-        exc = GarrisonTimeoutError("Test")
-        assert is_garrison_error(exc) is True
+    def test_counterscarp_timeout_error_returns_true(self):
+        """Test CounterscarpTimeoutError returns True."""
+        exc = CounterscarpTimeoutError("Test")
+        assert is_counterscarp_error(exc) is True
 
     def test_value_error_returns_false(self):
         """Test ValueError returns False."""
         exc = ValueError("Test")
-        assert is_garrison_error(exc) is False
+        assert is_counterscarp_error(exc) is False
 
     def test_runtime_error_returns_false(self):
         """Test RuntimeError returns False."""
         exc = RuntimeError("Test")
-        assert is_garrison_error(exc) is False
+        assert is_counterscarp_error(exc) is False
 
     def test_type_error_returns_false(self):
         """Test TypeError returns False."""
         exc = TypeError("Test")
-        assert is_garrison_error(exc) is False
+        assert is_counterscarp_error(exc) is False
 
 
 class TestAllExceptionTypes:
@@ -336,31 +336,31 @@ class TestAllExceptionTypes:
     def test_all_types_with_message(self):
         """Test all exception types can be created with message."""
         exceptions = [
-            GarrisonError("Base"),
-            GarrisonConfigError("Config"),
-            GarrisonAnalysisError("Analysis"),
-            GarrisonAPIError("API"),
-            GarrisonReportError("Report"),
-            GarrisonToolNotFoundError("Tool"),
-            GarrisonValidationError("Validation"),
-            GarrisonTimeoutError("Timeout"),
+            CounterscarpError("Base"),
+            CounterscarpConfigError("Config"),
+            CounterscarpAnalysisError("Analysis"),
+            CounterscarpAPIError("API"),
+            CounterscarpReportError("Report"),
+            CounterscarpToolNotFoundError("Tool"),
+            CounterscarpValidationError("Validation"),
+            CounterscarpTimeoutError("Timeout"),
         ]
         
         for exc in exceptions:
-            assert isinstance(exc, GarrisonError)
+            assert isinstance(exc, CounterscarpError)
             assert exc.message is not None
 
     def test_all_types_with_details(self):
         """Test all exception types can be created with details."""
         exceptions = [
-            GarrisonError("Base", {"code": 1}),
-            GarrisonConfigError("Config", {"file": "test"}),
-            GarrisonAnalysisError("Analysis", {"tool": "slither"}),
-            GarrisonAPIError("API", {"status": 500}),
-            GarrisonReportError("Report", {"format": "html"}),
-            GarrisonToolNotFoundError("Tool", {"tool": "mythril"}),
-            GarrisonValidationError("Validation", {"field": "address"}),
-            GarrisonTimeoutError("Timeout", {"seconds": 30}),
+            CounterscarpError("Base", {"code": 1}),
+            CounterscarpConfigError("Config", {"file": "test"}),
+            CounterscarpAnalysisError("Analysis", {"tool": "slither"}),
+            CounterscarpAPIError("API", {"status": 500}),
+            CounterscarpReportError("Report", {"format": "html"}),
+            CounterscarpToolNotFoundError("Tool", {"tool": "mythril"}),
+            CounterscarpValidationError("Validation", {"field": "address"}),
+            CounterscarpTimeoutError("Timeout", {"seconds": 30}),
         ]
         
         for exc in exceptions:
@@ -369,14 +369,14 @@ class TestAllExceptionTypes:
     def test_all_types_to_dict(self):
         """Test all exception types can be serialized to dict."""
         exceptions = [
-            GarrisonError("Base"),
-            GarrisonConfigError("Config"),
-            GarrisonAnalysisError("Analysis"),
-            GarrisonAPIError("API"),
-            GarrisonReportError("Report"),
-            GarrisonToolNotFoundError("Tool"),
-            GarrisonValidationError("Validation"),
-            GarrisonTimeoutError("Timeout"),
+            CounterscarpError("Base"),
+            CounterscarpConfigError("Config"),
+            CounterscarpAnalysisError("Analysis"),
+            CounterscarpAPIError("API"),
+            CounterscarpReportError("Report"),
+            CounterscarpToolNotFoundError("Tool"),
+            CounterscarpValidationError("Validation"),
+            CounterscarpTimeoutError("Timeout"),
         ]
         
         for exc in exceptions:

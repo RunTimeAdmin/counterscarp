@@ -169,9 +169,9 @@ contracts/Vault.sol
 
     def test_not_a_git_repo(self, tmp_path):
         """Test error when path is not a git repo."""
-        from exceptions import GarrisonValidationError
+        from exceptions import CounterscarpValidationError
         
-        with pytest.raises(GarrisonValidationError):
+        with pytest.raises(CounterscarpValidationError):
             parse_git_history(str(tmp_path))
 
     def test_git_command_failure(self, tmp_path):
@@ -183,10 +183,10 @@ contracts/Vault.sol
         mock_result.returncode = 1
         mock_result.stderr = "fatal: not a git repository"
         
-        from exceptions import GarrisonAnalysisError
+        from exceptions import CounterscarpAnalysisError
         
         with patch('subprocess.run', return_value=mock_result):
-            with pytest.raises(GarrisonAnalysisError):
+            with pytest.raises(CounterscarpAnalysisError):
                 parse_git_history(str(tmp_path))
 
     def test_git_not_found(self, tmp_path):
@@ -194,10 +194,10 @@ contracts/Vault.sol
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
         
-        from exceptions import GarrisonAnalysisError
+        from exceptions import CounterscarpAnalysisError
         
         with patch('subprocess.run', side_effect=FileNotFoundError()):
-            with pytest.raises(GarrisonAnalysisError):
+            with pytest.raises(CounterscarpAnalysisError):
                 parse_git_history(str(tmp_path))
 
     def test_filters_non_sol_rs_files(self, tmp_path):
