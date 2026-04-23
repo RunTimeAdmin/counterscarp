@@ -596,6 +596,46 @@ def is_in_multiline_comment(
     return in_multiline_comment
 
 
+def _check_safe_patterns(
+    finding: "HeuristicFinding",
+    file_lines: List[str],
+    safe_patterns: Optional[List[Any]] = None,
+) -> None:
+    """Check if a finding matches a known-safe library pattern and downgrade severity.
+
+    Scans the first 100 lines of the file for known import/inheritance patterns
+    (e.g., OpenZeppelin, Uniswap). When a match is found, the finding's severity
+    is downgraded and an explanatory note is appended to the message.
+
+    Args:
+        finding: The HeuristicFinding to (potentially) modify in-place.
+        file_lines: All source lines of the scanned file.
+        safe_patterns: Override list of SafePattern objects. Defaults to
+            DEFAULT_SAFE_PATTERNS from config_loader.
+    """
+    if CONFIG_AVAILABLE:
+        try:
+            from config_loader import DEFAULT_SAFE_PATTERNS  # noqa: PLC0415
+        except ImportError:
+            return
+    else:
+        return
+
+    patterns = safe_patterns if safe_patterns is not None else DEFAULT_SAFE_PATTERNS
+
+    # Build context from imports and inheritance (first 100 lines typically enough)
+    header_text = "".join(file_lines[:min(100, len(file_lines))])
+
+    for sp in patterns:
+        if sp.rule_id != finding.rule_id:
+            continue
+        if re.search(sp.pattern, header_text):
+            finding.severity = sp.downgrade_to
+            finding.message = f"{finding.message} [{sp.library}: {sp.reason}]"
+            finding.confidence = max(1, finding.confidence - 3)
+            break  # First match wins
+
+
 def scan_file(
     path: str,
     config: Optional[CounterscarpConfig] = None,
@@ -749,6 +789,9 @@ def scan_file(
                         finding.severity = "INFO"
                         finding.message = "External call wrapped in try/catch"
                         finding.confidence = 1
+
+                # Check safe library patterns — downgrade severity for known-safe usage
+                _check_safe_patterns(finding, lines)
 
                 findings.append(finding)
                 # Only report one finding per rule per line

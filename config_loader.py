@@ -471,6 +471,82 @@ class ExploitGenerationConfig:
 
 
 @dataclass
+class SafePattern:
+    """A known-safe library/framework pattern that downgrades finding severity.
+
+    Attributes:
+        library: Human-readable library name (e.g., "OpenZeppelin.UUPS").
+        rule_id: Rule ID to match against.
+        pattern: Regex to match in import/inheritance lines.
+        downgrade_to: Target severity (INFO, LOW, etc.).
+        reason: Human-readable explanation.
+    """
+    library: str
+    rule_id: str
+    pattern: str
+    downgrade_to: str
+    reason: str
+
+
+DEFAULT_SAFE_PATTERNS: List[SafePattern] = [
+    SafePattern(
+        "OpenZeppelin.UUPS", "STORAGE_COLLISION_RISK",
+        r"import\s+.*@openzeppelin.*UUPSUpgradeable|is\s+UUPSUpgradeable",
+        "INFO", "OpenZeppelin UUPS proxy follows audited standard storage layout"
+    ),
+    SafePattern(
+        "OpenZeppelin.ReentrancyGuard", "REENTRANCY_PATTERN",
+        r"import\s+.*@openzeppelin.*ReentrancyGuard|nonReentrant",
+        "INFO", "Protected by OpenZeppelin ReentrancyGuard mutex"
+    ),
+    SafePattern(
+        "Uniswap.Currency", "UNCHECKED_EXTERNAL_CALL",
+        r"Currency\.transfer|CurrencyLibrary|import.*Currency",
+        "INFO", "Uniswap Currency library wrapper, not a raw ETH transfer"
+    ),
+    SafePattern(
+        "Uniswap.Permit2", "UNCHECKED_EXTERNAL_CALL",
+        r"IAllowanceTransfer|ISignatureTransfer|import.*[Pp]ermit2",
+        "INFO", "Uniswap Permit2 standard approval pattern"
+    ),
+    SafePattern(
+        "OpenZeppelin.SafeERC20", "UNCHECKED_EXTERNAL_CALL",
+        r"import\s+.*SafeERC20|using\s+SafeERC20|safeTransfer\(|safeTransferFrom\(",
+        "INFO", "OpenZeppelin SafeERC20 handles return value checking"
+    ),
+    SafePattern(
+        "OpenZeppelin.Initializable", "STORAGE_COLLISION_RISK",
+        r"import\s+.*@openzeppelin.*Initializable|modifier\s+initializer",
+        "LOW", "OpenZeppelin Initializable follows audited standard pattern"
+    ),
+    SafePattern(
+        "OpenZeppelin.AccessControl", "MISSING_ACCESS_CONTROL",
+        r"import\s+.*@openzeppelin.*AccessControl|hasRole\(|onlyRole\(",
+        "INFO", "Protected by OpenZeppelin role-based AccessControl"
+    ),
+    SafePattern(
+        "OpenZeppelin.Ownable", "MISSING_ACCESS_CONTROL",
+        r"import\s+.*@openzeppelin.*Ownable|onlyOwner",
+        "INFO", "Protected by OpenZeppelin Ownable modifier"
+    ),
+]
+
+
+@dataclass
+class SafePatternConfig:
+    """Configuration for the context-aware severity whitelist.
+
+    Attributes:
+        enabled: Whether safe pattern matching is enabled.
+        patterns: List of safe patterns to apply.
+    """
+    enabled: bool = True
+    patterns: List[SafePattern] = field(
+        default_factory=lambda: list(DEFAULT_SAFE_PATTERNS)
+    )
+
+
+@dataclass
 class FingerprintConfig:
     """Protocol fingerprint scanner configuration.
 
