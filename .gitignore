@@ -51,3 +51,22 @@ uploads/
 
 # Local environment secrets (API keys)
 data/.env.local
+
+# Workspace artifacts
+_*.txt
+_*.py
+git_*.txt
+run_battery_*.py
+run_scan_*.bat
+mypy_*.txt
+_cleanup.ps1
+
+# Coverage
+.coverage.*
+
+# Demo/test HTML reports (generated)
+test_report_*.html
+demo_*.html
+
+# Exploits directory
+exploits/
