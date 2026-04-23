@@ -5,9 +5,9 @@ import os
 import re
 import argparse
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Import logger
 try:
@@ -115,6 +115,21 @@ class HeuristicFinding:
     suppressed: bool = False
     suppression_reason: str = ""
     confidence: int = 5  # 1-10 scale
+    similar_locations: List[str] = field(default_factory=list)
+    duplicate_count: int = 0
+
+
+def _deduplicate_findings(findings: List['HeuristicFinding']) -> List['HeuristicFinding']:
+    """Collapse duplicate rule_id hits within the same file to one finding."""
+    seen: Dict[tuple, 'HeuristicFinding'] = {}
+    for f in findings:
+        key = (f.rule_id, f.file)
+        if key in seen:
+            seen[key].similar_locations.append(f"{f.file}:{f.line_no}")
+            seen[key].duplicate_count += 1
+        else:
+            seen[key] = f
+    return list(seen.values())
 
 
 @dataclass
@@ -176,7 +191,7 @@ RULES: List[HeuristicRule] = [
         id="HARDCODED_ADDRESS",
         description="Hardcoded address literal in code",
         severity="INFO",
-        pattern=re.compile(r"0x[0-9a-fA-F]{38,40}"),
+        pattern=re.compile(r"0x[0-9a-fA-F]{40}(?![0-9a-fA-F])"),
         hint="Verify hardcoded addresses are correct and documented; consider configurability.",
         confidence=1,
     ),
@@ -683,6 +698,58 @@ def scan_file(
                         finding.suppressed = True
                         finding.suppression_reason = suppression.reason
 
+                # Post-match severity refinement for BLOCK_TIMESTAMP_RANDOMNESS
+                if finding.rule_id == "BLOCK_TIMESTAMP_RANDOMNESS":
+                    line_lower = finding.line_text.lower()
+                    # Deadline comparison pattern — standard DeFi practice
+                    if any(op in line_lower for op in [">=", "<=", "> ", "< ", "require(", "assert("]) and \
+                       any(kw in line_lower for kw in ["deadline", "expir", "timeout", "valid"]):
+                        finding.severity = "INFO"
+                        finding.message = "block.timestamp used for deadline comparison (standard practice)"
+                        finding.confidence = 1
+                    # Even without deadline keywords, comparison operators suggest conditional check, not randomness
+                    elif any(op in finding.line_text for op in [">=", "<=", ">", "<"]) and "%" not in finding.line_text:
+                        finding.severity = "INFO"
+                        finding.message = "block.timestamp used in comparison (likely deadline check)"
+                        finding.confidence = 2
+                    # Modulo or arithmetic — potential randomness
+                    elif "%" in finding.line_text or "keccak256" in finding.line_text:
+                        finding.severity = "HIGH"
+                        finding.message = "block.timestamp used for randomness or entropy (exploitable by miners)"
+                        finding.confidence = 7
+
+                # Post-match exclusion for HARDCODED_ADDRESS — skip bytes32 constants
+                if finding.rule_id == "HARDCODED_ADDRESS":
+                    line_upper = finding.line_text.upper()
+                    if any(kw in line_upper for kw in ["TYPEHASH", "MASK", "SLOT", "SELECTOR",
+                                                        "DOMAIN_SEPARATOR", "PERMIT", "DIRTY", "BITS"]):
+                        finding.suppressed = True
+                        finding.suppression_reason = "bytes32 constant, not an address"
+
+                # Post-match severity refinement for UNCHECKED_EXTERNAL_CALL
+                if finding.rule_id == "UNCHECKED_EXTERNAL_CALL":
+                    line_text = finding.line_text.strip()
+                    # Check if return value is captured: (bool success, ...) = ...
+                    if re.search(r'\(\s*bool\s+\w+', line_text):
+                        # Return captured — check next few lines for verification
+                        check_lines = ""
+                        for offset in range(1, 4):
+                            if finding.line_no + offset - 1 < len(lines):
+                                check_lines += lines[finding.line_no + offset - 1]
+                        if re.search(r'require\s*\(|assert\s*\(|if\s*\(\s*!?\s*success', check_lines):
+                            finding.severity = "INFO"
+                            finding.message = "External call with captured and verified return value"
+                            finding.confidence = 1
+                        else:
+                            finding.severity = "HIGH"
+                            finding.message = "External call return value captured but not verified"
+                            finding.confidence = 6
+                    # Also check for try/catch pattern
+                    elif "try " in line_text or line_text.startswith("try"):
+                        finding.severity = "INFO"
+                        finding.message = "External call wrapped in try/catch"
+                        finding.confidence = 1
+
                 findings.append(finding)
                 # Only report one finding per rule per line
                 break
@@ -738,7 +805,7 @@ def scan_file(
 
             findings.append(finding)
 
-    return findings
+    return _deduplicate_findings(findings)
 
 
 def should_exclude(file_path: str, exclude_patterns: List[str], base_dir: str = "") -> bool:
@@ -842,7 +909,7 @@ def scan_target(
         # Not a file or directory; nothing to do
         return []
 
-    return all_findings
+    return _deduplicate_findings(all_findings)
 
 
 def print_report(findings: List[HeuristicFinding], show_suppressed: bool = False) -> None:
