@@ -188,6 +188,7 @@ def _generate_action_plan_report(
     upgrade_results: Optional[Dict[str, Any]] = None,
     fingerprint_results: Optional[List[Dict[str, Any]]] = None,
     exploit_results: Optional[List] = None,
+    analyzer_status: Optional[Dict[str, Any]] = None,
     output_dir: Optional[str] = None,
 ) -> str:
     """Generates an action-plan report focused on REMEDIATION (Fixing the bugs).
@@ -353,6 +354,28 @@ def _generate_action_plan_report(
             f.write("\n")
 
         f.write("---\n\n")
+
+        # ---------------------------------------------------------
+        # ANALYZER COVERAGE TABLE
+        # ---------------------------------------------------------
+        if analyzer_status:
+            f.write("## Analyzer Coverage\n\n")
+            f.write("| Analyzer | Status | Findings |\n")
+            f.write("|----------|--------|----------|\n")
+            _failed_analyzers = []
+            for _aname, _astatus in analyzer_status.items():
+                if _astatus.get("ran"):
+                    _acount = _astatus.get("finding_count", 0)
+                    f.write(f"| {_aname} | Completed | {_acount} |\n")
+                elif _astatus.get("error") == "Not enabled":
+                    f.write(f"| {_aname} | Skipped (not enabled) | — |\n")
+                else:
+                    f.write(f"| {_aname} | **FAILED** | — |\n")
+                    _failed_analyzers.append((_aname, _astatus.get("error", "Unknown error")))
+            f.write("\n")
+            for _aname, _aerr in _failed_analyzers:
+                f.write(f"> **Warning:** {_aname} did not complete successfully ({_aerr}). Results below may be incomplete.\n\n")
+            f.write("---\n\n")
 
         # ---------------------------------------------------------
         # SECTION 1: SUPPLY CHAIN (DEPENDENCIES)
@@ -1056,6 +1079,9 @@ def main() -> None:
     solana_results: Optional[Dict] = None
     upgrade_results: Optional[Dict] = None
 
+    # Analyzer status tracking — populated as each phase completes
+    analyzer_status: Dict[str, Dict[str, Any]] = {}
+
     # [PHASE 1] Supply Chain
     print(">>> Assessing Supply Chain...")
     logger.info("[PHASE 1] Assessing Supply Chain")
@@ -1079,10 +1105,16 @@ def main() -> None:
     else:
         supply_issues = state_mgr.load_phase_results("supply_chain") or []
         logger.info("[PHASE 1] Supply Chain — loaded from cache (resumed)")
+    analyzer_status["Supply Chain"] = {
+        "ran": bool(supply_issues),
+        "finding_count": len(supply_issues),
+        "error": None,
+    }
 
     # [PHASE 2] Static Analysis (Slither)
     print("\n>>> Analyzing Code Patterns...")
     logger.info("[PHASE 2] Running Static Analysis (Slither)")
+    _slither_error: Optional[str] = None
     if state_mgr.is_phase_pending("slither"):
         _t0 = _time.time()
         try:
@@ -1097,22 +1129,31 @@ def main() -> None:
             logger.error("Slither analysis failed: %s", e)
             static_issues = []
             raw_slither = None
+            _slither_error = str(e)
         except Exception as e:
             logger.error("Slither analysis unexpected failure: %s", e)
             static_issues = []
             raw_slither = None
+            _slither_error = str(e)
         state_mgr.save_phase_results("slither", static_issues)
         state_mgr.mark_phase_complete("slither", len(static_issues) if static_issues else 0, _time.time() - _t0)
     else:
         static_issues = state_mgr.load_phase_results("slither") or []
         logger.info("[PHASE 2] Slither — loaded from cache (resumed)")
+    analyzer_status["Slither (Static Analysis)"] = {
+        "ran": bool(static_issues),
+        "finding_count": len(static_issues),
+        "error": _slither_error,
+    }
 
     # [PHASE 2B] Aderyn Static Analysis (optional)
+    _aderyn_error: Optional[str] = None
     if args.aderyn and os.path.isdir(args.target):
         print("\n>>> Running Aderyn Static Analysis...")
         logger.info("[PHASE 2B] Running Aderyn Static Analysis")
         if aderyn_wrapper is None:
             logger.warning("Aderyn wrapper not available in this environment")
+            _aderyn_error = "Aderyn wrapper not available"
         elif state_mgr.is_phase_pending("aderyn"):
             _t0 = _time.time()
             try:
@@ -1126,6 +1167,7 @@ def main() -> None:
                 logger.error("Aderyn analysis failed: %s", e)
                 print("[!] Aderyn analysis failed; continuing without Aderyn results.")
                 aderyn_results = {"error": "Aderyn run failed"}
+                _aderyn_error = str(e)
             finally:
                 try:
                     _sys.exit = old_exit
@@ -1137,8 +1179,17 @@ def main() -> None:
         else:
             aderyn_results = state_mgr.load_phase_results("aderyn")
             logger.info("[PHASE 2B] Aderyn — loaded from cache (resumed)")
+    else:
+        _aderyn_error = "Not enabled"
+    _aderyn_count = len(aderyn_results.get("issues", [])) if isinstance(aderyn_results, dict) and not aderyn_results.get("error") else 0
+    analyzer_status["Aderyn (Static Analysis)"] = {
+        "ran": aderyn_results is not None and not (isinstance(aderyn_results, dict) and aderyn_results.get("error")),
+        "finding_count": _aderyn_count,
+        "error": _aderyn_error,
+    }
 
     # [PHASE 3] Fuzzing (Foundry)
+    _fuzz_error: Optional[str] = None
     if args.fuzz_contract:
         print("\n>>> Stress Testing Logic (Foundry)...")
         logger.info("[PHASE 3] Running Foundry Fuzzing on %s", args.fuzz_contract)
@@ -1151,18 +1202,28 @@ def main() -> None:
             except Exception as e:
                 logger.error("Foundry fuzzing failed: %s", e)
                 fuzz_issues = []
+                _fuzz_error = str(e)
             state_mgr.save_phase_results("foundry_fuzz", fuzz_issues)
             state_mgr.mark_phase_complete("foundry_fuzz", len(fuzz_issues), _time.time() - _t0)
         else:
             fuzz_issues = state_mgr.load_phase_results("foundry_fuzz") or []
             logger.info("[PHASE 3] Foundry Fuzz — loaded from cache (resumed)")
+    else:
+        _fuzz_error = "Not enabled"
+    analyzer_status["Foundry Fuzz"] = {
+        "ran": bool(fuzz_issues),
+        "finding_count": len(fuzz_issues),
+        "error": _fuzz_error,
+    }
 
     # [PHASE 3B] Medusa Fuzzing (optional)
+    _medusa_error: Optional[str] = None
     if args.medusa:
         print("\n>>> Running Medusa Fuzzing (coverage-guided)...")
         logger.info("[PHASE 3B] Running Medusa Fuzzing")
         if medusa_wrapper is None:
             logger.warning("Medusa wrapper not available in this environment")
+            _medusa_error = "Medusa wrapper not available"
         elif state_mgr.is_phase_pending("medusa_fuzz"):
             _t0 = _time.time()
             medusa_target = args.target if os.path.isdir(args.target) else os.path.dirname(args.target)
@@ -1178,6 +1239,7 @@ def main() -> None:
             except Exception as e:
                 logger.error("Medusa fuzzing failed: %s", e)
                 medusa_results = {"error": "Medusa run failed"}
+                _medusa_error = str(e)
             finally:
                 try:
                     _sys.exit = old_exit
@@ -1189,10 +1251,19 @@ def main() -> None:
         else:
             medusa_results = state_mgr.load_phase_results("medusa_fuzz")
             logger.info("[PHASE 3B] Medusa Fuzz — loaded from cache (resumed)")
+    else:
+        _medusa_error = "Not enabled"
+    _medusa_count = len(medusa_results.get("findings", [])) if isinstance(medusa_results, dict) and not medusa_results.get("error") else 0
+    analyzer_status["Medusa (Fuzzing)"] = {
+        "ran": medusa_results is not None and not (isinstance(medusa_results, dict) and medusa_results.get("error")),
+        "finding_count": _medusa_count,
+        "error": _medusa_error,
+    }
 
     # [PHASE 4] Heuristic Scan
     print("\n>>> Running Heuristic Scan...")
     logger.info("[PHASE 4] Running Heuristic Scan")
+    _heuristic_error: Optional[str] = None
     if state_mgr.is_phase_pending("heuristic"):
         _t0 = _time.time()
         try:
@@ -1218,11 +1289,17 @@ def main() -> None:
         except Exception as e:
             logger.error("Heuristic scan failed: %s", e)
             heuristic_results = []
+            _heuristic_error = str(e)
         state_mgr.save_phase_results("heuristic", heuristic_results)
         state_mgr.mark_phase_complete("heuristic", len(heuristic_results), _time.time() - _t0)
     else:
         heuristic_results = state_mgr.load_phase_results("heuristic") or []
         logger.info("[PHASE 4] Heuristic — loaded from cache (resumed)")
+    analyzer_status["Heuristic Scanner"] = {
+        "ran": bool(heuristic_results) or _heuristic_error is None,
+        "finding_count": len(heuristic_results),
+        "error": _heuristic_error,
+    }
 
     # [PHASE 4C] Plugin Analyzers (optional)
     if plugin_mgr and plugin_mgr.get_analyzer_count() > 0:
@@ -1317,6 +1394,7 @@ def main() -> None:
             logger.info("[PHASE 4B] Fingerprint — loaded from cache (resumed)")
 
     # [PHASE 5] Symbolic Analysis (optional)
+    _mythril_error: Optional[str] = None
     if args.symbolic and os.path.isfile(args.target):
         print("\n>>> Running Symbolic Analysis (Mythril)...")
         logger.info("[PHASE 5] Running Symbolic Analysis (Mythril)")
@@ -1330,20 +1408,31 @@ def main() -> None:
                 logger.error("Symbolic analysis failed: %s", e)
                 # In case Mythril or the CLI fails, don't crash the whole pipeline
                 symbolic_results = []
+                _mythril_error = str(e)
             state_mgr.save_phase_results("mythril", symbolic_results)
             state_mgr.mark_phase_complete("mythril", len(symbolic_results), _time.time() - _t0)
         else:
             symbolic_results = state_mgr.load_phase_results("mythril") or []
             logger.info("[PHASE 5] Mythril — loaded from cache (resumed)")
+    else:
+        _mythril_error = "Not enabled"
+    analyzer_status["Mythril (Symbolic)"] = {
+        "ran": bool(symbolic_results) or _mythril_error is None,
+        "finding_count": len(symbolic_results),
+        "error": _mythril_error,
+    }
 
     # [PHASE 6] Solana Static Analysis (optional)
+    _solana_error: Optional[str] = None
     if args.solana_root and not _license.check_pro_feature(SOLANA):
         print(_license.get_upgrade_message(SOLANA))
+        _solana_error = "License required"
     elif args.solana_root:
         print("\n>>> Running Solana Static Analysis...")
         logger.info("[PHASE 6] Running Solana Static Analysis")
         if solana_analyzer is None:
             logger.warning("solana_analyzer module not available")
+            _solana_error = "solana_analyzer module not available"
         elif state_mgr.is_phase_pending("solana"):
             _t0 = _time.time()
             try:
@@ -1352,12 +1441,21 @@ def main() -> None:
             except Exception as e:
                 logger.error("Solana analysis failed: %s", e)
                 solana_results = {"error": "Solana analysis failed"}
+                _solana_error = str(e)
             _sc = len((solana_results or {}).get("pattern_findings", [])) if isinstance(solana_results, dict) else 0
             state_mgr.save_phase_results("solana", solana_results)
             state_mgr.mark_phase_complete("solana", _sc, _time.time() - _t0)
         else:
             solana_results = state_mgr.load_phase_results("solana")
             logger.info("[PHASE 6] Solana — loaded from cache (resumed)")
+    else:
+        _solana_error = "Not enabled"
+    _solana_count = len((solana_results or {}).get("pattern_findings", [])) if isinstance(solana_results, dict) and not (solana_results or {}).get("error") else 0
+    analyzer_status["Solana Analyzer"] = {
+        "ran": solana_results is not None and not (isinstance(solana_results, dict) and solana_results.get("error")),
+        "finding_count": _solana_count,
+        "error": _solana_error,
+    }
 
     # [PHASE 7] Upgrade Diff Analysis (optional)
     if args.upgrade_old and args.upgrade_new:
@@ -1623,6 +1721,7 @@ def main() -> None:
         upgrade_results,
         fingerprint_results if args.fingerprint else None,
         exploit_results=exploit_results,
+        analyzer_status=analyzer_status,
         output_dir=str(scan_output_dir),
     )
 
@@ -1858,7 +1957,8 @@ def main() -> None:
                 project_name=project_name,
                 target_path=args.target,
                 findings=all_findings,
-                engine_version=_ENGINE_VERSION
+                engine_version=_ENGINE_VERSION,
+                analyzer_status=analyzer_status
             )
             
             # Generate Markdown report (always free)

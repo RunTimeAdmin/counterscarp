@@ -115,6 +115,7 @@ class AuditReport:
     sections: List[ReportSection]
     risk_score: float  # 0-100
     pass_fail: str  # PASS, FAIL, WARNING
+    analyzer_status: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 # Severity weights for risk scoring
@@ -991,6 +992,28 @@ def generate_markdown_report(report: AuditReport, output_path: str) -> str:
 
     md += "---\n\n"
 
+    # Analyzer Coverage section
+    _analyzer_status = getattr(report, 'analyzer_status', {})
+    if _analyzer_status:
+        md += "## Analyzer Coverage\n\n"
+        md += "| Analyzer | Status | Findings |\n"
+        md += "|----------|--------|----------|\n"
+        _failed_analyzers = []
+        for _aname, _astatus in _analyzer_status.items():
+            if _astatus.get("ran"):
+                _acount = _astatus.get("finding_count", 0)
+                md += f"| {_aname} | Completed | {_acount} |\n"
+            elif _astatus.get("error") == "Not enabled":
+                md += f"| {_aname} | Skipped (not enabled) | — |\n"
+            else:
+                _aerr = _astatus.get("error", "Unknown error")
+                md += f"| {_aname} | **FAILED** | — |\n"
+                _failed_analyzers.append((_aname, _aerr))
+        md += "\n"
+        for _aname, _aerr in _failed_analyzers:
+            md += f"> **Warning:** {_aname} did not complete successfully ({_aerr}). Results below may be incomplete.\n\n"
+        md += "---\n\n"
+
     for section in report.sections:
         if not section.findings:
             continue
@@ -1269,7 +1292,8 @@ def create_audit_report(
     project_name: str,
     target_path: str,
     findings: List[Finding],
-    engine_version: str = _ENGINE_VERSION
+    engine_version: str = _ENGINE_VERSION,
+    analyzer_status: Optional[Dict] = None
 ) -> AuditReport:
     """Build complete audit report from findings.
 
@@ -1278,6 +1302,7 @@ def create_audit_report(
         target_path: Path to the analyzed target.
         findings: List of findings to include in the report.
         engine_version: Version of the Counterscarp Engine.
+        analyzer_status: Optional dict mapping analyzer names to status dicts.
 
     Returns:
         Complete AuditReport object.
@@ -1320,7 +1345,8 @@ def create_audit_report(
         executive_summary=exec_summary,
         sections=report_sections,
         risk_score=calculate_risk_score(findings),
-        pass_fail=get_pass_fail_status(findings)
+        pass_fail=get_pass_fail_status(findings),
+        analyzer_status=analyzer_status or {}
     )
     
     return report
