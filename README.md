@@ -27,6 +27,16 @@ pip install "counterscarp-engine[ai,advanced]"  # RAG + LLM analysis
 pip install "counterscarp-engine[web,pdf,ai,advanced]"  # Full install
 ```
 
+### PDF Report Generation (Pro/Enterprise)
+
+PDF export requires the optional `pdf` extra:
+
+```bash
+pip install "counterscarp-engine[pdf]"
+```
+
+This installs [xhtml2pdf](https://github.com/xhtml2pdf/xhtml2pdf) for converting HTML audit reports to branded, print-ready PDFs with custom logos.
+
 See **[QUICKSTART.md](QUICKSTART.md)** for Docker setup, optional external tools (Slither, Aderyn, Medusa), and full installation details.
 
 ---

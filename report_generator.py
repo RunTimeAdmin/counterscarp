@@ -675,8 +675,7 @@ a { color: #667eea !important; }
 
     except ImportError:
         logger.warning(
-            "PDF generation requires xhtml2pdf: pip install xhtml2pdf  "
-            "(or: pip install counterscarp-engine[pdf])"
+            "PDF report skipped — install with: pip install counterscarp-engine[pdf]"
         )
         return None
     except Exception as e:

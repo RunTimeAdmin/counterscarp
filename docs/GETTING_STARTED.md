@@ -61,11 +61,14 @@ pip install counterscarp-engine
 # Web UI (FastAPI + uvicorn)
 pip install "counterscarp-engine[web]"
 
+# PDF report generation (Pro/Enterprise)
+pip install "counterscarp-engine[pdf]"
+
 # AI/RAG enrichment (local embeddings, no API needed)
 pip install "counterscarp-engine[ai]"
 
 # Everything at once
-pip install "counterscarp-engine[web,ai]"
+pip install "counterscarp-engine[web,pdf,ai]"
 
 # Development dependencies (pytest, mypy, benchmarks)
 pip install "counterscarp-engine[dev]"
@@ -211,6 +214,21 @@ This is the quickest way to use the browser interface for one-off audits. To kee
 
 Counterscarp Engine ships with both free and pro features in a single package. Pro features require a valid license key to unlock.
 
+
+### Enabling PDF Reports
+
+Pro and Enterprise users can generate PDF versions of audit reports:
+
+```bash
+pip install "counterscarp-engine[pdf]"
+```
+
+Once installed, PDF reports are generated automatically alongside HTML and Markdown outputs. Configure your company logo in `counterscarp.toml`:
+
+```toml
+[reporting]
+logo_path = "path/to/your-logo.png"
+```
 ### Setting Your License Key
 
 **Option 1: Environment variable**
