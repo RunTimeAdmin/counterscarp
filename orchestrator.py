@@ -966,6 +966,13 @@ def main() -> None:
         exclude_paths = config.ci.exclude_paths
         logger.info("Path exclusions active: %s", exclude_paths)
 
+    # Auto-detect Foundry projects and ensure lib/** is excluded
+    _target_root = getattr(args, "target", None)
+    if _target_root and os.path.isfile(os.path.join(_target_root, "foundry.toml")):
+        if "lib/**" not in exclude_paths:
+            exclude_paths = list(exclude_paths) + ["lib/**"]
+            logger.info("Foundry project detected — appended 'lib/**' to path exclusions")
+
     # Initialize plugin manager
     plugin_mgr = None
     if PLUGIN_MANAGER_AVAILABLE and config and config.plugins.enabled:
@@ -1380,7 +1387,8 @@ def main() -> None:
                 }
                 fingerprint_results = fingerprint_scanner.scan_project(
                     args.target,
-                    scan_config
+                    scan_config,
+                    exclude_paths=exclude_paths,
                 )
 
                 if fingerprint_results:

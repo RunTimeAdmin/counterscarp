@@ -7,10 +7,12 @@ assess inherited vulnerabilities.
 
 from __future__ import annotations
 
+import fnmatch
 import logging
 import os
 import re
 import argparse
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -780,9 +782,49 @@ def generate_fingerprint_report(
     return report
 
 
+def _fp_should_exclude(path: str, exclude_patterns: List[str], base_dir: str = "") -> bool:
+    """Check if a path matches any exclusion glob pattern.
+
+    Args:
+        path: Path to check (absolute or relative).
+        exclude_patterns: List of glob patterns (e.g. ``lib/**``).
+        base_dir: Optional base directory to make ``path`` relative to.
+
+    Returns:
+        True if the path matches at least one exclusion pattern.
+    """
+    if not exclude_patterns:
+        return False
+
+    if base_dir:
+        try:
+            rel_path = str(Path(path).relative_to(base_dir))
+        except ValueError:
+            rel_path = path
+    else:
+        rel_path = path
+
+    # Normalise to forward slashes for consistent cross-platform matching
+    rel_path = rel_path.replace("\\", "/")
+
+    for pattern in exclude_patterns:
+        if fnmatch.fnmatch(rel_path, pattern):
+            return True
+        # Also match each path component against the bare pattern stem so that
+        # ``node_modules/**`` can prune a bare directory name ``node_modules``.
+        bare = pattern.rstrip("/").rstrip("*").rstrip("/")
+        if bare:
+            parts = rel_path.split("/")
+            for part in parts:
+                if fnmatch.fnmatch(part, bare):
+                    return True
+    return False
+
+
 def scan_project(
     target_path: str,
-    config: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None,
+    exclude_paths: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Scan all .sol files in target directory for protocol similarity.
 
@@ -792,6 +834,9 @@ def scan_project(
             - fingerprints: List of ProtocolFingerprint
             - min_similarity: float
             - database_path: str
+        exclude_paths: Optional list of glob patterns (e.g. ``lib/**``) for
+            paths that should be skipped.  Patterns are matched against paths
+            relative to *target_path*, normalised to forward slashes.
 
     Returns:
         List of aggregated results per contract.
@@ -804,6 +849,10 @@ def scan_project(
     cfg = config or {}
     min_similarity = cfg.get('min_similarity', 0.5)
     database_path = cfg.get('database_path')
+    exclude_patterns: List[str] = exclude_paths or []
+
+    if exclude_patterns:
+        logger.info("Fingerprint scanner path exclusions active: %s", exclude_patterns)
 
     # Load fingerprints
     if 'fingerprints' in cfg:
@@ -822,12 +871,32 @@ def scan_project(
     # Collect files to scan
     files_to_scan = []
     if os.path.isfile(target_path) and target_path.endswith('.sol'):
-        files_to_scan.append(target_path)
+        if not _fp_should_exclude(os.path.basename(target_path), exclude_patterns):
+            files_to_scan.append(target_path)
+        else:
+            logger.debug("Fingerprint scanner excluded: %s", target_path)
     elif os.path.isdir(target_path):
-        for root, _, files in os.walk(target_path):
+        for root, dirs, files in os.walk(target_path):
+            # Prune excluded directories in-place to prevent descending into them
+            if exclude_patterns:
+                rel_root = os.path.relpath(root, target_path).replace("\\", "/")
+                dirs[:] = [
+                    d for d in dirs
+                    if not _fp_should_exclude(
+                        f"{rel_root}/{d}" if rel_root != "." else d,
+                        exclude_patterns,
+                    )
+                ]
+
             for filename in files:
                 if filename.endswith('.sol'):
-                    files_to_scan.append(os.path.join(root, filename))
+                    file_path = os.path.join(root, filename)
+                    if exclude_patterns:
+                        rel_file = os.path.relpath(file_path, target_path).replace("\\", "/")
+                        if _fp_should_exclude(rel_file, exclude_patterns):
+                            logger.debug("Fingerprint scanner excluded: %s", rel_file)
+                            continue
+                    files_to_scan.append(file_path)
 
     # Scan each file
     all_results = []

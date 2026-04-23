@@ -304,6 +304,7 @@ exclude_paths = [
     "script/**",
     "node_modules/**",
     ".git/**",
+    "lib/**",
 ]
 
 

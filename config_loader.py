@@ -360,7 +360,7 @@ class CIConfig:
     post_pr_comment: bool = True
     upload_sarif: bool = False
     exclude_paths: List[str] = field(default_factory=lambda: [
-        "test/**", "script/**", "node_modules/**", ".git/**"
+        "test/**", "script/**", "node_modules/**", ".git/**", "lib/**"
     ])
     generator: Optional[CIGeneratorConfig] = None
 
