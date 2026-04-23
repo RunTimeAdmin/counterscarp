@@ -106,6 +106,62 @@ def _validate_path_containment(file_path: str, project_root: str) -> Path:
     return resolved
 
 
+def _parse_foundry_out_dir(project_root: str) -> str:
+    """Parse the `out` directory from foundry.toml.
+
+    Attempts to read ``out`` from ``[profile.default]`` (or bare ``out =``)
+    using tomllib (Python 3.11+) or tomli as fallback, then falls back to
+    a simple regex search.  Returns ``'out'`` if parsing fails or the key
+    is not present.
+
+    Args:
+        project_root: Path to the Foundry project root.
+
+    Returns:
+        The configured output directory name (e.g. ``'foundry-out'``).
+    """
+    toml_path = Path(project_root) / "foundry.toml"
+    if not toml_path.exists():
+        return "out"
+
+    # Try structured TOML parsing first
+    try:
+        try:
+            import tomllib  # Python 3.11+
+        except ImportError:
+            import tomli as tomllib  # type: ignore[no-redef]
+        data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
+        # foundry.toml uses [profile.default] as its primary section
+        out_val = (
+            data.get("profile", {}).get("default", {}).get("out")
+            or data.get("out")  # bare top-level fallback
+        )
+        if out_val and isinstance(out_val, str):
+            logger.debug(
+                f"foundry.toml out directory (TOML parser): {out_val!r}"
+            )
+            return out_val
+    except Exception as exc:
+        logger.debug(f"TOML parser unavailable or failed ({exc}); using regex")
+
+    # Regex fallback — handles files that are syntactically valid but
+    # whose TOML library is not installed.
+    import re
+    try:
+        content = toml_path.read_text(encoding="utf-8")
+        match = re.search(r'^\s*out\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+        if match:
+            out_val = match.group(1)
+            logger.debug(
+                f"foundry.toml out directory (regex): {out_val!r}"
+            )
+            return out_val
+    except OSError as exc:
+        logger.warning(f"Could not read foundry.toml for out-dir: {exc}")
+
+    return "out"
+
+
 def find_project_root(target_path: str) -> Optional[str]:
     """Walk up from target to find Foundry/Hardhat project root.
 
@@ -292,7 +348,7 @@ def _slither_per_file_fallback(
                 capture_output=True,
                 text=True,
                 check=False,
-                timeout=300,
+                timeout=600,
                 env=_env,
             )
             if result.stderr and stderr_log:
@@ -316,8 +372,8 @@ def _slither_per_file_fallback(
                 errors.append(f"{sol_name}: {err}")
         except subprocess.TimeoutExpired:
             fail_count += 1
-            logger.warning(f"Slither timed out on {sol_name} (300s)")
-            errors.append(f"{sol_name}: timeout after 300s")
+            logger.warning(f"Slither timed out on {sol_name} (600s)")
+            errors.append(f"{sol_name}: timeout after 600s")
         except Exception as exc:
             fail_count += 1
             errors.append(f"{sol_name}: {exc}")
@@ -448,6 +504,13 @@ def run_slither(
                 "[*] Foundry mode: project root + ignore-compile"
                 " (using existing forge build artifacts)"
             )
+            # Pass the custom out directory so Slither can find build-info
+            foundry_out = _parse_foundry_out_dir(project_root)
+            cmd.extend(["--foundry-out-directory", foundry_out])
+            print(
+                f"[*] Foundry out directory: {foundry_out!r}"
+                f" (--foundry-out-directory)"
+            )
         else:
             # Force solc to prevent crytic-compile from
             # auto-detecting foundry.toml and invoking forge
@@ -501,6 +564,42 @@ def run_slither(
             cmd.extend(["--filter-paths", ",".join(filter_parts)])
             logger.info("Slither filter-paths: %s", ",".join(filter_parts))
 
+    # Run forge build --build-info before Slither when using
+    # --foundry-ignore-compile (Slither won't build itself, so we
+    # must ensure build artifacts exist in the out/build-info dir).
+    if is_foundry and forge_available and project_root:
+        forge_bin = shutil.which("forge")
+        if forge_bin:
+            print("[*] Running 'forge build --build-info' to generate build artifacts...")
+            try:
+                forge_result = subprocess.run(
+                    [forge_bin, "build", "--build-info"],
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=600,
+                )
+                if forge_result.returncode == 0:
+                    print("[*] forge build succeeded — build artifacts ready for Slither")
+                else:
+                    logger.warning(
+                        "forge build --build-info exited with code %d; "
+                        "Slither may fall back to solc. stderr: %s",
+                        forge_result.returncode,
+                        forge_result.stderr[:500] if forge_result.stderr else "",
+                    )
+                    print(
+                        f"[!] forge build failed (exit {forge_result.returncode});"
+                        " continuing with Slither anyway"
+                    )
+            except subprocess.TimeoutExpired:
+                logger.warning("forge build timed out; continuing with Slither anyway")
+                print("[!] forge build timed out; proceeding with Slither")
+            except OSError as exc:
+                logger.warning("Could not run forge build: %s", exc)
+                print(f"[!] Could not run forge build ({exc}); proceeding with Slither")
+
     print(f"[*] Slither command: {' '.join(cmd)}")
     print(f"[*] Working directory: {cwd}")
 
@@ -527,7 +626,7 @@ def run_slither(
             capture_output=True,
             text=True,
             check=False,  # Slither exits non-zero on findings
-            timeout=300,
+            timeout=600,
             env=_slither_env,
         )
 
@@ -644,10 +743,10 @@ def run_slither(
             details={"returncode": e.returncode, "stderr": e.stderr}
         ) from e
     except subprocess.TimeoutExpired:
-        logger.error("Slither analysis timed out (300s)")
+        logger.error("Slither analysis timed out (600s)")
         raise CounterscarpAnalysisError(
-            "Slither analysis timed out after 300 seconds",
-            details={"tool": "slither", "timeout": 300}
+            "Slither analysis timed out after 600 seconds",
+            details={"tool": "slither", "timeout": 600}
         )
     except PermissionError as e:
         logger.error(f"Permission denied running Slither: {e}")
