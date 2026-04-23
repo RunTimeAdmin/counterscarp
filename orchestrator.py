@@ -114,7 +114,7 @@ try:
         create_audit_report,
         generate_html_report,
         generate_pdf_report,
-        generate_markdown_report as generate_audit_markdown_report
+        generate_markdown_report
     )
     REPORT_GENERATOR_AVAILABLE = True
     logger.debug("Report generator imported successfully")
@@ -175,7 +175,7 @@ def get_remediation(issue_type: str, context: str) -> str:
     return f"Review logic at `{context[:20]}...`. Ensure strict validation of inputs and access control."
 
 
-def generate_markdown_report(
+def _generate_action_plan_report(
     project_name: str,
     static_results: List[Dict[str, Any]],
     supply_results: List[Dict[str, Any]],
@@ -190,7 +190,11 @@ def generate_markdown_report(
     exploit_results: Optional[List] = None,
     output_dir: Optional[str] = None,
 ) -> str:
-    """Generates a report focused on REMEDIATION (Fixing the bugs).
+    """Generates an action-plan report focused on REMEDIATION (Fixing the bugs).
+
+    This is distinct from report_generator.generate_markdown_report which produces
+    a full AuditReport-based markdown. This function writes ACTION_PLAN.md with
+    a remediation-focused layout directly from raw orchestrator result lists.
 
     Args:
         project_name: Name of the project being audited.
@@ -1606,7 +1610,7 @@ def main() -> None:
         # exploit_results objects not easily re-serialized; re-generate is safest, just skip
         exploit_results = None
 
-    report_file = generate_markdown_report(
+    report_file = _generate_action_plan_report(
         args.project_name or os.path.basename(os.path.abspath(args.target)),
         static_issues,
         supply_issues,
@@ -1859,7 +1863,7 @@ def main() -> None:
             
             # Generate Markdown report (always free)
             md_file = str(scan_output_dir / "audit_report.md")
-            md_path = generate_audit_markdown_report(audit_report, md_file)
+            md_path = generate_markdown_report(audit_report, md_file)
 
             print(f"\n[*] Professional Report Generated:")
             print(f"   Markdown: {os.path.abspath(md_path)}")
