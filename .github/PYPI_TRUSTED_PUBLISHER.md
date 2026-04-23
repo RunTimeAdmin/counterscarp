@@ -5,7 +5,7 @@
 1. Go to https://pypi.org/manage/project/counterscarp-engine/settings/publishing/
 2. Under "Add a new publisher", fill in:
    - **Owner**: `RunTimeAdmin`
-   - **Repository**: `counterscarp-engine`
+   - **Repository**: `counterscarp`
    - **Workflow name**: `publish.yml`
    - **Environment name**: `pypi`
 3. Click "Add"

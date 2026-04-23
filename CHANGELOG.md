@@ -152,7 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.1.0] - 2026-04-18
 
 ### Added
-- 5-tier pricing restructure (Community Free, Developer $49, Pro $149, Team $399, Enterprise Custom)
+- 5-tier pricing restructure (Community Free, Developer $49, Pro $199, Team $399, Enterprise Custom)
 - Solana Analyzer and branded HTML/SARIF reports available at Developer tier
 - Stripe Checkout integration with license provisioning
 - Web application with drag-and-drop upload

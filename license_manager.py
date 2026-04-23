@@ -58,7 +58,7 @@ TIER_PREFIXES = {
 TIER_DEFAULT_ACTIVATIONS = {
     DEVELOPER: 1,
     PRO: 3,
-    TEAM: 10,
+    TEAM: 5,
     ENTERPRISE: 100,
 }
 
@@ -670,7 +670,7 @@ class LicenseManager:
             price = "$49/mo"
         elif required_tier == PRO:
             tier_label = "Pro"
-            price = "$149/mo"
+            price = "$199/mo"
         elif required_tier == TEAM:
             tier_label = "Team"
             price = "$399/mo"

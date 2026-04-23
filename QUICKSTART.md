@@ -913,7 +913,7 @@ ollama_url = "http://localhost:11434"
 
 Counterscarp Engine ships as a single package. Pro features are gated by a license key.
 
-| Feature | Community (Free) | Developer ($49/mo) | Professional ($149/mo) | Team ($399/mo) | Enterprise (Custom) |
+| Feature | Community (Free) | Developer ($49/mo) | Professional ($199/mo) | Team ($399/mo) | Enterprise (Custom) |
 |---------|:---:|:---:|:---:|:---:|:---:|
 | Heuristic scanning (34 rules) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Markdown / JSON reports | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -928,7 +928,7 @@ Counterscarp Engine ships as a single package. Pro features are gated by a licen
 | Exploit PoC generator | — | — | ✅ | ✅ | ✅ |
 | Time-travel git scanner | — | — | ✅ | ✅ | ✅ |
 | Attack graph visualization | — | — | ✅ | ✅ | ✅ |
-| Machine activations | — | 1 | 3 | 10 | Unlimited |
+| Machine activations | — | 1 | 3 | 5 | Unlimited |
 | Support | GitHub | Email | Priority (24 hr) | Dedicated | Dedicated + SLA |
 | Custom integrations | — | — | — | — | ✅ |
 | Dedicated account manager | — | — | — | — | ✅ |

@@ -141,7 +141,7 @@ Counterscarp Engine is built for environments where source-code confidentiality 
 
 ## Pricing
 
-| Feature | Community (Free) | Developer ($49/mo) | Professional ($149/mo) | Team ($399/mo) | Enterprise |
+| Feature | Community (Free) | Developer ($49/mo) | Professional ($199/mo) | Team ($399/mo) | Enterprise |
 |---------|:---:|:---:|:---:|:---:|:---:|
 | Heuristic scanning + CLI | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Markdown / JSON reports | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -149,7 +149,7 @@ Counterscarp Engine is built for environments where source-code confidentiality 
 | Slither + Solana analyzer | — | ✅ | ✅ | ✅ | ✅ |
 | AI Copilot + Exploit Gen | — | — | ✅ | ✅ | ✅ |
 | Time-travel + Attack graph | — | — | ✅ | ✅ | ✅ |
-| Machine activations | — | 1 | 3 | 10 | Unlimited |
+| Machine activations | — | 1 | 3 | 5 | Unlimited |
 
 > **Enterprise (SE-ENT-xxx):** Custom pricing — unlimited seats, unlimited activations, custom integrations, priority support, and a dedicated account manager. Contact [contact@counterscarp.io](mailto:contact@counterscarp.io).
 

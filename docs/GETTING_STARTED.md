@@ -240,8 +240,8 @@ Counterscarp Engine offers five license tiers:
 |------|-------|------------|----------|
 | **Community** | Free | — | Core heuristic scanner, Slither, basic reports (Markdown/JSON), CLI |
 | **Developer** | $49/mo | `SE-DEV-xxx` | Web app, Solana Analyzer, HTML/SARIF reports |
-| **Pro** | $149/mo | `SE-PRO-xxx` | AI Copilot, Attack Graph, Exploit PoC, Time-Travel, Fingerprinting |
-| **Team** | $399/mo | `SE-TEAM-xxx` | 10 seats, shared workspace, API access |
+| **Pro** | $199/mo | `SE-PRO-xxx` | AI Copilot, Attack Graph, Exploit PoC, Time-Travel, Fingerprinting |
+| **Team** | $399/mo | `SE-TEAM-xxx` | 5 seats, shared workspace, API access |
 | **Enterprise** | Custom | `SE-ENT-xxx` | Unlimited seats, unlimited activations, custom integrations, priority support, dedicated account manager |
 
 ### Tier Features

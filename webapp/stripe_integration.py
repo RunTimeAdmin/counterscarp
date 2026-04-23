@@ -51,7 +51,7 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
     "dev_annual": {
         "name": "Counterscarp Developer (Annual)",
         "description": "Developer tier – annual billing",
-        "price_cents": 49900,
+        "price_cents": 46800,
         "interval": "year",
         "tier": "developer",
         "max_activations": 1,
@@ -59,7 +59,7 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
     "pro_monthly": {
         "name": "Counterscarp Pro",
         "description": "Pro tier – monthly billing",
-        "price_cents": 14900,
+        "price_cents": 19900,
         "interval": "month",
         "tier": "pro",
         "max_activations": 3,
@@ -67,7 +67,7 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
     "pro_annual": {
         "name": "Counterscarp Pro (Annual)",
         "description": "Pro tier – annual billing",
-        "price_cents": 149900,
+        "price_cents": 190800,
         "interval": "year",
         "tier": "pro",
         "max_activations": 3,
@@ -78,15 +78,15 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
         "price_cents": 39900,
         "interval": "month",
         "tier": "team",
-        "max_activations": 10,
+        "max_activations": 5,
     },
     "team_annual": {
         "name": "Counterscarp Team (Annual)",
         "description": "Team tier – annual billing",
-        "price_cents": 399900,
+        "price_cents": 382800,
         "interval": "year",
         "tier": "team",
-        "max_activations": 10,
+        "max_activations": 5,
     },
 }
 

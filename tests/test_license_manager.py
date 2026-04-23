@@ -221,7 +221,7 @@ class TestKeyGeneration:
         )
         assert entry["key"].startswith("SE-TEAM-")
         assert entry["tier"] == "team"
-        assert entry["max_activations"] == 10  # default for team
+        assert entry["max_activations"] == 5  # default for team
 
     def test_default_activations_per_tier(self):
         from license_manager import generate_license_key
@@ -265,7 +265,7 @@ class TestTierHierarchy:
     def test_default_activations(self):
         assert TIER_DEFAULT_ACTIVATIONS[DEVELOPER] == 1
         assert TIER_DEFAULT_ACTIVATIONS[PRO] == 3
-        assert TIER_DEFAULT_ACTIVATIONS[TEAM] == 10
+        assert TIER_DEFAULT_ACTIVATIONS[TEAM] == 5
         assert TIER_DEFAULT_ACTIVATIONS[ENTERPRISE] == 100
 
 
@@ -329,4 +329,4 @@ class TestUpgradeMessageTiers:
     def test_pro_feature_message(self):
         msg = LicenseManager.get_upgrade_message(AI_COPILOT)
         assert "Pro" in msg
-        assert "$149/mo" in msg
+        assert "$199/mo" in msg

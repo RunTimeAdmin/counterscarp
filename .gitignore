@@ -45,6 +45,7 @@ reports/
 
 # Runtime data
 .sentinel/
+.counterscarp/
 vulnerability_timeline.json
 vulnerability_trends.md
 uploads/

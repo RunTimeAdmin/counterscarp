@@ -116,7 +116,7 @@ class TestProductConfiguration:
         assert PRODUCTS["dev_monthly"]["price_cents"] == 4900
 
     def test_pro_monthly_price(self):
-        assert PRODUCTS["pro_monthly"]["price_cents"] == 14900
+        assert PRODUCTS["pro_monthly"]["price_cents"] == 19900
 
     def test_team_monthly_price(self):
         assert PRODUCTS["team_monthly"]["price_cents"] == 39900
@@ -130,8 +130,8 @@ class TestProductConfiguration:
         assert PRODUCTS["pro_annual"]["max_activations"] == 3
 
     def test_team_max_activations(self):
-        assert PRODUCTS["team_monthly"]["max_activations"] == 10
-        assert PRODUCTS["team_annual"]["max_activations"] == 10
+        assert PRODUCTS["team_monthly"]["max_activations"] == 5
+        assert PRODUCTS["team_annual"]["max_activations"] == 5
 
     def test_annual_prices_greater_than_monthly(self):
         for tier in ("dev", "pro", "team"):

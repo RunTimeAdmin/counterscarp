@@ -29,8 +29,8 @@ All tiers ship in a single `counterscarp-engine` package. Pro features are gated
 |------|-----------|-------|-------------|--------------|
 | **Community** | — | Free | Unlimited | 21 analyzers, Markdown/JSON reports, CLI |
 | **Developer** | `SE-DEV-` | $49/mo | 1 machine | + Web app, Solana analyzer, HTML/SARIF reports |
-| **Professional** | `SE-PRO-` | $149/mo | 3 machines | + AI Copilot, attack graphs, exploit PoC, protocol fingerprinting, time-travel |
-| **Team** | `SE-TEAM-` | $399/mo | 10 machines | + All Pro features, team dashboard, API access |
+| **Professional** | `SE-PRO-` | $199/mo | 3 machines | + AI Copilot, attack graphs, exploit PoC, protocol fingerprinting, time-travel |
+| **Team** | `SE-TEAM-` | $399/mo | 5 machines | + All Pro features, team dashboard, API access |
 | **Enterprise** | `SE-ENT-` | Custom | Unlimited | + Custom integrations, priority support, dedicated account manager |
 
 The key prefix determines which features unlock. A `SE-PRO-` key will not unlock Team-only features; a `SE-TEAM-` key unlocks Pro features as well.
