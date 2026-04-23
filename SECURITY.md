@@ -45,7 +45,7 @@ The following are out of scope:
 - Social engineering attacks
 - Denial of service attacks
 
-## API Security Controls (v5.0.1)
+## API Security Controls (v5.0.2)
 
 The following security controls are enforced by the Counterscarp Engine web API:
 

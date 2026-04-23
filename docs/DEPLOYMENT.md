@@ -408,7 +408,7 @@ Expected response:
 | Upload fails | Permissions wrong | `chown -R counterscarp:counterscarp /opt/counterscarp-engine/uploads` |
 | Webhook returns 500 | `STRIPE_WEBHOOK_SECRET` not set | Set `STRIPE_WEBHOOK_SECRET` in systemd unit and reload |
 
-> **Security:** Stripe webhook signature verification is **mandatory** in v5.0.1. If `STRIPE_WEBHOOK_SECRET` is not configured, the `/api/stripe/webhook` endpoint will return HTTP 500. Retrieve the signing secret from Stripe Dashboard > Developers > Webhooks > Signing secret (`whsec_...`).
+> **Security:** Stripe webhook signature verification is **mandatory** in v5.0.2. If `STRIPE_WEBHOOK_SECRET` is not configured, the `/api/stripe/webhook` endpoint will return HTTP 500. Retrieve the signing secret from Stripe Dashboard > Developers > Webhooks > Signing secret (`whsec_...`).
 
 ### Check Disk Space
 

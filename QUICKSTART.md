@@ -1,6 +1,6 @@
 # Counterscarp Engine — Quick Start Guide
 
-> **Version 5.0.1** | Smart contract security auditing for EVM + Solana
+> **Version 5.0.2** | Smart contract security auditing for EVM + Solana
 
 ---
 
@@ -75,10 +75,10 @@ Adds `pytest`, `pytest-cov`, `mypy`, `pytest-benchmark`.
 
 ```bash
 # Pull official image
-docker pull tokenaudit/counterscarp-engine:5.0.1
+docker pull tokenaudit/counterscarp-engine:5.0.2
 
 # Run scan (bind-mount your project)
-docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:5.0.1 \
+docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:5.0.2 \
   --target /scan --report
 
 # With docker-compose
@@ -1125,7 +1125,7 @@ sudo usermod -aG docker $USER
 
 # Or run with --user flag
 docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan \
-  tokenaudit/counterscarp-engine:5.0.1 --target /scan --report
+  tokenaudit/counterscarp-engine:5.0.2 --target /scan --report
 ```
 
 ### OpenAI API key not set
@@ -1255,4 +1255,4 @@ Operations:
 
 ---
 
-*Counterscarp Engine v5.0.1 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*
+*Counterscarp Engine v5.0.2 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*

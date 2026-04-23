@@ -83,7 +83,7 @@ Launches a local Tkinter desktop interface. Provides 12 analyzer toggles for gra
 
 ## Solana/Anchor Security Analysis
 
-### Coverage (v5.0.1)
+### Coverage (v5.0.2)
 
 35 Rust/Anchor security patterns across 7 categories:
 
@@ -210,6 +210,6 @@ Threat intelligence: Code4rena · Immunefi · Solodit · Neodyme · OtterSec · 
 
 ---
 
-**Version:** 5.0.1 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
+**Version:** 5.0.2 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
 
 **⭐ If this helped you find bugs, please star the repo!**
