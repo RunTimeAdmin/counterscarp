@@ -47,6 +47,70 @@ counterscarp --gui  # Launch local web interface
 
 ---
 
+## Interface Modes
+
+### CLI (Headless)
+
+```bash
+counterscarp --target ./contracts
+```
+
+Headless mode designed for CI/CD pipelines and automation. Supports all scan profiles (PR, Audit, Bounty, Solana). Outputs JSON, Markdown, and SARIF for direct pipeline integration. No GUI dependencies required.
+
+### Desktop GUI
+
+```bash
+counterscarp --gui
+```
+
+Launches a local Tkinter desktop interface. Provides 12 analyzer toggles for granular scan configuration, a file browser for contract selection, and real-time result streaming. Fully offline — no network connection required.
+
+### Cloud App
+
+`app.counterscarp.io` — multi-user web application with account system. Browser-based interface supporting scan upload, interactive results, and report downloads (HTML/PDF/SARIF/Markdown). Includes attack graph visualization and Stripe-integrated billing.
+
+---
+
+## Solana/Anchor Security Analysis
+
+### Coverage (v5.0.1)
+
+35 Rust/Anchor security patterns across 7 categories:
+
+| Category | Rules | Examples |
+|---|---|---|
+| **Account Validation** | 8 | Missing signer/owner checks, unvalidated PDA seeds, missing discriminator checks |
+| **CPI Security** | 4 | Arbitrary CPI, missing CPI authority, unverified program accounts |
+| **Arithmetic & Logic** | 5 | Unchecked arithmetic, integer overflow, unsafe casting, precision loss |
+| **State Management** | 6 | Uninitialized accounts, reinitialization, missing rent exemption, stale data |
+| **Access Control** | 4 | Missing access control, hardcoded authority, weak authority checks |
+| **Token Security** | 4 | Missing token account validation, unchecked balances, unvalidated token program |
+| **General Validation** | 4 | Unconstrained system program, missing clock validation, duplicate mutable accounts |
+
+### Additional Capabilities
+
+- `cargo-audit` integration for Cargo.toml dependency CVEs
+- Anchor IDL validation for security constraint verification
+
+### Approach
+
+Static regex-based pattern matching against Rust source files. Scans all `.rs` files, excluding the `/target` directory.
+
+### Known Limitations
+
+- **Single-file analysis** — no cross-contract taint tracking across Rust modules
+- **Regex-based** — no data-flow or symbolic execution analysis
+- **Anchor-focused** — raw Solana SDK (non-Anchor) coverage is lighter
+- **No CPI tracing** — cross-program invocation paths are not traced across program boundaries
+
+### Roadmap (v5.x)
+
+- Cross-file CPI tracing
+- Expanded raw Solana SDK patterns
+- Integration with Anchor's built-in verification tools
+
+---
+
 ## Key Features
 
 - **21 Integrated Analyzers** — Heuristic scanner, Slither, Aderyn, Mythril, Medusa, supply chain, threat intel, and more
