@@ -282,19 +282,20 @@ def enrich_finding(finding: Finding) -> Finding:
     return finding
 
 
-def generate_html_report(report: AuditReport, output_path: str, logo_path: Optional[str] = None) -> Optional[str]:
+def generate_html_report(report: AuditReport, output_path: str, logo_path: Optional[str] = None, dev_mode: bool = False) -> Optional[str]:
     """Generate professional HTML report.
 
     Args:
         report: AuditReport object to generate report from.
         output_path: Path to save the HTML file.
         logo_path: Optional path to a logo image file to embed in the report.
+        dev_mode: When True, bypass the Pro license check (for local development).
 
     Returns:
         Path to the generated HTML file, or None if pro feature not available.
     """
     _license = LicenseManager()
-    if not _license.check_pro_feature(BRANDED_REPORTS):
+    if not (dev_mode or _license.check_pro_feature(BRANDED_REPORTS)):
         print(_license.get_upgrade_message(BRANDED_REPORTS))
         return None
 
@@ -557,6 +558,7 @@ def generate_pdf_report(
     report: AuditReport,
     output_path: Optional[str] = None,
     logo_path: Optional[str] = None,
+    dev_mode: bool = False,
 ) -> Optional[Any]:
     """Generate a PDF audit report by converting the HTML report to PDF.
 
@@ -571,6 +573,7 @@ def generate_pdf_report(
             PDF bytes are returned so callers can stream it directly.
         logo_path: Optional path to a logo image to embed (forwarded to the
             underlying HTML generator).
+        dev_mode: When True, bypass the Pro license check (for local development).
 
     Returns:
         * ``str`` — the *output_path* when a path was provided and the file was
@@ -580,7 +583,7 @@ def generate_pdf_report(
           ``xhtml2pdf`` dependency) or when generation fails.
     """
     _license = LicenseManager()
-    if not _license.check_pro_feature(BRANDED_REPORTS):
+    if not (dev_mode or _license.check_pro_feature(BRANDED_REPORTS)):
         print(_license.get_upgrade_message(BRANDED_REPORTS))
         return None
 
@@ -597,7 +600,7 @@ def generate_pdf_report(
         ) as tmp:
             tmp_path = tmp.name
 
-        html_result = generate_html_report(report, tmp_path, logo_path=logo_path)
+        html_result = generate_html_report(report, tmp_path, logo_path=logo_path, dev_mode=dev_mode)
         if not html_result:
             logger.error("PDF generation failed: HTML generation returned None")
             return None

@@ -815,6 +815,11 @@ def main() -> None:
         action="store_true",
         help="Launch the local web interface (FastAPI/Uvicorn on http://localhost:8000)",
     )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Development mode — bypass license tier restrictions for local testing",
+    )
     args = parser.parse_args()
 
     # --- GUI mode (no --target needed) ---
@@ -919,6 +924,13 @@ def main() -> None:
         print(f"[!] ERROR: {msg}")
         sys.exit(1)
 
+    # --- Dev mode banner ---
+    if args.dev:
+        logger.info("=== DEVELOPMENT MODE — All features unlocked for local testing ===")
+        print("\n" + "=" * 65)
+        print(" *** DEVELOPMENT MODE — All Pro features unlocked for local testing ***")
+        print("=" * 65 + "\n")
+
     # Load config
     config = None
     if CONFIG_AVAILABLE:
@@ -971,7 +983,7 @@ def main() -> None:
 
     # Handle RAG index build
     if args.build_rag_index:
-        if not _license.check_pro_feature(AI_COPILOT):
+        if not (args.dev or _license.check_pro_feature(AI_COPILOT)):
             print(_license.get_upgrade_message(AI_COPILOT))
             return
         if not RAG_AVAILABLE:
@@ -1014,7 +1026,7 @@ def main() -> None:
 
     # Handle history scan mode
     if args.history:
-        if not _license.check_pro_feature(TIME_TRAVEL):
+        if not (args.dev or _license.check_pro_feature(TIME_TRAVEL)):
             print(_license.get_upgrade_message(TIME_TRAVEL))
             return
         if history_scanner is None:
@@ -1338,7 +1350,7 @@ def main() -> None:
 
     # [PHASE 4B] Protocol Fingerprint Scan (optional)
     fingerprint_results: List[Dict] = []
-    if args.fingerprint and not _license.check_pro_feature(FINGERPRINT):
+    if args.fingerprint and not (args.dev or _license.check_pro_feature(FINGERPRINT)):
         print(_license.get_upgrade_message(FINGERPRINT))
     elif args.fingerprint:
         print("\n>>> Running Protocol Fingerprint Scan...")
@@ -1424,7 +1436,7 @@ def main() -> None:
 
     # [PHASE 6] Solana Static Analysis (optional)
     _solana_error: Optional[str] = None
-    if args.solana_root and not _license.check_pro_feature(SOLANA):
+    if args.solana_root and not (args.dev or _license.check_pro_feature(SOLANA)):
         print(_license.get_upgrade_message(SOLANA))
         _solana_error = "License required"
     elif args.solana_root:
@@ -1481,7 +1493,7 @@ def main() -> None:
             logger.info("[PHASE 7] Upgrade Diff — loaded from cache (resumed)")
 
     # [PHASE 7.5] RAG Enrichment (optional)
-    if args.rag and RAG_AVAILABLE and not _license.check_pro_feature(AI_COPILOT):
+    if args.rag and RAG_AVAILABLE and not (args.dev or _license.check_pro_feature(AI_COPILOT)):
         print(_license.get_upgrade_message(AI_COPILOT))
     elif args.rag and RAG_AVAILABLE:
         print("\n>>> Enriching Findings with RAG Context...")
@@ -1632,7 +1644,7 @@ def main() -> None:
         try:
             from exploit_generator import ExploitGenerator, ExploitResult as _ExploitResult
 
-            if _license.check_pro_feature(EXPLOIT_GEN):
+            if args.dev or _license.check_pro_feature(EXPLOIT_GEN):
                 # Always use per-scan output dir for exploits (config output_dir is ignored
                 # to ensure exploits land inside the per-scan report directory)
                 _default_exploit_dir = str(scan_output_dir / "exploits")
@@ -1736,7 +1748,7 @@ def main() -> None:
         args.report
         and REPORT_GENERATOR_AVAILABLE
         and history_scanner is not None
-        and _license.check_pro_feature(TIME_TRAVEL)
+        and (args.dev or _license.check_pro_feature(TIME_TRAVEL))
         and os.path.isdir(args.target)
         and os.path.isdir(os.path.join(args.target, ".git"))
     ):
@@ -1970,16 +1982,16 @@ def main() -> None:
             logger.info("Professional Markdown report: %s", os.path.abspath(md_path))
 
             # HTML/SARIF reports require Pro license
-            if _license.check_pro_feature(BRANDED_REPORTS):
+            if args.dev or _license.check_pro_feature(BRANDED_REPORTS):
                 html_file = str(scan_output_dir / "audit_report.html")
-                html_path = generate_html_report(audit_report, html_file)
+                html_path = generate_html_report(audit_report, html_file, dev_mode=args.dev)
                 if html_path:
                     print(f"   HTML: {os.path.abspath(html_path)}")
                     logger.info("Professional HTML report: %s", os.path.abspath(html_path))
 
                 # PDF report (Pro feature, requires xhtml2pdf)
                 pdf_file = str(scan_output_dir / "audit_report.pdf")
-                pdf_path = generate_pdf_report(audit_report, pdf_file)
+                pdf_path = generate_pdf_report(audit_report, pdf_file, dev_mode=args.dev)
                 if pdf_path:
                     print(f"   PDF:  {os.path.abspath(pdf_path)}")
                     logger.info("Professional PDF report: %s", os.path.abspath(pdf_path))

@@ -71,3 +71,11 @@ demo_*.html
 
 # Exploits directory
 exploits/
+
+# Scan/test temp output artifacts
+*_retest_output.txt
+*_scan_output.txt
+test_out*.txt
+test_results.txt
+test_output_temp.txt
+run_tests.py

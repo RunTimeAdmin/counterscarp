@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.2] - 2026-04-23
+
+### Fixed
+- STORAGE_COLLISION_RISK: deduplicate to 1 finding per contract (was 4-10x inflation)
+- BLOCK_TIMESTAMP_RANDOMNESS: deadline comparisons downgraded to INFO (standard DeFi practice)
+- HARDCODED_ADDRESS: exclude bytes32 constants (TYPEHASH, MASK, SLOT, etc.)
+- UNCHECKED_EXTERNAL_CALL: verify return value capture before assigning CRITICAL
+
+### Added
+- Analyzer coverage section in reports with warning banners for failed analyzers
+- Context-aware severity whitelist for known-safe patterns (OpenZeppelin, Uniswap)
+- 16 new exploit template mappings (DELEGATECALL_USAGE, incorrect-return, reentrancy-eth, etc.)
+- Educational template labels and contract-specific context in exploit PoCs
+- Counter-suffixed exploit filenames to prevent overwrites
+- RAG index seeded with 101 curated vulnerability entries across 12 categories
+- Protocol fingerprint database expanded to 47 protocols (from 27)
+- Fingerprint matching threshold lowered from 0.7 to 0.5 for better partial-fork detection
+- --dev flag to bypass license gates for local testing
+- PDF setup instructions in onboarding documentation
+
+
 ## [5.0.1] - 2026-04-22
 
 ### Fixed
