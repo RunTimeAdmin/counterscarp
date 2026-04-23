@@ -20,9 +20,13 @@ try:
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
+
     def get_logger(name: str) -> logging.Logger:
         return logging.getLogger(name)
-    def append_stderr_log(stderr_text: str, tool_name: str, stderr_log_path: str) -> None:  # noqa: E501
+
+    def append_stderr_log(  # noqa: E501
+        stderr_text: str, tool_name: str, stderr_log_path: str
+    ) -> None:
         pass
     CounterscarpAnalysisError = Exception  # type: ignore[assignment,misc]
     CounterscarpToolNotFoundError = Exception  # type: ignore[assignment,misc]
@@ -87,8 +91,12 @@ def get_ignore_checks() -> List[str]:
         return DEFAULT_IGNORE_CHECKS
 
 
-def _validate_path_containment(file_path: str, project_root: str) -> Path:
-    """Ensure file_path is contained within project_root to prevent path traversal.
+def _validate_path_containment(
+    file_path: str, project_root: str
+) -> Path:
+    """Ensure file_path is contained within project_root.
+
+    Prevents path traversal attacks.
 
     Args:
         file_path: The file or directory path to validate.
@@ -129,7 +137,7 @@ def _parse_foundry_out_dir(project_root: str) -> str:
         try:
             import tomllib  # Python 3.11+
         except ImportError:
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # noqa: F811
         data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
         # foundry.toml uses [profile.default] as its primary section
         out_val = (
@@ -140,7 +148,7 @@ def _parse_foundry_out_dir(project_root: str) -> str:
             logger.debug(
                 f"foundry.toml out directory (TOML parser): {out_val!r}"
             )
-            return out_val
+            return str(out_val)
     except Exception as exc:
         logger.debug(f"TOML parser unavailable or failed ({exc}); using regex")
 
@@ -149,7 +157,11 @@ def _parse_foundry_out_dir(project_root: str) -> str:
     import re
     try:
         content = toml_path.read_text(encoding="utf-8")
-        match = re.search(r'^\s*out\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+        match = re.search(
+            r'^\s*out\s*=\s*["\']([^"\']+)["\']',
+            content,
+            re.MULTILINE,
+        )
         if match:
             out_val = match.group(1)
             logger.debug(
@@ -504,8 +516,11 @@ def run_slither(
                 "[*] Foundry mode: project root + ignore-compile"
                 " (using existing forge build artifacts)"
             )
-            # Pass the custom out directory so Slither can find build-info
-            foundry_out = _parse_foundry_out_dir(project_root)
+            # Pass the custom out directory so Slither can find
+            # build-info
+            foundry_out = _parse_foundry_out_dir(
+                project_root or ""
+            )
             cmd.extend(["--foundry-out-directory", foundry_out])
             print(
                 f"[*] Foundry out directory: {foundry_out!r}"
@@ -550,11 +565,12 @@ def run_slither(
                     f"Could not read remappings.txt: {e}"
                 )
 
-    # Pass exclusion patterns to Slither via --filter-paths (comma-separated regex)
+    # Pass exclusion patterns to Slither via --filter-paths
     if exclude_paths:
-        # Slither's --filter-paths accepts a comma-separated list of path substrings /
-        # regex patterns.  Strip trailing glob wildcards so they work as substring
-        # filters (e.g. "node_modules/**" → "node_modules").
+        # Slither's --filter-paths accepts a comma-separated list of
+        # path substrings / regex patterns.  Strip trailing glob
+        # wildcards so they work as substring filters
+        # (e.g. "node_modules/**" → "node_modules").
         filter_parts = []
         for p in exclude_paths:
             bare = p.rstrip("/").rstrip("*").rstrip("/")
@@ -570,7 +586,10 @@ def run_slither(
     if is_foundry and forge_available and project_root:
         forge_bin = shutil.which("forge")
         if forge_bin:
-            print("[*] Running 'forge build --build-info' to generate build artifacts...")
+            print(
+                "[*] Running 'forge build --build-info'"
+                " to generate build artifacts..."
+            )
             try:
                 forge_result = subprocess.run(
                     [forge_bin, "build", "--build-info"],
@@ -581,24 +600,42 @@ def run_slither(
                     timeout=600,
                 )
                 if forge_result.returncode == 0:
-                    print("[*] forge build succeeded — build artifacts ready for Slither")
+                    print(
+                        "[*] forge build succeeded"
+                        " — build artifacts ready for Slither"
+                    )
                 else:
                     logger.warning(
-                        "forge build --build-info exited with code %d; "
-                        "Slither may fall back to solc. stderr: %s",
+                        "forge build --build-info exited with"
+                        " code %d; Slither may fall back to"
+                        " solc. stderr: %s",
                         forge_result.returncode,
-                        forge_result.stderr[:500] if forge_result.stderr else "",
+                        forge_result.stderr[:500]
+                        if forge_result.stderr
+                        else "",
                     )
                     print(
-                        f"[!] forge build failed (exit {forge_result.returncode});"
+                        f"[!] forge build failed"
+                        f" (exit {forge_result.returncode});"
                         " continuing with Slither anyway"
                     )
             except subprocess.TimeoutExpired:
-                logger.warning("forge build timed out; continuing with Slither anyway")
-                print("[!] forge build timed out; proceeding with Slither")
+                logger.warning(
+                    "forge build timed out;"
+                    " continuing with Slither anyway"
+                )
+                print(
+                    "[!] forge build timed out;"
+                    " proceeding with Slither"
+                )
             except OSError as exc:
-                logger.warning("Could not run forge build: %s", exc)
-                print(f"[!] Could not run forge build ({exc}); proceeding with Slither")
+                logger.warning(
+                    "Could not run forge build: %s", exc
+                )
+                print(
+                    f"[!] Could not run forge build ({exc});"
+                    " proceeding with Slither"
+                )
 
     print(f"[*] Slither command: {' '.join(cmd)}")
     print(f"[*] Working directory: {cwd}")
@@ -835,11 +872,11 @@ def filter_vulnerabilities(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
     relevant_findings = []
-    
+
     for finding in data["results"]["detectors"]:
         impact = finding.get("impact", "Unknown")
         check_id = finding.get("check", "Unknown")
-        
+
         # 1. Filter by Severity
         if impact not in get_severity_allowlist():
             continue
@@ -847,7 +884,7 @@ def filter_vulnerabilities(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         # 2. Filter by Ignore List (Noise)
         if check_id in get_ignore_checks():
             continue
-            
+
         # 3. Construct clean finding object
         clean_finding = {
             "title": finding.get("check", "Unknown Issue"),
@@ -858,7 +895,7 @@ def filter_vulnerabilities(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             "location": parse_location(finding.get("elements", []))
         }
         relevant_findings.append(clean_finding)
-        
+
     return relevant_findings
 
 
@@ -873,16 +910,16 @@ def parse_location(elements: List[Dict[str, Any]]) -> str:
     """
     if not elements:
         return "Unknown location"
-    
+
     # Usually the first element is the source of the bug
     el = elements[0]
     source_map = el.get("source_mapping", {})
     filename = source_map.get("filename_short", "unknown_file")
     lines = source_map.get("lines", [])
-    
+
     if lines:
         return f"{filename} (Lines: {lines})"
-    return cast(str, filename)
+    return str(filename)
 
 
 def print_report(findings: List[Dict[str, Any]]) -> None:
@@ -895,7 +932,7 @@ def print_report(findings: List[Dict[str, Any]]) -> None:
     print("\n" + "="*60)
     print(f" VULNERABILITY REPORT - {len(findings)} CRITICAL ISSUES FOUND")
     print("="*60 + "\n")
-    
+
     if not findings:
         print("[+] CLEAN: No critical vulnerabilities found matching "
               "criteria.")
@@ -906,7 +943,7 @@ def print_report(findings: List[Dict[str, Any]]) -> None:
         # Red for High, Yellow for Medium
         color = "\033[91m" if f['impact'] == "High" else "\033[93m"
         reset = "\033[0m"
-        
+
         print(f"{color}[{f['impact']}] {f['title']}{reset}")
         print(f"Location: {f['location']}")
         print(f"Context: {f['description']}")
