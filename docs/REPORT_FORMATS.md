@@ -57,7 +57,7 @@ reports/{ProjectName}_{YYYY-MM-DD}_{session}/
 - **Exploit PoCs** are placed in the `exploits/` subdirectory within the per-scan folder, not in the engine root directory
 - **Web uploads** follow the same structure; files are accessible via the results page download links
 
-> **Note:** Prior to v5.0, reports were written directly to the engine root directory (e.g., `audit_report.md`, `audit_report.html`). From v5.0.2 onward, all output is scoped to per-scan subdirectories under `reports/`.
+> **Note:** Prior to v5.0, reports were written directly to the engine root directory (e.g., `audit_report.md`, `audit_report.html`). From v5.0.2 onward, all output is scoped to per-scan subdirectories under `reports/`. (Behavior unchanged in v5.0.3.)
 
 ---
 

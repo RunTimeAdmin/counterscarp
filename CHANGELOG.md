@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.3] - 2026-04-23
+
+### Fixed
+- Add `lib/**` to default path exclusions for Foundry projects (reduces noise from dependency scanning)
+- Auto-detect Foundry projects via `foundry.toml` and ensure `lib/**` is excluded
+- Fingerprint scanner now honors path exclusions (was scanning ~1080 lib files, now only src/)
+- Parse `foundry.toml` custom `out` directory and pass `--foundry-out-directory` to Slither
+- Add `forge build --build-info` pre-step before Slither when using `--foundry-ignore-compile`
+- Bump Slither and forge build timeouts from 300s to 600s for large Foundry projects
+- Resolve mypy type errors and lint issues in red_team_scan.py
+
+### Changed
+- Documentation version references updated from 5.0.1 to 5.0.2 (carried forward)
+
+
 ## [5.0.2] - 2026-04-23
 
 ### Fixed

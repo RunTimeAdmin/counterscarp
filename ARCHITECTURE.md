@@ -930,7 +930,7 @@ flowchart LR
 
 ---
 
-## 9. v5.0.2 API Security Architecture
+## 9. v5.0.3 API Security Architecture
 
 This section documents the security hardening layer introduced in v5.0.2 for the web application API (`webapp/`).
 
