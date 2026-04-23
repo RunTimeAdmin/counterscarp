@@ -106,10 +106,10 @@ class TestGetDefaultFingerprints:
     """Test get_default_fingerprints function."""
 
     def test_returns_all_protocols(self):
-        """Test that all 18 default protocols are returned."""
+        """Test that all 47 default protocols are returned."""
         fingerprints = get_default_fingerprints()
         
-        assert len(fingerprints) == 27
+        assert len(fingerprints) == 47
 
     def test_protocol_names(self):
         """Test that expected protocols are included."""

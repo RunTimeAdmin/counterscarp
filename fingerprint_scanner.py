@@ -596,7 +596,7 @@ def assess_inherited_risk(matches: List[Dict[str, Any]]) -> Dict[str, Any]:
 def scan_for_protocol_similarity(
     source_path: str,
     fingerprints: Optional[List[ProtocolFingerprint]] = None,
-    min_similarity: float = 0.7
+    min_similarity: float = 0.5
 ) -> List[Dict[str, Any]]:
     """Scan contract for protocol similarity.
 
@@ -802,7 +802,7 @@ def scan_project(
 
     # Parse config
     cfg = config or {}
-    min_similarity = cfg.get('min_similarity', 0.7)
+    min_similarity = cfg.get('min_similarity', 0.5)
     database_path = cfg.get('database_path')
 
     # Load fingerprints
@@ -886,8 +886,8 @@ def main() -> None:
     parser.add_argument(
         "--min-similarity",
         type=float,
-        default=0.7,
-        help="Minimum similarity threshold (0.0-1.0, default: 0.7)"
+        default=0.5,
+        help="Minimum similarity threshold (0.0-1.0, default: 0.5)"
     )
     parser.add_argument(
         "--database",

@@ -1813,5 +1813,1095 @@
         "reference_url": "https://community.optimism.io/t/l1-gas-oracle-manipulation"
       }
     ]
+  },
+  {
+    "name": "Uniswap V4 Periphery",
+    "category": "AMM",
+    "version": "4.0",
+    "function_signatures": [
+      "modifyLiquidities(bytes,uint256)",
+      "settle(address,uint256,bool)",
+      "take(address,address,uint256)",
+      "mint(address,uint256)",
+      "burn(address,uint256,address)",
+      "multicall(bytes[])",
+      "unlockCallback(bytes)"
+    ],
+    "event_signatures": [
+      "ModifyLiquidity(address indexed sender,address indexed poolId,int256 liquidityDelta,int256 delta0,int256 delta1)",
+      "Swap(address indexed sender,address indexed poolId,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)"
+    ],
+    "storage_patterns": [
+      "poolManager",
+      "positionInfo",
+      "nextTokenId",
+      "poolKeys"
+    ],
+    "inheritance_markers": [
+      "IPoolManager",
+      "IHooks",
+      "BaseHook",
+      "PositionManager",
+      "IUnlockCallback"
+    ],
+    "constants": {
+      "HOOKS_BEFORE_SWAP_FLAG": "1 << 7",
+      "HOOKS_AFTER_SWAP_FLAG": "1 << 6"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "UNI-V4P-001",
+        "title": "Hook Reentrancy via unlockCallback",
+        "severity": "HIGH",
+        "description": "Custom hooks can reenter the PoolManager during unlockCallback, enabling price manipulation or liquidity draining if hook access controls are insufficient",
+        "reference_url": "https://docs.uniswap.org/contracts/v4/concepts/hooks"
+      },
+      {
+        "id": "UNI-V4P-002",
+        "title": "ERC6909 Claims Balance Manipulation",
+        "severity": "MEDIUM",
+        "description": "Flash accounting via ERC6909 claims can leave unresolved delta balances if hooks fail to settle, allowing transient token theft",
+        "reference_url": "https://github.com/Uniswap/v4-core/blob/main/src/PoolManager.sol"
+      }
+    ]
+  },
+  {
+    "name": "Uniswap V2 Router",
+    "category": "AMM",
+    "version": "2.0",
+    "function_signatures": [
+      "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+      "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+      "swapExactETHForTokens(uint256,address[],address,uint256)",
+      "swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
+      "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
+      "swapETHForExactTokens(uint256,address[],address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+      "getAmountsOut(uint256,address[])",
+      "getAmountsIn(uint256,address[])"
+    ],
+    "event_signatures": [
+      "Transfer(address indexed from,address indexed to,uint256 value)",
+      "Approval(address indexed owner,address indexed spender,uint256 value)"
+    ],
+    "storage_patterns": [
+      "factory",
+      "WETH"
+    ],
+    "inheritance_markers": [
+      "IUniswapV2Router02",
+      "IUniswapV2Router01"
+    ],
+    "constants": {
+      "deadline": "block.timestamp"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "UNI-V2-ROUTER-001",
+        "title": "Insufficient Slippage Protection",
+        "severity": "HIGH",
+        "description": "Setting amountOutMin=0 exposes users to sandwich attacks; forks that remove deadline checks are vulnerable to delayed execution attacks",
+        "reference_url": "https://docs.uniswap.org/protocol/V2/concepts/advanced-topics/security-considerations"
+      },
+      {
+        "id": "UNI-V2-ROUTER-002",
+        "title": "Path Manipulation",
+        "severity": "MEDIUM",
+        "description": "Multi-hop swap paths are not validated; malicious paths can route through low-liquidity pools to drain value",
+        "reference_url": "https://github.com/Uniswap/v2-periphery/blob/master/contracts/UniswapV2Router02.sol"
+      }
+    ]
+  },
+  {
+    "name": "OpenZeppelin UUPS",
+    "category": "Proxy",
+    "version": "4.x",
+    "function_signatures": [
+      "upgradeTo(address)",
+      "upgradeToAndCall(address,bytes)",
+      "_authorizeUpgrade(address)",
+      "proxiableUUID()",
+      "initialize()",
+      "_disableInitializers()"
+    ],
+    "event_signatures": [
+      "Upgraded(address indexed implementation)",
+      "AdminChanged(address previousAdmin,address newAdmin)",
+      "BeaconUpgraded(address indexed beacon)"
+    ],
+    "storage_patterns": [
+      "_initialized",
+      "_initializing",
+      "__gap",
+      "_IMPLEMENTATION_SLOT"
+    ],
+    "inheritance_markers": [
+      "UUPSUpgradeable",
+      "ERC1967Upgrade",
+      "Initializable",
+      "ERC1967Proxy"
+    ],
+    "constants": {
+      "IMPLEMENTATION_SLOT": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "OZ-UUPS-001",
+        "title": "Uninitialized Implementation Selfdestruct",
+        "severity": "CRITICAL",
+        "description": "If the implementation contract is deployed without calling disableInitializers(), an attacker can initialize it and call upgradeTo with a selfdestruct payload, permanently bricking the proxy (CVE-2022-21224)",
+        "reference_url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-9c22-pwxw-p6hx"
+      },
+      {
+        "id": "OZ-UUPS-002",
+        "title": "_authorizeUpgrade Missing Access Control",
+        "severity": "HIGH",
+        "description": "If _authorizeUpgrade is not properly overridden with onlyOwner or equivalent, anyone can upgrade the implementation to an arbitrary contract",
+        "reference_url": "https://docs.openzeppelin.com/contracts/4.x/api/proxy#UUPSUpgradeable-_authorizeUpgrade-address-"
+      }
+    ]
+  },
+  {
+    "name": "OpenZeppelin Governor",
+    "category": "Governance",
+    "version": "4.x",
+    "function_signatures": [
+      "propose(address[],uint256[],bytes[],string)",
+      "castVote(uint256,uint8)",
+      "castVoteWithReason(uint256,uint8,string)",
+      "castVoteBySig(uint256,uint8,uint8,bytes32,bytes32)",
+      "queue(address[],uint256[],bytes[],bytes32)",
+      "execute(address[],uint256[],bytes[],bytes32)",
+      "cancel(address[],uint256[],bytes[],bytes32)",
+      "state(uint256)",
+      "quorum(uint256)",
+      "votingDelay()",
+      "votingPeriod()"
+    ],
+    "event_signatures": [
+      "ProposalCreated(uint256 proposalId,address proposer,address[] targets,uint256[] values,string[] signatures,bytes[] calldatas,uint256 startBlock,uint256 endBlock,string description)",
+      "VoteCast(address indexed voter,uint256 proposalId,uint8 support,uint256 weight,string reason)",
+      "ProposalExecuted(uint256 proposalId)",
+      "ProposalCanceled(uint256 proposalId)",
+      "ProposalQueued(uint256 proposalId,uint256 eta)"
+    ],
+    "storage_patterns": [
+      "_proposals",
+      "_votes",
+      "_quorumNumerator",
+      "_timelock"
+    ],
+    "inheritance_markers": [
+      "IGovernor",
+      "Governor",
+      "GovernorSettings",
+      "GovernorCountingSimple",
+      "GovernorVotes",
+      "GovernorTimelockControl"
+    ],
+    "constants": {
+      "BALLOT_TYPEHASH": "0x150214d74d59b7d1e90c73fc22ef3d991dd0a76b046543d4d80ab92d2a50328f"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "GOV-001",
+        "title": "Flash Loan Governance Attack",
+        "severity": "CRITICAL",
+        "description": "If voting power is snapshotted at proposal creation rather than a prior block, flash loans can temporarily inflate voting power to pass malicious proposals",
+        "reference_url": "https://blog.openzeppelin.com/governor-vulnerability"
+      },
+      {
+        "id": "GOV-002",
+        "title": "Short Voting Period Manipulation",
+        "severity": "HIGH",
+        "description": "Insufficient voting delay and period allow rapid governance attacks when token distribution is concentrated",
+        "reference_url": "https://docs.openzeppelin.com/contracts/4.x/governance"
+      }
+    ]
+  },
+  {
+    "name": "OpenZeppelin TimelockController",
+    "category": "Governance",
+    "version": "4.x",
+    "function_signatures": [
+      "schedule(address,uint256,bytes,bytes32,bytes32,uint256)",
+      "scheduleBatch(address[],uint256[],bytes[],bytes32,bytes32,uint256)",
+      "execute(address,uint256,bytes,bytes32,bytes32)",
+      "executeBatch(address[],uint256[],bytes[],bytes32,bytes32)",
+      "cancel(bytes32)",
+      "hashOperation(address,uint256,bytes,bytes32,bytes32)",
+      "hashOperationBatch(address[],uint256[],bytes[],bytes32,bytes32)",
+      "isOperation(bytes32)",
+      "isOperationPending(bytes32)",
+      "isOperationReady(bytes32)",
+      "isOperationDone(bytes32)"
+    ],
+    "event_signatures": [
+      "CallScheduled(bytes32 indexed id,uint256 indexed index,address target,uint256 value,bytes data,bytes32 predecessor,uint256 delay)",
+      "CallExecuted(bytes32 indexed id,uint256 indexed index,address target,uint256 value,bytes data)",
+      "Cancelled(bytes32 indexed id)",
+      "MinDelayChange(uint256 oldDuration,uint256 newDuration)"
+    ],
+    "storage_patterns": [
+      "_timestamps",
+      "_minDelay",
+      "_roles"
+    ],
+    "inheritance_markers": [
+      "TimelockController",
+      "AccessControl",
+      "IERC721Receiver",
+      "IERC1155Receiver"
+    ],
+    "constants": {
+      "TIMELOCK_ADMIN_ROLE": "0x5f58e3a2316349923ce3780f8d587db2d72378aed66a8261c916544fa6846ca5",
+      "PROPOSER_ROLE": "0xb09aa5aeb3702cfd50b6b62bc4532604938f21248a27a1d5ca736082b6819cc1",
+      "EXECUTOR_ROLE": "0xd8aa0f3194971a2a116679f7c2090f6939c8d4e01a2a8d7e41d55e5351469e63"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "TIMELOCK-001",
+        "title": "Minimum Delay Bypass via Role Misconfiguration",
+        "severity": "HIGH",
+        "description": "If EXECUTOR_ROLE is granted to address(0), anyone can execute queued operations; improper role separation between proposer and executor undermines timelock security",
+        "reference_url": "https://docs.openzeppelin.com/contracts/4.x/api/governance#TimelockController"
+      },
+      {
+        "id": "TIMELOCK-002",
+        "title": "Front-running of Scheduled Operations",
+        "severity": "MEDIUM",
+        "description": "Scheduled operations are publicly visible; MEV bots can front-run execute() calls to extract value from approved treasury disbursements or parameter changes",
+        "reference_url": "https://blog.openzeppelin.com/bypassing-smart-contract-timelocks"
+      }
+    ]
+  },
+  {
+    "name": "Compound V3 Comet",
+    "category": "Lending",
+    "version": "3.0",
+    "function_signatures": [
+      "supply(address,uint256)",
+      "supplyTo(address,address,uint256)",
+      "supplyFrom(address,address,address,uint256)",
+      "withdraw(address,uint256)",
+      "withdrawTo(address,address,uint256)",
+      "withdrawFrom(address,address,address,uint256)",
+      "absorb(address,address[])",
+      "buyCollateral(address,uint256,uint256,address)",
+      "getUtilization()",
+      "getSupplyRate(uint256)",
+      "getBorrowRate(uint256)",
+      "isBorrowCollateralized(address)",
+      "isLiquidatable(address)"
+    ],
+    "event_signatures": [
+      "Supply(address indexed from,address indexed dst,uint256 amount)",
+      "Withdraw(address indexed src,address indexed to,uint256 amount)",
+      "AbsorbCollateral(address indexed absorber,address indexed borrower,address indexed asset,uint256 collateralAbsorbed,uint256 usdValue)",
+      "AbsorbDebt(address indexed absorber,address indexed borrower,uint256 basePaidOut,uint256 usdValue)",
+      "BuyCollateral(address indexed buyer,address indexed asset,uint256 baseAmount,uint256 collateralAmount)"
+    ],
+    "storage_patterns": [
+      "userBasic",
+      "userCollateral",
+      "totalsBasic",
+      "totalsCollateral",
+      "baseToken",
+      "baseTokenPriceFeed"
+    ],
+    "inheritance_markers": [
+      "CometCore",
+      "CometMainInterface",
+      "CometExtInterface",
+      "CometStorage"
+    ],
+    "constants": {
+      "FACTOR_SCALE": "1e18",
+      "BASE_INDEX_SCALE": "1e15"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "COMP-V3-001",
+        "title": "Absorb Insolvency Risk",
+        "severity": "HIGH",
+        "description": "The absorb() function socializes bad debt; if collateral prices drop faster than absorb can be called, the protocol absorbs a loss that reduces supplier yields or requires governance intervention",
+        "reference_url": "https://docs.compound.finance/liquidation/"
+      },
+      {
+        "id": "COMP-V3-002",
+        "title": "Single Base Asset Concentration",
+        "severity": "MEDIUM",
+        "description": "Each Comet instance supports only one base borrowing asset; a depeg or oracle failure for that asset affects the entire market",
+        "reference_url": "https://docs.compound.finance/v3/"
+      }
+    ]
+  },
+  {
+    "name": "Aave V3 Pool",
+    "category": "Lending",
+    "version": "3.0",
+    "function_signatures": [
+      "supply(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)",
+      "repayWithATokens(address,uint256,uint256)",
+      "liquidationCall(address,address,address,uint256,bool)",
+      "flashLoan(address,address[],uint256[],uint256[],address,bytes,uint16)",
+      "flashLoanSimple(address,address,uint256,bytes,uint16)",
+      "setUserUseReserveAsCollateral(address,bool)",
+      "swapBorrowRateMode(address,uint256)",
+      "getUserAccountData(address)",
+      "getReserveData(address)"
+    ],
+    "event_signatures": [
+      "Supply(address indexed reserve,address user,address indexed onBehalfOf,uint256 amount,uint16 indexed referralCode)",
+      "Withdraw(address indexed reserve,address indexed user,address indexed to,uint256 amount)",
+      "Borrow(address indexed reserve,address user,address indexed onBehalfOf,uint256 amount,uint8 interestRateMode,uint256 borrowRate,uint16 indexed referralCode)",
+      "Repay(address indexed reserve,address indexed user,address indexed repayer,uint256 amount,bool useATokens)",
+      "FlashLoan(address indexed target,address initiator,address indexed asset,uint256 amount,uint8 interestRateMode,uint256 premium,uint16 indexed referralCode)",
+      "LiquidationCall(address indexed collateralAsset,address indexed debtAsset,address indexed user,uint256 debtToCover,uint256 liquidatedCollateralAmount,address liquidator,bool receiveAToken)"
+    ],
+    "storage_patterns": [
+      "_reserves",
+      "_usersConfig",
+      "_reservesList",
+      "_eModeCategories",
+      "_flashLoanPremiumTotal",
+      "_reservesCount"
+    ],
+    "inheritance_markers": [
+      "IPool",
+      "PoolCore",
+      "PoolStorage",
+      "IPoolAddressesProvider",
+      "IFlashLoanReceiver",
+      "IFlashLoanSimpleReceiver"
+    ],
+    "constants": {
+      "FLASHLOAN_PREMIUM_TOTAL": "5",
+      "MAX_NUMBER_RESERVES": "128"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "AAVE-V3-001",
+        "title": "E-Mode Oracle Bypass",
+        "severity": "HIGH",
+        "description": "E-Mode allows higher LTV within correlated asset categories; if oracle prices between e-mode assets diverge unexpectedly, the elevated LTV can create undercollateralized positions",
+        "reference_url": "https://docs.aave.com/developers/whats-new/efficiency-mode-emode"
+      },
+      {
+        "id": "AAVE-V3-002",
+        "title": "Flash Loan Premium Griefing",
+        "severity": "MEDIUM",
+        "description": "Flash loan fees in V3 are split between LPs and protocol; contracts that assume fee = 0 (V2 behaviour) will revert or underpay, causing integration failures",
+        "reference_url": "https://docs.aave.com/developers/guides/flash-loans"
+      }
+    ]
+  },
+  {
+    "name": "Chainlink Price Feed",
+    "category": "Oracle",
+    "version": "3.0",
+    "function_signatures": [
+      "latestRoundData()",
+      "getRoundData(uint80)",
+      "latestAnswer()",
+      "latestTimestamp()",
+      "latestRound()",
+      "getAnswer(uint256)",
+      "getTimestamp(uint256)",
+      "decimals()",
+      "description()",
+      "version()"
+    ],
+    "event_signatures": [
+      "AnswerUpdated(int256 indexed current,uint256 indexed roundId,uint256 updatedAt)",
+      "NewRound(uint256 indexed roundId,address indexed startedBy,uint256 startedAt)"
+    ],
+    "storage_patterns": [
+      "s_hotVars",
+      "s_transmissions",
+      "s_oracles",
+      "s_signers",
+      "latestAggregatorRoundId"
+    ],
+    "inheritance_markers": [
+      "AggregatorV3Interface",
+      "AggregatorInterface",
+      "AggregatorV2V3Interface",
+      "AccessControlledOffchainAggregator"
+    ],
+    "constants": {
+      "LINK_USD_HEARTBEAT": "3600",
+      "ETH_USD_HEARTBEAT": "3600"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "CHAINLINK-001",
+        "title": "Stale Price Data",
+        "severity": "HIGH",
+        "description": "latestRoundData() does not revert on stale data; consumers must validate updatedAt against a heartbeat threshold, otherwise stale prices can cause incorrect liquidations or mispriced trades",
+        "reference_url": "https://docs.chain.link/data-feeds/price-feeds/historical-data"
+      },
+      {
+        "id": "CHAINLINK-002",
+        "title": "Round Completeness Check Missing",
+        "severity": "MEDIUM",
+        "description": "answeredInRound < roundId indicates an incomplete round; consuming prices from incomplete rounds returns stale or partially-reported data",
+        "reference_url": "https://docs.chain.link/data-feeds/api-reference#latestrounddata"
+      },
+      {
+        "id": "CHAINLINK-003",
+        "title": "Sequencer Uptime Feed Not Checked on L2",
+        "severity": "HIGH",
+        "description": "On L2 chains, Chainlink price feeds can return stale data during sequencer downtime; protocols must check the L2 Sequencer Uptime Feed and reject prices reported during grace periods",
+        "reference_url": "https://docs.chain.link/data-feeds/l2-sequencer-feeds"
+      }
+    ]
+  },
+  {
+    "name": "Safe (Gnosis Safe)",
+    "category": "Multisig",
+    "version": "1.3",
+    "function_signatures": [
+      "execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes)",
+      "approveHash(bytes32)",
+      "enableModule(address)",
+      "disableModule(address,address)",
+      "execTransactionFromModule(address,uint256,bytes,uint8)",
+      "setGuard(address)",
+      "addOwnerWithThreshold(address,uint256)",
+      "removeOwner(address,address,uint256)",
+      "swapOwner(address,address,address)",
+      "changeThreshold(uint256)",
+      "getOwners()",
+      "getThreshold()"
+    ],
+    "event_signatures": [
+      "ExecutionSuccess(bytes32 txHash,uint256 payment)",
+      "ExecutionFailure(bytes32 txHash,uint256 payment)",
+      "AddedOwner(address owner)",
+      "RemovedOwner(address owner)",
+      "EnabledModule(address module)",
+      "DisabledModule(address module)",
+      "ChangedGuard(address guard)",
+      "ChangedThreshold(uint256 threshold)"
+    ],
+    "storage_patterns": [
+      "owners",
+      "modules",
+      "threshold",
+      "nonce",
+      "signedMessages",
+      "approvedHashes"
+    ],
+    "inheritance_markers": [
+      "GnosisSafe",
+      "ModuleManager",
+      "OwnerManager",
+      "GuardManager",
+      "FallbackManager",
+      "StorageAccessible"
+    ],
+    "constants": {
+      "SENTINEL_OWNERS": "0x0000000000000000000000000000000000000001",
+      "SENTINEL_MODULES": "0x0000000000000000000000000000000000000001"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "SAFE-001",
+        "title": "Signature Malleability",
+        "severity": "HIGH",
+        "description": "Pre-validated and contract signatures bypass threshold enforcement; malformed or replayed signatures can allow unauthorized execution if signature validation logic is incorrectly overridden",
+        "reference_url": "https://github.com/safe-global/safe-contracts/blob/main/docs/signatures.md"
+      },
+      {
+        "id": "SAFE-002",
+        "title": "Module Privilege Escalation",
+        "severity": "CRITICAL",
+        "description": "Enabled modules have unrestricted execTransactionFromModule access; a compromised or malicious module can drain all assets without owner signatures",
+        "reference_url": "https://docs.safe.global/advanced/smart-account-modules"
+      }
+    ]
+  },
+  {
+    "name": "ERC-4626 Vault",
+    "category": "Vault",
+    "version": "1.0",
+    "function_signatures": [
+      "deposit(uint256,address)",
+      "mint(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)",
+      "totalAssets()",
+      "maxDeposit(address)",
+      "maxMint(address)",
+      "maxWithdraw(address)",
+      "maxRedeem(address)",
+      "previewDeposit(uint256)",
+      "previewMint(uint256)",
+      "previewWithdraw(uint256)",
+      "previewRedeem(uint256)",
+      "asset()"
+    ],
+    "event_signatures": [
+      "Deposit(address indexed caller,address indexed owner,uint256 assets,uint256 shares)",
+      "Withdraw(address indexed caller,address indexed receiver,address indexed owner,uint256 assets,uint256 shares)"
+    ],
+    "storage_patterns": [
+      "_asset",
+      "_totalAssets",
+      "balanceOf",
+      "totalSupply"
+    ],
+    "inheritance_markers": [
+      "IERC4626",
+      "ERC20",
+      "ERC4626"
+    ],
+    "constants": {},
+    "known_vulnerabilities": [
+      {
+        "id": "ERC4626-001",
+        "title": "Inflation Attack (First Depositor)",
+        "severity": "CRITICAL",
+        "description": "An attacker can front-run the first deposit by donating assets to inflate the share price, causing subsequent depositors to receive zero shares; mitigated by virtual shares (EIP-4626 recommendation) or minimum deposit checks",
+        "reference_url": "https://github.com/OpenZeppelin/openzeppelin-contracts/issues/3706"
+      },
+      {
+        "id": "ERC4626-002",
+        "title": "Rounding Inconsistency",
+        "severity": "MEDIUM",
+        "description": "Improper rounding direction in convertToShares/convertToAssets can allow repeated deposit-redeem cycles to drain value from the vault",
+        "reference_url": "https://eips.ethereum.org/EIPS/eip-4626#security-considerations"
+      }
+    ]
+  },
+  {
+    "name": "Diamond (EIP-2535)",
+    "category": "Proxy",
+    "version": "1.0",
+    "function_signatures": [
+      "diamondCut(tuple[],address,bytes)",
+      "facetAddress(bytes4)",
+      "facetAddresses()",
+      "facetFunctionSelectors(address)",
+      "facets()",
+      "supportsInterface(bytes4)"
+    ],
+    "event_signatures": [
+      "DiamondCut(tuple[] _diamondCut,address _init,bytes _calldata)"
+    ],
+    "storage_patterns": [
+      "diamondStorage",
+      "facets",
+      "selectorSlots",
+      "selectorCount",
+      "supportedInterfaces"
+    ],
+    "inheritance_markers": [
+      "IDiamondCut",
+      "IDiamondLoupe",
+      "IERC173",
+      "IERC165",
+      "LibDiamond"
+    ],
+    "constants": {
+      "DIAMOND_STORAGE_POSITION": "0xc8fcad8db84d3cc18b4c41d551ea0ee66dd599cde068d998e57d5e09332c131b"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "DIAMOND-001",
+        "title": "Facet Storage Collision",
+        "severity": "CRITICAL",
+        "description": "Diamond storage slots must use unique keccak positions; if two facets use overlapping storage layouts, upgrades or additions can corrupt existing state",
+        "reference_url": "https://eips.ethereum.org/EIPS/eip-2535#storage-collision"
+      },
+      {
+        "id": "DIAMOND-002",
+        "title": "Unrestricted diamondCut Access",
+        "severity": "HIGH",
+        "description": "If diamondCut lacks ownership or multisig protection, an attacker can replace all facets with malicious implementations; loupe functions should be preserved to detect unexpected changes",
+        "reference_url": "https://eips.ethereum.org/EIPS/eip-2535#diamond-security"
+      }
+    ]
+  },
+  {
+    "name": "Permit2",
+    "category": "Token",
+    "version": "1.0",
+    "function_signatures": [
+      "permit(address,tuple,bytes)",
+      "permit(address,tuple[],bytes)",
+      "transferFrom(address,address,uint160,address)",
+      "transferFrom(tuple[])",
+      "allowance(address,address,address)",
+      "lockdown(tuple[])",
+      "invalidateNonces(address,address,uint48)",
+      "invalidateUnorderedNonces(address,uint256,uint256)"
+    ],
+    "event_signatures": [
+      "Permit(address indexed owner,address indexed token,address indexed spender,uint160 amount,uint48 expiration,uint48 nonce)",
+      "Approval(address indexed owner,address indexed token,address indexed spender,uint160 amount,uint48 expiration)",
+      "Lockdown(address indexed owner,address token,address spender)"
+    ],
+    "storage_patterns": [
+      "allowance",
+      "nonceBitmap",
+      "orderBitmap"
+    ],
+    "inheritance_markers": [
+      "IAllowanceTransfer",
+      "ISignatureTransfer",
+      "EIP712",
+      "IPermit2"
+    ],
+    "constants": {
+      "PERMIT_TRANSFER_FROM_TYPEHASH": "0x939c21a48a8dbe3a9a2404a1d46691e2fcd2f20420e71e9b3b28af6f7c91ab53",
+      "PERMIT_DETAILS_TYPEHASH": "0x2b06cf91d52b62d5c6ca8b72bb73b5ed1e09b68ce0614f0f0cdf7a756dba87aa"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "PERMIT2-001",
+        "title": "Signature Replay via Expiration Edge Cases",
+        "severity": "HIGH",
+        "description": "Permit2 signatures with expiration set to type(uint48).max effectively never expire; integrations that do not enforce custom expiration windows expose users to indefinite approvals if private keys are leaked",
+        "reference_url": "https://github.com/Uniswap/permit2/blob/main/src/interfaces/IAllowanceTransfer.sol"
+      },
+      {
+        "id": "PERMIT2-002",
+        "title": "Front-running of Lockdown",
+        "severity": "MEDIUM",
+        "description": "A pending lockdown transaction can be front-run; an attacker monitoring the mempool can execute a transferFrom before lockdown is confirmed, draining approved tokens",
+        "reference_url": "https://github.com/Uniswap/permit2"
+      }
+    ]
+  },
+  {
+    "name": "Solmate",
+    "category": "Library",
+    "version": "6.0",
+    "function_signatures": [
+      "safeTransfer(address,address,uint256)",
+      "safeTransferFrom(address,address,address,uint256)",
+      "safeApprove(address,address,uint256)",
+      "safeTransferETH(address,uint256)",
+      "computeCreate2Address(bytes32,bytes32,address)",
+      "computeCreate2Address(bytes32,bytes32)"
+    ],
+    "event_signatures": [
+      "Transfer(address indexed from,address indexed to,uint256 amount)",
+      "Approval(address indexed owner,address indexed spender,uint256 amount)"
+    ],
+    "storage_patterns": [
+      "totalSupply",
+      "balanceOf",
+      "allowance",
+      "name",
+      "symbol",
+      "decimals"
+    ],
+    "inheritance_markers": [
+      "ERC20",
+      "ERC721",
+      "ERC1155",
+      "SafeTransferLib",
+      "ReentrancyGuard",
+      "Owned",
+      "Auth"
+    ],
+    "constants": {},
+    "known_vulnerabilities": [
+      {
+        "id": "SOLMATE-001",
+        "title": "SafeTransferLib Does Not Check Contract Existence",
+        "severity": "HIGH",
+        "description": "Solmate's SafeTransferLib does not verify that the token address contains code; calls to non-existent token contracts succeed silently, causing integrations to believe transfers succeeded when no tokens moved (audit finding referenced in multiple C4 reports)",
+        "reference_url": "https://github.com/transmissions11/solmate/issues/320"
+      },
+      {
+        "id": "SOLMATE-002",
+        "title": "ERC20 Missing Return Value Handling",
+        "severity": "MEDIUM",
+        "description": "Solmate ERC20 does not emit events for mint/burn in certain patterns; contracts relying on event monitoring for accounting may miss balance changes",
+        "reference_url": "https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC20.sol"
+      }
+    ]
+  },
+  {
+    "name": "LayerZero OApp",
+    "category": "CrossChain",
+    "version": "2.0",
+    "function_signatures": [
+      "lzSend(uint32,bytes,bytes,tuple,address,bytes)",
+      "lzReceive(tuple,bytes32,bytes,address,bytes)",
+      "_lzSend(uint32,bytes,bytes,tuple,address,bytes)",
+      "setPeer(uint32,bytes32)",
+      "setDelegate(address)",
+      "allowInitializePath(tuple)",
+      "nextNonce(uint32,bytes32)",
+      "endpoint()"
+    ],
+    "event_signatures": [
+      "PacketSent(bytes encodedPayload,bytes options,address sendLibrary)",
+      "PacketReceived(tuple origin,address receiver)",
+      "PeerSet(uint32 eid,bytes32 peer)"
+    ],
+    "storage_patterns": [
+      "peers",
+      "endpoint",
+      "delegate"
+    ],
+    "inheritance_markers": [
+      "OApp",
+      "OAppReceiver",
+      "OAppSender",
+      "IOAppCore",
+      "IOAppReceiver"
+    ],
+    "constants": {},
+    "known_vulnerabilities": [
+      {
+        "id": "LZ-OAPP-001",
+        "title": "Missing Peer Validation",
+        "severity": "CRITICAL",
+        "description": "If setPeer is not called or is set to an incorrect address, messages from attacker-controlled chains can be accepted as legitimate; always validate msg.sender == endpoint and origin.sender == peers[origin.srcEid]",
+        "reference_url": "https://docs.layerzero.network/v2/developers/evm/oapp/overview#security-considerations"
+      },
+      {
+        "id": "LZ-OAPP-002",
+        "title": "lzReceive Revert Blocking",
+        "severity": "HIGH",
+        "description": "If lzReceive reverts, the message is stored as a failed delivery; an attacker can intentionally cause reverts to block subsequent messages in the same channel (nonce ordering), creating a denial-of-service",
+        "reference_url": "https://docs.layerzero.network/v2/developers/evm/troubleshooting/debugging-messages"
+      }
+    ]
+  },
+  {
+    "name": "Wormhole",
+    "category": "Bridge",
+    "version": "2.0",
+    "function_signatures": [
+      "publishMessage(uint32,bytes,uint8)",
+      "parseAndVerifyVM(bytes)",
+      "completeTransfer(bytes)",
+      "transferTokens(address,uint256,uint16,bytes32,uint256,uint32)",
+      "attestToken(address,uint32)",
+      "completeAndUnwrapETHSmall(bytes)",
+      "verifySignatures(bytes32,tuple[],tuple)"
+    ],
+    "event_signatures": [
+      "LogMessagePublished(address indexed sender,uint64 sequence,uint32 nonce,bytes payload,uint8 consistencyLevel)",
+      "TransferRedeemed(uint16 indexed emitterChainId,bytes32 indexed emitterAddress,uint64 indexed sequence)"
+    ],
+    "storage_patterns": [
+      "provider",
+      "guardianSets",
+      "sequences",
+      "completedTransactions"
+    ],
+    "inheritance_markers": [
+      "IWormhole",
+      "TokenBridge",
+      "WormholeRelayer",
+      "IWormholeRelayer"
+    ],
+    "constants": {
+      "CHAIN_ID_ETH": "2",
+      "CHAIN_ID_SOL": "1"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "WORMHOLE-001",
+        "title": "Guardian Set Signature Verification Bypass",
+        "severity": "CRITICAL",
+        "description": "In Feb 2022, a missing account ownership check on Solana allowed an attacker to forge VAA signatures and mint 120,000 wETH without collateral (Wormhole hack, $320M); EVM implementations must validate all guardian set thresholds",
+        "reference_url": "https://extropy-io.medium.com/solanas-wormhole-hack-post-mortem-analysis-3b68b9e88e13"
+      },
+      {
+        "id": "WORMHOLE-002",
+        "title": "Replay of Completed VAAs",
+        "severity": "HIGH",
+        "description": "Completed VAA hashes must be stored and rejected on reuse; failure to maintain completedTransactions mapping allows double-spending of bridge transfers",
+        "reference_url": "https://docs.wormhole.com/wormhole/explore-wormhole/vaa"
+      }
+    ]
+  },
+  {
+    "name": "Axelar",
+    "category": "CrossChain",
+    "version": "1.0",
+    "function_signatures": [
+      "callContract(string,string,bytes)",
+      "callContractWithToken(string,string,bytes,string,uint256)",
+      "execute(bytes32,string,string,bytes)",
+      "executeWithToken(bytes32,string,string,bytes,string,uint256)",
+      "validateContractCall(bytes32,string,string,bytes32)",
+      "validateContractCallAndMint(bytes32,string,string,bytes32,string,uint256)",
+      "isContractCallApproved(bytes32,string,string,address,bytes32)"
+    ],
+    "event_signatures": [
+      "ContractCall(address indexed sender,string destinationChain,string destinationContractAddress,bytes32 indexed payloadHash,bytes payload)",
+      "ContractCallWithToken(address indexed sender,string destinationChain,string destinationContractAddress,bytes32 indexed payloadHash,bytes payload,string symbol,uint256 amount)",
+      "Executed(bytes32 indexed commandId)"
+    ],
+    "storage_patterns": [
+      "gateway",
+      "commandsExecuted",
+      "contractCallApprovals"
+    ],
+    "inheritance_markers": [
+      "AxelarExecutable",
+      "IAxelarGateway",
+      "IAxelarGasService",
+      "IAxelarExecutable"
+    ],
+    "constants": {},
+    "known_vulnerabilities": [
+      {
+        "id": "AXELAR-001",
+        "title": "Gateway Validation Bypass",
+        "severity": "CRITICAL",
+        "description": "execute() must call validateContractCall() before processing; skipping validation allows unauthenticated cross-chain messages to execute arbitrary contract logic",
+        "reference_url": "https://docs.axelar.dev/dev/general-message-passing/gmp-messages#security"
+      },
+      {
+        "id": "AXELAR-002",
+        "title": "Gas Underpayment Griefing",
+        "severity": "MEDIUM",
+        "description": "Insufficient gas prepayment to IAxelarGasService causes cross-chain messages to fail at destination; integrations must estimate and prepay sufficient gas",
+        "reference_url": "https://docs.axelar.dev/dev/general-message-passing/gas-services/intro"
+      }
+    ]
+  },
+  {
+    "name": "Rocket Pool",
+    "category": "LiquidStaking",
+    "version": "1.3",
+    "function_signatures": [
+      "deposit()",
+      "burn(uint256)",
+      "getExchangeRate()",
+      "getTotalRETHSupply()",
+      "getTotalCollateral()",
+      "getCollateralRate()",
+      "getRethValue(uint256)",
+      "getEthValue(uint256)"
+    ],
+    "event_signatures": [
+      "TokensMinted(address indexed to,uint256 amount,uint256 ethAmount,uint256 time)",
+      "TokensBurned(address indexed from,uint256 amount,uint256 ethAmount,uint256 time)"
+    ],
+    "storage_patterns": [
+      "rocketVault",
+      "rocketDepositPool",
+      "rocketNetworkBalances",
+      "rocketTokenRETH",
+      "totalSupply"
+    ],
+    "inheritance_markers": [
+      "RocketTokenRETH",
+      "RocketBase",
+      "RocketStorageInterface",
+      "IRocketTokenRETH"
+    ],
+    "constants": {
+      "RATIO_PRECISION": "1e18"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "ROCKETPOOL-001",
+        "title": "Exchange Rate Manipulation",
+        "severity": "HIGH",
+        "description": "The rETH/ETH exchange rate is calculated from network balances reported by trusted nodes; if balance reporting is delayed or manipulated, arbitrageurs can exploit rate discrepancies between the contract rate and market rate",
+        "reference_url": "https://docs.rocketpool.net/overview/explainers/redstone"
+      },
+      {
+        "id": "ROCKETPOOL-002",
+        "title": "Deposit Ceiling Denial of Service",
+        "severity": "MEDIUM",
+        "description": "Rocket Pool enforces deposit limits configurable by the DAO; a governance attack reducing the deposit ceiling to zero would prevent new stakers from entering the protocol",
+        "reference_url": "https://docs.rocketpool.net/overview/contracts-integrations"
+      }
+    ]
+  },
+  {
+    "name": "Frax",
+    "category": "Stablecoin",
+    "version": "2.0",
+    "function_signatures": [
+      "mint(uint256,uint256)",
+      "redeem(uint256,uint256,uint256)",
+      "addCollateral(address,address)",
+      "removeCollateral(address,address)",
+      "refreshCollateralRatio()",
+      "recollateralizeFrax(address,uint256,uint256)",
+      "buyBackFXS(uint256,uint256)",
+      "setFraxStep(uint256)",
+      "setRefreshCooldown(uint256)",
+      "toggleCollateralRatio()"
+    ],
+    "event_signatures": [
+      "FRAXMinted(address indexed minter,uint256 fraxAmount,uint256 collateralAmount,uint256 fxsAmount)",
+      "FRAXRedeemed(address indexed redeemer,uint256 fraxAmount,uint256 collateralAmount,uint256 fxsAmount)",
+      "CollateralAdded(address collateralAddress,address poolAddress)",
+      "CollateralRemoved(address collateralAddress,address poolAddress)"
+    ],
+    "storage_patterns": [
+      "global_collateral_ratio",
+      "frax_pools",
+      "frax_pools_array",
+      "frax_price",
+      "fxs_price"
+    ],
+    "inheritance_markers": [
+      "FraxPool",
+      "Frax",
+      "ERC20Custom",
+      "AccessControl",
+      "IFrax"
+    ],
+    "constants": {
+      "COLLATERAL_RATIO_PRECISION": "1e6",
+      "PRICE_PRECISION": "1e6",
+      "RATIO_PRECISION": "1e6"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "FRAX-001",
+        "title": "Algorithmic Component Oracle Dependency",
+        "severity": "CRITICAL",
+        "description": "FRAX v1/v2 used AMM-derived FXS/FRAX prices to determine collateral ratio; oracle manipulation can trigger inappropriate ratio changes, enabling profitable mint-redeem cycles that drain collateral",
+        "reference_url": "https://docs.frax.finance/overview"
+      },
+      {
+        "id": "FRAX-002",
+        "title": "Collateral Ratio Griefing",
+        "severity": "HIGH",
+        "description": "refreshCollateralRatio() can be called by anyone after cooldown; sophisticated attackers can time calls during oracle anomalies to force the protocol into an under-collateralized state",
+        "reference_url": "https://docs.frax.finance/pool-contracts"
+      }
+    ]
+  },
+  {
+    "name": "Morpho",
+    "category": "Lending",
+    "version": "1.0",
+    "function_signatures": [
+      "supply(tuple,uint256,uint256,address,bytes)",
+      "borrow(tuple,uint256,uint256,address,address)",
+      "repay(tuple,uint256,uint256,address,bytes)",
+      "withdraw(tuple,uint256,uint256,address,address)",
+      "liquidate(tuple,address,uint256,bytes)",
+      "createMarket(tuple)",
+      "supplyCollateral(tuple,uint256,address,bytes)",
+      "withdrawCollateral(tuple,uint256,address,address)"
+    ],
+    "event_signatures": [
+      "Supplied(address indexed caller,address indexed onBehalfOf,bytes32 indexed id,uint256 assets,uint256 shares)",
+      "Borrowed(address indexed caller,address indexed onBehalfOf,address indexed receiver,bytes32 id,uint256 assets,uint256 shares)",
+      "Repaid(address indexed caller,address indexed onBehalfOf,bytes32 indexed id,uint256 assets,uint256 shares)",
+      "Withdrawn(address indexed caller,address indexed onBehalfOf,address indexed receiver,bytes32 id,uint256 assets,uint256 shares)",
+      "Liquidated(address indexed caller,address indexed borrower,bytes32 indexed id,uint256 repaidAssets,uint256 repaidShares,uint256 seizedAssets,uint256 badDebtAssets)"
+    ],
+    "storage_patterns": [
+      "position",
+      "market",
+      "idToMarketParams",
+      "isIrmEnabled",
+      "isLltvEnabled"
+    ],
+    "inheritance_markers": [
+      "IMorpho",
+      "MorphoStorage",
+      "MorphoLib",
+      "IMorphoFlashLoanCallback",
+      "IIrm"
+    ],
+    "constants": {
+      "MAX_FEE": "0.25e18",
+      "ORACLE_PRICE_SCALE": "1e36",
+      "LIQUIDATION_CURSOR": "0.3e18"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "MORPHO-001",
+        "title": "Bad Debt Socialization",
+        "severity": "HIGH",
+        "description": "Morpho Blue accrues bad debt to all suppliers via share dilution; during extreme market conditions, rapid collateral devaluation can leave suppliers with irrecoverable losses before liquidators can act",
+        "reference_url": "https://docs.morpho.org/morpho/concepts/liquidations"
+      },
+      {
+        "id": "MORPHO-002",
+        "title": "Oracle Price Manipulation in Isolated Markets",
+        "severity": "CRITICAL",
+        "description": "Each Morpho market uses a single oracle; a manipulated oracle causes incorrect LTV calculations for all positions in that market, enabling profitable liquidations or preventing legitimate liquidations",
+        "reference_url": "https://docs.morpho.org/morpho/concepts/oracles"
+      }
+    ]
+  },
+  {
+    "name": "StakeWise V3",
+    "category": "LiquidStaking",
+    "version": "3.0",
+    "function_signatures": [
+      "deposit(address,bool)",
+      "updateState(tuple)",
+      "redeem(uint256,address)",
+      "claimExitedAssets(uint256,uint256,address)",
+      "enterExitQueue(uint256,address)",
+      "mintOsToken(address,uint256,address)",
+      "burnOsToken(uint128)",
+      "getShares(address)",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)"
+    ],
+    "event_signatures": [
+      "Deposited(address indexed caller,address indexed receiver,uint256 assets,uint256 shares,address referrer)",
+      "Redeemed(address indexed caller,address indexed receiver,uint256 assets,uint256 shares)",
+      "ExitQueueEntered(address indexed caller,address indexed receiver,uint256 positionTicket,uint256 shares)",
+      "ExitedAssetsClaimed(address indexed caller,address indexed receiver,uint256 prevPositionTicket,uint256 newPositionTicket,uint256 withdrawnAssets)"
+    ],
+    "storage_patterns": [
+      "_totalShares",
+      "_totalAssets",
+      "_exitQueue",
+      "_checkpointIndex",
+      "osToken"
+    ],
+    "inheritance_markers": [
+      "IVaultState",
+      "IVaultEnterExit",
+      "IVaultOsToken",
+      "IVaultAdmin",
+      "ERC4626",
+      "IKeeperRewards"
+    ],
+    "constants": {
+      "MAX_FEE": "0.5e18",
+      "SECONDS_PER_YEAR": "31536000"
+    },
+    "known_vulnerabilities": [
+      {
+        "id": "STAKEWISE-001",
+        "title": "Exit Queue Griefing",
+        "severity": "MEDIUM",
+        "description": "The exit queue is processed using checkpoint indices; if validator rewards are not regularly harvested via updateState(), exit queue processing stalls and users cannot claim exited assets",
+        "reference_url": "https://docs.stakewise.io/protocol/vaults"
+      },
+      {
+        "id": "STAKEWISE-002",
+        "title": "osToken Over-Minting",
+        "severity": "HIGH",
+        "description": "osToken minting is capped by the vault's LTV ratio; if updateState() is delayed and beacon chain rewards are not applied, the effective LTV can temporarily exceed limits allowing over-minting of osTokens relative to actual staked value",
+        "reference_url": "https://docs.stakewise.io/protocol/ostoken"
+      }
+    ]
   }
 ]
