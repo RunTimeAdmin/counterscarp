@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import after path setup
 from orchestrator import (
     get_remediation,
-    generate_markdown_report,
+    _generate_action_plan_report,
     REMEDIATION_DB,
 )
 
@@ -77,7 +77,7 @@ class TestGenerateMarkdownReport:
         os.chdir(tmp_path)
         
         try:
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test Project",
                 static_results=[],
                 supply_results=[],
@@ -102,7 +102,7 @@ class TestGenerateMarkdownReport:
         os.chdir(tmp_path)
         
         try:
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="MyTestProject",
                 static_results=[],
                 supply_results=[],
@@ -132,7 +132,7 @@ class TestGenerateMarkdownReport:
                 {"library": "vulnerable-lib", "installed": "1.0.0", "summary": "Test vuln"}
             ]
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=supply_results,
@@ -169,7 +169,7 @@ class TestGenerateMarkdownReport:
                 }
             ]
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=static_results,
                 supply_results=[],
@@ -206,7 +206,7 @@ class TestGenerateMarkdownReport:
                 }
             ]
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=[],
@@ -240,7 +240,7 @@ class TestGenerateMarkdownReport:
                 }
             ]
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=[],
@@ -270,7 +270,7 @@ class TestGenerateMarkdownReport:
             fuzz_results = [{"test_name": "Test", "steps": []}]
             static_results = [{"impact": "High", "title": "Issue", "description": "D", "location": "t.sol:1"}]
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=static_results,
                 supply_results=[],
@@ -296,7 +296,7 @@ class TestGenerateMarkdownReport:
         os.chdir(tmp_path)
         
         try:
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=[],
@@ -329,7 +329,7 @@ class TestGenerateMarkdownReport:
                 "nc": []
             }
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=[],
@@ -361,7 +361,7 @@ class TestGenerateMarkdownReport:
                 "total_sequences": 1000
             }
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=[],
@@ -392,7 +392,7 @@ class TestGenerateMarkdownReport:
                 "pattern_findings": []
             }
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=[],
@@ -423,7 +423,7 @@ class TestGenerateMarkdownReport:
                 "safe": True
             }
             
-            filename = generate_markdown_report(
+            filename = _generate_action_plan_report(
                 project_name="Test",
                 static_results=[],
                 supply_results=[],
