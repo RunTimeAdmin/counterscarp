@@ -87,11 +87,19 @@ Two mount points are defined for contract input and report output:
 | `/scan` | Mount your contract source directory here |
 | `/output` | Audit reports are written here |
 
+Use `--output-dir /output` to direct reports to the host-mounted volume (required for `docker run --rm` so reports are not lost when the container exits):
+
 ```bash
-docker compose run --rm \
+# Recommended: persist reports to host via --output-dir
+docker run --rm \
   -v /path/to/contracts:/scan \
   -v /path/to/reports:/output \
-  counterscarp scan /scan/MyContract.sol
+  counterscarp-engine:5.0.3 \
+  --target /scan --output-dir /output --report
+
+# docker-compose equivalent (volume mounts already pre-configured)
+docker compose run --rm \
+  counterscarp --target /scan --output-dir /output --report
 ```
 
 ### Resource Limits

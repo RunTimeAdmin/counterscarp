@@ -55,6 +55,18 @@ counterscarp-engine --target ./contracts --config counterscarp-bounty.toml  # bu
 counterscarp --gui  # Launch local web interface
 ```
 
+### Docker (report persistence)
+
+```bash
+docker run --rm \
+  -v /path/to/contracts:/scan \
+  -v /path/to/reports:/output \
+  counterscarp-engine:5.0.3 \
+  --target /scan --output-dir /output --report
+```
+
+Mount a host directory to `/output` and pass `--output-dir /output` so reports survive `--rm` container teardown. See [QUICKSTART.md](QUICKSTART.md) for full Docker setup.
+
 ---
 
 ## Interface Modes

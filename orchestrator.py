@@ -725,6 +725,12 @@ def main() -> None:
         help="Generate professional HTML/Markdown audit report",
     )
     parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Directory for scan reports and action plans (default: engine reports dir). "
+             "Useful with Docker: -v /host/reports:/output --output-dir /output",
+    )
+    parser.add_argument(
         "--project-name",
         help="Project name for report (default: extracted from target path)",
         default=None,
@@ -909,7 +915,11 @@ def main() -> None:
     _proj_slug = "".join(c if c.isalnum() or c in "-_." else "_" for c in _raw_proj)
     _session_short = str(state_mgr._session_id)[:8]
     _engine_root = Path(os.path.dirname(os.path.abspath(__file__)))
-    scan_output_dir = _engine_root / "reports" / f"{_proj_slug}_{_scan_date_str}_{_session_short}"
+    if args.output_dir:
+        _reports_base = Path(args.output_dir)
+    else:
+        _reports_base = _engine_root / "reports"
+    scan_output_dir = _reports_base / f"{_proj_slug}_{_scan_date_str}_{_session_short}"
     scan_output_dir.mkdir(parents=True, exist_ok=True)
     logger.info("Per-scan output directory: %s", scan_output_dir)
 

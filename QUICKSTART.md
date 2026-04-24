@@ -82,13 +82,15 @@ The Docker image bundles the complete 21-analyzer stack including Python 3.12, S
 # Build the image from the repository root
 docker build -t counterscarp-engine:5.0.3 .
 
-# Run a full audit (bind-mount your project directory)
+# Run a full audit with report persistence (recommended)
 docker run --rm \
-  -v $(pwd):/scan \
-  -v $(pwd)/reports:/output \
+  -v /path/to/contracts:/scan \
+  -v /path/to/reports:/output \
   counterscarp-engine:5.0.3 \
-  scan /scan/MyContract.sol
+  --target /scan --output-dir /output --report
 ```
+
+> **`--output-dir /output`** writes all reports to the host-mounted `/output` directory instead of the engine's internal `reports/` folder. Without this flag, reports are written inside the container and lost when it exits (`--rm`).
 
 #### Official registry image (if available)
 
@@ -96,8 +98,11 @@ docker run --rm \
 # If using the official registry image:
 docker pull counterscarp-engine:5.0.3
 
-docker run --rm -v $(pwd):/scan counterscarp-engine:5.0.3 \
-  scan /scan/MyContract.sol
+docker run --rm \
+  -v /path/to/contracts:/scan \
+  -v /path/to/reports:/output \
+  counterscarp-engine:5.0.3 \
+  --target /scan --output-dir /output --report
 ```
 
 #### docker-compose services
