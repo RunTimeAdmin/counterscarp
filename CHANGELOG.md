@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Documentation version references updated from 5.0.1 to 5.0.2 (carried forward)
 - **Docker:** Updated multi-stage Docker image now bundles the complete 21-analyzer stack on Python 3.12, with docker-compose support for four service profiles (full audit, diagnostics, heuristic-only, symbolic execution)
+- **Docker docs:** Added Docker deployment sections to QUICKSTART.md, DEPLOYMENT.md, and wiki Deployment pages; fixed health-check intervals, foundry-cache volume mount, and removed stale image tag prefixes
+- **Marketing:** Updated landing page title to "Counterscarp | Smart Contract Audit & Vulnerability Scanner" for SEO; replaced "No Docker" messaging with "Run standalone or containerized"
 
 
 ## [5.0.2] - 2026-04-23
