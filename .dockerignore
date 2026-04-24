@@ -1,20 +1,59 @@
+# ==============================================================================
+# COUNTERSCARP ENGINE — .dockerignore
+# Excludes files that should not be copied into the Docker build context.
+# Keeping the context lean speeds up `docker build` and avoids leaking secrets.
+# ==============================================================================
+
+# Version control
 .git
 .gitignore
-node_modules
+.github
+
+# Python bytecode & caches
 __pycache__
 *.pyc
 *.pyo
+.mypy_cache
+.pytest_cache
+.benchmarks
+
+# Package build artifacts
+*.egg-info
 dist/
 build/
-*.egg-info
-.eggs/
-*.whl
-.pytest_cache
-.mypy_cache
-.tox
-.env
-.venv
-venv/
+
+# Tool output directories (large, generated at runtime)
+.counterscarp/
+reports/
+results/
 uploads/
-*.log
+exploits/
+
+# Test suite (not needed in the runtime image)
+tests/
+test/
+test_contracts/
+
+# Local config overrides (use environment variables in Docker instead)
+*.toml.local
+.env
+.env.*
+
+# Node / JS artifacts
+node_modules/
+
+# IDE / editor configs
+.vscode/
+.idea/
+*.code-workspace
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Misc large files not needed at build time
+*.zip
 *.tar.gz
+*.log
+_*.txt
+_*.py

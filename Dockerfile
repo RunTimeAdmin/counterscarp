@@ -1,176 +1,144 @@
-# ------------------------------------------------------------------------------
-# THE COUNTERSCARP ENGINE - DOCKERFILE
-# Multi-Chain Smart Contract Security Auditing Toolkit
-# ------------------------------------------------------------------------------
-# Stage 1: Build stage for Rust/Go tools
-FROM python:3.10.14-slim-bullseye AS builder
-
-# Install build dependencies for Rust and Go
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    build-essential \
-    libssl-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Rust (for Aderyn)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:$PATH"
-
-# Install Aderyn (Rust-based Solidity static analyzer by Cyfrin)
-RUN cargo install aderyn@0.6.2
-
-# Install Go (for Medusa)
-RUN curl -L https://go.dev/dl/go1.22.0.linux-amd64.tar.gz | tar -C /usr/local -xzf -
-ENV PATH="/usr/local/go/bin:$PATH"
-
-# Install Medusa (Go-based coverage-guided fuzzer by Crytic)
-RUN go install github.com/crytic/medusa/cmd/medusa@v0.1.8
+# ==============================================================================
+# COUNTERSCARP ENGINE — DOCKERFILE
+# Multi-stage build: 21-analyzer stack for smart contract security auditing
+# ==============================================================================
 
 # ------------------------------------------------------------------------------
-# Stage 2: Final runtime image
-FROM python:3.10.14-slim-bullseye
+# STAGE 1 — Go builder (Medusa coverage-guided fuzzer)
+# ------------------------------------------------------------------------------
+FROM golang:1.24-bookworm AS go-builder
 
-# Metadata
-LABEL maintainer="CyberShield Austin / TokenAudit"
-LABEL description="Professional-grade smart contract security auditing toolkit (EVM + Solana)"
-LABEL version="2.1"
+# Build Medusa from source via go install
+# Pin to a specific release tag so the binary is reproducible
+RUN go install github.com/crytic/medusa@latest
 
-# 1. ENVIRONMENT VARIABLES
-# Prevent Python from writing .pyc files
+# Confirm the binary was placed at the expected path
+RUN ls /go/bin/medusa
+
+# ------------------------------------------------------------------------------
+# STAGE 2 — Final runtime image
+# Base: python:3.12-slim-bookworm (Debian Bookworm, smaller than full image)
+# ------------------------------------------------------------------------------
+FROM python:3.12-slim-bookworm
+
+# ── Metadata ──────────────────────────────────────────────────────────────────
+LABEL maintainer="Counterscarp Engine Team"
+LABEL description="Smart contract security auditing platform — 21-analyzer stack"
+LABEL version="5.0.3"
+
+# ── Environment variables ─────────────────────────────────────────────────────
+# Prevent .pyc files and enable unbuffered output for clean container logs
 ENV PYTHONDONTWRITEBYTECODE=1
-# Keep Python output unbuffered (so you see logs immediately)
 ENV PYTHONUNBUFFERED=1
-# Add local bin to path for Foundry/Solc/Aderyn/Medusa
-ENV PATH="/root/.foundry/bin:/root/.local/bin:/root/.cargo/bin:/usr/local/go/bin:/root/go/bin:$PATH"
 
-# 2. SYSTEM DEPENDENCIES
-# We need git/curl for installing Foundry and build-essential for compiling deps
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    build-essential \
-    libssl-dev \
-    libxml2 \
-    ca-certificates \
-    libcairo2-dev \
-    pkg-config \
+# Add all tool binary paths to PATH so they can be invoked by name anywhere
+ENV PATH="/root/.foundry/bin:/root/.cargo/bin:/root/.local/bin:/usr/local/go/bin:/root/go/bin:$PATH"
+
+# ── 1. System dependencies ────────────────────────────────────────────────────
+# curl/git: needed for Foundry and Aderyn installers
+# build-essential: required by Mythril's C extensions (leveldb bindings etc.)
+# libssl-dev / ca-certificates: TLS for curl-based installers
+# libxml2: required by xhtml2pdf (PDF report generation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        git \
+        build-essential \
+        libssl-dev \
+        libxml2 \
+        libcairo2-dev \
+        ca-certificates \
+        pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. INSTALL PYTHON TOOLS
-# Install core dependencies for the Counterscarp Engine
-RUN pip install --no-cache-dir \
-    slither-analyzer==0.11.5 \
-    mythril==0.24.8 \
-    solc-select==1.2.0 \
-    requests==2.31.0 \
-    packaging==23.0
+# ── 2. Install Foundry (forge + cast + anvil + chisel) ────────────────────────
+# The official installer drops binaries into ~/.foundry/bin
+# We run foundryup immediately after to pull the latest stable release
+RUN curl -L https://foundry.paradigm.xyz | bash \
+    && /root/.foundry/bin/foundryup \
+    && forge --version \
+    && echo "[foundry] installed OK"
 
-RUN pip install --no-cache-dir xhtml2pdf>=0.2.11 colorama>=0.4.6
+# ── 3. Install Aderyn (Rust-based Solidity static analyser by Cyfrin) ─────────
+# cyfrinup was removed; install via the direct GitHub installer script
+RUN curl --proto '=https' --tlsv1.2 -LsSf \
+        https://github.com/cyfrin/aderyn/releases/download/aderyn-v0.6.8/aderyn-installer.sh \
+        | sh \
+    && aderyn --version \
+    && echo "[aderyn] installed OK"
 
-# Initialize solc-select (install commonly used versions)
-# Legacy versions
-RUN solc-select install 0.6.12 && \
-    solc-select install 0.7.6
+# ── 4. Copy Medusa binary from Stage 1 ───────────────────────────────────────
+COPY --from=go-builder /go/bin/medusa /usr/local/bin/medusa
+RUN medusa --version && echo "[medusa] installed OK"
 
-# Modern versions
-RUN solc-select install 0.8.19 && \
-    solc-select install 0.8.20 && \
-    solc-select install 0.8.23 && \
-    solc-select install 0.8.25 && \
-    solc-select install 0.8.26 && \
-    solc-select install 0.8.27 && \
-    solc-select install 0.8.28
+# ── 5. Python tooling — solc-select + Solidity compiler ──────────────────────
+RUN pip install --no-cache-dir solc-select==1.2.0 \
+    && solc-select install 0.8.28 \
+    && solc-select use 0.8.28 \
+    && echo "[solc] 0.8.28 active"
 
-# Set default Solidity version
-RUN solc-select use 0.8.19
-
-# 4. INSTALL FOUNDRY (Fuzzing Engine)
-# We use the official install script (optional - graceful degradation if fails)
-RUN curl -L https://foundry.paradigm.xyz | bash || echo "Foundry install skipped" && \
-    (if [ -f /root/.foundry/bin/foundryup ]; then /root/.foundry/bin/foundryup || true; fi)
-
-# 5. COPY BINARIES FROM BUILDER STAGE
-# Copy Aderyn binary
-COPY --from=builder /root/.cargo/bin/aderyn /usr/local/bin/aderyn
-
-# Copy Medusa binary
-COPY --from=builder /root/go/bin/medusa /usr/local/bin/medusa
-
-# 6. SETUP WORKSPACE
+# ── 6. Install the Counterscarp Engine package (with PDF extras) ──────────────
+# Copy the full source first so pip can resolve pyproject.toml
 WORKDIR /app
+COPY . /app
 
-# Copy all Counterscarp Engine scripts
-COPY orchestrator.py .
-COPY red_team_scan.py .
-COPY supply_chain_check.py .
-COPY fuzz_wrapper.py .
-COPY access_matrix.py .
-COPY symbolic_wrapper.py .
-COPY heuristic_scanner.py .
-COPY inflation_scaffold.py .
-COPY intent_check.py .
+RUN pip install --no-cache-dir ".[pdf]" \
+    && echo "[counterscarp-engine] installed OK"
 
-# Threat Intelligence Modules
-COPY knowledge_fetcher.py .
-COPY solana_intel.py .
-COPY threat_intel.py .
+# ── 7. Install Slither (Python-based EVM static analyser) ────────────────────
+RUN pip install --no-cache-dir slither-analyzer==0.11.5 \
+    && echo "[slither] installed OK"
 
-# Advanced Analysis Tools (NEW)
-COPY medusa_wrapper.py .
-COPY exploit_generator.py .
-COPY upgrade_diff.py .
-COPY aderyn_wrapper.py .
+# ── 8. Install Mythril (symbolic execution / EVM bytecode analyser) ───────────
+# mythril has heavy C-extension deps — build-essential (above) satisfies them
+RUN pip install --no-cache-dir mythril==0.24.8 \
+    && echo "[mythril] installed OK"
 
-# GUI (optional - for local runs)
-COPY gui.py .
+# ── 9. Clean up caches to reduce final image size ────────────────────────────
+RUN pip cache purge \
+    && apt-get clean \
+    && rm -rf /tmp/* /root/.cache
 
-# Tool version manifest
-COPY tool-versions.json /app/tool-versions.json
-COPY healthcheck.py /app/healthcheck.py
+# ── 10. Pre-install additional solc versions commonly seen in audits ──────────
+RUN solc-select install 0.8.19 \
+    && solc-select install 0.8.25 \
+    && solc-select install 0.7.6 \
+    && solc-select install 0.6.12 \
+    && echo "[solc] additional versions installed"
 
-# Design Documentation (reference)
-# Note: Skipping design docs to keep image lean (available in repo)
-# COPY Pragmatic\ Security\ Engine.txt ./docs/
-# COPY Action-Oriented\ Orchestrator.txt ./docs/
-# COPY God\ Mode\ Matrix.txt ./docs/
-# COPY Directions\ for\ tools.txt ./docs/
+# ── 11. Working directory for scan mounts ────────────────────────────────────
+# /scan is the conventional mount point for the target contract tree
+WORKDIR /scan
 
-# 7. HEALTHCHECK
-# Verify Python and core dependencies are installed
-RUN python3 --version && \
-    pip list | grep slither-analyzer && \
-    aderyn --version && \
-    medusa --version && \
-    echo "Counterscarp Engine core dependencies installed"
+# ── 12. Docker HEALTHCHECK ───────────────────────────────────────────────────
+# Runs `counterscarp --doctor` — the built-in environment diagnostic command.
+# exit 0 = all critical tools found; non-zero = something is missing.
+HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
+    CMD counterscarp --doctor
 
-RUN python3 -c "from xhtml2pdf import pisa; print('xhtml2pdf OK')"
-
-# 8. HEALTHCHECK DIRECTIVE
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD python /app/healthcheck.py
-
-# 9. ENTRYPOINT
-# Default: Show orchestrator help
-ENTRYPOINT ["python3", "orchestrator.py"]
+# ── 13. Entrypoint ───────────────────────────────────────────────────────────
+# counterscarp is the console_scripts entry point defined in pyproject.toml:
+#   counterscarp = "orchestrator:main"
+# Pass `--help` as the default CMD so a bare `docker run` prints usage.
+ENTRYPOINT ["counterscarp"]
 CMD ["--help"]
 
-# ------------------------------------------------------------------------------
-# USAGE EXAMPLES:
+# ==============================================================================
+# USAGE EXAMPLES
+# ==============================================================================
 #
-# Build:
-#   docker build -t counterscarp-engine .
+# Build the image:
+#   docker build -t counterscarp-engine:5.0.3 .
 #
-# Scan EVM contract:
-#   docker run --rm -v $(pwd):/scan counterscarp-engine --target /scan
+# Run a full audit scan (mounts current directory as /scan):
+#   docker run --rm -v $(pwd):/scan -v $(pwd)/output:/output \
+#       counterscarp-engine:5.0.3 --target /scan --report --output-dir /output
 #
-# Threat intel (EVM):
-#   docker run --rm -v $(pwd):/scan counterscarp-engine python3 threat_intel.py /scan/contracts/Vault.sol
+# Run only heuristic + Slither (no fuzzing):
+#   docker run --rm -v $(pwd):/scan counterscarp-engine:5.0.3 --target /scan
 #
-# Threat intel (Solana):
-#   docker run --rm -v $(pwd):/scan counterscarp-engine python3 solana_intel.py /scan/programs/lib.rs
+# Run environment diagnostics:
+#   docker run --rm counterscarp-engine:5.0.3 --doctor
 #
 # Interactive shell:
-#   docker run --rm -it -v $(pwd):/scan counterscarp-engine /bin/bash
-# ------------------------------------------------------------------------------
+#   docker run --rm -it -v $(pwd):/scan counterscarp-engine:5.0.3 /bin/bash
+# ==============================================================================

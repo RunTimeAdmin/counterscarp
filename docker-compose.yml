@@ -1,118 +1,135 @@
-version: '3.8'
+version: "3.9"
+
+# ==============================================================================
+# COUNTERSCARP ENGINE — DOCKER COMPOSE
+# Bundles the complete 21-analyzer stack for EVM smart contract auditing.
+# ==============================================================================
+#
+# Quick start:
+#   docker-compose build
+#   docker-compose run --rm counterscarp --target /scan --report --output-dir /output
+#
+# Environment variables (create a .env file or export before running):
+#   COUNTERSCARP_PRO_LICENSE   — Pro license key (leave empty for community tier)
+#
+# Volume mounts:
+#   ./target  → /scan    — place your Solidity project here before running
+#   ./output  → /output  — audit reports and exploit PoCs are written here
+# ==============================================================================
 
 services:
-  # =============================================================================
-  # THE COUNTERSCARP ENGINE - DOCKER COMPOSE CONFIGURATION
-  # =============================================================================
-  
-  audit:
-    build: .
-    image: tokenaudit/counterscarp-engine:5.0.0
-    container_name: counterscarp-engine
-    
+
+  # ── Primary scan service ─────────────────────────────────────────────────────
+  counterscarp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Tag the locally-built image for easy reference
+    image: counterscarp-engine:5.0.3
+
+    # ── Volume mounts ───────────────────────────────────────────────────────────
     volumes:
-      # Mount current directory to /scan inside container
-      # This allows the engine to analyze your contracts
-      - .:/scan
-      
-      # Optional: Persist Foundry cache (speeds up repeated fuzzing)
-      - foundry-cache:/root/.foundry
-    
-    # Default command: Run full orchestrator pipeline
-    command: ["--target", "/scan"]
-    
-    # Environment overrides (optional)
+      # Mount the contract source tree as the scan target
+      - ./target:/scan
+      # Mount a host directory to receive reports and PoC exploits
+      - ./output:/output
+
+    # ── Environment ────────────────────────────────────────────────────────────
     environment:
-      # Set custom Solidity version if needed
-      - SOLC_VERSION=0.8.19
-      
-      # Enable verbose logging
-      - DEBUG=1
-    
-    # Resource limits (prevents container from consuming all system resources)
+      # Pro license key — pass via .env or export COUNTERSCARP_PRO_LICENSE=<key>
+      - COUNTERSCARP_PRO_LICENSE=${COUNTERSCARP_PRO_LICENSE:-}
+      # Prevent Python from buffering stdout (so logs stream live)
+      - PYTHONUNBUFFERED=1
+
+    # ── Default command ─────────────────────────────────────────────────────────
+    # Runs a full audit scan on /scan and writes reports to /output.
+    # Override at runtime with `docker-compose run --rm counterscarp <args>`.
+    command: ["--target", "/scan", "--report", "--output-dir", "/output"]
+
+    # ── Healthcheck ─────────────────────────────────────────────────────────────
+    healthcheck:
+      test: ["CMD", "counterscarp", "--doctor"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 15s
+
+    # ── Resource limits (adjust to your host capacity) ──────────────────────────
     deploy:
       resources:
         limits:
-          cpus: '4.0'
+          cpus: "4.0"
           memory: 4G
         reservations:
-          cpus: '2.0'
-          memory: 2G
+          cpus: "1.0"
+          memory: 1G
 
-    healthcheck:
-      test: ["CMD", "python", "/app/healthcheck.py"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+  # ── Doctor / diagnostics service ─────────────────────────────────────────────
+  # Verifies all 21 analyzer tools are reachable inside the container.
+  # Usage: docker-compose run --rm doctor
+  doctor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: counterscarp-engine:5.0.3
+    command: ["--doctor"]
 
-  # =============================================================================
-  # STANDALONE MODULES (Run specific tools without full pipeline)
-  # =============================================================================
-  
-  # Heuristic Scanner Only
-  heuristic-scan:
-    build: .
-    image: tokenaudit/counterscarp-engine:5.0.0
-    container_name: counterscarp-heuristic
+  # ── Heuristic-only scan (no external tool dependencies) ──────────────────────
+  # Usage: docker-compose run --rm heuristic --target /scan
+  heuristic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: counterscarp-engine:5.0.3
     volumes:
-      - .:/scan
-    command: ["python3", "heuristic_scanner.py", "/scan"]
-  
-  # Threat Intelligence (Auto-detects EVM vs Solana)
-  threat-intel:
-    build: .
-    image: tokenaudit/counterscarp-engine:5.0.0
-    container_name: counterscarp-intel
-    volumes:
-      - .:/scan
-    entrypoint: ["python3", "threat_intel.py"]
-    command: ["/scan/contracts/YourContract.sol"]
-  
-  # Liar Detector (Intent Checker)
-  liar-detector:
-    build: .
-    image: tokenaudit/counterscarp-engine:5.0.0
-    container_name: counterscarp-intent
-    volumes:
-      - .:/scan
-    entrypoint: ["python3", "intent_check.py"]
-    command: ["/scan/contracts/YourContract.sol"]
-  
-  # Access Matrix (God Mode Detector)
-  access-matrix:
-    build: .
-    image: tokenaudit/counterscarp-engine:5.0.0
-    container_name: counterscarp-access
-    volumes:
-      - .:/scan
-    entrypoint: ["python3", "access_matrix.py"]
-    command: ["/scan/contracts/YourContract.sol"]
+      - ./target:/scan
+      - ./output:/output
+    command: ["--target", "/scan"]
 
+  # ── Symbolic execution via Mythril ───────────────────────────────────────────
+  # Usage: docker-compose run --rm symbolic --target /scan
+  symbolic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: counterscarp-engine:5.0.3
+    volumes:
+      - ./target:/scan
+      - ./output:/output
+    command: ["--target", "/scan", "--symbolic"]
+
+# ==============================================================================
+# NAMED VOLUMES
+# ==============================================================================
+# foundry-cache persists downloaded forge dependencies across container runs,
+# significantly speeding up repeated fuzzing sessions.
 volumes:
   foundry-cache:
     driver: local
 
-# =============================================================================
-# USAGE EXAMPLES:
-# =============================================================================
+# ==============================================================================
+# USAGE EXAMPLES
+# ==============================================================================
 #
-# 1. Build the engine:
-#    docker-compose build
+# 1. Build the image:
+#      docker-compose build
 #
-# 2. Run full audit pipeline:
-#    docker-compose run --rm audit --target /scan
+# 2. Full audit (reads ./target, writes to ./output):
+#      docker-compose run --rm counterscarp
 #
-# 3. Run specific module (e.g., Liar Detector):
-#    docker-compose run --rm liar-detector /scan/contracts/Vault.sol
+# 3. Full audit with Pro license:
+#      COUNTERSCARP_PRO_LICENSE=<key> docker-compose run --rm counterscarp
 #
-# 4. Run threat intelligence:
-#    docker-compose run --rm threat-intel /scan/contracts/Token.sol
+# 4. Run environment diagnostics:
+#      docker-compose run --rm doctor
 #
-# 5. Interactive shell (for debugging):
-#    docker-compose run --rm audit /bin/bash
+# 5. Heuristic-only fast scan:
+#      docker-compose run --rm heuristic --target /scan
 #
-# 6. Run heuristic scan only:
-#    docker-compose run --rm heuristic-scan
+# 6. Symbolic execution only:
+#      docker-compose run --rm symbolic --target /scan
 #
-# =============================================================================
+# 7. Interactive shell for debugging:
+#      docker-compose run --rm --entrypoint /bin/bash counterscarp
+# ==============================================================================

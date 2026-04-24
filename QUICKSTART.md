@@ -7,19 +7,20 @@
 ## Table of Contents
 
 1. [Installation](#installation)
-2. [Quick Scan](#quick-scan)
-3. [Local GUI Mode](#local-gui-mode)
-4. [Configuration](#configuration)
-5. [Report Formats](#report-formats)
-6. [CI/CD Integration](#cicd-integration)
-7. [Execution Profiles](#execution-profiles)
-8. [Advanced Features](#advanced-features)
-9. [Offline / Air-Gapped Setup](#offline--air-gapped-setup)
-10. [License Tiers](#license-tiers)
-11. [Web Application Authentication](#web-application-authentication)
-12. [Environment Variables](#environment-variables)
-13. [Updating](#updating)
-14. [Troubleshooting](#troubleshooting)
+2. [External Tool Dependencies](#external-tool-dependencies)
+3. [Quick Scan](#quick-scan)
+4. [Local GUI Mode](#local-gui-mode)
+5. [Configuration](#configuration)
+6. [Report Formats](#report-formats)
+7. [CI/CD Integration](#cicd-integration)
+8. [Execution Profiles](#execution-profiles)
+9. [Advanced Features](#advanced-features)
+10. [Offline / Air-Gapped Setup](#offline--air-gapped-setup)
+11. [License Tiers](#license-tiers)
+12. [Web Application Authentication](#web-application-authentication)
+13. [Environment Variables](#environment-variables)
+14. [Updating](#updating)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -94,13 +95,15 @@ These are not required for basic scanning but unlock additional analyzers:
 ```bash
 # Slither — Trail of Bits static analyzer
 pip install slither-analyzer
-solc-select install 0.8.19 && solc-select use 0.8.19
+pip install solc-select && solc-select install 0.8.28 && solc-select use 0.8.28
 
-# Aderyn — Cyfrin Rust-based analyzer
-cargo install aderyn
+# Aderyn — Cyfrin static analyzer (Linux/macOS only)
+# curl --proto '=https' --tlsv1.2 -LsSf \
+#   https://github.com/cyfrin/aderyn/releases/download/aderyn-v0.6.8/aderyn-installer.sh | sh
 
-# Medusa — coverage-guided fuzzing (requires Go)
-go install github.com/crytic/medusa/cmd/medusa@latest
+# Medusa — coverage-guided fuzzing (requires Go ≥ 1.21)
+# Use root module path — do NOT add /cmd/medusa suffix
+go install github.com/crytic/medusa@latest
 
 # Mythril — symbolic execution (requires pipx or pip)
 pip install mythril
@@ -111,12 +114,172 @@ pip install mythril
 forge --version
 ```
 
+> See the [External Tool Dependencies](#external-tool-dependencies) section for full per-platform install instructions, minimum version requirements, and Windows-specific notes.
+
 ### Verify installation
 
 ```bash
 counterscarp-engine --help
 counterscarp --help          # short alias
 ```
+
+---
+
+## External Tool Dependencies
+
+Counterscarp Engine supports a 21-analyzer stack. The core engine runs out of the box with just Python, but unlocking the full suite requires the following external binaries.
+
+> **Graceful degradation:** All optional tools degrade gracefully. If a binary is not found on `PATH`, the engine emits a warning and skips that analyzer — your scan still completes with the remaining analyzers.
+
+Run `counterscarp --doctor` at any time to check which tools are installed and their versions.
+
+### Quick Reference
+
+| Tool | Required? | Activates | Install Method |
+|------|:---------:|-----------|----------------|
+| **Slither** | Core | Static analysis (always runs) | `pip install slither-analyzer` |
+| **Forge / Foundry** | Core | Fuzzing & compilation | `foundryup` (Linux/macOS) / GitHub release (Windows) |
+| **solc** | Core | Solidity compilation | `pip install solc-select` |
+| **Mythril** | Optional | Symbolic execution (`--symbolic`) | `pip install mythril` |
+| **Medusa** | Optional | Coverage-guided fuzzing (`--medusa`) | `go install github.com/crytic/medusa@latest` |
+| **Aderyn** | Optional | Cyfrin static analysis (`--aderyn`) | Installer script (Linux/macOS only) |
+
+---
+
+### 1. Slither — Static Analysis (core, always runs)
+
+Minimum version: **0.11.5**
+
+```bash
+# All platforms
+pip install slither-analyzer
+
+# Verify
+slither --version
+```
+
+---
+
+### 2. Forge / Foundry — Fuzzing & Build (core)
+
+Minimum version: **1.0.0**
+
+**Linux / macOS:**
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+
+# Verify
+forge --version
+```
+
+**Windows:**
+
+Download the latest release ZIP from https://github.com/foundry-rs/foundry/releases, extract the `forge.exe` / `cast.exe` / `anvil.exe` binaries, and add the directory to your `PATH`.
+
+Alternatively, use `foundryup` inside **WSL** (Windows Subsystem for Linux):
+
+```bash
+# Inside WSL
+curl -L https://foundry.paradigm.xyz | bash && foundryup
+```
+
+---
+
+### 3. solc — Solidity Compiler (core)
+
+Recommended install via `solc-select` (manages multiple compiler versions):
+
+```bash
+# All platforms
+pip install solc-select
+solc-select install 0.8.28
+solc-select use 0.8.28
+
+# Verify
+solc --version
+```
+
+Alternatively, download prebuilt binaries directly from https://github.com/ethereum/solidity/releases.
+
+---
+
+### 4. Mythril — Symbolic Execution (optional — `--symbolic` flag)
+
+Minimum version: **0.24.8**
+
+```bash
+# Linux / macOS
+pip install mythril
+
+# Verify
+myth version
+```
+
+> **Windows note:** Mythril requires a C compiler. Install **Visual C++ Build Tools 14.0+** (via Visual Studio Installer or `winget install Microsoft.VisualStudio.2022.BuildTools`) before running `pip install mythril`. Linux/macOS is recommended for production symbolic execution.
+
+---
+
+### 5. Medusa — Coverage-Guided Fuzzing (optional — `--medusa` flag)
+
+Minimum version: **0.1.8**
+
+Requires **Go ≥ 1.21**.
+
+```bash
+# All platforms (requires Go installed)
+go install github.com/crytic/medusa@latest
+```
+
+> **Important:** Use the root module path `github.com/crytic/medusa@latest` — **not** `github.com/crytic/medusa/cmd/medusa@latest`. The `/cmd/medusa` suffix causes a module resolution error.
+
+After installation, ensure `~/go/bin` (Linux/macOS) or `%USERPROFILE%\go\bin` (Windows) is on your `PATH`:
+
+```bash
+# Linux / macOS — add to ~/.bashrc or ~/.zshrc
+export PATH="$HOME/go/bin:$PATH"
+
+# Windows PowerShell — add to your profile
+$env:PATH += ";$env:USERPROFILE\go\bin"
+
+# Verify
+medusa --version
+```
+
+---
+
+### 6. Aderyn — Cyfrin Static Analysis (optional — `--aderyn` flag)
+
+Minimum version: **0.6.2**
+
+> **Platform availability:** No Windows binary is currently available. Aderyn is supported on Linux and macOS only.
+
+**Linux / macOS:**
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/cyfrin/aderyn/releases/download/aderyn-v0.6.8/aderyn-installer.sh | sh
+
+# Verify
+aderyn --version
+```
+
+> The `--proto '=https' --tlsv1.2` flags are required for security and TLS compatibility. Do not omit them.
+
+---
+
+### Checking your environment
+
+```bash
+# Run the built-in environment doctor
+counterscarp --doctor
+
+# Or run the preflight check before a scan
+counterscarp-engine --preflight --target ./contracts
+```
+
+Both commands report which tools are found, their detected versions, and whether they meet minimum version requirements.
 
 ---
 

@@ -139,6 +139,7 @@ py-modules = [
     "protocol_db",
     "plugin_manager",
     "license_manager",
+    "doctor",
 ]
 
 [tool.setuptools.package-data]

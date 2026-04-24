@@ -820,7 +820,18 @@ def main() -> None:
         action="store_true",
         help="Development mode — bypass license tier restrictions for local testing",
     )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run environment diagnostics — check all external tool dependencies",
+    )
     args = parser.parse_args()
+
+    # --- Doctor mode (no --target needed) ---
+    if args.doctor:
+        import doctor as _doctor
+        result = _doctor.run_doctor()
+        sys.exit(result["exit_code"])
 
     # --- GUI mode (no --target needed) ---
     if args.gui:
