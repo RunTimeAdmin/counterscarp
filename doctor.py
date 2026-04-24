@@ -22,7 +22,7 @@ def _get_engine_version() -> str:
         import tomllib  # Python 3.11+
     except ImportError:
         try:
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # noqa: F811
         except ImportError:
             return "5.0.3"
     import pathlib
@@ -30,7 +30,7 @@ def _get_engine_version() -> str:
     try:
         with open(toml_path, "rb") as f:
             data = tomllib.load(f)
-        return data["project"]["version"]
+        return str(data["project"]["version"])
     except Exception:
         return "5.0.3"
 
