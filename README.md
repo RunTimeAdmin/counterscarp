@@ -202,7 +202,7 @@ Create an account at [app.counterscarp.io](https://app.counterscarp.io) using Go
 
 ## Credits
 
-**Built by CyberShield Austin** · [@defiauditccie](https://twitter.com/defiauditccie) · [counterscarp.io](https://counterscarp.io)
+**Built by CyberShield Austin** · [@counterscarpsec](https://twitter.com/counterscarpsec) · [@defiauditccie](https://twitter.com/defiauditccie) · [counterscarp.io](https://counterscarp.io)
 
 Powered by [Slither](https://github.com/crytic/slither) · [Aderyn](https://github.com/Cyfrin/aderyn) · [Medusa](https://github.com/crytic/medusa) · [Mythril](https://github.com/ConsenSys/mythril) · [Foundry](https://github.com/foundry-rs/foundry) · [OSV.dev](https://osv.dev)
 

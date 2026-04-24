@@ -57,6 +57,8 @@ data/.env.local
 _*.txt
 _*.py
 git_*.txt
+garrison_*.txt
+ethernaut_*.txt
 run_battery_*.py
 run_scan_*.bat
 mypy_*.txt
