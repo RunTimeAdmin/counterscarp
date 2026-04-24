@@ -34,6 +34,8 @@ services:
       - ./target:/scan
       # Mount a host directory to receive reports and PoC exploits
       - ./output:/output
+      # Persist Foundry compilation cache across runs
+      - foundry-cache:/root/.foundry/cache
 
     # ── Environment ────────────────────────────────────────────────────────────
     environment:

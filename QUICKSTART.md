@@ -74,19 +74,58 @@ Adds `pytest`, `pytest-cov`, `mypy`, `pytest-benchmark`.
 
 ### Docker
 
+The Docker image bundles the complete 21-analyzer stack including Python 3.12, Slither, Mythril, Foundry, Aderyn, Medusa, solc-select, and all required dependencies (~1.5 GB).
+
+#### Build from source (primary)
+
 ```bash
-# Pull official image
-docker pull tokenaudit/counterscarp-engine:5.0.3
+# Build the image from the repository root
+docker build -t counterscarp-engine:5.0.3 .
 
-# Run scan (bind-mount your project)
-docker run --rm -v $(pwd):/scan tokenaudit/counterscarp-engine:5.0.3 \
-  --target /scan --report
-
-# With docker-compose
-docker-compose run --rm audit --target /scan --config /scan/counterscarp-audit.toml --report
+# Run a full audit (bind-mount your project directory)
+docker run --rm \
+  -v $(pwd):/scan \
+  -v $(pwd)/reports:/output \
+  counterscarp-engine:5.0.3 \
+  scan /scan/MyContract.sol
 ```
 
-The Docker image includes Python 3.10, Slither, Mythril, and `solc` 0.8.19/0.8.20/0.8.23 (~600 MB).
+#### Official registry image (if available)
+
+```bash
+# If using the official registry image:
+docker pull counterscarp-engine:5.0.3
+
+docker run --rm -v $(pwd):/scan counterscarp-engine:5.0.3 \
+  scan /scan/MyContract.sol
+```
+
+#### docker-compose services
+
+The project's `docker-compose.yml` defines four pre-configured services with resource limits (4 CPUs, 4 GB RAM) already set:
+
+| Service | Description |
+|---------|-------------|
+| `counterscarp` | Main audit service — full 21-analyzer stack |
+| `doctor` | Diagnostics / dependency health check |
+| `heuristic` | Heuristic-only scan (no external tools required) |
+| `symbolic` | Mythril symbolic execution only |
+
+```bash
+# Run a full audit
+docker compose run --rm counterscarp scan /scan/MyContract.sol
+
+# Run diagnostics (verify all tools are installed and healthy)
+docker compose run --rm doctor
+
+# Run heuristic-only analysis (fastest, no external tools needed)
+docker compose run --rm heuristic scan /scan/MyContract.sol
+
+# Run symbolic execution only
+docker compose run --rm symbolic scan /scan/MyContract.sol
+```
+
+Volume mounts `/scan` (source input) and `/output` (report output) are pre-configured in the compose file.
 
 ### Optional external tools
 
@@ -1277,7 +1316,7 @@ aderyn --version
 
 ```bash
 # Requires Go ≥ 1.21
-go install github.com/crytic/medusa/cmd/medusa@latest
+go install github.com/crytic/medusa@latest
 ```
 
 ### Docker permission errors (Linux)
@@ -1288,7 +1327,7 @@ sudo usermod -aG docker $USER
 
 # Or run with --user flag
 docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan \
-  tokenaudit/counterscarp-engine:5.0.3 --target /scan --report
+  counterscarp-engine:5.0.3 --target /scan --report
 ```
 
 ### OpenAI API key not set

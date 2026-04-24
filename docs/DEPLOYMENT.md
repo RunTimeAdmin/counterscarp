@@ -3,6 +3,14 @@
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Docker Deployment](#docker-deployment)
+  - [Building the Image](#building-the-image)
+  - [Running with docker-compose](#running-with-docker-compose)
+  - [Volume Mounts](#volume-mounts)
+  - [Resource Limits](#resource-limits)
+  - [Health Checks](#health-checks)
+  - [Environment Variables](#environment-variables)
+  - [Production Considerations](#production-considerations)
 - [Step-by-Step VPS Deployment](#step-by-step-vps-deployment)
 - [Nginx Reverse Proxy Configuration](#nginx-reverse-proxy-configuration)
 - [SSL Certificate Setup](#ssl-certificate-setup-lets-encrypt)
@@ -31,6 +39,114 @@
 - nginx
 - certbot (Let's Encrypt)
 - git
+
+---
+
+## Docker Deployment
+
+Docker is the recommended deployment method for CI environments, local development, and any host where you prefer not to install external tools (Foundry, Slither, Mythril, Aderyn, Medusa) directly. The multi-stage Dockerfile bundles the complete 21-analyzer stack on Python 3.12 (image size ~1.5 GB).
+
+### Building the Image
+
+```bash
+cd sentinel-engine
+docker build -t counterscarp-engine:5.0.3 .
+```
+
+### Running with docker-compose
+
+The project's `docker-compose.yml` defines four services:
+
+| Service | Purpose |
+|---------|---------|
+| `counterscarp` | Main audit service (all 21 analyzers) |
+| `doctor` | Diagnostics / health check |
+| `heuristic` | Heuristic-only scan (no external tools required) |
+| `symbolic` | Mythril symbolic execution only |
+
+```bash
+# Full audit
+docker compose run --rm counterscarp scan /scan/MyContract.sol
+
+# Health check
+docker compose run --rm doctor
+
+# Heuristic-only scan
+docker compose run --rm heuristic scan /scan/MyContract.sol
+
+# Symbolic execution only
+docker compose run --rm symbolic scan /scan/MyContract.sol
+```
+
+### Volume Mounts
+
+Two mount points are defined for contract input and report output:
+
+| Mount | Purpose |
+|-------|---------|
+| `/scan` | Mount your contract source directory here |
+| `/output` | Audit reports are written here |
+
+```bash
+docker compose run --rm \
+  -v /path/to/contracts:/scan \
+  -v /path/to/reports:/output \
+  counterscarp scan /scan/MyContract.sol
+```
+
+### Resource Limits
+
+Pre-configured in `docker-compose.yml` under `deploy.resources`:
+
+| Resource | Limit |
+|----------|-------|
+| CPU | 4.0 cores |
+| Memory | 4 GB |
+
+Adjust these values in the `deploy.resources` section of `docker-compose.yml` to match your host's capacity.
+
+### Health Checks
+
+All services include an automatic health check that runs `counterscarp --doctor`:
+
+| Setting | Value |
+|---------|-------|
+| Interval | 60s |
+| Timeout | 30s |
+| Retries | 3 |
+
+Use `docker compose ps` to view current health status for each service.
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `COUNTERSCARP_PRO_LICENSE` | Set your Pro license key to enable premium features |
+
+```bash
+docker compose run --rm \
+  -e COUNTERSCARP_PRO_LICENSE=your-key \
+  counterscarp scan /scan/MyContract.sol
+```
+
+For persistent configuration, add `COUNTERSCARP_PRO_LICENSE` to a `.env` file in the project root — Docker Compose picks it up automatically.
+
+### Production Considerations
+
+```bash
+# Run the main service in the background
+docker compose up -d counterscarp
+
+# Follow live logs
+docker compose logs -f counterscarp
+
+# Stop all services
+docker compose down
+```
+
+- The `foundry-cache` named volume persists the Foundry compilation cache across runs, significantly reducing re-compilation time.
+- Bind-mount a dedicated output directory so reports survive container restarts.
+- Rotate or prune the `foundry-cache` volume periodically if disk space is constrained: `docker volume rm sentinel-engine_foundry-cache`.
 
 ---
 
