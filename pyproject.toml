@@ -140,6 +140,9 @@ py-modules = [
     "plugin_manager",
     "license_manager",
     "doctor",
+    "state_manager",
+    "signature_updater",
+    "healthcheck",
 ]
 
 [tool.setuptools.package-data]
