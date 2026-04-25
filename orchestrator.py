@@ -33,8 +33,7 @@ try:
     import symbolic_wrapper
     logger.debug("Core modules imported successfully")
 except ImportError as e:
-    logger.critical(f"Missing a core module: {e}")
-    print(f"[!] CRITICAL: Missing a core module. {e}")
+    logger.critical("Missing a core module: %s", e)
     sys.exit(1)
 
 # Optional fingerprint scanner
@@ -848,17 +847,17 @@ def main() -> None:
     # --- Update signatures (no --target needed) ---
     if args.update_signatures:
         from signature_updater import update_from_github
-        print("[*] Updating threat intelligence databases from GitHub...")
+        logger.info("Updating threat intelligence databases from GitHub...")
         updated, failed = update_from_github()
         if updated:
-            print(f"[+] Updated: {', '.join(updated)}")
+            logger.info("Updated: %s", ", ".join(updated))
         if failed:
-            print(f"[-] Failed:  {', '.join(failed)}")
+            logger.warning("Failed: %s", ", ".join(failed))
         sys.exit(0 if not failed else 1)
 
     if args.update_from_file:
         from signature_updater import update_from_file
-        print(f"[*] Importing threat intel from: {args.update_from_file}")
+        logger.info("Importing threat intel from: %s", args.update_from_file)
         success = update_from_file(args.update_from_file)
         sys.exit(0 if success else 1)
 
@@ -893,9 +892,7 @@ def main() -> None:
         session = state_mgr.load_session(args.resume)
         args.target = session["target"]
         completed = state_mgr.get_completed_phases()
-        logger.info(f"Resuming scan {args.resume} — {len(completed)} phases already done")
-        print(f"[*] Resuming scan {args.resume}")
-        print(f"[*] Completed phases: {completed}")
+        logger.info("Resuming scan %s — %d phases already done", args.resume, len(completed))
     else:
         cli_args = {k: v for k, v in vars(args).items() if v is not None}
         session_id = state_mgr.start_session(str(args.target), cli_args)
@@ -927,22 +924,18 @@ def main() -> None:
     if not os.path.exists(args.target):
         msg = f"Target path does not exist: {args.target}"
         logger.error(msg)
-        print(f"[!] ERROR: {msg}")
         sys.exit(1)
     if os.path.isfile(args.target) and not args.target.lower().endswith(".sol"):
         msg = f"Target file must be a Solidity (.sol) file, got: {args.target}"
         logger.error(msg)
-        print(f"[!] ERROR: {msg}")
         sys.exit(1)
     if args.upgrade_old and not os.path.exists(args.upgrade_old):
         msg = f"--upgrade-old path does not exist: {args.upgrade_old}"
         logger.error(msg)
-        print(f"[!] ERROR: {msg}")
         sys.exit(1)
     if args.upgrade_new and not os.path.exists(args.upgrade_new):
         msg = f"--upgrade-new path does not exist: {args.upgrade_new}"
         logger.error(msg)
-        print(f"[!] ERROR: {msg}")
         sys.exit(1)
 
     # --- Dev mode banner ---
@@ -1012,10 +1005,10 @@ def main() -> None:
     # Handle RAG index build
     if args.build_rag_index:
         if not (args.dev or _license.check_pro_feature(AI_COPILOT)):
-            print(_license.get_upgrade_message(AI_COPILOT))
+            logger.info("RAG index build requires Pro license: %s", _license.get_upgrade_message(AI_COPILOT))
             return
         if not RAG_AVAILABLE:
-            print("[!] RAG engine not available. Install dependencies: pip install sentence-transformers numpy")
+            logger.error("RAG engine not available. Install dependencies: pip install sentence-transformers numpy")
             sys.exit(1)
         
         print("\n" + "=" * 60)
@@ -1039,26 +1032,25 @@ def main() -> None:
             sources = {"remediation_db": REMEDIATION_DB}
             counts = copilot.rebuild_index(sources)
             
-            print(f"\n[+] Index built successfully:")
+            logger.info("RAG index built successfully")
             for source, count in counts.items():
-                print(f"    {source}: {count} entries")
-            print(f"\n[+] Index saved to: {copilot.index_path}")
-            print("=" * 60 + "\n")
+                logger.info("  %s: %d entries", source, count)
+            logger.info("Index saved to: %s", copilot.index_path)
             
             return
             
         except Exception as e:
-            print(f"[!] Failed to build RAG index: {e}")
+            logger.error("Failed to build RAG index: %s", e)
             logger.exception("RAG index build failed")
             sys.exit(1)
 
     # Handle history scan mode
     if args.history:
         if not (args.dev or _license.check_pro_feature(TIME_TRAVEL)):
-            print(_license.get_upgrade_message(TIME_TRAVEL))
+            logger.info("History scan requires Pro license: %s", _license.get_upgrade_message(TIME_TRAVEL))
             return
         if history_scanner is None:
-            print("[!] History scanner not available")
+            logger.warning("History scanner not available")
             sys.exit(1)
         
         print("\n" + "=" * 60)
@@ -1098,7 +1090,7 @@ def main() -> None:
             return
             
         except Exception as e:
-            print(f"[!] History scan failed: {e}")
+            logger.error("History scan failed: %s", e)
             logger.exception("History scan failed")
             sys.exit(1)
 
@@ -1123,7 +1115,6 @@ def main() -> None:
     analyzer_status: Dict[str, Dict[str, Any]] = {}
 
     # [PHASE 1] Supply Chain
-    print(">>> Assessing Supply Chain...")
     logger.info("[PHASE 1] Assessing Supply Chain")
     if state_mgr.is_phase_pending("supply_chain"):
         _t0 = _time.time()
@@ -1152,7 +1143,6 @@ def main() -> None:
     }
 
     # [PHASE 2] Static Analysis (Slither)
-    print("\n>>> Analyzing Code Patterns...")
     logger.info("[PHASE 2] Running Static Analysis (Slither)")
     _slither_error: Optional[str] = None
     if state_mgr.is_phase_pending("slither"):
@@ -1189,7 +1179,6 @@ def main() -> None:
     # [PHASE 2B] Aderyn Static Analysis (optional)
     _aderyn_error: Optional[str] = None
     if args.aderyn and os.path.isdir(args.target):
-        print("\n>>> Running Aderyn Static Analysis...")
         logger.info("[PHASE 2B] Running Aderyn Static Analysis")
         if aderyn_wrapper is None:
             logger.warning("Aderyn wrapper not available in this environment")
@@ -1204,8 +1193,7 @@ def main() -> None:
                 aderyn_results = aderyn_wrapper.run_aderyn(args.target, stderr_log=stderr_log)
                 logger.info("Aderyn analysis complete")
             except Exception as e:
-                logger.error("Aderyn analysis failed: %s", e)
-                print("[!] Aderyn analysis failed; continuing without Aderyn results.")
+                logger.error("Aderyn analysis failed: %s — continuing without Aderyn results", e)
                 aderyn_results = {"error": "Aderyn run failed"}
                 _aderyn_error = str(e)
             finally:
@@ -1231,7 +1219,6 @@ def main() -> None:
     # [PHASE 3] Fuzzing (Foundry)
     _fuzz_error: Optional[str] = None
     if args.fuzz_contract:
-        print("\n>>> Stress Testing Logic (Foundry)...")
         logger.info("[PHASE 3] Running Foundry Fuzzing on %s", args.fuzz_contract)
         if state_mgr.is_phase_pending("foundry_fuzz"):
             _t0 = _time.time()
@@ -1259,7 +1246,6 @@ def main() -> None:
     # [PHASE 3B] Medusa Fuzzing (optional)
     _medusa_error: Optional[str] = None
     if args.medusa:
-        print("\n>>> Running Medusa Fuzzing (coverage-guided)...")
         logger.info("[PHASE 3B] Running Medusa Fuzzing")
         if medusa_wrapper is None:
             logger.warning("Medusa wrapper not available in this environment")
@@ -1301,7 +1287,6 @@ def main() -> None:
     }
 
     # [PHASE 4] Heuristic Scan
-    print("\n>>> Running Heuristic Scan...")
     logger.info("[PHASE 4] Running Heuristic Scan")
     _heuristic_error: Optional[str] = None
     if state_mgr.is_phase_pending("heuristic"):
@@ -1343,7 +1328,6 @@ def main() -> None:
 
     # [PHASE 4C] Plugin Analyzers (optional)
     if plugin_mgr and plugin_mgr.get_analyzer_count() > 0:
-        print("\n>>> Running Plugin Analyzers...")
         logger.info("[PHASE 4C] Running Plugin Analyzers")
         if state_mgr.is_phase_pending("plugins"):
             _t0 = _time.time()
@@ -1379,9 +1363,8 @@ def main() -> None:
     # [PHASE 4B] Protocol Fingerprint Scan (optional)
     fingerprint_results: List[Dict] = []
     if args.fingerprint and not (args.dev or _license.check_pro_feature(FINGERPRINT)):
-        print(_license.get_upgrade_message(FINGERPRINT))
+        logger.info("Fingerprint scan requires Pro license: %s", _license.get_upgrade_message(FINGERPRINT))
     elif args.fingerprint:
-        print("\n>>> Running Protocol Fingerprint Scan...")
         logger.info("[PHASE 4B] Running Protocol Fingerprint Scan")
         if not FINGERPRINT_AVAILABLE:
             logger.warning("Fingerprint scanner not available")
@@ -1416,13 +1399,12 @@ def main() -> None:
                     total_fp_matches = sum(len(r.get('matches', [])) for r in fingerprint_results)
                     logger.info("Fingerprint scan complete: %d contracts with %d protocol matches",
                                 len(fingerprint_results), total_fp_matches)
-                    print(f"    Found {len(fingerprint_results)} contract(s) with protocol matches")
                     for result in fingerprint_results:
                         matches = result.get('matches', [])
                         risk = result.get('risk_assessment', {})
-                        print(f"    - {result['file']}: {len(matches)} match(es)")
+                        logger.info("  - %s: %d match(es)", result['file'], len(matches))
                         if risk:
-                            print(f"      Risk Level: {risk.get('risk_level', 'N/A')}")
+                            logger.info("    Risk Level: %s", risk.get('risk_level', 'N/A'))
                 else:
                     logger.info("No protocol matches found")
 
@@ -1437,7 +1419,6 @@ def main() -> None:
     # [PHASE 5] Symbolic Analysis (optional)
     _mythril_error: Optional[str] = None
     if args.symbolic and os.path.isfile(args.target):
-        print("\n>>> Running Symbolic Analysis (Mythril)...")
         logger.info("[PHASE 5] Running Symbolic Analysis (Mythril)")
         if state_mgr.is_phase_pending("mythril"):
             _t0 = _time.time()
@@ -1466,10 +1447,9 @@ def main() -> None:
     # [PHASE 6] Solana Static Analysis (optional)
     _solana_error: Optional[str] = None
     if args.solana_root and not (args.dev or _license.check_pro_feature(SOLANA)):
-        print(_license.get_upgrade_message(SOLANA))
+        logger.info("Solana analysis requires Pro license: %s", _license.get_upgrade_message(SOLANA))
         _solana_error = "License required"
     elif args.solana_root:
-        print("\n>>> Running Solana Static Analysis...")
         logger.info("[PHASE 6] Running Solana Static Analysis")
         if solana_analyzer is None:
             logger.warning("solana_analyzer module not available")
@@ -1500,7 +1480,6 @@ def main() -> None:
 
     # [PHASE 7] Upgrade Diff Analysis (optional)
     if args.upgrade_old and args.upgrade_new:
-        print("\n>>> Running Upgrade Diff Analyzer...")
         logger.info("[PHASE 7] Running Upgrade Diff Analyzer")
         if upgrade_diff is None:
             logger.warning("upgrade_diff module not available")
@@ -1523,9 +1502,8 @@ def main() -> None:
 
     # [PHASE 7.5] RAG Enrichment (optional)
     if args.rag and RAG_AVAILABLE and not (args.dev or _license.check_pro_feature(AI_COPILOT)):
-        print(_license.get_upgrade_message(AI_COPILOT))
+        logger.info("RAG enrichment requires Pro license: %s", _license.get_upgrade_message(AI_COPILOT))
     elif args.rag and RAG_AVAILABLE:
-        print("\n>>> Enriching Findings with RAG Context...")
         logger.info("[PHASE 7.5] Running RAG Enrichment")
         if state_mgr.is_phase_pending("rag_enrichment"):
             _t0 = _time.time()
@@ -1556,10 +1534,6 @@ def main() -> None:
                         heuristic_results = copilot.enrich_findings_batch(
                             heuristic_results
                         )
-                        print(
-                            f"    Enriched {len(heuristic_results)}"
-                            " heuristic findings"
-                        )
                         logger.info(
                             "Enriched %d heuristic findings",
                             len(heuristic_results),
@@ -1569,20 +1543,13 @@ def main() -> None:
                             r.get("rag_status") == "offline"
                             for r in heuristic_results
                         ):
-                            print(
-                                "    [INFO] AI Copilot offline — continuing"
-                                " scan without LLM enrichment"
-                            )
+                            logger.warning("AI Copilot offline — continuing scan without LLM enrichment")
                             rag_offline = True
                     
                     # Enrich static issues
                     if static_issues and not rag_offline:
                         static_issues = copilot.enrich_findings_batch(
                             static_issues
-                        )
-                        print(
-                            f"    Enriched {len(static_issues)}"
-                            " static analysis findings"
                         )
                         logger.info(
                             "Enriched %d static analysis findings",
@@ -1592,27 +1559,18 @@ def main() -> None:
                             r.get("rag_status") == "offline"
                             for r in static_issues
                         ):
-                            print(
-                                "    [INFO] AI Copilot offline — continuing"
-                                " scan without LLM enrichment"
-                            )
+                            logger.warning("AI Copilot offline — continuing scan without LLM enrichment")
                             rag_offline = True
                     
                     if not rag_offline:
-                        print("    [+] RAG enrichment complete")
                         logger.info("RAG enrichment complete")
                     else:
-                        print(
-                            "    [!] RAG enrichment skipped (AI Copilot offline)"
-                        )
-                        logger.warning("RAG enrichment aborted — offline mode")
+                        logger.warning("RAG enrichment aborted — offline mode (AI Copilot offline)")
                 else:
-                    print("    [!] No RAG index found. Build with: --build-rag-index")
-                    logger.warning("No RAG index found — cannot enrich findings")
+                    logger.warning("No RAG index found — cannot enrich findings. Build with: --build-rag-index")
                     
             except Exception as e:
-                logger.warning(f"RAG enrichment failed: {e}")
-                print(f"    [!] RAG enrichment failed: {e}")
+                logger.warning("RAG enrichment failed: %s", e)
             # Save enriched results for potential resume
             state_mgr.save_phase_results("rag_enrichment", {"heuristic": heuristic_results, "static": static_issues})
             state_mgr.mark_phase_complete("rag_enrichment", len(heuristic_results) + len(static_issues), _time.time() - _t0)
@@ -1624,9 +1582,7 @@ def main() -> None:
                 static_issues = _rag_cache["static"]
             logger.info("[PHASE 7.5] RAG Enrichment — loaded from cache (resumed)")
     elif args.rag and not RAG_AVAILABLE:
-        print("\n>>> RAG Enrichment Requested...")
-        logger.warning("RAG engine not available — cannot enrich findings")
-        print("    [!] RAG engine not available. Install: pip install sentence-transformers numpy")
+        logger.warning("RAG engine not available — cannot enrich findings. Install: pip install sentence-transformers numpy")
 
     # --- Noise Control Filters ---
     _severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
@@ -1664,7 +1620,6 @@ def main() -> None:
         )
 
     # [PHASE 8] Action Report
-    print("\n>>> Writing Action Plan...")
     logger.info("[PHASE 8] Writing Action Plan")
     # --- Exploit PoC Generation (Pro tier) ---
     exploit_results: Optional[List] = None
@@ -1717,26 +1672,21 @@ def main() -> None:
 
                 if critical_findings:
                     logger.info("Generating exploit PoCs for %d critical/high findings...", len(critical_findings))
-                    print(f"\n>>> Generating exploit PoCs for {len(critical_findings)} critical/high findings...")
                     exploit_results = generator.batch_generate(
                         critical_findings,
                         output_dir=exploit_config.get('output_dir', _default_exploit_dir),
                     )
                     successful = [r for r in exploit_results if r.status == "success"]
                     logger.info("Generated %d exploit PoCs out of %d findings", len(successful), len(critical_findings))
-                    print(f"    [+] Generated {len(successful)} exploit PoCs out of {len(critical_findings)} findings")
                 else:
                     exploit_results = []
                     logger.info("No CRITICAL/HIGH findings for exploit generation")
-                    print("    [i] No CRITICAL/HIGH findings for exploit generation")
             else:
-                logger.info("Exploit PoC generation requires Pro tier license")
-                print(f"\n{_license.get_upgrade_message(EXPLOIT_GEN)}")
+                logger.info("Exploit PoC generation requires Pro tier license: %s", _license.get_upgrade_message(EXPLOIT_GEN))
         except ImportError:
             logger.warning("Exploit generator module not available")
         except Exception as _eg_exc:
             logger.warning("Exploit generation failed: %s", _eg_exc)
-            print(f"    [!] Exploit generation failed: {_eg_exc}")
         # Save serializable metadata about exploit results (paths, statuses)
         _exploit_meta = [
             {"finding": getattr(r, "finding", {}), "status": getattr(r, "status", ""), "output_path": getattr(r, "output_path", "")}
@@ -1781,7 +1731,6 @@ def main() -> None:
         and os.path.isdir(args.target)
         and os.path.isdir(os.path.join(args.target, ".git"))
     ):
-        print("\n>>> Running Time-Travel Historical Scan for unified report...")
         logger.info("[PHASE 8B] Running inline Time-Travel Historical Scan")
         if state_mgr.is_phase_pending("time_travel"):
             _t0 = _time.time()
@@ -1809,13 +1758,12 @@ def main() -> None:
                     "Time-Travel scan complete: %d timeline entries",
                     len(history_timeline),
                 )
-                print(
-                    f"    [+] Time-Travel scan complete: "
-                    f"{_hist_results.get('total_vulnerabilities', 0)} historical vulnerabilities"
+                logger.info(
+                    "Time-Travel scan complete: %d historical vulnerabilities",
+                    _hist_results.get('total_vulnerabilities', 0),
                 )
             except Exception as _hist_exc:
                 logger.warning("Inline Time-Travel scan failed: %s", _hist_exc)
-                print(f"    [!] Time-Travel scan failed (continuing without): {_hist_exc}")
             state_mgr.save_phase_results("time_travel", history_timeline)
             state_mgr.mark_phase_complete("time_travel", len(history_timeline), _time.time() - _t0)
         else:
@@ -1824,7 +1772,6 @@ def main() -> None:
 
     # [PHASE 9] Professional Report (Optional)
     if args.report and REPORT_GENERATOR_AVAILABLE:
-        print("\n>>> Generating Professional Audit Report...")
         logger.info("[PHASE 9] Generating Professional Audit Report")
         if state_mgr.is_phase_pending("report"):
             _t0 = _time.time()
@@ -1989,8 +1936,6 @@ def main() -> None:
                             _wired += 1
                             break  # one result per finding is enough
                 logger.info("Wired %d exploit PoC(s) into unified findings", _wired)
-                if _wired:
-                    print(f"    [+] Exploit PoC code wired into {_wired} finding(s) for HTML/SARIF reports")
 
             # Create report
             project_name = args.project_name or os.path.basename(os.path.abspath(args.target))
@@ -2029,7 +1974,7 @@ def main() -> None:
                         "PDF report skipped (install xhtml2pdf: pip install counterscarp-engine[pdf])"
                     )
             else:
-                print(_license.get_upgrade_message(BRANDED_REPORTS))
+                logger.info("HTML/PDF reports require Pro license: %s", _license.get_upgrade_message(BRANDED_REPORTS))
             print(f"\n   Risk Score: {audit_report.risk_score}/100")
             print(f"   Status: {audit_report.pass_fail}")
             print(f"   Findings: {len(all_findings)} total")

@@ -21,7 +21,7 @@ from logging import Logger
 if TYPE_CHECKING:
     from exceptions import CounterscarpError as _CounterscarpErrorType
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Network error types for graceful offline handling
 _NETWORK_ERRORS: Tuple[Type[Exception], ...] = (ConnectionError, TimeoutError, OSError)
@@ -826,7 +826,10 @@ class AuditCopilot:
         
         self.vector_store = VectorStore()
         self.knowledge_builder = KnowledgeBaseBuilder(self.vector_store)
-        
+
+        # Offline TTL: set when an API failure occurs, cleared when it expires
+        self._offline_until: Optional[datetime] = None
+
         # Try to load existing index
         self._load_index()
         
@@ -841,7 +844,20 @@ class AuditCopilot:
             self.vector_store.load(self.index_path)
         except Exception as e:
             logger.warning(f"Could not load RAG index: {e}")
-    
+
+    def _is_offline(self) -> bool:
+        """Return True if the copilot is in the offline backoff window."""
+        if self._offline_until is None:
+            return False
+        if datetime.now() > self._offline_until:
+            self._offline_until = None  # TTL expired, retry
+            return False
+        return True
+
+    def _set_offline(self, minutes: int = 5) -> None:
+        """Enter offline mode for *minutes* (default 5)."""
+        self._offline_until = datetime.now() + timedelta(minutes=minutes)
+
     def enrich_finding(self, finding: Dict[str, Any]) -> Dict[str, Any]:
         """Enrich a single finding with RAG context.
         
@@ -942,6 +958,7 @@ class AuditCopilot:
             logger.warning(
                 f"AI Copilot unavailable (offline mode): {e}"
             )
+            self._set_offline()
             offline = dict(_OFFLINE_RESULT)
             offline.update(
                 {k: finding.get(k) for k in finding if k not in offline}
@@ -992,10 +1009,9 @@ class AuditCopilot:
             llm_eligible_ids = set(sorted_by_severity[:LLM_CAP])
 
         enriched = []
-        copilot_offline = False
         for idx, finding in enumerate(findings):
-            if copilot_offline:
-                # API already confirmed unreachable — skip remainder
+            if self._is_offline():
+                # API already confirmed unreachable — skip remainder until TTL expires
                 offline = dict(_OFFLINE_RESULT)
                 offline.update(
                     {k: finding.get(k)
@@ -1015,7 +1031,6 @@ class AuditCopilot:
             self.llm_enrichment = _orig_llm
 
             if result.get("rag_status") == "offline":
-                copilot_offline = True
                 logger.info(
                     "AI Copilot offline — skipping enrichment"
                     " for remaining findings"

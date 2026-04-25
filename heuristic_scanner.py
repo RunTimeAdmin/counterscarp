@@ -50,6 +50,21 @@ except ImportError:
 #          // counterscarp-suppress: ALL
 SUPPRESS_PATTERN = re.compile(r'counterscarp-suppress:\s*(\w+)(?:\s+(.*))?')
 
+# Module-level cache for DEFAULT_SAFE_PATTERNS (Task M5)
+_DEFAULT_SAFE_PATTERNS_CACHE: Optional[List] = None
+
+
+def _get_safe_patterns() -> List[Any]:
+    """Return DEFAULT_SAFE_PATTERNS, importing and caching on first call."""
+    global _DEFAULT_SAFE_PATTERNS_CACHE
+    if _DEFAULT_SAFE_PATTERNS_CACHE is None:
+        try:
+            from config_loader import DEFAULT_SAFE_PATTERNS
+            _DEFAULT_SAFE_PATTERNS_CACHE = DEFAULT_SAFE_PATTERNS
+        except ImportError:
+            _DEFAULT_SAFE_PATTERNS_CACHE = []
+    return _DEFAULT_SAFE_PATTERNS_CACHE
+
 
 # Rule categories: groups rule IDs by security domain for coverage reporting.
 RULE_CATEGORIES: dict[str, list[str]] = {
@@ -542,10 +557,59 @@ def is_in_code_context(line: str, match_start: int) -> bool:
     return True
 
 
+def _build_comment_map(lines: List[str]) -> List[bool]:
+    """Build a per-line boolean map indicating multi-line comment state (Task H6).
+
+    Makes a single O(n) pass through all lines and returns a list of booleans
+    where ``True`` at index ``i`` means line ``i`` begins while the parser is
+    already inside a ``/* ... */`` block (i.e. the first character of that line
+    is inside a comment).
+
+    Handles multiple ``/*`` and ``*/`` tokens on the same line correctly, which
+    mirrors the logic used by :func:`is_in_multiline_comment`.
+
+    Args:
+        lines: All lines of the file (as returned by ``f.readlines()``).
+
+    Returns:
+        A ``List[bool]`` of the same length as *lines*.
+    """
+    result: List[bool] = []
+    in_comment = False
+
+    for line in lines:
+        # Record whether this line *starts* inside a comment
+        result.append(in_comment)
+
+        # Walk the whole line to update the comment state for the next line
+        pos = 0
+        while pos < len(line):
+            if not in_comment:
+                open_pos = line.find('/*', pos)
+                if open_pos == -1:
+                    break
+                in_comment = True
+                pos = open_pos + 2
+            else:
+                close_pos = line.find('*/', pos)
+                if close_pos == -1:
+                    break
+                in_comment = False
+                pos = close_pos + 2
+
+    return result
+
+
+# DEPRECATED: use _build_comment_map() + comment_map[line_idx] instead.
+# Kept for backward compatibility with any external callers.
 def is_in_multiline_comment(
     lines: List[str], line_idx: int, match_start: int
 ) -> bool:
     """Check if a position is inside a multi-line comment (/* */).
+
+    .. deprecated::
+        Build a comment map once with :func:`_build_comment_map` and index it
+        instead of calling this function per-match (O(n²) → O(n)).
 
     Args:
         lines: All lines of the file.
@@ -614,14 +678,9 @@ def _check_safe_patterns(
             DEFAULT_SAFE_PATTERNS from config_loader.
     """
     if CONFIG_AVAILABLE:
-        try:
-            from config_loader import DEFAULT_SAFE_PATTERNS  # noqa: PLC0415
-        except ImportError:
-            return
+        patterns = safe_patterns if safe_patterns is not None else _get_safe_patterns()
     else:
         return
-
-    patterns = safe_patterns if safe_patterns is not None else DEFAULT_SAFE_PATTERNS
 
     # Build context from imports and inheritance (first 100 lines typically enough)
     header_text = "".join(file_lines[:min(100, len(file_lines))])
@@ -672,6 +731,9 @@ def scan_file(
     # Get all rules (built-in + plugin rules)
     all_rules = get_all_rules(plugin_mgr)
 
+    # Build comment map once (O(n)) so per-match checks are O(1) — Task H6
+    comment_map = _build_comment_map(lines)
+
     # Simple rule-based line scanning
     for i, line in enumerate(lines, start=1):
         # Skip obvious comments-only lines to reduce noise
@@ -702,7 +764,7 @@ def scan_file(
                     continue
 
                 # Skip if match is inside a multi-line comment
-                if is_in_multiline_comment(lines, i - 1, match_start):
+                if comment_map[i - 1]:
                     logger.debug(
                         f"Skipping match for {rule.id} in multi-line comment "
                         f"at {path}:{i}:{match_start}"

@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -160,13 +161,18 @@ def run_slither_analysis(file_path: str) -> tuple[list[Finding], str]:
     Status can be: 'completed', 'not_installed', 'timeout', 'error'.
     """
     try:
+        # Validate file_path is within upload directory (defense in depth)
+        upload_dir = Path(UPLOAD_DIR).resolve()
+        resolved = Path(file_path).resolve()
+        if not resolved.is_relative_to(upload_dir):
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
         # Use the slither binary from the same venv as this process
-        import sys
         venv_bin = Path(sys.executable).parent
         slither_bin = str(venv_bin / "slither")
 
         result = subprocess.run(
-            [slither_bin, file_path, "--json", "-"],
+            [slither_bin, "--json", "-", "--", str(resolved)],
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode not in (0, 1):  # 1 means findings found

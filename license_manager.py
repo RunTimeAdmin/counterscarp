@@ -13,6 +13,7 @@ import logging
 import os
 import platform
 import secrets
+import socket
 import sys
 import threading
 import time
@@ -99,7 +100,7 @@ FEATURE_NAMES = {
 LICENSE_SERVER_URL = "https://api.counterscarp.io/api/license/validate"
 LICENSE_DEACTIVATE_URL = "https://api.counterscarp.io/api/license/deactivate"
 CACHE_TTL_HOURS = 24
-GRACE_PERIOD_DAYS = 7
+GRACE_PERIOD_DAYS = 3
 try:
     from importlib.metadata import version as _get_version
     PRODUCT_VERSION = _get_version("counterscarp-engine")
@@ -227,9 +228,14 @@ class LicenseManager:
         self, key_hash: str, machine_id: str, cached_at: str
     ) -> str:
         """Compute HMAC-SHA256 signature for cache validation."""
+        # Derive a separate key for HMAC (don't use license key directly)
+        derived_key = hashlib.pbkdf2_hmac(
+            'sha256', self._license_key.encode(),
+            machine_id.encode(), 100000
+        )
         message = f"{key_hash}{machine_id}{cached_at}"
         return hmac.new(
-            self._license_key.encode(), message.encode(), hashlib.sha256
+            derived_key, message.encode(), hashlib.sha256
         ).hexdigest()
 
     def _load_cached_result(self) -> Optional[LicenseInfo]:
@@ -254,12 +260,12 @@ class LicenseManager:
             )
 
             if not hmac.compare_digest(stored_signature, computed_signature):
-                print("License cache signature mismatch")
+                _logger.warning("License cache signature mismatch")
                 return None
 
             # Check machine ID
             if cache.get("machine_id") != self._machine_id:
-                print("License cache machine ID mismatch")
+                _logger.warning("License cache machine ID mismatch")
                 return None
 
             # Check key hash
@@ -293,6 +299,14 @@ class LicenseManager:
             _logger.warning("Failed to load license cache: %s", e)
             return None
 
+    def _check_dns_resolves(self) -> bool:
+        """Check if api.counterscarp.io resolves via DNS."""
+        try:
+            socket.getaddrinfo("api.counterscarp.io", 443, socket.AF_INET)
+            return True
+        except socket.gaierror:
+            return False
+
     def _load_grace_period_cache(self) -> Optional[LicenseInfo]:
         """Load cached result during grace period (network failure)."""
         cache_path = _get_cache_path()
@@ -321,14 +335,25 @@ class LicenseManager:
             cached_at = datetime.fromisoformat(cache.get("cached_at", ""))
             now = datetime.now(timezone.utc)
 
-            # Grace period: up to 7 days
+            # DNS-aware grace period:
+            # - DNS resolves but HTTP fails  → full GRACE_PERIOD_DAYS (3 days)
+            # - DNS itself fails (no route)  → reduce to 1 day, warn user
             cache_age = now - cached_at
-            if cache_age > timedelta(days=GRACE_PERIOD_DAYS):
+            dns_ok = self._check_dns_resolves()
+            if dns_ok:
+                effective_grace = GRACE_PERIOD_DAYS
+            else:
+                effective_grace = 1
+                _logger.warning(
+                    "DNS resolution for api.counterscarp.io failed — "
+                    "grace period reduced to 1 day (possible network or DNS misconfiguration)"
+                )
+            if cache_age > timedelta(days=effective_grace):
                 return None
 
             result = cache.get("validation_result", {})
             days = cache_age.days
-            print(f"Using cached license (grace period: {days} days)")
+            _logger.info("Using cached license (grace period: %d days)", days)
             return LicenseInfo(
                 valid=result.get("valid", False),
                 tier=result.get("tier", "free"),
@@ -425,10 +450,8 @@ class LicenseManager:
                 expires_str = cached.get("validation_result", {}).get("expires_at")
                 if expires_str:
                     expires_at_dt = datetime.fromisoformat(expires_str)
-            except Exception:
-                pass
-
-        now = datetime.now(timezone.utc)
+            except (ValueError, TypeError) as e:
+                _logger.debug("License date parse error: %s", e)
 
         # Check payment_failed_at — grace window from failure date
         payment_failed_at_str = server_data.get("payment_failed_at") or (
@@ -705,7 +728,7 @@ def require_pro(feature: str):
         def wrapper(*args, **kwargs):
             mgr = LicenseManager()
             if not mgr.check_pro_feature(feature):
-                print(mgr.get_upgrade_message(feature))
+                _logger.warning("Pro feature required: %s — %s", feature, mgr.get_upgrade_message(feature))
                 return None
             return func(*args, **kwargs)
 
@@ -750,7 +773,7 @@ def _save_license_to_db(entry: dict) -> None:
     with open(db_path, "w", encoding="utf-8") as f:
         json.dump(db, f, indent=2)
 
-    print(f"License saved to {db_path}")
+    _logger.info("License saved to %s", db_path)
 
 
 def main_generate(args):
