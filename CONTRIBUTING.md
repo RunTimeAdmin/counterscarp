@@ -3,7 +3,7 @@
 Thank you for your interest in contributing to Counterscarp Engine! This guide will help you get started with adding new features, fixing bugs, and improving the codebase.
 
 > **Website:** [counterscarp.io](https://counterscarp.io)  
-> **Issues:** [GitHub Issues](https://github.com/RunTimeAdmin/counterscarp-engine/issues)
+> **Issues:** Report issues via email: contact@counterscarp.io
 
 ---
 

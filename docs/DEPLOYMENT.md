@@ -199,7 +199,7 @@ python3 -m venv venv
 # Method B: Clone from GitHub (for development/customization)
 # mkdir -p /opt/counterscarp-engine
 # cd /opt/counterscarp-engine
-# git clone https://github.com/RunTimeAdmin/counterscarp-engine.git .
+# git clone https://github.com/RunTimeAdmin/counterscarp.git .
 # python3 -m venv venv
 # ./venv/bin/pip install --upgrade pip
 # ./venv/bin/pip install -e ".[web]"
