@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-instance RAG offline TTL (5min) prevents repeated failed network calls
 - Created `data/licenses.example.json` safe template, removed legacy `fix_version.py`
 
+### Post-5.0.4 Review Fixes
+
+#### Batch 1 — Quick Fixes (commit e162e46)
+- **M4**: Moved function-level imports to module top in `webapp/main.py` — eliminated redundant `import logging`, `from webapp.user_manager`, `from webapp.stripe_integration`, `from license_manager`, and `from datetime import date` inside route handlers
+- **M7**: Added `version` and `last_updated` metadata to `data/protocol_fingerprints.json`; `protocol_db.py` now logs loaded version and warns on legacy unversioned format; new test `test_load_versioned_format`
+- **M11**: Replaced TODO comments with ACTION REQUIRED markers in `inflation_scaffold.py` generated exploit templates
+- **L4**: Verified all Python subdirectories have `__init__.py` (all already present — no changes required)
+- **L6**: Centralized `LICENSE_PREFIXES` in `license_manager.py`; `webapp/main.py` now imports the constant instead of redefining it
+
+#### Batch 2 — Medium Fixes (commit f43ff0e)
+- **M2**: Added `refine: Optional[Callable]` field to `HeuristicRule` dataclass; extracted inline rule-specific post-match logic for BLOCK_TIMESTAMP_RANDOMNESS, HARDCODED_ADDRESS, and UNCHECKED_EXTERNAL_CALL into standalone refiner functions; replaced ~50 lines of `if rule.id ==` blocks with a single generic `rule.refine()` call
+- **M8**: Added pagination (`?page=&limit=`) to `/admin/users` and `/admin/licenses` endpoints in `webapp/auth.py` with `total`/`pages` metadata envelope; defaults to page=1, limit=50 for backward compatibility
+- **M10**: Separated `exceptions.py` imports from optional `logger.py` fallbacks across 9 modules (`fingerprint_scanner.py`, `config_loader.py`, `protocol_db.py`, `exploit_generator.py`, `embeddings.py`, `rag_engine.py`, `history_scanner.py`, `pipeline_generator.py`, `red_team_scan.py`) — core exceptions now always required, logger remains optional with stdlib fallback
+
 ## [5.0.3] - 2026-04-23
 
 ### Fixed
