@@ -9,7 +9,8 @@ TEMPLATE = """// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
-// TODO: adjust token and vault imports to match your project
+// ACTION REQUIRED: Verify these import paths match your project layout.
+// ERC20 is sourced from solmate; adjust if you use OpenZeppelin or a custom token.
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {{{vault_contract}}} from "../src/{vault_contract}.sol";
 
@@ -46,12 +47,13 @@ contract {vault_contract}InflationTest is Test {{
     {vault_contract}InflationHandler public handler;
 
     function setUp() public {{
-        // TODO: wire this to your real vault and asset.
-        // Example (adjust to your constructor signature):
-        // asset = new ERC20("Mock", "MCK", 18);
-        // vault = new {vault_contract}(asset);
+        // ACTION REQUIRED: Instantiate your vault and underlying asset below.
+        // Replace the two lines with your actual constructor calls, e.g.:
+        //   asset = new ERC20("Mock", "MCK", 18);
+        //   vault = new {vault_contract}(address(asset));
+        // Then delete the vm.skip line so the invariants run.
 
-        vm.skip(true); // REMOVE this once you have real wiring above.
+        vm.skip(true); // Remove this line after wiring vault and asset above.
 
         handler = new {vault_contract}InflationHandler(vault, asset);
         targetContract(address(handler));
@@ -114,7 +116,7 @@ def main() -> None:
 
     print("[+] Inflation invariant scaffold created:")
     print(f"    {target_path}")
-    print("[!] IMPORTANT: Edit the TODOs to wire in your real vault and asset before running:")
+    print("[!] IMPORTANT: Complete the ACTION REQUIRED sections to wire in your real vault and asset before running:")
     print("    forge test --match-contract {vault}InflationTest -vvv".format(vault=vault_contract))
 
 

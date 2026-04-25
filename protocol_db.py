@@ -104,7 +104,25 @@ def _load_fingerprints_from_json(path: str) -> Optional[List[ProtocolFingerprint
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        fingerprints = [ProtocolFingerprint.from_dict(item) for item in data]
+
+        if isinstance(data, list):
+            # Legacy bare-array format
+            logger.warning(
+                "protocol_fingerprints.json missing version field — update recommended"
+            )
+            raw_fingerprints = data
+        else:
+            raw_fingerprints = data.get("fingerprints", [])
+            version = data.get("version", "unknown")
+            last_updated = data.get("last_updated", "unknown")
+            logger.info(
+                "Loaded protocol fingerprints database v%s (%d entries, last updated: %s)",
+                version,
+                len(raw_fingerprints),
+                last_updated,
+            )
+
+        fingerprints = [ProtocolFingerprint.from_dict(item) for item in raw_fingerprints]
         logger.debug(f"Loaded {len(fingerprints)} protocol fingerprints from {path}")
         return fingerprints
     except (IOError, OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
@@ -689,6 +707,14 @@ def save_fingerprint_db(fingerprints: List[ProtocolFingerprint], path: str) -> N
 def load_fingerprint_db(path: str) -> List[ProtocolFingerprint]:
     """Deserialize fingerprints from JSON file.
 
+    Supports both the legacy bare-array format and the versioned object format::
+
+        # Legacy (v1) — bare array
+        [{...}, {...}]
+
+        # Versioned (v2+) — wrapped object
+        {"version": 2, "last_updated": "YYYY-MM-DD", "fingerprints": [{...}, ...]}
+
     Args:
         path: Path to the JSON file to load.
 
@@ -701,7 +727,25 @@ def load_fingerprint_db(path: str) -> List[ProtocolFingerprint]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        fingerprints = [ProtocolFingerprint.from_dict(item) for item in data]
+
+        if isinstance(data, list):
+            # Legacy bare-array format — no version metadata present
+            logger.warning(
+                "protocol_fingerprints.json missing version field — update recommended"
+            )
+            raw_fingerprints = data
+        else:
+            raw_fingerprints = data.get("fingerprints", [])
+            version = data.get("version", "unknown")
+            last_updated = data.get("last_updated", "unknown")
+            logger.info(
+                "Loaded protocol fingerprints database v%s (%d entries, last updated: %s)",
+                version,
+                len(raw_fingerprints),
+                last_updated,
+            )
+
+        fingerprints = [ProtocolFingerprint.from_dict(item) for item in raw_fingerprints]
         logger.info(f"Loaded {len(fingerprints)} fingerprints from {path}")
         return fingerprints
     except (IOError, OSError) as e:

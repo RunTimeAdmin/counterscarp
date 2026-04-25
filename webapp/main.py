@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -47,14 +47,20 @@ from license_manager import (
     AI_COPILOT,
     ATTACK_GRAPH,
     BRANDED_REPORTS,
+    FEATURE_TIERS,
+    FEATURE_NAMES,
+    LICENSE_PREFIXES,
+    TIER_HIERARCHY,
 )
 
 from webapp.license_api import license_router
 from webapp.rate_limiter import RateLimiter
 from webapp.stripe_integration import (
     create_checkout_session,
+    find_license_by_subscription,
     handle_checkout_completed,
     get_session_license_key,
+    update_license_in_db,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET,
     PRODUCTS,
@@ -325,8 +331,7 @@ async def startup_event():
 @app.on_event("startup")
 async def startup_cleanup():
     """Run housekeeping cleanup on app startup."""
-    import logging as _logging
-    _cleanup_logger = _logging.getLogger("counterscarp.cleanup")
+    _cleanup_logger = logging.getLogger("counterscarp.cleanup")
 
     # 1. Clean old scan state files (>30 days)
     try:
@@ -780,7 +785,6 @@ async def checkout_success(request: Request):
             # Auto-link the license to the logged-in user's account
             license_key = license_info.get("key", "")
             if license_key and not current_user.get("license_key"):
-                from webapp.user_manager import user_manager
                 user_manager.set_license_key(
                     current_user["id"],
                     license_key,
@@ -863,7 +867,6 @@ async def stripe_webhook(request: Request):
         invoice = event["data"]["object"]
         subscription_id = invoice.get("subscription", "")
         if subscription_id:
-            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
             license_entry = find_license_by_subscription(subscription_id)
             if license_entry:
                 # Determine extension period from billing_interval
@@ -887,7 +890,6 @@ async def stripe_webhook(request: Request):
         subscription = event["data"]["object"]
         subscription_id = subscription.get("id", "")
         if subscription_id:
-            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
             license_entry = find_license_by_subscription(subscription_id)
             if license_entry:
                 update_license_in_db(license_entry["key"], {
@@ -904,7 +906,6 @@ async def stripe_webhook(request: Request):
         invoice = event["data"]["object"]
         subscription_id = invoice.get("subscription", "")
         if subscription_id:
-            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
             license_entry = find_license_by_subscription(subscription_id)
             if license_entry:
                 update_license_in_db(license_entry["key"], {
@@ -926,7 +927,6 @@ async def stripe_webhook(request: Request):
         subscription = event["data"]["object"]
         subscription_id = subscription.get("id", "")
         if subscription_id:
-            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
             license_entry = find_license_by_subscription(subscription_id)
             if license_entry:
                 # Determine new tier from product_key metadata on the price
@@ -964,7 +964,6 @@ async def stripe_webhook(request: Request):
         subscription = event["data"]["object"]
         subscription_id = subscription.get("id", "")
         if subscription_id:
-            from webapp.stripe_integration import find_license_by_subscription, update_license_in_db
             license_entry = find_license_by_subscription(subscription_id)
             if license_entry:
                 license_key = license_entry["key"]
@@ -1085,9 +1084,6 @@ async def license_status(request: Request):
     return {"tier": _license.get_tier(), "features": info.features}
 
 
-# Valid license key prefixes
-LICENSE_PREFIXES = ("SE-DEV-", "SE-PRO-", "SE-TEAM-", "SE-ENT-")
-
 
 def find_license_in_db(license_key: str) -> Optional[Dict]:
     """Look up a license entry in licenses.json by key."""
@@ -1111,8 +1107,6 @@ def _mask_license_key(key: str) -> str:
 
 def _get_tier_features(tier: str) -> list[str]:
     """Get list of feature names available for a tier."""
-    from license_manager import FEATURE_TIERS, FEATURE_NAMES, TIER_HIERARCHY
-
     tier_idx = TIER_HIERARCHY.index(tier) if tier in TIER_HIERARCHY else 0
     features = []
     for feature, min_tier in FEATURE_TIERS.items():
@@ -1171,7 +1165,6 @@ async def save_license_key(request: Request):
         )
     expires_at = lic_entry.get("expires_at")
     if expires_at:
-        from datetime import date
         try:
             if date.fromisoformat(expires_at) < date.today():
                 ip = request.client.host if request.client else "unknown"

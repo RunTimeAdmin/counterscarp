@@ -258,7 +258,7 @@ class TestLoadFingerprintDb:
     """Test load_fingerprint_db function."""
 
     def test_load_from_file(self, tmp_path):
-        """Test loading fingerprints from file."""
+        """Test loading fingerprints from file (legacy bare-array format)."""
         data = [
             {
                 "name": "Test",
@@ -282,6 +282,49 @@ class TestLoadFingerprintDb:
         assert len(fingerprints) == 1
         assert fingerprints[0].name == "Test"
         assert isinstance(fingerprints[0], ProtocolFingerprint)
+
+    def test_load_versioned_format(self, tmp_path):
+        """Test loading fingerprints from versioned wrapped-object format."""
+        data = {
+            "version": 2,
+            "last_updated": "2025-04-25",
+            "fingerprints": [
+                {
+                    "name": "VersionedTest",
+                    "category": "DeFi",
+                    "version": "2.0",
+                    "function_signatures": ["deposit(uint256)", "withdraw(uint256)"],
+                    "event_signatures": [],
+                    "storage_patterns": [],
+                    "inheritance_markers": [],
+                    "constants": {},
+                    "known_vulnerabilities": []
+                },
+                {
+                    "name": "VersionedTest2",
+                    "category": "AMM",
+                    "version": "1.0",
+                    "function_signatures": ["swap(uint256,uint256,address,bytes)"],
+                    "event_signatures": [],
+                    "storage_patterns": [],
+                    "inheritance_markers": [],
+                    "constants": {},
+                    "known_vulnerabilities": []
+                }
+            ]
+        }
+
+        input_path = str(tmp_path / "fingerprints_v2.json")
+        with open(input_path, 'w') as f:
+            json.dump(data, f)
+
+        fingerprints = load_fingerprint_db(input_path)
+
+        assert len(fingerprints) == 2
+        assert fingerprints[0].name == "VersionedTest"
+        assert fingerprints[1].name == "VersionedTest2"
+        assert isinstance(fingerprints[0], ProtocolFingerprint)
+        assert isinstance(fingerprints[1], ProtocolFingerprint)
 
     def test_load_invalid_json(self, tmp_path):
         """Test loading invalid JSON."""

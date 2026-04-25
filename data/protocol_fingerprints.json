@@ -1,4 +1,7 @@
-[
+{
+  "version": 2,
+  "last_updated": "2025-04-25",
+  "fingerprints": [
   {
     "name": "Uniswap V2",
     "category": "AMM",
@@ -2904,4 +2907,5 @@
       }
     ]
   }
-]
+  ]
+}

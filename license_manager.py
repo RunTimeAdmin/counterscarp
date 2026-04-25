@@ -55,6 +55,9 @@ TIER_PREFIXES = {
     ENTERPRISE: "SE-ENT-",
 }
 
+# Canonical tuple of valid license key prefixes (used for format validation)
+LICENSE_PREFIXES = tuple(TIER_PREFIXES.values())
+
 # Default max activations per tier
 TIER_DEFAULT_ACTIVATIONS = {
     DEVELOPER: 1,
