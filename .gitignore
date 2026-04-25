@@ -81,3 +81,14 @@ test_out*.txt
 test_results.txt
 test_output_temp.txt
 run_tests.py
+
+# Runtime data
+data/licenses.json
+data/users.json
+
+# Scan results
+results/
+!results/examples/
+
+# Dev scripts
+fix_version.py
