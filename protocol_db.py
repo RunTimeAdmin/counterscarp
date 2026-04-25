@@ -7,7 +7,6 @@ used to identify similar contracts and assess inherited vulnerabilities.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 import logging
@@ -86,7 +85,7 @@ class ProtocolFingerprint:
 
 
 # Path to the bundled JSON fingerprint database (relative to this file)
-_FINGERPRINT_DB_PATH = os.path.join(os.path.dirname(__file__), "data", "protocol_fingerprints.json")
+_FINGERPRINT_DB_PATH = str(Path(__file__).parent / "data" / "protocol_fingerprints.json")
 
 
 def _load_fingerprints_from_json(path: str) -> Optional[List[ProtocolFingerprint]]:
@@ -98,7 +97,7 @@ def _load_fingerprints_from_json(path: str) -> Optional[List[ProtocolFingerprint
     Returns:
         List of ProtocolFingerprint instances on success, None on failure.
     """
-    if not os.path.isfile(path):
+    if not Path(path).is_file():
         logger.warning(f"Fingerprint JSON database not found at {path}; falling back to hardcoded entries")
         return None
     try:
@@ -694,7 +693,7 @@ def save_fingerprint_db(fingerprints: List[ProtocolFingerprint], path: str) -> N
     """
     try:
         data = [fp.to_dict() for fp in fingerprints]
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         logger.info(f"Saved {len(fingerprints)} fingerprints to {path}")
@@ -790,10 +789,10 @@ def load_community_signatures(community_dir: str | None = None) -> List[Protocol
         List of ProtocolFingerprint instances loaded from community files.
     """
     if community_dir is None:
-        community_dir = os.path.join(os.path.dirname(__file__), "data", "community_signatures")
+        community_dir = str(Path(__file__).parent / "data" / "community_signatures")
 
     signatures: List[ProtocolFingerprint] = []
-    if not os.path.isdir(community_dir):
+    if not Path(community_dir).is_dir():
         return signatures
 
     for json_file in sorted(Path(community_dir).glob("*.json")):
@@ -850,7 +849,7 @@ if __name__ == "__main__":
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        test_path = os.path.join(tmpdir, "test_fingerprints.json")
+        test_path = str(Path(tmpdir) / "test_fingerprints.json")
         save_fingerprint_db(fps, test_path)
         loaded = load_fingerprint_db(test_path)
         print(f"Save/Load test: {len(loaded)} fingerprints")

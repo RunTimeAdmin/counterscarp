@@ -176,8 +176,8 @@ class Suppression:
             True if the files match according to suppression rules.
         """
         # Normalize both paths
-        norm_target = os.path.normpath(target_file)
-        norm_suppression = os.path.normpath(suppression_file)
+        norm_target = str(Path(target_file))
+        norm_suppression = str(Path(suppression_file))
 
         # On Windows, make comparison case-insensitive
         if os.name == 'nt':
@@ -185,8 +185,8 @@ class Suppression:
             norm_suppression = norm_suppression.lower()
 
         # Get basenames for comparison
-        target_basename = os.path.basename(norm_target)
-        suppression_basename = os.path.basename(norm_suppression)
+        target_basename = Path(norm_target).name
+        suppression_basename = Path(norm_suppression).name
 
         # Exact basename match
         if target_basename == suppression_basename:
@@ -736,7 +736,7 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
     if config_path is None:
         config_path = find_config_file()
 
-    if not config_path or not os.path.exists(config_path):
+    if not config_path or not Path(config_path).exists():
         logger.info("No counterscarp.toml found, using default configuration")
         return CounterscarpConfig()
 

@@ -247,3 +247,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Migrated from open-source to commercial model with free Community tier
+
+---
+
+## Project History
+
+**Counterscarp Engine** was originally developed as **Garrison Engine** (later briefly known as **Sentinel Engine**) starting in late 2024. The project was conceived as an automated smart contract security analysis platform combining static analysis, heuristic scanning, and AI-augmented audit capabilities.
+
+### Timeline
+- **2024 Q4** — Initial development as Garrison Engine; core heuristic scanner, Slither integration, and CLI framework
+- **2025 Q1** — Rebranded to Sentinel Engine; added fingerprint scanning, exploit generation, and HTML/PDF reporting
+- **2025 Q2** — Rebranded to Counterscarp Engine (v3.0.0); domain moved to counterscarp.io; added RAG-powered audit copilot, protocol fingerprinting, and the webapp
+- **2025 Q3** — v4.x series: Stripe integration, license management, Docker distribution, VPS deployment
+- **2025 Q4–2026** — v5.x series: PyPI distribution, GitHub Actions CI/CD, comprehensive code review hardening

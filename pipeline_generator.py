@@ -18,7 +18,6 @@ CLI Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from typing import Callable, Dict, List, Optional, Any, TYPE_CHECKING
 from pathlib import Path
@@ -748,9 +747,9 @@ def generate_pipeline(
     # Write to file if output path provided
     if output_path:
         try:
-            output_dir = os.path.dirname(output_path)
-            if output_dir and not os.path.exists(output_dir):
-                os.makedirs(output_dir, exist_ok=True)
+            output_dir = str(Path(output_path).parent)
+            if output_dir and not Path(output_dir).exists():
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
             
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(content)

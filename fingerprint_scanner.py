@@ -857,7 +857,7 @@ def scan_project(
     # Load fingerprints
     if 'fingerprints' in cfg:
         fingerprints = cfg['fingerprints']
-    elif database_path and os.path.exists(database_path):
+    elif database_path and Path(database_path).exists():
         fingerprints = load_fingerprint_db(database_path)
     else:
         fingerprints = get_default_fingerprints()
@@ -870,16 +870,16 @@ def scan_project(
 
     # Collect files to scan
     files_to_scan = []
-    if os.path.isfile(target_path) and target_path.endswith('.sol'):
-        if not _fp_should_exclude(os.path.basename(target_path), exclude_patterns):
+    if Path(target_path).is_file() and target_path.endswith('.sol'):
+        if not _fp_should_exclude(Path(target_path).name, exclude_patterns):
             files_to_scan.append(target_path)
         else:
             logger.debug("Fingerprint scanner excluded: %s", target_path)
-    elif os.path.isdir(target_path):
+    elif Path(target_path).is_dir():
         for root, dirs, files in os.walk(target_path):
             # Prune excluded directories in-place to prevent descending into them
             if exclude_patterns:
-                rel_root = os.path.relpath(root, target_path).replace("\\", "/")
+                rel_root = str(Path(root).relative_to(target_path)).replace("\\", "/")
                 dirs[:] = [
                     d for d in dirs
                     if not _fp_should_exclude(
@@ -890,9 +890,9 @@ def scan_project(
 
             for filename in files:
                 if filename.endswith('.sol'):
-                    file_path = os.path.join(root, filename)
+                    file_path = str(Path(root) / filename)
                     if exclude_patterns:
-                        rel_file = os.path.relpath(file_path, target_path).replace("\\", "/")
+                        rel_file = str(Path(file_path).relative_to(target_path)).replace("\\", "/")
                         if _fp_should_exclude(rel_file, exclude_patterns):
                             logger.debug("Fingerprint scanner excluded: %s", rel_file)
                             continue

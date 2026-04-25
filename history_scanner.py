@@ -14,12 +14,12 @@ Example:
 from __future__ import annotations
 
 import logging
-import os
 import json
 import subprocess
 import tempfile
 import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
 
@@ -152,11 +152,11 @@ def parse_git_history(
         CounterscarpValidationError: If repo_path is not a valid git repository.
         CounterscarpAnalysisError: If git command fails.
     """
-    repo_path = os.path.abspath(repo_path)
+    repo_path = str(Path(repo_path).resolve())
     
     # Validate repository
-    git_dir = os.path.join(repo_path, ".git")
-    if not os.path.isdir(git_dir):
+    git_dir = str(Path(repo_path) / ".git")
+    if not Path(git_dir).is_dir():
         raise CounterscarpValidationError(
             "Not a valid Git repository",
             details={"path": repo_path}
@@ -292,7 +292,7 @@ def scan_commit(
             details={"hint": "Ensure heuristic_scanner.py is accessible"}
         )
     
-    repo_path = os.path.abspath(repo_path)
+    repo_path = str(Path(repo_path).resolve())
     all_findings = []
     
     # Create temporary directory for extracted files
@@ -331,10 +331,10 @@ def scan_commit(
                     continue
                 
                 # Write to temp file
-                temp_file = os.path.join(
-                    temp_dir,
+                temp_file = str(
+                    Path(temp_dir) /
                     f"{commit_hash[:8]}_"
-                    f"{os.path.basename(file_path)}"
+                    f"{Path(file_path).name}"
                 )
                 with open(temp_file, "w", encoding="utf-8") as f:
                     f.write(result.stdout)
@@ -639,11 +639,11 @@ def generate_history_report(
     Raises:
         CounterscarpAnalysisError: If report generation fails.
     """
-    output_dir = os.path.abspath(output_dir)
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = str(Path(output_dir).resolve())
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
     
     # Generate JSON report
-    json_path = os.path.join(output_dir, "vulnerability_timeline.json")
+    json_path = str(Path(output_dir) / "vulnerability_timeline.json")
     try:
         timeline_data = [asdict(entry) for entry in timeline]
         report_data = {
@@ -664,7 +664,7 @@ def generate_history_report(
         )
     
     # Generate Markdown report
-    md_path = os.path.join(output_dir, "vulnerability_trends.md")
+    md_path = str(Path(output_dir) / "vulnerability_trends.md")
     try:
         with open(md_path, "w", encoding="utf-8") as f:
             f.write("# Vulnerability Timeline Report\n\n")

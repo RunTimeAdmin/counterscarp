@@ -301,7 +301,7 @@ class VectorStore:
         """
         try:
             pkl_path = path.replace('.json', '.pkl')
-            if os.path.exists(pkl_path):
+            if Path(pkl_path).exists():
                 logger.warning(
                     "Legacy .pkl index found at %s — manual migration required. "
                     "Convert to JSON format. See documentation for details.", pkl_path

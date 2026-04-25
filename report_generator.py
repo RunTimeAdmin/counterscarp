@@ -1250,7 +1250,7 @@ def deduplicate_findings(findings: List[Finding]) -> List[Finding]:
     def _normalize_filename(filepath: str) -> str:
         """Strip network suffixes from filenames for grouping.
         E.g., Token_Sepolia.sol -> Token, TokenBSC.sol -> Token"""
-        basename = os.path.splitext(os.path.basename(filepath))[0]
+        basename = Path(filepath).stem
         suffixes = [
             '_Sepolia', '_sepolia', '_BSC', '_bsc', '_Polygon', '_polygon',
             '_Base', '_base', '_Mainnet', '_mainnet', '_Goerli', '_goerli',

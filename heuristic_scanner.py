@@ -776,6 +776,228 @@ def _check_safe_patterns(
             break  # First match wins
 
 
+def _read_source_file(path: str) -> Optional[Tuple[List[str], str]]:
+    """Open *path* and return ``(lines, content)`` or ``None`` on I/O error.
+
+    Args:
+        path: Path to the Solidity source file.
+
+    Returns:
+        Tuple of (lines list, joined content string) on success, or None if
+        the file cannot be read.
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+            content = "".join(lines)
+        return lines, content
+    except OSError as e:
+        logger.warning("Failed to read file %s: %s", path, e)
+        return None
+
+
+def _create_finding(
+    rule: "HeuristicRule",
+    effective_severity: str,
+    path: str,
+    line_no: int,
+    line: str,
+) -> "HeuristicFinding":
+    """Construct a :class:`HeuristicFinding` from a rule match.
+
+    Args:
+        rule: The rule that triggered.
+        effective_severity: Resolved severity (may differ from rule default due to config override).
+        path: Path to the scanned file.
+        line_no: 1-based line number of the match.
+        line: Raw line text (will be rstripped of newline).
+
+    Returns:
+        A freshly constructed HeuristicFinding.
+    """
+    return HeuristicFinding(
+        rule_id=rule.id,
+        severity=effective_severity,
+        message=rule.description,
+        file=path,
+        line_no=line_no,
+        line_text=line.rstrip("\n"),
+        confidence=rule.confidence,
+    )
+
+
+def _apply_suppressions(
+    finding: "HeuristicFinding",
+    lines: List[str],
+    line_idx: int,
+    config: Optional["CounterscarpConfig"],
+    path: str,
+) -> None:
+    """Apply inline and config-based suppressions to *finding* in-place.
+
+    Args:
+        finding: The finding to (potentially) mark as suppressed.
+        lines: All source lines of the file.
+        line_idx: 0-based index of the matching line.
+        config: Optional config for rule-based suppressions.
+        path: Path to the scanned file (used for config lookup).
+    """
+    suppressed, suppression_reason = _check_inline_suppression(lines, line_idx, finding.rule_id)
+    if suppressed:
+        finding.suppressed = True
+        finding.suppression_reason = suppression_reason
+        logger.debug(
+            "Inline suppression applied for %s at %s:%d: %s",
+            finding.rule_id, path, finding.line_no, suppression_reason,
+        )
+        return
+
+    if config:
+        suppression = config.is_finding_suppressed(finding.rule_id, path, finding.line_no)
+        if suppression:
+            finding.suppressed = True
+            finding.suppression_reason = suppression.reason
+
+
+def _scan_lines_for_rules(
+    lines: List[str],
+    path: str,
+    all_rules: List["HeuristicRule"],
+    config: Optional["CounterscarpConfig"],
+) -> List["HeuristicFinding"]:
+    """Scan *lines* rule-by-rule and return raw findings (pre-dedup).
+
+    Performs the per-line, per-rule pattern matching loop including:
+    - single-line comment / string-literal filtering via :func:`is_in_code_context`
+    - multi-line comment filtering via :func:`_build_comment_map`
+    - finding construction via :func:`_create_finding`
+    - suppression via :func:`_apply_suppressions`
+    - per-rule refinement callbacks
+    - safe-pattern downgrading via :func:`_check_safe_patterns`
+
+    Args:
+        lines: Source lines of the file to scan.
+        path: File path (used for finding metadata and logging).
+        all_rules: Full rule list (built-in + plugin).
+        config: Optional scanner configuration.
+
+    Returns:
+        List of HeuristicFinding objects (not yet deduplicated).
+    """
+    findings: List[HeuristicFinding] = []
+    comment_map: Optional[List[bool]] = None  # Built lazily on first need
+
+    for i, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if stripped.startswith("//"):
+            continue  # Skip comment-only lines early
+
+        for rule in all_rules:
+            if config and config.heuristics and not config.heuristics.is_rule_enabled(rule.id):
+                continue
+
+            effective_severity = rule.severity
+            if config and config.heuristics:
+                effective_severity = config.heuristics.get_rule_severity(rule.id, rule.severity)
+
+            for match in rule.pattern.finditer(line):
+                match_start = match.start()
+
+                if not is_in_code_context(line, match_start):
+                    logger.debug(
+                        "Skipping match for %s in comment/string at %s:%d:%d",
+                        rule.id, path, i, match_start,
+                    )
+                    continue
+
+                if comment_map is None:
+                    comment_map = _build_comment_map(lines)
+                if comment_map[i - 1]:
+                    logger.debug(
+                        "Skipping match for %s in multi-line comment at %s:%d:%d",
+                        rule.id, path, i, match_start,
+                    )
+                    continue
+
+                finding = _create_finding(rule, effective_severity, path, i, line)
+                _apply_suppressions(finding, lines, i - 1, config, path)
+
+                if rule.refine and not rule.refine(finding, lines, i - 1):
+                    continue
+
+                _check_safe_patterns(finding, lines)
+                findings.append(finding)
+                break  # One finding per rule per line
+
+    return findings
+
+
+def _scan_arbitrary_external_calls(
+    content: str,
+    path: str,
+    config: Optional["CounterscarpConfig"],
+) -> List["HeuristicFinding"]:
+    """H-05: function-level scan for unprotected arbitrary external calls.
+
+    Splits the file content on ``function`` keywords and checks each block for
+    a public/external function whose caller controls both the target address and
+    the calldata — without access-control modifiers.
+
+    Args:
+        content: Full file content as a single string.
+        path: File path (used for finding metadata and suppression lookup).
+        config: Optional scanner configuration.
+
+    Returns:
+        List of HeuristicFinding objects for any matched functions.
+    """
+    findings: List[HeuristicFinding] = []
+    functions = content.split("function ")
+
+    for func_block in functions[1:]:  # Skip preamble before first 'function'
+        header_match = re.search(
+            r"^(\w+)\s*\((.*?)\).*?(public|external)", func_block, re.DOTALL
+        )
+        if not header_match:
+            continue
+
+        func_name = header_match.group(1)
+        params = header_match.group(2)
+        header = func_block.split("{")[0]
+
+        if "address" not in params or ("bytes" not in params and "calldata" not in params):
+            continue
+
+        if re.search(r"(onlyOwner|auth|onlyRole)", header):
+            continue
+
+        call_match = re.search(r"(\w+)\.call\s*\{.*\}\s*\(\s*(\w+)\s*\)", func_block)
+        if not call_match:
+            continue
+
+        target_var = call_match.group(1)
+        data_var = call_match.group(2)
+
+        if target_var in params and data_var in params:
+            finding = HeuristicFinding(
+                rule_id="ARBITRARY_EXTERNAL_CALL",
+                severity="HIGH",
+                message="Unprotected arbitrary external call: user controls target and calldata.",
+                file=path,
+                line_no=0,
+                line_text=f"function {func_name}(...)",
+                confidence=7,
+            )
+            if config:
+                suppression = config.is_finding_suppressed("ARBITRARY_EXTERNAL_CALL", path, 0)
+                if suppression:
+                    finding.suppressed = True
+                    finding.suppression_reason = suppression.reason
+            findings.append(finding)
+
+    return findings
+
+
 def scan_file(
     path: str,
     config: Optional[CounterscarpConfig] = None,
@@ -791,159 +1013,26 @@ def scan_file(
     Returns:
         List of heuristic findings for the file.
     """
-    findings: List[HeuristicFinding] = []
-
-    # Get heuristics config
+    # Guard: heuristics disabled
     heuristics_enabled = True
     if config and config.heuristics:
         heuristics_enabled = config.heuristics.enabled
-
     if not heuristics_enabled:
-        return findings
+        return []
 
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-            content = "".join(lines)
-    except OSError as e:
-        logger.warning("Failed to read file %s: %s", path, e)
-        return findings
+    # Read source — bail early on I/O failure
+    result = _read_source_file(path)
+    if result is None:
+        return []
+    lines, content = result
 
-    # Get all rules (built-in + plugin rules)
     all_rules = get_all_rules(plugin_mgr)
 
-    # Lazily built on first match needing comment check — avoids cost for zero-match files
-    comment_map: Optional[List[bool]] = None
+    # Per-line pattern scan (all built-in + plugin rules)
+    findings = _scan_lines_for_rules(lines, path, all_rules, config)
 
-    # Simple rule-based line scanning
-    for i, line in enumerate(lines, start=1):
-        # Skip obvious comments-only lines to reduce noise
-        stripped = line.strip()
-        if stripped.startswith("//"):
-            continue
-
-        for rule in all_rules:
-            # Check if rule is disabled in config
-            if config and config.heuristics and not config.heuristics.is_rule_enabled(rule.id):
-                continue
-
-            # Get effective severity (considering overrides)
-            effective_severity = rule.severity
-            if config and config.heuristics:
-                effective_severity = config.heuristics.get_rule_severity(rule.id, rule.severity)
-
-            # Find all matches for this rule
-            for match in rule.pattern.finditer(line):
-                match_start = match.start()
-
-                # Skip if match is in a single-line comment or string literal
-                if not is_in_code_context(line, match_start):
-                    logger.debug(
-                        "Skipping match for %s in comment/string at %s:%d:%d",
-                        rule.id, path, i, match_start,
-                    )
-                    continue
-
-                # Skip if match is inside a multi-line comment
-                if comment_map is None:
-                    comment_map = _build_comment_map(lines)
-                if comment_map[i - 1]:
-                    logger.debug(
-                        "Skipping match for %s in multi-line comment at %s:%d:%d",
-                        rule.id, path, i, match_start,
-                    )
-                    continue
-
-                finding = HeuristicFinding(
-                    rule_id=rule.id,
-                    severity=effective_severity,
-                    message=rule.description,
-                    file=path,
-                    line_no=i,
-                    line_text=line.rstrip("\n"),
-                    confidence=rule.confidence,
-                )
-
-                # Check inline suppression pragmas first (current line + line above)
-                suppressed, suppression_reason = _check_inline_suppression(
-                    lines, i - 1, rule.id
-                )
-                if suppressed:
-                    finding.suppressed = True
-                    finding.suppression_reason = suppression_reason
-                    logger.debug(
-                        "Inline suppression applied for %s at %s:%d: %s",
-                        rule.id, path, i, suppression_reason,
-                    )
-
-                # Check config-based suppressions (only if not already suppressed inline)
-                if not finding.suppressed and config:
-                    suppression = config.is_finding_suppressed(rule.id, path, i)
-                    if suppression:
-                        finding.suppressed = True
-                        finding.suppression_reason = suppression.reason
-
-                # Invoke per-rule refiner (if defined) — may mutate severity/message or suppress
-                if rule.refine and not rule.refine(finding, lines, i - 1):
-                    continue
-
-                # Check safe library patterns — downgrade severity for known-safe usage
-                _check_safe_patterns(finding, lines)
-
-                findings.append(finding)
-                # Only report one finding per rule per line
-                break
-
-    # H-05: Arbitrary External Call (approximate, function-level scan)
-    # Quick split by 'function' to keep context (not a full parser).
-    functions = content.split("function ")
-    for func_block in functions[1:]:  # Skip preamble
-        header_match = re.search(
-            r"^(\w+)\s*\((.*?)\).*?(public|external)", func_block, re.DOTALL
-        )
-        if not header_match:
-            continue
-
-        func_name = header_match.group(1)
-        params = header_match.group(2)
-        header = func_block.split("{")[0]
-
-        # Require an address and bytes/calldata param
-        if "address" not in params or ("bytes" not in params and "calldata" not in params):
-            continue
-
-        # Skip if protected by common auth modifiers in the header
-        if re.search(r"(onlyOwner|auth|onlyRole)", header):
-            continue
-
-        # Look for low-level .call using variables
-        call_match = re.search(r"(\w+)\.call\s*\{.*\}\s*\(\s*(\w+)\s*\)", func_block)
-        if not call_match:
-            continue
-
-        target_var = call_match.group(1)
-        data_var = call_match.group(2)
-
-        # Verify that target/data vars appear in the parameter list
-        if target_var in params and data_var in params:
-            finding = HeuristicFinding(
-                rule_id="ARBITRARY_EXTERNAL_CALL",
-                severity="HIGH",
-                message="Unprotected arbitrary external call: user controls target and calldata.",
-                file=path,
-                line_no=0,
-                line_text=f"function {func_name}(...)",
-                confidence=7,
-            )
-
-            # Check suppressions
-            if config:
-                suppression = config.is_finding_suppressed("ARBITRARY_EXTERNAL_CALL", path, 0)
-                if suppression:
-                    finding.suppressed = True
-                    finding.suppression_reason = suppression.reason
-
-            findings.append(finding)
+    # Function-level scan for arbitrary external calls (H-05)
+    findings.extend(_scan_arbitrary_external_calls(content, path, config))
 
     return _deduplicate_findings(findings)
 
@@ -1015,18 +1104,18 @@ def scan_target(
 
     all_findings: List[HeuristicFinding] = []
 
-    if os.path.isfile(target) and target.endswith(".sol"):
+    if Path(target).is_file() and target.endswith(".sol"):
         # Single-file scan: check whether the file itself is excluded
-        rel_single = os.path.basename(target)
+        rel_single = Path(target).name
         if exclude_patterns and should_exclude(rel_single, exclude_patterns, ""):
             logger.debug("Excluded: %s", target)
         else:
             all_findings.extend(scan_file(target, config, plugin_mgr))
-    elif os.path.isdir(target):
+    elif Path(target).is_dir():
         for root, dirs, files in os.walk(target):
             # Prune excluded directories in-place to avoid descending into them
             if exclude_patterns:
-                rel_root = os.path.relpath(root, target).replace("\\", "/")
+                rel_root = str(Path(root).relative_to(target)).replace("\\", "/")
                 dirs[:] = [
                     d for d in dirs
                     if not should_exclude(
@@ -1038,9 +1127,9 @@ def scan_target(
 
             for name in files:
                 if name.endswith(".sol"):
-                    path = os.path.join(root, name)
+                    path = str(Path(root) / name)
                     if exclude_patterns:
-                        rel_path = os.path.relpath(path, target).replace("\\", "/")
+                        rel_path = str(Path(path).relative_to(target)).replace("\\", "/")
                         if should_exclude(rel_path, exclude_patterns, ""):
                             logger.debug("Excluded: %s", rel_path)
                             continue
