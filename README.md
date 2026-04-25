@@ -1,4 +1,4 @@
-# Counterscarp Security Engine
+# Counterscarp&#8482; Security Engine
 
 **Production-ready smart contract security platform — 21 integrated analyzers, configurable rules, and professional audit reports.**
 
