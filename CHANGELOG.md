@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.4] - 2026-04-25
+
+### Security
+- Subprocess path traversal validation with `Path.is_relative_to()` and `--` argument separator in webapp
+- PBKDF2-HMAC key derivation (100k iterations) for license cache signatures
+- DNS-aware grace period — reduced from 7 to 3 days, distinguishes network outage from targeted blocking
+
+### Performance
+- Lazy comment map initialization — O(n) comment state array only built when first match found, zero cost for files with no hits
+- Lazy `%s` log formatting on scanner hot path — eliminates f-string allocation when debug logging disabled
+
+### Changed
+- Compatible-release dependency pins (`~=`) replacing lower-bound-only (`>=`) in pyproject.toml
+- 62 `print()` calls converted to structured `logger.*` calls in orchestrator
+- Narrowed bare `except: pass` to specific exception types with debug logging
+- Per-instance RAG offline TTL (5min) prevents repeated failed network calls
+- Created `data/licenses.example.json` safe template, removed legacy `fix_version.py`
+
 ## [5.0.3] - 2026-04-23
 
 ### Fixed

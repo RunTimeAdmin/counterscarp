@@ -731,8 +731,8 @@ def scan_file(
     # Get all rules (built-in + plugin rules)
     all_rules = get_all_rules(plugin_mgr)
 
-    # Build comment map once (O(n)) so per-match checks are O(1) — Task H6
-    comment_map = _build_comment_map(lines)
+    # Lazily built on first match needing comment check — avoids cost for zero-match files
+    comment_map: Optional[List[bool]] = None
 
     # Simple rule-based line scanning
     for i, line in enumerate(lines, start=1):
@@ -758,16 +758,18 @@ def scan_file(
                 # Skip if match is in a single-line comment or string literal
                 if not is_in_code_context(line, match_start):
                     logger.debug(
-                        f"Skipping match for {rule.id} in comment/string "
-                        f"at {path}:{i}:{match_start}"
+                        "Skipping match for %s in comment/string at %s:%d:%d",
+                        rule.id, path, i, match_start,
                     )
                     continue
 
                 # Skip if match is inside a multi-line comment
+                if comment_map is None:
+                    comment_map = _build_comment_map(lines)
                 if comment_map[i - 1]:
                     logger.debug(
-                        f"Skipping match for {rule.id} in multi-line comment "
-                        f"at {path}:{i}:{match_start}"
+                        "Skipping match for %s in multi-line comment at %s:%d:%d",
+                        rule.id, path, i, match_start,
                     )
                     continue
 

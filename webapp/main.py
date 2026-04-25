@@ -1,4 +1,4 @@
-﻿"""FastAPI web application for Counterscarp Engine."""
+"""FastAPI web application for Counterscarp Engine."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ from visualizer import generate_attack_graph_html
 app = FastAPI(
     title="Counterscarp Engine",
     description="Smart Contract Security Audit Platform",
-    version="5.0.3",
+    version="5.0.4",
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
