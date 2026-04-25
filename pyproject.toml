@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "counterscarp-engine"
-version = "5.0.4"
+version = "5.0.5"
 description = "Smart contract security auditing platform with Pro features"
 requires-python = ">=3.10"
 license = "MIT"
@@ -64,6 +64,7 @@ web = [
     "authlib~=1.3",
     "httpx~=0.25",
     "itsdangerous~=2.1",
+    "redis~=5.0",
 ]
 pdf = [
     # PDF report generation (pure Python, no system dependencies)
@@ -103,9 +104,11 @@ markers = [
 
 [tool.setuptools]
 include-package-data = true
-packages = ["webapp", "webapp.templates", "webapp.static"]
+packages = ["webapp", "webapp.templates", "webapp.static", "phases"]
 py-modules = [
     "orchestrator",
+    "scan_phase",
+    "async_subprocess",
     "config_loader",
     "logger",
     "exceptions",

@@ -24,7 +24,7 @@ def _get_engine_version() -> str:
         try:
             import tomli as tomllib  # noqa: F811
         except ImportError:
-            return "5.0.4"
+            return "5.0.5"
     import pathlib
     toml_path = pathlib.Path(__file__).parent / "pyproject.toml"
     try:
@@ -32,7 +32,7 @@ def _get_engine_version() -> str:
             data = tomllib.load(f)
         return str(data["project"]["version"])
     except Exception:
-        return "5.0.4"
+        return "5.0.5"
 
 
 def _parse_semver(version_str: str) -> Tuple[int, int, int]:

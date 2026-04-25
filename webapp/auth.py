@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import math
 
-from fastapi import APIRouter, Query, Request, Form
+from fastapi import APIRouter, HTTPException, Query, Request, Form
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
 
 from webapp.user_manager import user_manager
+from webapp.rate_limiter import get_client_ip
 from webapp.config import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
@@ -81,6 +82,10 @@ async def login_submit(
     password: str = Form(...),
 ):
     """Handle email/password login form submission."""
+    client_ip = get_client_ip(request)
+    login_limiter = getattr(request.app.state, "login_limiter", None)
+    if login_limiter and not login_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
     user = user_manager.verify_password(email, password)
     if user:
         request.session["user_id"] = user["id"]
@@ -116,6 +121,10 @@ async def register_submit(
     confirm_password: str = Form(...),
 ):
     """Handle registration form submission."""
+    client_ip = get_client_ip(request)
+    register_limiter = getattr(request.app.state, "register_limiter", None)
+    if register_limiter and not register_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many registration attempts. Try again later.")
     if password != confirm_password:
         return templates.TemplateResponse(
             request,
@@ -305,6 +314,11 @@ async def admin_users(
     if not current_user or current_user["email"] != ADMIN_EMAIL:
         return JSONResponse({"error": "Unauthorized"}, status_code=403)
 
+    client_ip = get_client_ip(request)
+    admin_limiter = getattr(request.app.state, "admin_limiter", None)
+    if admin_limiter and not admin_limiter.is_allowed(client_ip):
+        return JSONResponse({"error": "Rate limit exceeded. Try again later."}, status_code=429)
+
     def _get_user_tier(license_key: str | None) -> str:
         if not license_key:
             return "community"
@@ -368,6 +382,11 @@ async def admin_licenses(
     current_user = get_current_user(request)
     if not current_user or current_user["email"] != ADMIN_EMAIL:
         return JSONResponse({"error": "Unauthorized"}, status_code=403)
+
+    client_ip = get_client_ip(request)
+    admin_limiter = getattr(request.app.state, "admin_limiter", None)
+    if admin_limiter and not admin_limiter.is_allowed(client_ip):
+        return JSONResponse({"error": "Rate limit exceeded. Try again later."}, status_code=429)
 
     licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
     if not licenses_path.exists():

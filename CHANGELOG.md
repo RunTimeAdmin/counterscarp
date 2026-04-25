@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v5.0.5 — 2026-04-25
+
+### Major Changes
+
+- **H1: Orchestrator Phase Architecture** — Refactored the monolithic 1,361-line `main()` function into a clean phase-based architecture. New `ScanPhase` base class and `ScanContext` dataclass in `scan_phase.py`. 15 scan phases extracted into `phases/` package (6 modules: static_analysis, fuzzing, heuristic, analysis, enrichment, reporting). Orchestrator main() reduced to ~200 lines with a registry-driven phase loop. Full backward compatibility preserved: same CLI, same state checkpoints, same resume behavior.
+
+- **M6: Async I/O** — Added async subprocess execution via `async_subprocess.py` with timeout-aware `run_tool()` coroutine. All scan phases gained `run_async()` methods with thread-executor fallback. Independent phases (Slither+Aderyn, FoundryFuzz+MedusaFuzz) now run concurrently via `asyncio.gather()`. Webapp audit endpoint converted to non-blocking async Slither analysis.
+
+- **M9: Redis Rate Limiter** — Added `RedisRateLimiter` with sliding-window algorithm backed by Redis sorted sets, with automatic in-memory fallback when Redis is unavailable. Applied rate limits to 5 endpoint groups: login (5/15min), registration (3/hr), audit (10/hr), license API (100/hr), admin (30/hr). Trusted proxy validation for X-Forwarded-For header.
+
+### Fixes
+
+- Fixed plugin phase ordering to run after heuristic phase (was incorrectly concurrent)
+- Fixed async resume cache restoration for partially-completed phase groups
+- Replaced deprecated `asyncio.get_event_loop()` with `asyncio.get_running_loop()` across all async code
+- Updated report_generator.pyi type stubs with missing Finding fields and function signatures
+
 ## [5.0.4] - 2026-04-25
 
 ### Security

@@ -54,7 +54,7 @@ from license_manager import (
 )
 
 from webapp.license_api import license_router
-from webapp.rate_limiter import RateLimiter
+from webapp.rate_limiter import RateLimiter, RedisRateLimiter, get_client_ip
 from webapp.stripe_integration import (
     create_checkout_session,
     find_license_by_subscription,
@@ -72,6 +72,15 @@ logger = get_logger(__name__)
 
 # Rate limiter for the Stripe webhook endpoint (30 req/min per IP)
 _stripe_webhook_limiter = RateLimiter(max_requests=30, window_seconds=60)
+
+_redis_url = os.environ.get("REDIS_URL")
+
+# Rate limiters per endpoint group (Redis-backed with in-memory fallback)
+_login_limiter = RedisRateLimiter(max_requests=5, window_seconds=900, redis_url=_redis_url, prefix="rl:login")
+_register_limiter = RedisRateLimiter(max_requests=3, window_seconds=3600, redis_url=_redis_url, prefix="rl:register")
+_audit_limiter = RedisRateLimiter(max_requests=10, window_seconds=3600, redis_url=_redis_url, prefix="rl:audit")
+_license_limiter = RedisRateLimiter(max_requests=100, window_seconds=3600, redis_url=_redis_url, prefix="rl:license")
+_admin_limiter = RedisRateLimiter(max_requests=30, window_seconds=3600, redis_url=_redis_url, prefix="rl:admin")
 security_logger = logging.getLogger("counterscarp.security")
 
 _license = LicenseManager()
@@ -105,7 +114,7 @@ from visualizer import generate_attack_graph_html
 app = FastAPI(
     title="Counterscarp Engine",
     description="Smart Contract Security Audit Platform",
-    version="5.0.4",
+    version="5.0.5",
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -229,6 +238,84 @@ def run_slither_analysis(file_path: str) -> tuple[list[Finding], str]:
         return [], "error"
 
 
+async def async_run_slither_analysis(file_path: str) -> tuple[list[Finding], str]:
+    """Async version of run_slither_analysis using async_subprocess.run_tool().
+
+    Runs Slither without blocking the event loop. The sync run_slither_analysis()
+    is preserved for CLI/non-async usage.
+
+    Returns a tuple of (list of Finding objects, status string).
+    Status can be: 'completed', 'not_installed', 'timeout', 'error'.
+    """
+    import asyncio
+    try:
+        import async_subprocess as _async_subprocess
+    except ImportError:
+        # Fallback: wrap sync version in thread executor
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, run_slither_analysis, file_path)
+
+    try:
+        upload_dir = Path(UPLOAD_DIR).resolve()
+        resolved = Path(file_path).resolve()
+        if not resolved.is_relative_to(upload_dir):
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
+        venv_bin = Path(sys.executable).parent
+        slither_bin = str(venv_bin / "slither")
+
+        result = await _async_subprocess.run_tool(
+            [slither_bin, "--json", "-", "--", str(resolved)],
+            timeout=120,
+        )
+
+        if result.returncode not in (0, 1):
+            return [], "error"
+
+        data = json.loads(result.stdout) if result.stdout else {}
+        detectors = data.get("results", {}).get("detectors", [])
+
+        slither_findings: list[Finding] = []
+        severity_map = {
+            "High": "HIGH", "Medium": "MEDIUM", "Low": "LOW",
+            "Informational": "INFO", "Optimization": "INFO",
+        }
+
+        for det in detectors:
+            elements = det.get("elements", [])
+            file_name = ""
+            line_no = 0
+            code_snippet = ""
+            if elements:
+                src = elements[0].get("source_mapping", {})
+                file_name = src.get("filename_short", "")
+                lines = src.get("lines", [])
+                line_no = lines[0] if lines else 0
+                code_snippet = elements[0].get("name", "")
+
+            finding = Finding(
+                rule_id=f"SLITHER-{det.get('check', 'unknown').upper()}",
+                severity=severity_map.get(det.get("impact", ""), "INFO"),
+                category="Slither",
+                title=det.get("check", "Unknown").replace("-", " ").title(),
+                description=det.get("description", ""),
+                file=file_name,
+                line_no=line_no,
+                code_snippet=code_snippet,
+                remediation=det.get("markdown", ""),
+                references=[],
+            )
+            slither_findings.append(finding)
+
+        return slither_findings, "completed"
+    except FileNotFoundError:
+        return [], "not_installed"
+    except Exception:
+        # Fallback to sync in executor on any unexpected error
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, run_slither_analysis, file_path)
+
+
 def run_ai_copilot(
     findings: list[Finding], source_code: str,
 ) -> tuple[str, str]:
@@ -326,6 +413,12 @@ async def startup_event():
     """Initialize on startup."""
     validate_production_config()
     ensure_directories()
+    # Expose rate limiters via app.state for use in auth router
+    app.state.login_limiter = _login_limiter
+    app.state.register_limiter = _register_limiter
+    app.state.audit_limiter = _audit_limiter
+    app.state.license_limiter = _license_limiter
+    app.state.admin_limiter = _admin_limiter
 
 
 @app.on_event("startup")
@@ -388,6 +481,11 @@ async def audit(
     files: List[UploadFile] = File(...),
 ):
     """Run security audit on uploaded files."""
+    # Enforce per-IP audit rate limit
+    client_ip = get_client_ip(request)
+    if not _audit_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+
     # Validate files
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
@@ -452,12 +550,12 @@ async def audit(
 
     heuristic_count = len(findings)
 
-    # Run Slither static analysis on Solidity files
+    # Run Slither static analysis on Solidity files (async — non-blocking)
     slither_findings: list[Finding] = []
     slither_status = "skipped"
     for fp_str in uploaded_paths:
         if fp_str.endswith(".sol"):
-            sf, status = run_slither_analysis(fp_str)
+            sf, status = await async_run_slither_analysis(fp_str)
             slither_findings.extend(sf)
             if status != "completed" and slither_status == "skipped":
                 slither_status = status

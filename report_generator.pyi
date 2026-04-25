@@ -20,6 +20,14 @@ class Finding:
     references: List[str] = ...
     cwe: Optional[str] = None
     owasp: Optional[str] = None
+    similar_locations: List[str] = ...
+    duplicate_count: int = 0
+    confidence: int = 5
+    rag_similar_findings: List[Dict[str, Any]] = ...
+    rag_remediation: str = ""
+    rag_references: List[Dict[str, str]] = ...
+    exploit_code: str = ""
+    exploit_path: str = ""
 
 
 @dataclass
@@ -61,7 +69,7 @@ REMEDIATION_KB: Dict[str, Dict[str, Any]]
 def calculate_risk_score(findings: List[Finding]) -> float: ...
 def get_pass_fail_status(findings: List[Finding]) -> str: ...
 def enrich_finding(finding: Finding) -> Finding: ...
-def generate_html_report(report: AuditReport, output_path: str, logo_path: Optional[str] = None) -> str: ...
+def generate_html_report(report: AuditReport, output_path: str, logo_path: Optional[str] = None, dev_mode: bool = False) -> Optional[str]: ...
 def generate_sarif_report(
     findings: List[Finding], metadata: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]: ...
@@ -73,6 +81,7 @@ def generate_pdf_report(
     report: AuditReport,
     output_path: Optional[str] = None,
     logo_path: Optional[str] = None,
+    dev_mode: bool = False,
 ) -> Optional[Any]: ...
 def aggregate_findings_from_orchestrator(
     static_results: List[Dict[str, Any]],
@@ -87,5 +96,6 @@ def create_audit_report(
     project_name: str,
     target_path: str,
     findings: List[Finding],
-    engine_version: str = "2.2"
+    engine_version: str = ...,
+    analyzer_status: Optional[Dict[str, Any]] = None,
 ) -> AuditReport: ...
