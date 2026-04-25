@@ -13,17 +13,17 @@ from pathlib import Path
 import logging
 from typing import List, Dict, Any, Optional
 
-# Import logger and exceptions
+# Import exceptions (core module — must always be available)
+from exceptions import CounterscarpConfigError, CounterscarpValidationError
+
+# Import logger with fallback
 try:
     from logger import get_logger
-    from exceptions import CounterscarpConfigError, CounterscarpValidationError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     def get_logger(name: str) -> logging.Logger:
         return logging.getLogger(name)
-    CounterscarpConfigError = Exception  # type: ignore[assignment,misc]
-    CounterscarpValidationError = Exception  # type: ignore[assignment,misc]
 
 # Initialize logger
 logger: logging.Logger = get_logger(__name__)

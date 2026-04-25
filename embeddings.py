@@ -25,16 +25,16 @@ import re
 from typing import List, Optional, Any
 from collections import Counter
 
-# Import logger and exceptions
+# Import exceptions (core module — must always be available)
+from exceptions import CounterscarpError, CounterscarpConfigError
+
+# Import logger with fallback
 try:
     from logger import get_logger
-    from exceptions import CounterscarpError, CounterscarpConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger = None  # type: ignore[assignment]
-    CounterscarpError = Exception  # type: ignore[misc,assignment]
-    CounterscarpConfigError = Exception  # type: ignore[misc,assignment]
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger is not None:

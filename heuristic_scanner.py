@@ -158,6 +158,9 @@ class HeuristicRule:
         pattern: Compiled regex pattern to match against code.
         hint: Remediation hint for developers.
         confidence: Confidence score for findings from this rule (1-10 scale).
+        refine: Optional callable for post-match refinement. Receives
+            (line, match, lines, line_idx) and returns True to keep the
+            finding or False to skip it.
     """
     id: str
     description: str
@@ -165,6 +168,81 @@ class HeuristicRule:
     pattern: re.Pattern[str]
     hint: str
     confidence: int = 5  # 1-10 scale
+    refine: Optional[Callable[["HeuristicFinding", List[str], int], bool]] = None
+
+
+# ---------------------------------------------------------------------------
+# Per-rule refinement callables
+# Each function receives (finding, lines, line_idx) where:
+#   finding  – the HeuristicFinding already created for this match
+#   lines    – all source lines of the file (0-based list)
+#   line_idx – 0-based index of the matching line
+# Return True  → keep the finding (possibly mutated in-place)
+# Return False → discard the finding entirely
+# ---------------------------------------------------------------------------
+
+def _refine_block_timestamp(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """Refine BLOCK_TIMESTAMP_RANDOMNESS severity based on surrounding context."""
+    line_lower = finding.line_text.lower()
+    # Deadline comparison pattern — standard DeFi practice
+    if any(op in line_lower for op in [">=", "<=", "> ", "< ", "require(", "assert("]) and \
+       any(kw in line_lower for kw in ["deadline", "expir", "timeout", "valid"]):
+        finding.severity = "INFO"
+        finding.message = "block.timestamp used for deadline comparison (standard practice)"
+        finding.confidence = 1
+    # Even without deadline keywords, comparison operators suggest conditional check, not randomness
+    elif any(op in finding.line_text for op in [">=", "<=", ">", "<"]) and "%" not in finding.line_text:
+        finding.severity = "INFO"
+        finding.message = "block.timestamp used in comparison (likely deadline check)"
+        finding.confidence = 2
+    # Modulo or arithmetic — potential randomness
+    elif "%" in finding.line_text or "keccak256" in finding.line_text:
+        finding.severity = "HIGH"
+        finding.message = "block.timestamp used for randomness or entropy (exploitable by miners)"
+        finding.confidence = 7
+    return True
+
+
+def _refine_hardcoded_address(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """Suppress HARDCODED_ADDRESS findings that are actually bytes32 constants."""
+    line_upper = finding.line_text.upper()
+    if any(kw in line_upper for kw in ["TYPEHASH", "MASK", "SLOT", "SELECTOR",
+                                        "DOMAIN_SEPARATOR", "PERMIT", "DIRTY", "BITS"]):
+        finding.suppressed = True
+        finding.suppression_reason = "bytes32 constant, not an address"
+    return True
+
+
+def _refine_unchecked_external_call(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """Refine UNCHECKED_EXTERNAL_CALL severity based on return-value handling."""
+    line_text = finding.line_text.strip()
+    # Check if return value is captured: (bool success, ...) = ...
+    if re.search(r'\(\s*bool\s+\w+', line_text):
+        # Return captured — check next few lines for verification
+        check_lines = ""
+        for offset in range(1, 4):
+            if finding.line_no + offset - 1 < len(lines):
+                check_lines += lines[finding.line_no + offset - 1]
+        if re.search(r'require\s*\(|assert\s*\(|if\s*\(\s*!?\s*success', check_lines):
+            finding.severity = "INFO"
+            finding.message = "External call with captured and verified return value"
+            finding.confidence = 1
+        else:
+            finding.severity = "HIGH"
+            finding.message = "External call return value captured but not verified"
+            finding.confidence = 6
+    # Also check for try/catch pattern
+    elif "try " in line_text or line_text.startswith("try"):
+        finding.severity = "INFO"
+        finding.message = "External call wrapped in try/catch"
+        finding.confidence = 1
+    return True
 
 
 # Core heuristic rules. These complement Slither/Mythril with simple
@@ -185,6 +263,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"block\.timestamp|\bnow\b"),
         hint="Do not use block.timestamp/now as randomness; use VRF or off-chain randomness.",
         confidence=2,
+        refine=_refine_block_timestamp,
     ),
     HeuristicRule(
         id="DELEGATECALL_USAGE",
@@ -209,6 +288,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"0x[0-9a-fA-F]{40}(?![0-9a-fA-F])"),
         hint="Verify hardcoded addresses are correct and documented; consider configurability.",
         confidence=1,
+        refine=_refine_hardcoded_address,
     ),
     HeuristicRule(
         id="EMERGENCY_WITHDRAW_PUBLIC",
@@ -301,6 +381,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"(\w+(?:\([^)]*\))?)\.(call[{(]|transfer\(|transferFrom\()"),
         hint="CRITICAL: Always check return values of external calls. Unchecked calls are top bug bounty targets ($10K-$100K).",
         confidence=9,
+        refine=_refine_unchecked_external_call,
     ),
     
     HeuristicRule(
@@ -802,57 +883,9 @@ def scan_file(
                         finding.suppressed = True
                         finding.suppression_reason = suppression.reason
 
-                # Post-match severity refinement for BLOCK_TIMESTAMP_RANDOMNESS
-                if finding.rule_id == "BLOCK_TIMESTAMP_RANDOMNESS":
-                    line_lower = finding.line_text.lower()
-                    # Deadline comparison pattern — standard DeFi practice
-                    if any(op in line_lower for op in [">=", "<=", "> ", "< ", "require(", "assert("]) and \
-                       any(kw in line_lower for kw in ["deadline", "expir", "timeout", "valid"]):
-                        finding.severity = "INFO"
-                        finding.message = "block.timestamp used for deadline comparison (standard practice)"
-                        finding.confidence = 1
-                    # Even without deadline keywords, comparison operators suggest conditional check, not randomness
-                    elif any(op in finding.line_text for op in [">=", "<=", ">", "<"]) and "%" not in finding.line_text:
-                        finding.severity = "INFO"
-                        finding.message = "block.timestamp used in comparison (likely deadline check)"
-                        finding.confidence = 2
-                    # Modulo or arithmetic — potential randomness
-                    elif "%" in finding.line_text or "keccak256" in finding.line_text:
-                        finding.severity = "HIGH"
-                        finding.message = "block.timestamp used for randomness or entropy (exploitable by miners)"
-                        finding.confidence = 7
-
-                # Post-match exclusion for HARDCODED_ADDRESS — skip bytes32 constants
-                if finding.rule_id == "HARDCODED_ADDRESS":
-                    line_upper = finding.line_text.upper()
-                    if any(kw in line_upper for kw in ["TYPEHASH", "MASK", "SLOT", "SELECTOR",
-                                                        "DOMAIN_SEPARATOR", "PERMIT", "DIRTY", "BITS"]):
-                        finding.suppressed = True
-                        finding.suppression_reason = "bytes32 constant, not an address"
-
-                # Post-match severity refinement for UNCHECKED_EXTERNAL_CALL
-                if finding.rule_id == "UNCHECKED_EXTERNAL_CALL":
-                    line_text = finding.line_text.strip()
-                    # Check if return value is captured: (bool success, ...) = ...
-                    if re.search(r'\(\s*bool\s+\w+', line_text):
-                        # Return captured — check next few lines for verification
-                        check_lines = ""
-                        for offset in range(1, 4):
-                            if finding.line_no + offset - 1 < len(lines):
-                                check_lines += lines[finding.line_no + offset - 1]
-                        if re.search(r'require\s*\(|assert\s*\(|if\s*\(\s*!?\s*success', check_lines):
-                            finding.severity = "INFO"
-                            finding.message = "External call with captured and verified return value"
-                            finding.confidence = 1
-                        else:
-                            finding.severity = "HIGH"
-                            finding.message = "External call return value captured but not verified"
-                            finding.confidence = 6
-                    # Also check for try/catch pattern
-                    elif "try " in line_text or line_text.startswith("try"):
-                        finding.severity = "INFO"
-                        finding.message = "External call wrapped in try/catch"
-                        finding.confidence = 1
+                # Invoke per-rule refiner (if defined) — may mutate severity/message or suppress
+                if rule.refine and not rule.refine(finding, lines, i - 1):
+                    continue
 
                 # Check safe library patterns — downgrade severity for known-safe usage
                 _check_safe_patterns(finding, lines)

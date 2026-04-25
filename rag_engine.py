@@ -48,16 +48,17 @@ _OFFLINE_RESULT: Dict[str, Any] = {
     "rag_references": [],
 }
 
-# Import logger and exceptions
+# Import exceptions (core module — must always be available)
+from exceptions import CounterscarpError, CounterscarpConfigError
+
+# Import logger with fallback
 get_logger: Optional[Callable[[str], Logger]] = None
-CounterscarpConfigError: Type[Exception] = Exception
 LOGGER_AVAILABLE = False
 try:
     from logger import get_logger
-    from exceptions import CounterscarpError, CounterscarpConfigError
     LOGGER_AVAILABLE = True
 except ImportError:
-    CounterscarpError = Exception  # type: ignore[misc,assignment]
+    pass
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger is not None:

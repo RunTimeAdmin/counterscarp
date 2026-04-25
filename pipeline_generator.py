@@ -26,21 +26,19 @@ from pathlib import Path
 if TYPE_CHECKING:
     from config_loader import CounterscarpConfig
 
-# Import logger and exceptions
+# Import exceptions (core module — must always be available)
+from exceptions import (
+    CounterscarpConfigError,
+    CounterscarpValidationError,
+)
+
+# Import logger with fallback
 try:
     from logger import get_logger
-    from exceptions import (
-        CounterscarpConfigError,
-        CounterscarpValidationError,
-        CounterscarpError,
-    )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     get_logger: Optional[Callable[..., Any]] = None  # type: ignore[no-redef]
-    CounterscarpConfigError = Exception  # type: ignore[misc,assignment]
-    CounterscarpValidationError = ValueError  # type: ignore[misc,assignment]
-    CounterscarpError = Exception  # type: ignore[misc,assignment]
 
 # Initialize logger
 if LOGGER_AVAILABLE and get_logger is not None:

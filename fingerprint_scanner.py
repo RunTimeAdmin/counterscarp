@@ -16,17 +16,17 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
-# Import logger and exceptions
+# Import exceptions (core module — must always be available)
+from exceptions import CounterscarpAnalysisError, CounterscarpValidationError
+
+# Import logger with fallback
 try:
     from logger import get_logger
-    from exceptions import CounterscarpAnalysisError, CounterscarpValidationError
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
     def get_logger(name: str) -> logging.Logger:
         return logging.getLogger(name)
-    CounterscarpAnalysisError = None  # type: ignore[assignment,misc]
-    CounterscarpValidationError = None  # type: ignore[assignment,misc]
 
 # Import protocol database
 try:

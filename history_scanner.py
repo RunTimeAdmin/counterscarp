@@ -23,12 +23,14 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
 
-# Import logger and exceptions
+# Import exceptions (core module — must always be available)
+from exceptions import (
+    CounterscarpError, CounterscarpAnalysisError, CounterscarpValidationError
+)
+
+# Import logger with fallback
 try:
     from logger import get_logger, append_stderr_log
-    from exceptions import (
-        CounterscarpError, CounterscarpAnalysisError, CounterscarpValidationError
-    )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
@@ -36,9 +38,6 @@ except ImportError:
         return logging.getLogger(name)
     def append_stderr_log(stderr_text: str, tool_name: str, stderr_log_path: str) -> None:
         pass
-    CounterscarpError = Exception  # type: ignore[assignment,misc]
-    CounterscarpAnalysisError = Exception  # type: ignore[assignment,misc]
-    CounterscarpValidationError = Exception  # type: ignore[assignment,misc]
 
 # Initialize logger
 logger: logging.Logger = get_logger(__name__)

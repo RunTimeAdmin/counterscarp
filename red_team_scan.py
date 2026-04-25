@@ -10,13 +10,15 @@ import argparse
 from pathlib import Path
 from typing import List, Dict, Any, Optional, cast
 
-# Import logger and exceptions
+# Import exceptions (core module — must always be available)
+from exceptions import (
+    CounterscarpAnalysisError,
+    CounterscarpToolNotFoundError,
+)
+
+# Import logger with fallback
 try:
     from logger import get_logger, append_stderr_log
-    from exceptions import (
-        CounterscarpAnalysisError,
-        CounterscarpToolNotFoundError,
-    )
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
@@ -28,8 +30,6 @@ except ImportError:
         stderr_text: str, tool_name: str, stderr_log_path: str
     ) -> None:
         pass
-    CounterscarpAnalysisError = Exception  # type: ignore[assignment,misc]
-    CounterscarpToolNotFoundError = Exception  # type: ignore[assignment,misc]
 
 # Import config loader
 try:

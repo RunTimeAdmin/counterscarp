@@ -6,7 +6,9 @@ and an admin endpoint for mailing-list export.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Form
+import math
+
+from fastapi import APIRouter, Query, Request, Form
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
 
@@ -290,8 +292,12 @@ async def logout(request: Request):
 
 
 @admin_router.get("/admin/users")
-async def admin_users(request: Request):
-    """Return enriched user list with license info for admin only."""
+async def admin_users(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(50, ge=1, le=200, description="Items per page"),
+):
+    """Return enriched user list with license info for admin only (paginated)."""
     import json
     from pathlib import Path
 
@@ -318,10 +324,10 @@ async def admin_users(request: Request):
         return license_key[:10] + "..." if len(license_key) > 10 else license_key
 
     users = user_manager.list_users()
-    enriched = []
+    all_items = []
     for u in users:
         raw_key = u.get("license_key")
-        enriched.append(
+        all_items.append(
             {
                 "email": u["email"],
                 "name": u["name"],
@@ -333,7 +339,76 @@ async def admin_users(request: Request):
             }
         )
 
-    return JSONResponse({"users": enriched})
+    total = len(all_items)
+    start = (page - 1) * limit
+    items = all_items[start : start + limit]
+    pages = math.ceil(total / limit) if total > 0 else 1
+
+    return JSONResponse(
+        {
+            "items": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
+    )
+
+
+@admin_router.get("/admin/licenses")
+async def admin_licenses(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(50, ge=1, le=200, description="Items per page"),
+):
+    """Return paginated list of all licenses for admin only."""
+    import json
+    from pathlib import Path
+
+    current_user = get_current_user(request)
+    if not current_user or current_user["email"] != ADMIN_EMAIL:
+        return JSONResponse({"error": "Unauthorized"}, status_code=403)
+
+    licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
+    if not licenses_path.exists():
+        all_items: list = []
+    else:
+        with open(licenses_path, "r") as f:
+            data = json.load(f)
+        raw_licenses = data.get("licenses", [])
+        all_items = []
+        for lic in raw_licenses:
+            key = lic.get("key", "")
+            masked = key[:10] + "..." if len(key) > 10 else key
+            all_items.append(
+                {
+                    "key": masked,
+                    "tier": lic.get("tier", "community"),
+                    "expires_at": lic.get("expires_at"),
+                    "revoked": lic.get("revoked", False),
+                    "created_at": lic.get("created_at"),
+                    "stripe_customer_id": lic.get("stripe_customer_id"),
+                    "stripe_subscription_id": lic.get("stripe_subscription_id"),
+                    "billing_interval": lic.get("billing_interval"),
+                    "max_activations": lic.get("max_activations"),
+                    "current_activations": lic.get("current_activations", 0),
+                }
+            )
+
+    total = len(all_items)
+    start = (page - 1) * limit
+    items = all_items[start : start + limit]
+    pages = math.ceil(total / limit) if total > 0 else 1
+
+    return JSONResponse(
+        {
+            "items": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
