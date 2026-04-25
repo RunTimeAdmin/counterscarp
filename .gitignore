@@ -56,6 +56,7 @@ data/.env.local
 # Workspace artifacts
 _*.txt
 _*.py
+!phases/__init__.py
 git_*.txt
 garrison_*.txt
 ethernaut_*.txt

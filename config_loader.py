@@ -768,7 +768,7 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
             e,
         )
         if CounterscarpConfigError is not None:
-            raise CounterscarpConfigError(  # type: ignore[call-arg]
+            raise CounterscarpConfigError(
                 "Failed to parse configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e
@@ -776,7 +776,7 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
     except Exception as e:
         logger.error("Unexpected error reading config '%s' (%s): %s", config_path, type(e).__name__, e)
         if CounterscarpConfigError is not None:
-            raise CounterscarpConfigError(  # type: ignore[call-arg]
+            raise CounterscarpConfigError(
                 "Failed to read configuration file",
                 details={"path": config_path, "error": str(e)}
             ) from e

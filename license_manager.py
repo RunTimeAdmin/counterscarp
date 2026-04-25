@@ -466,6 +466,7 @@ class LicenseManager:
                     payment_failed_at_str.replace("Z", "+00:00")
                 )
                 grace_end = failed_at + timedelta(days=GRACE_PERIOD_DAYS)
+                now = datetime.now(timezone.utc)
                 if now < grace_end:
                     days_left = (grace_end - now).days
                     _logger.warning(
@@ -480,6 +481,7 @@ class LicenseManager:
         # Standard expiry grace period
         if expires_at_dt is not None:
             grace_end = expires_at_dt + timedelta(days=GRACE_PERIOD_DAYS)
+            now = datetime.now()
             if now < grace_end:
                 days_left = (grace_end - now).days
                 _logger.warning(
