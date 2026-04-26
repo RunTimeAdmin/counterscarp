@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 try:
-    import stripe  # noqa: F401
+    import stripe
 except ImportError:
-    stripe = None  # type: ignore[assignment]
+    stripe = None  # type: ignore[assignment,unused-ignore]
 
 from webapp.user_manager import user_manager
 
