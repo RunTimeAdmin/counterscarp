@@ -134,3 +134,7 @@ def generate_license_key(
 ) -> Dict[str, Any]:
     """Generate a new license key entry for the licenses.json database."""
     ...
+
+def _save_license_to_db(entry: Dict[str, Any]) -> None:
+    """Persist a license entry to the licenses.json database."""
+    ...

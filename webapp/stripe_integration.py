@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 try:
     import stripe  # noqa: F401
 except ImportError:
-    stripe = None  # type: ignore
+    stripe = None  # type: ignore[assignment]
 
 from webapp.user_manager import user_manager
 
@@ -190,7 +190,7 @@ def get_or_create_price(product_key: str) -> str:
             price_id = prices.data[0].id
             with _price_cache_lock:
                 _price_cache[product_key] = price_id
-            return price_id
+            return str(price_id)
 
     # Create a new Product + Price
     product = stripe.Product.create(
@@ -210,7 +210,7 @@ def get_or_create_price(product_key: str) -> str:
     price_id = price.id
     with _price_cache_lock:
         _price_cache[product_key] = price_id
-    return price_id
+    return str(price_id)
 
 
 # ---------------------------------------------------------------------------
