@@ -223,6 +223,7 @@ jobs:
       - name: Upload SARIF to GitHub Security Tab
         uses: github/codeql-action/upload-sarif@v4
         if: always() && hashFiles('counterscarp-report.sarif') != ''
+        continue-on-error: true  # GHAS required for private repos; fails gracefully
         with:
           sarif_file: counterscarp-report.sarif
           category: counterscarp-engine
