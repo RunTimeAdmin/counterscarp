@@ -12,8 +12,8 @@ from scan_phase import ScanContext, ScanPhase
 class FoundryFuzzPhase(ScanPhase):
     """Phase 3 — Foundry invariant fuzzing (optional, --fuzz-contract flag)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="foundry_fuzz", display_name="Foundry Fuzz")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="foundry_fuzz", display_name="Foundry Fuzz", **kwargs)
 
     def should_run(self, ctx: ScanContext) -> bool:
         return bool(getattr(ctx.args, "fuzz_contract", None))
@@ -111,8 +111,8 @@ class FoundryFuzzPhase(ScanPhase):
 class MedusaFuzzPhase(ScanPhase):
     """Phase 3B — Medusa coverage-guided fuzzing (optional, --medusa flag + directory)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="medusa_fuzz", display_name="Medusa (Fuzzing)")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="medusa_fuzz", display_name="Medusa (Fuzzing)", **kwargs)
 
     def should_run(self, ctx: ScanContext) -> bool:
         return bool(getattr(ctx.args, "medusa", False)) and os.path.isdir(ctx.target)

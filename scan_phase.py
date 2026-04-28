@@ -54,6 +54,8 @@ class ScanPhase:
     display_name: str
     requires_pro: bool = False
     requires_tool: Optional[str] = None
+    group: int = 0      # Concurrency group index (phases in same group run together)
+    parallel: bool = False  # Whether this phase can run concurrently with others
 
     def should_run(self, ctx: ScanContext) -> bool:
         """Check if this phase should run given the context.

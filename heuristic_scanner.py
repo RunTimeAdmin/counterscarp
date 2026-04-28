@@ -135,10 +135,11 @@ class HeuristicFinding:
 
 
 def _deduplicate_findings(findings: List['HeuristicFinding']) -> List['HeuristicFinding']:
-    """Collapse duplicate rule_id hits within the same file to one finding."""
+    """Collapse duplicate rule_id hits within the same file and line region."""
     seen: Dict[tuple, 'HeuristicFinding'] = {}
     for f in findings:
-        key = (f.rule_id, f.file)
+        line_bucket = (f.line_no // 3) * 3
+        key = (f.rule_id, f.file, line_bucket)
         if key in seen:
             seen[key].similar_locations.append(f"{f.file}:{f.line_no}")
             seen[key].duplicate_count += 1
@@ -359,7 +360,7 @@ RULES: List[HeuristicRule] = [
         id="DIVIDE_BEFORE_MULTIPLY",
         description="Potential precision loss: division before multiplication",
         severity="MEDIUM",
-        pattern=re.compile(r"/[^*].*\*"),
+        pattern=re.compile(r"\b\w+\s*/\s*\w+\s*\*\s*\w+"),
         hint="Prefer (a * c) / b over (a / b) * c to avoid rounding to zero.",
         confidence=4,
     ),

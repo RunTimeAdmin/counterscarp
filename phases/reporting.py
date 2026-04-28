@@ -26,8 +26,8 @@ def _safe_line_no(location_str: str) -> int:
 class ReportPhase(ScanPhase):
     """Phase 9 — Professional audit report generation (optional, --report flag)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="report", display_name="Professional Report")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="report", display_name="Professional Report", **kwargs)
 
     def should_run(self, ctx: ScanContext) -> bool:
         if not ctx.args.report:

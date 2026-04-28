@@ -231,14 +231,14 @@ class LicenseManager:
         self, key_hash: str, machine_id: str, cached_at: str
     ) -> str:
         """Compute HMAC-SHA256 signature for cache validation."""
-        # Derive a separate key for HMAC (don't use license key directly)
-        derived_key = hashlib.pbkdf2_hmac(
-            'sha256', self._license_key.encode(),
-            machine_id.encode(), 100000
-        )
-        message = f"{key_hash}{machine_id}{cached_at}"
-        return hmac.new(
-            derived_key, message.encode(), hashlib.sha256
+        import hmac as _hmac
+        binding_material = f"{self._license_key}:{machine_id}".encode()
+        derived_key = _hmac.new(
+            binding_material, b"counterscarp-cache-v1", hashlib.sha256
+        ).digest()
+        message = f"{key_hash}{machine_id}{cached_at}".encode()
+        return _hmac.new(
+            derived_key, message, hashlib.sha256
         ).hexdigest()
 
     def _load_cached_result(self) -> Optional[LicenseInfo]:
@@ -496,9 +496,13 @@ class LicenseManager:
         _logger.warning("License expired and past grace period — downgrading to community tier")
         return None
 
-    def _build_grace_period_license(self, expires_at_dt: Optional[datetime]) -> "LicenseInfo":
-        """Build a LicenseInfo reflecting the current key's tier for grace-period access."""
-        tier = self._tier_from_key_prefix()
+    def _build_grace_period_license(
+        self, expires_at_dt: Optional[datetime],
+    ) -> "LicenseInfo":
+        """Build a LicenseInfo for grace-period access."""
+        # Use the cached validated tier, not the self-reported key prefix
+        cached = self._load_cached_result()
+        tier = cached.tier if cached else COMMUNITY
         if tier in (PRO, TEAM, ENTERPRISE):
             features = list(ALL_PRO_FEATURES)
         else:
@@ -665,10 +669,12 @@ class LicenseManager:
         if license_info.valid and license_info.tier != COMMUNITY:
             return license_info.tier
 
-        # Fallback: derive tier from key prefix
-        return self._tier_from_key_prefix()
+        # Safe fallback: do not trust key prefix for authorization
+        return COMMUNITY
 
     def _tier_from_key_prefix(self) -> str:
+        # DEPRECATED: Do not use for authorization decisions —
+        # prefix is self-reported and can be trivially spoofed.
         """Derive tier from the license key prefix."""
         if not self._license_key:
             return COMMUNITY

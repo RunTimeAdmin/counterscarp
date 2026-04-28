@@ -13,8 +13,8 @@ from scan_phase import ScanContext, ScanPhase
 class SupplyChainPhase(ScanPhase):
     """Phase 1 — Supply chain dependency check (package.json)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="supply_chain", display_name="Supply Chain")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="supply_chain", display_name="Supply Chain", **kwargs)
 
     def run(self, ctx: ScanContext) -> List[Dict]:
         import supply_chain_check
@@ -50,8 +50,8 @@ class SupplyChainPhase(ScanPhase):
 class SlitherPhase(ScanPhase):
     """Phase 2 — Slither static analysis."""
 
-    def __init__(self) -> None:
-        super().__init__(name="slither", display_name="Slither")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="slither", display_name="Slither", **kwargs)
 
     def run(self, ctx: ScanContext) -> List[Dict]:
         import red_team_scan
@@ -95,8 +95,8 @@ class SlitherPhase(ScanPhase):
 class AderynPhase(ScanPhase):
     """Phase 2B — Aderyn static analysis (optional, --aderyn flag + directory target)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="aderyn", display_name="Aderyn")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="aderyn", display_name="Aderyn", **kwargs)
 
     def should_run(self, ctx: ScanContext) -> bool:
         return bool(ctx.args.aderyn) and os.path.isdir(ctx.target)

@@ -11,8 +11,8 @@ from scan_phase import ScanContext, ScanPhase
 class HeuristicPhase(ScanPhase):
     """Phase 4 — Heuristic pattern scanner."""
 
-    def __init__(self) -> None:
-        super().__init__(name="heuristic", display_name="Heuristic Scanner")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="heuristic", display_name="Heuristic Scanner", **kwargs)
 
     def run(self, ctx: ScanContext) -> List[Dict]:
         import heuristic_scanner
@@ -58,8 +58,8 @@ class HeuristicPhase(ScanPhase):
 class PluginPhase(ScanPhase):
     """Phase 4C — Plugin analyzer extensions (optional, requires plugin_mgr)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="plugins", display_name="Plugin Analyzers")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="plugins", display_name="Plugin Analyzers", **kwargs)
 
     def should_run(self, ctx: ScanContext) -> bool:
         return ctx.plugin_mgr is not None and ctx.plugin_mgr.get_analyzer_count() > 0
@@ -97,8 +97,11 @@ class PluginPhase(ScanPhase):
 class FingerprintPhase(ScanPhase):
     """Phase 4B — Protocol fingerprint similarity scan (optional, --fingerprint flag + Pro)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="fingerprint", display_name="Fingerprint Scan", requires_pro=True)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            name="fingerprint", display_name="Fingerprint Scan",
+            requires_pro=True, **kwargs,
+        )
 
     def should_run(self, ctx: ScanContext) -> bool:
         if not ctx.args.fingerprint:
@@ -174,8 +177,8 @@ class FingerprintPhase(ScanPhase):
 class SymbolicPhase(ScanPhase):
     """Phase 5 — Mythril symbolic execution (optional, --symbolic flag + single .sol file)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="mythril", display_name="Mythril (Symbolic)")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="mythril", display_name="Mythril (Symbolic)", **kwargs)
 
     def should_run(self, ctx: ScanContext) -> bool:
         return bool(ctx.args.symbolic) and os.path.isfile(ctx.target)

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Stripe integration for Counterscarp Engine — payment processing and license provisioning.
 """
 
@@ -140,22 +140,33 @@ def find_license_by_subscription(subscription_id: str) -> Optional[Dict[str, Any
     return None
 
 
+_licenses_file_lock = threading.Lock()
+
+
 def update_license_in_db(key: str, updates: Dict[str, Any]) -> bool:
     """Apply *updates* to the license identified by *key*.  Returns True on success."""
-    if not _LICENSES_PATH.exists():
-        return False
-    try:
-        with open(_LICENSES_PATH, "r", encoding="utf-8") as fh:
-            db = json.load(fh)
-    except (json.JSONDecodeError, OSError):
-        return False
+    with _licenses_file_lock:
+        if not _LICENSES_PATH.exists():
+            return False
+        try:
+            with open(_LICENSES_PATH, "r", encoding="utf-8") as fh:
+                db = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            return False
 
-    for entry in db.get("licenses", []):
-        if entry.get("key") == key:
-            entry.update(updates)
-            with open(_LICENSES_PATH, "w", encoding="utf-8") as fh:
-                json.dump(db, fh, indent=2)
-            return True
+        for entry in db.get("licenses", []):
+            if entry.get("key") == key:
+                entry.update(updates)
+                tmp = _LICENSES_PATH.with_suffix(".tmp")
+                try:
+                    with open(tmp, "w", encoding="utf-8") as fh:
+                        json.dump(db, fh, indent=2)
+                    tmp.replace(_LICENSES_PATH)
+                except OSError:
+                    # Fallback: direct write if atomic rename fails
+                    with open(_LICENSES_PATH, "w", encoding="utf-8") as fh:
+                        json.dump(db, fh, indent=2)
+                return True
     return False
 
 

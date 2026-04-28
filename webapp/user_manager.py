@@ -59,6 +59,8 @@ class UserManager:
             if self._initialized:
                 return
             self._file_lock = threading.Lock()
+            self._cache: Optional[Dict[str, Any]] = None
+            self._cache_mtime: float = 0.0
             self._ensure_db()
             self._initialized = True
 
@@ -73,18 +75,27 @@ class UserManager:
             self._write_db({"users": [], "version": 1})
 
     def _load_db(self) -> Dict[str, Any]:
-        """Load the users database from disk."""
-        if not _USERS_DB_PATH.exists():
+        """Load the users database from disk with mtime caching."""
+        try:
+            mtime = _USERS_DB_PATH.stat().st_mtime
+        except FileNotFoundError:
             return {"users": [], "version": 1}
+        if self._cache is not None and mtime == self._cache_mtime:
+            return self._cache
         with open(_USERS_DB_PATH, "r", encoding="utf-8") as f:
-            result: Dict[str, Any] = json.load(f)
-            return result
+            self._cache = json.load(f)
+        self._cache_mtime = mtime
+        return self._cache
 
     def _write_db(self, db: Dict) -> None:
         """Persist the users database to disk."""
         _USERS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(_USERS_DB_PATH, "w", encoding="utf-8") as f:
+        tmp = _USERS_DB_PATH.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(db, f, indent=2)
+        tmp.replace(_USERS_DB_PATH)
+        self._cache = db
+        self._cache_mtime = _USERS_DB_PATH.stat().st_mtime
 
     # ------------------------------------------------------------------
     # Public API
@@ -149,36 +160,36 @@ class UserManager:
         email = email.strip().lower()
         with self._file_lock:
             db = self._load_db()
-        for user in db["users"]:
-            if user["email"] == email:
-                user.setdefault("license_key", None)
-                user.setdefault("stripe_customer_id", None)
-                user.setdefault("stripe_subscription_id", None)
-                return dict(user)
+            for user in db["users"]:
+                if user["email"] == email:
+                    user.setdefault("license_key", None)
+                    user.setdefault("stripe_customer_id", None)
+                    user.setdefault("stripe_subscription_id", None)
+                    return dict(user)
         return None
 
     def get_by_google_id(self, google_id: str) -> Optional[Dict[str, Any]]:
         """Return the user dict for *google_id*, or None if not found."""
         with self._file_lock:
             db = self._load_db()
-        for user in db["users"]:
-            if user.get("google_id") == google_id:
-                user.setdefault("license_key", None)
-                user.setdefault("stripe_customer_id", None)
-                user.setdefault("stripe_subscription_id", None)
-                return dict(user)
+            for user in db["users"]:
+                if user.get("google_id") == google_id:
+                    user.setdefault("license_key", None)
+                    user.setdefault("stripe_customer_id", None)
+                    user.setdefault("stripe_subscription_id", None)
+                    return dict(user)
         return None
 
     def get_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Return the user dict for *user_id*, or None if not found."""
         with self._file_lock:
             db = self._load_db()
-        for user in db["users"]:
-            if user["id"] == user_id:
-                user.setdefault("license_key", None)
-                user.setdefault("stripe_customer_id", None)
-                user.setdefault("stripe_subscription_id", None)
-                return dict(user)
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user.setdefault("license_key", None)
+                    user.setdefault("stripe_customer_id", None)
+                    user.setdefault("stripe_subscription_id", None)
+                    return dict(user)
         return None
 
     def verify_password(self, email: str, password: str) -> Optional[Dict[str, Any]]:
@@ -217,14 +228,14 @@ class UserManager:
         """
         with self._file_lock:
             db = self._load_db()
-        return [
-            {
-                "email": u["email"],
-                "name": u["name"],
-                "created_at": u["created_at"],
-            }
-            for u in db["users"]
-        ]
+            return [
+                {
+                    "email": u["email"],
+                    "name": u["name"],
+                    "created_at": u["created_at"],
+                }
+                for u in db["users"]
+            ]
 
     def set_license_key(
         self,
@@ -286,26 +297,28 @@ class UserManager:
         """
         with self._file_lock:
             db = self._load_db()
-        result = []
-        for u in db["users"]:
-            u.setdefault("auth_method", "email")
-            u.setdefault("last_login", u.get("created_at"))
-            u.setdefault("license_key", None)
-            u.setdefault("stripe_customer_id", None)
-            u.setdefault("stripe_subscription_id", None)
-            result.append(
-                {
-                    "email": u["email"],
-                    "name": u["name"],
-                    "created_at": u["created_at"],
-                    "auth_method": u["auth_method"],
-                    "last_login": u["last_login"],
-                    "license_key": u["license_key"],
-                }
-            )
-        return result
+            result = []
+            for u in db["users"]:
+                u.setdefault("auth_method", "email")
+                u.setdefault("last_login", u.get("created_at"))
+                u.setdefault("license_key", None)
+                u.setdefault("stripe_customer_id", None)
+                u.setdefault("stripe_subscription_id", None)
+                result.append(
+                    {
+                        "email": u["email"],
+                        "name": u["name"],
+                        "created_at": u["created_at"],
+                        "auth_method": u["auth_method"],
+                        "last_login": u["last_login"],
+                        "license_key": u["license_key"],
+                    }
+                )
+            return result
 
-    def find_by_license_key(self, license_key: str) -> Optional[Dict[str, Any]]:
+    def find_by_license_key(
+        self, license_key: str,
+    ) -> Optional[Dict[str, Any]]:
         """Return the user dict whose ``license_key`` matches, or None.
 
         Useful for checking whether a license key is already linked to an
@@ -319,9 +332,9 @@ class UserManager:
         """
         with self._file_lock:
             db = self._load_db()
-        for user in db["users"]:
-            if user.get("license_key") == license_key:
-                return dict(user)
+            for user in db["users"]:
+                if user.get("license_key") == license_key:
+                    return dict(user)
         return None
 
 

@@ -36,19 +36,19 @@ __all__ = [
 #: Phase execution order MUST be preserved — some phases depend on results
 #: from earlier phases (e.g. ExploitGen needs heuristic_results + static_issues).
 PHASE_REGISTRY: list[ScanPhase] = [
-    SupplyChainPhase(),    # Phase 1
-    SlitherPhase(),        # Phase 2
-    AderynPhase(),         # Phase 2B
-    FoundryFuzzPhase(),    # Phase 3
-    MedusaFuzzPhase(),     # Phase 3B
-    HeuristicPhase(),      # Phase 4
-    PluginPhase(),         # Phase 4C
-    FingerprintPhase(),    # Phase 4B
-    SymbolicPhase(),       # Phase 5
-    SolanaPhase(),         # Phase 6
-    UpgradeDiffPhase(),    # Phase 7
-    RagEnrichPhase(),      # Phase 7.5
-    ExploitGenPhase(),     # Phase 8
-    HistoryPhase(),        # Phase 8B
-    ReportPhase(),         # Phase 9
+    SupplyChainPhase(group=0),                          # Phase 1
+    SlitherPhase(group=1, parallel=True),               # Phase 2
+    AderynPhase(group=1, parallel=True),                # Phase 2B
+    FoundryFuzzPhase(group=2, parallel=True),           # Phase 3
+    MedusaFuzzPhase(group=2, parallel=True),            # Phase 3B
+    HeuristicPhase(group=3, parallel=True),             # Phase 4
+    PluginPhase(group=4),                               # Phase 4C
+    FingerprintPhase(group=3, parallel=True),           # Phase 4B
+    SymbolicPhase(group=5),                             # Phase 5
+    SolanaPhase(group=6, parallel=True),                # Phase 6
+    UpgradeDiffPhase(group=6, parallel=True),           # Phase 7
+    RagEnrichPhase(group=7),                            # Phase 7.5
+    ExploitGenPhase(group=8, parallel=True),            # Phase 8
+    HistoryPhase(group=8, parallel=True),               # Phase 8B
+    ReportPhase(group=9),                               # Phase 9
 ]

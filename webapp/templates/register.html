@@ -166,6 +166,7 @@
         {% endif %}
 
         <form method="POST" action="/auth/register" id="registerForm">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
             <div class="auth-field">
                 <label for="name">Name</label>
                 <input type="text"

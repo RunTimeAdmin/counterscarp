@@ -14,6 +14,7 @@ Example:
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from dataclasses import dataclass, field
@@ -93,6 +94,11 @@ class AttackGraph:
     """
     nodes: List[GraphNode] = field(default_factory=list)
     edges: List[GraphEdge] = field(default_factory=list)
+    _node_ids: Set[str] = field(default_factory=set, repr=False)
+    _edge_keys: Set[tuple] = field(default_factory=set, repr=False)
+    _adj: Dict[str, Set[str]] = field(
+        default_factory=dict, repr=False
+    )
 
     def add_node(self, node: GraphNode) -> None:
         """Add a node to the graph if it doesn't already exist.
@@ -100,8 +106,9 @@ class AttackGraph:
         Args:
             node: The node to add.
         """
-        if not any(n.id == node.id for n in self.nodes):
+        if node.id not in self._node_ids:
             self.nodes.append(node)
+            self._node_ids.add(node.id)
             logger.debug(f"Added node: {node.id} ({node.type})")
 
     def add_edge(self, edge: GraphEdge) -> None:
@@ -110,14 +117,16 @@ class AttackGraph:
         Args:
             edge: The edge to add.
         """
-        # Check for duplicate edges
-        if not any(
-            e.source_id == edge.source_id and 
-            e.target_id == edge.target_id and 
-            e.type == edge.type 
-            for e in self.edges
-        ):
+        key = (edge.source_id, edge.target_id, edge.type)
+        if key not in self._edge_keys:
             self.edges.append(edge)
+            self._edge_keys.add(key)
+            self._adj.setdefault(
+                edge.source_id, set()
+            ).add(edge.target_id)
+            self._adj.setdefault(
+                edge.target_id, set()
+            ).add(edge.source_id)
             logger.debug(
                 f"Added edge: {edge.source_id} -> "
                 f"{edge.target_id} ({edge.type})"
@@ -132,6 +141,8 @@ class AttackGraph:
         Returns:
             The node if found, None otherwise.
         """
+        if node_id not in self._node_ids:
+            return None
         for node in self.nodes:
             if node.id == node_id:
                 return node
@@ -179,9 +190,7 @@ class AttackGraph:
         Returns:
             List of neighboring node IDs.
         """
-        outgoing = [e.target_id for e in self.edges if e.source_id == node_id]
-        incoming = [e.source_id for e in self.edges if e.target_id == node_id]
-        return list(set(outgoing + incoming))
+        return list(self._adj.get(node_id, set()))
 
 
 # Regex patterns for Solidity parsing
@@ -242,7 +251,7 @@ def _generate_node_id(
     """
     base = f"{node_type}_{name}"
     if file:
-        file_hash = str(hash(file) % 10000).zfill(4)
+        file_hash = hashlib.sha256(file.encode()).hexdigest()[:4]
         base += f"_{file_hash}"
     if line > 0:
         base += f"_L{line}"

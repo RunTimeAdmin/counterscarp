@@ -1,4 +1,4 @@
-﻿"""Configuration for the Counterscarp Engine web application."""
+"""Configuration for the Counterscarp Engine web application."""
 
 import os
 from pathlib import Path

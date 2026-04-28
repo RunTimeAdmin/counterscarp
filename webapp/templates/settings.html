@@ -483,6 +483,7 @@
 
             <!-- Key input form -->
             <form id="apiKeyForm" method="POST" action="/settings/api-key">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <div class="api-key-group">
                     <label for="openai_api_key">OpenAI API Key</label>
                     <div class="input-row">
@@ -637,7 +638,7 @@
             const resp = await fetch('/settings/license-key', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: `license_key=${encodeURIComponent(key)}`,
+                body: `license_key=${encodeURIComponent(key)}&_csrf_token=${encodeURIComponent('{{ csrf_token }}')}`,
             });
             const data = await resp.json();
 
@@ -677,6 +678,8 @@
         try {
             const resp = await fetch('/settings/remove-license', {
                 method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `_csrf_token=${encodeURIComponent('{{ csrf_token }}')}`,
             });
             const data = await resp.json();
 

@@ -155,6 +155,7 @@
         {% endif %}
 
         <form method="POST" action="/auth/login">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
             <div class="auth-field">
                 <label for="email">Email</label>
                 <input type="email"

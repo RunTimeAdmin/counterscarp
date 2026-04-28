@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -28,7 +28,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from starlette.middleware.sessions import SessionMiddleware
-from webapp.auth import auth_router, admin_router, get_current_user
+from starlette.middleware.base import BaseHTTPMiddleware
+from webapp.auth import auth_router, admin_router, get_current_user, get_license_key_for_request, generate_csrf_token, validate_csrf_token
 from webapp.user_manager import user_manager
 from webapp.config import (
     ALLOWED_EXTENSIONS,
@@ -85,6 +86,25 @@ security_logger = logging.getLogger("counterscarp.security")
 
 _license = LicenseManager()
 
+
+def _count_lines(path: str) -> int:
+    """Count lines in a file using a context manager."""
+    with open(path, encoding="utf-8", errors="ignore") as f:
+        return sum(1 for _ in f)
+
+
+def validate_audit_id(audit_id: str) -> str:
+    """Validate audit_id is a UUID and resolves inside RESULTS_DIR."""
+    try:
+        uuid.UUID(audit_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid audit ID format")
+    resolved = (RESULTS_DIR / audit_id).resolve()
+    if not str(resolved).startswith(str(RESULTS_DIR.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return audit_id
+
+
 # Import Counterscarp Engine modules
 from heuristic_scanner import (
     HeuristicFinding,
@@ -118,6 +138,28 @@ app = FastAPI(
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security-related HTTP headers to every response."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "font-src 'self'; connect-src 'self'"
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -464,7 +506,11 @@ async def index(request: Request):
     license_tier = _license.get_tier()
     return templates.TemplateResponse(
         request, "upload.html",
-        context={"current_user": get_current_user(request), "license_tier": license_tier},
+        context={
+            "current_user": get_current_user(request),
+            "license_tier": license_tier,
+            "csrf_token": generate_csrf_token(request),
+        },
     )
 
 
@@ -481,6 +527,14 @@ async def audit(
     files: List[UploadFile] = File(...),
 ):
     """Run security audit on uploaded files."""
+    # CSRF validation — skip if no token was ever generated
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     # Enforce per-IP audit rate limit
     client_ip = get_client_ip(request)
     if not _audit_limiter.is_allowed(client_ip):
@@ -722,16 +776,13 @@ async def audit(
             attack_graph_analyzer["pro_only"] = True
         analyzers_list.append(attack_graph_analyzer)
 
+    current_user = get_current_user(request)
     scan_meta = {
+        "owner_user_id": current_user["id"] if current_user else None,
         "project_name": project_name,
         "timestamp": datetime.now().isoformat(),
         "files_scanned": len(uploaded_paths),
-        "total_source_lines": sum(
-            len(
-                open(fp, encoding="utf-8", errors="ignore").readlines()
-            )
-            for fp in uploaded_paths
-        ),
+        "total_source_lines": sum(_count_lines(fp) for fp in uploaded_paths),
         "analyzers": analyzers_list,
         "rules_triggered": sorted(
             str(fd["rule_id"]) for fd in findings_data
@@ -746,13 +797,25 @@ async def audit(
 
 
 @app.get("/results/{audit_id}", response_class=HTMLResponse)
-async def results(request: Request, audit_id: str):
+async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
     """Display audit results."""
     results_dir = RESULTS_DIR / audit_id
     findings_path = results_dir / "findings.json"
 
     if not findings_path.exists():
         raise HTTPException(status_code=404, detail="Audit not found")
+
+    # Ownership check
+    current_user = request.session.get("user")
+    meta_path_acl = results_dir / "scan_meta.json"
+    if meta_path_acl.exists():
+        with open(meta_path_acl) as _mf:
+            _acl_meta = json.load(_mf)
+        if _acl_meta.get("owner_user_id") and current_user:
+            if _acl_meta["owner_user_id"] != current_user.get("id"):
+                raise HTTPException(status_code=403, detail="Access denied")
+        elif _acl_meta.get("owner_user_id") and not current_user:
+            return RedirectResponse(url="/auth/login")
 
     # Load findings
     with open(findings_path, "r", encoding="utf-8") as f:
@@ -839,6 +902,7 @@ async def pricing_page(request: Request):
             "current_user": get_current_user(request),
             "stripe_key": STRIPE_PUBLISHABLE_KEY,
             "products": PRODUCTS,
+            "csrf_token": generate_csrf_token(request),
         },
     )
 
@@ -856,6 +920,12 @@ async def terms_page(request: Request):
 async def create_checkout(request: Request):
     """Create a Stripe Checkout Session and redirect."""
     form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     product_key = str(form.get("product", "pro_monthly"))
     base_url = str(request.base_url).rstrip("/")
     success_url = (
@@ -889,8 +959,7 @@ async def checkout_success(request: Request):
                     stripe_customer_id=str(license_info.get("stripe_customer_id") or ""),
                     stripe_subscription_id=str(license_info.get("stripe_subscription_id") or "")
                 )
-                # Set env var for immediate session use
-                os.environ["COUNTERSCARP_PRO_LICENSE"] = license_key
+                # Store in session for immediate use (never in os.environ)
                 request.session["user_license"] = license_key
                 auto_linked = True
         else:
@@ -1098,10 +1167,7 @@ async def settings_page(request: Request):
 
     # License context for the template
     license_tier = _license.get_tier()
-    user_license_key = current_user.get("license_key") if current_user else None
-    # Fallback to env var for backward compatibility
-    if not user_license_key:
-        user_license_key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
+    user_license_key = get_license_key_for_request(request, current_user)
     license_key_set = bool(user_license_key)
     license_masked_key = _mask_license_key(user_license_key) if user_license_key else ""
     license_features = _get_tier_features(license_tier)
@@ -1116,6 +1182,7 @@ async def settings_page(request: Request):
             "license_key_set": license_key_set,
             "license_masked_key": license_masked_key,
             "license_features": license_features,
+            "csrf_token": generate_csrf_token(request),
         },
     )
 
@@ -1126,6 +1193,12 @@ async def save_api_key(request: Request):
     if not get_current_user(request):
         return RedirectResponse(url="/auth/login", status_code=302)
     form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     api_key = str(form.get("openai_api_key", "")).strip()
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
@@ -1221,6 +1294,12 @@ async def save_license_key(request: Request):
     if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     license_key = str(form.get("license_key", "")).strip()
 
     if not license_key:
@@ -1293,8 +1372,8 @@ async def save_license_key(request: Request):
     # Persist the key to the user's account record
     user_manager.set_license_key(current_user["id"], license_key)
 
-    # Also set in the current session's env for LicenseManager compatibility
-    os.environ["COUNTERSCARP_PRO_LICENSE"] = license_key
+    # Store in the session for this user (never in os.environ)
+    request.session["user_license"] = license_key
 
     # Clear LicenseManager cache so it picks up the new key
     _license.clear_cache()
@@ -1319,9 +1398,17 @@ async def remove_license(request: Request):
     if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
 
+    # CSRF validation
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     # Log deactivation attempt
     ip = request.client.host if request.client else "unknown"
-    user_key = current_user.get("license_key") or os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
+    user_key = get_license_key_for_request(request, current_user)
     if user_key:
         security_logger.info(
             "License deactivation: key=%s machine=%s ip=%s",
@@ -1331,8 +1418,8 @@ async def remove_license(request: Request):
     # Clear the license key from the user's account record
     user_manager.clear_license_key(current_user["id"])
 
-    # Remove from current session's environment
-    os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
+    # Clear license from the user's session
+    request.session.pop("user_license", None)
 
     # Clear LicenseManager cache
     _license.clear_cache()
@@ -1354,7 +1441,7 @@ async def get_license_status(request: Request):
     if current_user:
         key = current_user.get("license_key") or ""
     if not key:
-        key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "")
+        key = get_license_key_for_request(request, current_user)
 
     tier = _license.get_tier()
     masked_key = _mask_license_key(key) if key else ""
@@ -1370,19 +1457,8 @@ async def get_license_status(request: Request):
 
 
 @app.get("/results/{audit_id}/report/{format}")
-async def download_report(audit_id: str, format: str):
+async def download_report(audit_id: str = Depends(validate_audit_id), format: str = ""):
     """Download a report file."""
-    # Validate audit_id is a valid UUID to prevent path traversal
-    try:
-        uuid.UUID(audit_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid audit ID format")
-
-    # Path containment check — ensure resolved path stays within RESULTS_DIR
-    resolved = (RESULTS_DIR / audit_id).resolve()
-    if not str(resolved).startswith(str(RESULTS_DIR.resolve())):
-        raise HTTPException(status_code=403, detail="Access denied")
-
     results_dir = RESULTS_DIR / audit_id
 
     format_map = {
@@ -1410,13 +1486,25 @@ async def download_report(audit_id: str, format: str):
 
 
 @app.get("/results/{audit_id}/attack-graph", response_class=HTMLResponse)
-async def attack_graph(audit_id: str):
+async def attack_graph(request: Request, audit_id: str = Depends(validate_audit_id)):
     """View the attack graph."""
     results_dir = RESULTS_DIR / audit_id
     graph_path = results_dir / "attack_graph.html"
 
     if not graph_path.exists():
         raise HTTPException(status_code=404, detail="Attack graph not found")
+
+    # Ownership check
+    current_user = request.session.get("user")
+    meta_path_acl = results_dir / "scan_meta.json"
+    if meta_path_acl.exists():
+        with open(meta_path_acl) as _mf:
+            _acl_meta = json.load(_mf)
+        if _acl_meta.get("owner_user_id") and current_user:
+            if _acl_meta["owner_user_id"] != current_user.get("id"):
+                raise HTTPException(status_code=403, detail="Access denied")
+        elif _acl_meta.get("owner_user_id") and not current_user:
+            return RedirectResponse(url="/auth/login")
 
     with open(graph_path, "r", encoding="utf-8") as f:
         content = f.read()

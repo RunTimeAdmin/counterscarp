@@ -11,8 +11,11 @@ from scan_phase import ScanContext, ScanPhase
 class SolanaPhase(ScanPhase):
     """Phase 6 — Solana/Anchor static analysis (optional, --solana-root + Pro license)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="solana", display_name="Solana Analyzer", requires_pro=True)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            name="solana", display_name="Solana Analyzer",
+            requires_pro=True, **kwargs,
+        )
 
     def should_run(self, ctx: ScanContext) -> bool:
         if not ctx.args.solana_root:
@@ -78,8 +81,8 @@ class SolanaPhase(ScanPhase):
 class UpgradeDiffPhase(ScanPhase):
     """Phase 7 — Upgrade diff analysis (optional, --upgrade-old + --upgrade-new)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="upgrade_diff", display_name="Upgrade Diff")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="upgrade_diff", display_name="Upgrade Diff", **kwargs)
 
     def should_run(self, ctx: ScanContext) -> bool:
         return bool(ctx.args.upgrade_old) and bool(ctx.args.upgrade_new)

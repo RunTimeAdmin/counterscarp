@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ==============================================================================
 # COUNTERSCARP ENGINE — DOCKER COMPOSE
 # Bundles the complete 21-analyzer stack for EVM smart contract auditing.
@@ -26,7 +24,7 @@ services:
       dockerfile: Dockerfile
 
     # Tag the locally-built image for easy reference
-    image: counterscarp-engine:5.0.3
+    image: counterscarp-engine:5.0.5
 
     # ── Volume mounts ───────────────────────────────────────────────────────────
     volumes:
@@ -35,7 +33,7 @@ services:
       # Mount a host directory to receive reports and PoC exploits
       - ./output:/output
       # Persist Foundry compilation cache across runs
-      - foundry-cache:/root/.foundry/cache
+      - foundry-cache:/home/counterscarp/.foundry/cache
 
     # ── Environment ────────────────────────────────────────────────────────────
     environment:
@@ -74,7 +72,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.3
+    image: counterscarp-engine:5.0.5
     command: ["--doctor"]
 
   # ── Heuristic-only scan (no external tool dependencies) ──────────────────────
@@ -83,7 +81,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.3
+    image: counterscarp-engine:5.0.5
     volumes:
       - ./target:/scan
       - ./output:/output
@@ -95,7 +93,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.3
+    image: counterscarp-engine:5.0.5
     volumes:
       - ./target:/scan
       - ./output:/output

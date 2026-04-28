@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import os
 import argparse
@@ -174,6 +175,468 @@ def get_remediation(issue_type: str, context: str) -> str:
     return f"Review logic at `{context[:20]}...`. Ensure strict validation of inputs and access control."
 
 
+def _aggregate_findings(
+    static_results: List[Dict[str, Any]],
+    supply_results: List[Dict[str, Any]],
+    fuzz_results: List[Dict[str, Any]],
+    heuristic_results: List[Dict[str, Any]],
+    symbolic_results: List[Dict[str, Any]],
+    aderyn_results: Optional[Dict[str, Any]] = None,
+    medusa_results: Optional[Dict[str, Any]] = None,
+    solana_results: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Aggregate all analyzer outputs into a unified findings list.
+
+    Takes raw results from each analyzer and normalizes them into a common
+    schema with severity, rule_id, location, and message fields.
+
+    Returns:
+        Sorted list of unified finding dicts (CRITICAL first).
+    """
+    all_findings: List[Dict[str, Any]] = []
+
+    # static_results
+    for item in static_results:
+        all_findings.append({
+            "severity": item.get("impact", "MEDIUM").upper(),
+            "rule_id": item.get("check") or item.get("rule_id") or item.get("title", "unknown"),
+            "location": f"{item.get('file', item.get('location', 'unknown'))}:{item.get('line_no', item.get('line', '?'))}",
+            "message": (item.get("message") or item.get("description", ""))[:80],
+        })
+
+    # heuristic_results
+    for item in heuristic_results:
+        all_findings.append({
+            "severity": item.get("severity", "MEDIUM").upper(),
+            "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "unknown"),
+            "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+            "message": (item.get("message") or item.get("description", ""))[:80],
+        })
+
+    # fuzz_results — all CRITICAL
+    for item in fuzz_results:
+        all_findings.append({
+            "severity": "CRITICAL",
+            "rule_id": item.get("test_name") or item.get("rule_id") or item.get("title", "fuzz_violation"),
+            "location": item.get("file", item.get("location", "unknown")),
+            "message": (item.get("message") or item.get("description", ""))[:80],
+        })
+
+    # symbolic_results
+    for item in symbolic_results:
+        all_findings.append({
+            "severity": item.get("severity", "MEDIUM").upper(),
+            "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "symbolic_issue"),
+            "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+            "message": (item.get("message") or item.get("description", ""))[:80],
+        })
+
+    # aderyn_results
+    if aderyn_results and isinstance(aderyn_results, dict):
+        for item in aderyn_results.get("issues", []):
+            all_findings.append({
+                "severity": item.get("severity", "MEDIUM").upper(),
+                "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "aderyn_issue"),
+                "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+                "message": (item.get("message") or item.get("description", ""))[:80],
+            })
+
+    # medusa_results
+    if medusa_results and isinstance(medusa_results, dict):
+        for item in medusa_results.get("findings", []):
+            all_findings.append({
+                "severity": item.get("severity", "HIGH").upper(),
+                "rule_id": item.get("test") or item.get("rule_id") or item.get("title", "medusa_violation"),
+                "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
+                "message": (item.get("message") or item.get("description", ""))[:80],
+            })
+
+    # solana_results
+    if solana_results and isinstance(solana_results, dict):
+        for item in solana_results.get("pattern_findings", []):
+            sev = getattr(item, "severity", None) or item.get("severity", "MEDIUM") if isinstance(item, dict) else getattr(item, "severity", "MEDIUM")
+            rid = getattr(item, "rule_id", None) or (item.get("rule_id") if isinstance(item, dict) else None) or "solana_issue"
+            loc_file = getattr(item, "file", None) or (item.get("file") if isinstance(item, dict) else "unknown") or "unknown"
+            loc_line = getattr(item, "line_no", None) or (item.get("line_no") if isinstance(item, dict) else "?") or "?"
+            msg = getattr(item, "description", None) or (item.get("description") if isinstance(item, dict) else "") or ""
+            all_findings.append({
+                "severity": str(sev).upper(),
+                "rule_id": str(rid),
+                "location": f"{loc_file}:{loc_line}",
+                "message": str(msg)[:80],
+            })
+
+    # Sort: CRITICAL first
+    _severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+    all_findings.sort(key=lambda _x: _severity_order.get(_x.get("severity", "MEDIUM").upper(), 5))
+
+    return all_findings
+
+
+def _compute_risk_metrics(
+    all_findings: List[Dict[str, Any]],
+    fuzz_results: List[Dict[str, Any]],
+    static_results: List[Dict[str, Any]],
+    heuristic_results: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Compute aggregate risk score, severity distribution, and pass/fail.
+
+    Args:
+        all_findings: Unified findings list from _aggregate_findings.
+        fuzz_results: Raw fuzz results (for critical count).
+        static_results: Raw static results (for critical count).
+        heuristic_results: Raw heuristic results (for critical count).
+
+    Returns:
+        Dict with severity_counts, critical_count, status_icon, total_findings.
+    """
+    critical_count = (
+        len(fuzz_results)
+        + len([x for x in static_results if x.get("impact", "").lower() in ("high", "critical")])
+        + len([x for x in heuristic_results if x.get("severity", "").upper() == "CRITICAL"])
+    )
+    status_icon = "[CRITICAL]" if critical_count > 0 else "[STABLE]"
+
+    _severity_counts: Dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+    for _f in all_findings:
+        _sev = _f.get("severity", "MEDIUM").upper()
+        if _sev in _severity_counts:
+            _severity_counts[_sev] += 1
+
+    _total_findings = sum(_severity_counts.values())
+
+    return {
+        "severity_counts": _severity_counts,
+        "critical_count": critical_count,
+        "status_icon": status_icon,
+        "total_findings": _total_findings,
+    }
+
+
+def _render_markdown_report(
+    f,
+    project_name: str,
+    all_findings: List[Dict[str, Any]],
+    metrics: Dict[str, Any],
+    static_results: List[Dict[str, Any]],
+    supply_results: List[Dict[str, Any]],
+    fuzz_results: List[Dict[str, Any]],
+    heuristic_results: List[Dict[str, Any]],
+    symbolic_results: List[Dict[str, Any]],
+    aderyn_results: Optional[Dict[str, Any]] = None,
+    medusa_results: Optional[Dict[str, Any]] = None,
+    solana_results: Optional[Dict[str, Any]] = None,
+    upgrade_results: Optional[Dict[str, Any]] = None,
+    fingerprint_results: Optional[List[Dict[str, Any]]] = None,
+    exploit_results: Optional[List] = None,
+    analyzer_status: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Render the Markdown version of the action plan report.
+
+    Writes the full Markdown report content to the given file handle.
+    """
+    critical_count = metrics["critical_count"]
+    status_icon = metrics["status_icon"]
+    _severity_counts = metrics["severity_counts"]
+    _total_findings = metrics["total_findings"]
+
+    # Executive Summary
+    f.write("# Security Remediation Plan\n")
+    f.write(f"**Target:** `{project_name}`\n")
+    f.write(f"**Status:** {status_icon} ({critical_count} Critical Issues)\n")
+    f.write(f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
+
+    f.write("> **Objective:** This document lists specific, actionable steps to patch identified vulnerabilities. Prioritize 'Critical' items immediately.\n\n")
+
+    f.write("---\n\n")
+
+    # Executive Summary table
+    f.write("## Executive Summary\n\n")
+    f.write("| Severity | Count |\n")
+    f.write("|----------|-------|\n")
+    f.write(f"| CRITICAL | {_severity_counts['CRITICAL']} |\n")
+    f.write(f"| HIGH | {_severity_counts['HIGH']} |\n")
+    f.write(f"| MEDIUM | {_severity_counts['MEDIUM']} |\n")
+    f.write(f"| LOW | {_severity_counts['LOW']} |\n")
+    f.write(f"| INFO | {_severity_counts['INFO']} |\n")
+    f.write(f"| **Total** | **{_total_findings}** |\n\n")
+
+    top10 = all_findings[:10]
+    if top10:
+        f.write("### Top 10 Priority Issues\n\n")
+        f.write("| # | Severity | Issue | Location | Description |\n")
+        f.write("|---|----------|-------|----------|-------------|\n")
+        for _idx, _finding in enumerate(top10, 1):
+            _sev = _finding.get("severity", "MEDIUM")
+            _issue = _finding.get("rule_id", "unknown")
+            _loc = _finding.get("location", "unknown")
+            _desc = _finding.get("message", "").replace("|", "\\|")
+            f.write(f"| {_idx} | {_sev} | {_issue} | {_loc} | {_desc} |\n")
+        f.write("\n")
+
+    f.write("---\n\n")
+
+    # ANALYZER COVERAGE TABLE
+    if analyzer_status:
+        f.write("## Analyzer Coverage\n\n")
+        f.write("| Analyzer | Status | Findings |\n")
+        f.write("|----------|--------|----------|\n")
+        _failed_analyzers = []
+        for _aname, _astatus in analyzer_status.items():
+            if _astatus.get("ran"):
+                _acount = _astatus.get("finding_count", 0)
+                f.write(f"| {_aname} | Completed | {_acount} |\n")
+            elif _astatus.get("error") == "Not enabled":
+                f.write(f"| {_aname} | Skipped (not enabled) | — |\n")
+            else:
+                f.write(f"| {_aname} | **FAILED** | — |\n")
+                _failed_analyzers.append((_aname, _astatus.get("error", "Unknown error")))
+        f.write("\n")
+        for _aname, _aerr in _failed_analyzers:
+            f.write(f"> **Warning:** {_aname} did not complete successfully ({_aerr}). Results below may be incomplete.\n\n")
+        f.write("---\n\n")
+
+    # SECTION 1: SUPPLY CHAIN (DEPENDENCIES)
+    f.write("## 1. Dependency Updates (Supply Chain)\n")
+    if not supply_results:
+        f.write("[OK] **No Action Required.** All dependencies are up to date.\n\n")
+    else:
+        f.write("| Severity | Library | Action Required |\n")
+        f.write("| :--- | :--- | :--- |\n")
+        for item in supply_results:
+            f.write(
+                f"| [!] | `{item['library']}` | **Run:** `npm update {item['library']}` <br> **Reason:** {item.get('summary', 'Known Vulnerability')} |\n"
+            )
+        f.write("\n")
+
+    f.write("---\n\n")
+
+    # SECTION 2: CODE VULNERABILITIES (STATIC)
+    f.write("## 2. Code Patches (Static Analysis)\n")
+    if not static_results:
+        f.write("[OK] **No Action Required.** No critical patterns found.\n\n")
+    else:
+        for i, item in enumerate(static_results, 1):
+            impact = item.get("impact", "Unknown")
+            priority = "[IMMEDIATE]" if impact == "High" else "[HIGH]"
+            action = get_remediation(item.get("title", ""), item.get("description", ""))
+
+            f.write(f"### {i}. {item.get('title', 'Unknown Issue')} ({priority})\n")
+            f.write(f"- **Location:** `{item.get('location', 'Unknown location')}`\n")
+            f.write(f"- **The Issue:** {item.get('description', 'No description provided')}\n")
+            f.write(f"- **ACTION:** {action}\n\n")
+
+    f.write("---\n\n")
+
+    # SECTION 3: LOGIC FAILURES (FUZZING)
+    f.write("## 3. Logic & Invariant Patches (Dynamic)\n")
+    if not fuzz_results:
+        f.write("[OK] **No Action Required.** Logic held up against stress testing.\n\n")
+    else:
+        for item in fuzz_results:
+            test_name = item.get("test_name", "UnknownTest")
+            steps = item.get("steps", [])
+
+            f.write(f"### Logic Failure: `{test_name}`\n")
+            f.write("**Diagnosis:** The protocol entered an invalid state (Invariant broken).\n\n")
+            f.write("**ACTION:**\n")
+            f.write("1. Create a new test file `test/Exploit.t.sol`.\n")
+            f.write("2. Paste the 'Kill Shot' sequence below into it.\n")
+            f.write(f"3. Modify `{test_name}` to handle this edge case (usually by adding `require()` checks).\n\n")
+
+            f.write("**The Kill Shot (Trace):**\n")
+            f.write("```solidity\n")
+            for step in steps:
+                f.write(f"{step}\n")
+            f.write("```\n\n")
+
+    f.write("---\n\n")
+
+    # SECTION 4: HEURISTIC FINDINGS (PATTERN-BASED)
+    f.write("## 4. Heuristic Findings (Pattern-Based)\n")
+    if not heuristic_results:
+        f.write("[OK] **No heuristic red flags detected.** (Note: this does *not* guarantee safety.)\n\n")
+    else:
+        for item in heuristic_results:
+            severity = item.get("severity", "INFO")
+            rule_id = item.get("rule_id", "")
+            message = item.get("message", "")
+            location = f"{item.get('file', 'unknown_file')}:{item.get('line_no', '?')}"
+            code = (item.get("line_text", "") or "").strip()
+
+            f.write(f"- **[{severity}] {rule_id}:** {message}\n")
+            f.write(f"  - Location: `{location}`\n")
+            if code:
+                f.write(f"  - Code: `{code}`\n")
+            f.write("\n")
+
+    f.write("---\n\n")
+
+    # SECTION 5: SYMBOLIC ANALYSIS (MYTHRIL)
+    f.write("## 5. Symbolic Analysis (Mythril)\n")
+    if not symbolic_results:
+        f.write("[OK] **No issues reported by Mythril for this run.**\n\n")
+    else:
+        for i, issue in enumerate(symbolic_results, 1):
+            title = issue.get("title") or "Unnamed issue"
+            severity = issue.get("severity") or "UNKNOWN"
+            f.write(f"### {i}. {title} ({severity})\n")
+            if issue.get("swc_id"):
+                f.write(f"- **SWC:** {issue['swc_id']}\n")
+            if issue.get("function"):
+                f.write(f"- **Function:** `{issue['function']}`\n")
+            if issue.get("address"):
+                f.write(f"- **Address/PC:** `{issue['address']}`\n")
+            desc = issue.get("description") or ""
+            if desc:
+                f.write(f"- **Details:** {desc}\n")
+            f.write("\n")
+
+    # SECTION 6: ADERYN STATIC ANALYSIS (OPTIONAL)
+    f.write("---\n\n")
+    f.write("## 6. Aderyn Static Analysis (Optional)\n")
+    if not aderyn_results:
+        f.write("\u2139\ufe0f Aderyn analysis not run or produced no results.\n\n")
+    elif isinstance(aderyn_results, dict) and aderyn_results.get("error"):
+        f.write(f"[!] Aderyn error: {aderyn_results['error']}\n\n")
+    else:
+        total = aderyn_results.get("total", 0)
+        high_count = len(aderyn_results.get("high", []))
+        low_count = len(aderyn_results.get("low", []))
+        nc_count = len(aderyn_results.get("nc", []))
+        f.write(
+            f"[*] Total issues: {total} (High: {high_count}, Low: {low_count}, Non-critical: {nc_count})\n\n"
+        )
+        high_issues = aderyn_results.get("high", [])[:5]
+        if high_issues:
+            f.write("### Top High Severity Findings (Aderyn)\n")
+            for issue in high_issues:
+                title = issue.get("title", "Unknown issue")
+                detector = issue.get("detector_name", "unknown")
+                f.write(f"- **{title}** (Detector: {detector})\n")
+            f.write("\n")
+
+    # SECTION 7: MEDUSA FUZZING (OPTIONAL)
+    f.write("---\n\n")
+    f.write("## 7. Medusa Fuzzing (Coverage-Guided)\n")
+    if not medusa_results:
+        f.write("\u2139\ufe0f Medusa fuzzing not run or produced no results.\n\n")
+    elif isinstance(medusa_results, dict) and medusa_results.get("error"):
+        f.write(f"[!] Medusa error: {medusa_results['error']}\n\n")
+    else:
+        findings = medusa_results.get("findings", [])
+        stats = medusa_results.get("statistics", {})
+        total_seq = medusa_results.get("total_sequences", "unknown")
+        coverage = stats.get("coverage_percent", "N/A")
+        f.write(f"[*] Total sequences run: {total_seq}, Coverage: {coverage}%\n\n")
+        if not findings:
+            f.write("[+] No invariant violations found by Medusa.\n\n")
+        else:
+            f.write(f"[!] Medusa found {len(findings)} invariant violations.\n\n")
+            for finding in findings[:5]:
+                test_name = finding.get("test", "unknown")
+                status = finding.get("status", "")
+                f.write(f"- **{test_name}** ({status})\n")
+            if len(findings) > 5:
+                f.write(f"- ... ({len(findings) - 5} more violations)\n")
+            f.write("\n")
+
+    # SECTION 8: SOLANA/ANCHOR STATIC ANALYSIS (OPTIONAL)
+    f.write("---\n\n")
+    f.write("## 8. Solana/Anchor Static Analysis (Optional)\n")
+    if not solana_results:
+        f.write("\u2139\ufe0f Solana analysis not run or no Solana project configured.\n\n")
+    elif isinstance(solana_results, dict) and solana_results.get("summary"):
+        summary = solana_results["summary"]
+        f.write(
+            f"[*] Findings \u2192 CRITICAL: {summary.get('CRITICAL', 0)}, HIGH: {summary.get('HIGH', 0)}, "
+            f"MEDIUM: {summary.get('MEDIUM', 0)}, LOW: {summary.get('LOW', 0)}\n\n"
+        )
+        pattern_findings = solana_results.get("pattern_findings", [])
+        criticals = [
+            f_item for f_item in pattern_findings if getattr(f_item, "severity", None) == "CRITICAL"
+        ][:5]
+        if criticals:
+            f.write("### Top Critical Solana Findings\n")
+            for finding in criticals:
+                f.write(
+                    f"- **{finding.title}** in `{finding.file}:{finding.line_no}` \u2013 {finding.description}\n"
+                )
+            f.write("\n")
+
+    # SECTION 9: UPGRADE DIFF ANALYSIS (OPTIONAL)
+    f.write("---\n\n")
+    f.write("## 9. Upgrade Diff Analysis (Optional)\n")
+    if not upgrade_results:
+        f.write("\u2139\ufe0f No upgrade diff analysis run for this report.\n\n")
+    elif isinstance(upgrade_results, dict) and upgrade_results.get("summary"):
+        summary = upgrade_results["summary"]
+        f.write(
+            f"[*] Issues \u2192 CRITICAL: {summary.get('CRITICAL', 0)}, HIGH: {summary.get('HIGH', 0)}, "
+            f"MEDIUM: {summary.get('MEDIUM', 0)}, LOW: {summary.get('LOW', 0)}\n\n"
+        )
+        if upgrade_results.get("safe"):
+            f.write("[OK] SAFE TO UPGRADE (no critical/high issues detected).\n\n")
+        else:
+            f.write("[!] UNSAFE TO UPGRADE - address critical/high issues before deploying.\n\n")
+
+    # SECTION 10: PROTOCOL FINGERPRINT ANALYSIS (OPTIONAL)
+    f.write("---\n\n")
+    f.write("## 10. Protocol Fingerprint Analysis (Optional)\n")
+    if not fingerprint_results:
+        f.write("\u2139\ufe0f No protocol fingerprint analysis run for this report.\n\n")
+    else:
+        total_matches = sum(len(r.get("matches", [])) for r in fingerprint_results)
+        f.write(f"[*] Found {len(fingerprint_results)} contract(s) with {total_matches} protocol match(es)\n\n")
+
+        for result in fingerprint_results:
+            file_path = result.get("file", "unknown")
+            matches = result.get("matches", [])
+            risk = result.get("risk_assessment", {})
+
+            f.write(f"### {os.path.basename(file_path)}\n")
+            f.write(f"- **Path:** `{file_path}`\n")
+            f.write(f"- **Risk Level:** {risk.get('risk_level', 'N/A')}\n")
+            f.write(f"- **Risk Score:** {risk.get('risk_score', 0)}/100\n")
+            f.write(f"- **Inherited Vulnerabilities:** {risk.get('total_vulnerabilities', 0)}\n\n")
+
+            if matches:
+                f.write("**Protocol Matches:**\n")
+                for match in matches[:3]:  # Show top 3
+                    f.write(f"- **{match.get('protocol', 'Unknown')}** ({match.get('category', 'Unknown')}) - {match.get('confidence', 0) * 100:.1f}% confidence\n")
+                    if match.get('known_vulnerabilities'):
+                        high_crit = sum(1 for v in match.get('known_vulnerabilities', []) if v.get('severity') in ['CRITICAL', 'HIGH'])
+                        if high_crit > 0:
+                            f.write(f"  [!] {high_crit} high/critical vulnerabilities inherited\n")
+                if len(matches) > 3:
+                    f.write(f"- ... and {len(matches) - 3} more match(es)\n")
+                f.write("\n")
+
+            if risk.get('recommendations'):
+                f.write("**Recommendations:**\n")
+                for rec in risk.get('recommendations', [])[:3]:
+                    f.write(f"- {rec}\n")
+                f.write("\n")
+
+    # SECTION 11: EXPLOIT PROOF-OF-CONCEPT TESTS (PRO TIER)
+    if exploit_results:
+        f.write("---\n\n")
+        f.write("## 11. Exploit Proof-of-Concept Tests\n\n")
+        successful_exploits = [r for r in exploit_results if r.status == "success"]
+        if successful_exploits:
+            f.write(f"Generated **{len(successful_exploits)}** exploit PoC test(s) for critical findings.\n\n")
+            f.write("| Finding | Severity | Output File | Status |\n")
+            f.write("|---------|----------|-------------|--------|\n")
+            for r in exploit_results:
+                finding_name = r.finding.get("rule_id", r.finding.get("check", "unknown"))
+                severity = r.finding.get("severity", "N/A")
+                output_path = r.output_path or "\u2014"
+                f.write(f"| {finding_name} | {severity} | `{output_path}` | {r.status} |\n")
+            f.write("\n> **Run:** `forge test --match-path exploits/` to validate generated PoCs\n\n")
+        else:
+            f.write("No exploit PoCs were successfully generated for the detected findings.\n\n")
+
+
 def _generate_action_plan_report(
     project_name: str,
     static_results: List[Dict[str, Any]],
@@ -222,422 +685,46 @@ def _generate_action_plan_report(
     else:
         filename = f"ACTION_PLAN_{datetime.date.today()}.md"
 
-    # Risk Calculation
-    critical_count = (
-        len(fuzz_results)
-        + len([x for x in static_results if x.get("impact", "").lower() in ("high", "critical")])
-        + len([x for x in heuristic_results if x.get("severity", "").upper() == "CRITICAL"])
+    # Step 1: Aggregate all findings into a unified list
+    all_findings = _aggregate_findings(
+        static_results=static_results,
+        supply_results=supply_results,
+        fuzz_results=fuzz_results,
+        heuristic_results=heuristic_results,
+        symbolic_results=symbolic_results,
+        aderyn_results=aderyn_results,
+        medusa_results=medusa_results,
+        solana_results=solana_results,
     )
-    status_icon = "[CRITICAL]" if critical_count > 0 else "[STABLE]"
 
+    # Step 2: Compute risk metrics
+    metrics = _compute_risk_metrics(
+        all_findings=all_findings,
+        fuzz_results=fuzz_results,
+        static_results=static_results,
+        heuristic_results=heuristic_results,
+    )
+
+    # Step 3: Render Markdown report
     with open(filename, "w", encoding="utf-8", errors="replace") as f:
-        # Executive Summary
-        f.write("# Security Remediation Plan\n")
-        f.write(f"**Target:** `{project_name}`\n")
-        f.write(f"**Status:** {status_icon} ({critical_count} Critical Issues)\n")
-        f.write(f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
-
-        f.write("> **Objective:** This document lists specific, actionable steps to patch identified vulnerabilities. Prioritize 'Critical' items immediately.\n\n")
-
-        f.write("---\n\n")
-
-        # ---------------------------------------------------------
-        # EXECUTIVE SUMMARY: Aggregate all findings, count by severity, top 10
-        # ---------------------------------------------------------
-        all_findings: List[Dict[str, Any]] = []
-
-        # static_results
-        for item in static_results:
-            all_findings.append({
-                "severity": item.get("impact", "MEDIUM").upper(),
-                "rule_id": item.get("check") or item.get("rule_id") or item.get("title", "unknown"),
-                "location": f"{item.get('file', item.get('location', 'unknown'))}:{item.get('line_no', item.get('line', '?'))}",
-                "message": (item.get("message") or item.get("description", ""))[:80],
-            })
-
-        # heuristic_results
-        for item in heuristic_results:
-            all_findings.append({
-                "severity": item.get("severity", "MEDIUM").upper(),
-                "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "unknown"),
-                "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
-                "message": (item.get("message") or item.get("description", ""))[:80],
-            })
-
-        # fuzz_results — all CRITICAL
-        for item in fuzz_results:
-            all_findings.append({
-                "severity": "CRITICAL",
-                "rule_id": item.get("test_name") or item.get("rule_id") or item.get("title", "fuzz_violation"),
-                "location": item.get("file", item.get("location", "unknown")),
-                "message": (item.get("message") or item.get("description", ""))[:80],
-            })
-
-        # symbolic_results
-        for item in symbolic_results:
-            all_findings.append({
-                "severity": item.get("severity", "MEDIUM").upper(),
-                "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "symbolic_issue"),
-                "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
-                "message": (item.get("message") or item.get("description", ""))[:80],
-            })
-
-        # aderyn_results
-        if aderyn_results and isinstance(aderyn_results, dict):
-            for item in aderyn_results.get("issues", []):
-                all_findings.append({
-                    "severity": item.get("severity", "MEDIUM").upper(),
-                    "rule_id": item.get("rule_id") or item.get("check") or item.get("title", "aderyn_issue"),
-                    "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
-                    "message": (item.get("message") or item.get("description", ""))[:80],
-                })
-
-        # medusa_results
-        if medusa_results and isinstance(medusa_results, dict):
-            for item in medusa_results.get("findings", []):
-                all_findings.append({
-                    "severity": item.get("severity", "HIGH").upper(),
-                    "rule_id": item.get("test") or item.get("rule_id") or item.get("title", "medusa_violation"),
-                    "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
-                    "message": (item.get("message") or item.get("description", ""))[:80],
-                })
-
-        # solana_results
-        if solana_results and isinstance(solana_results, dict):
-            for item in solana_results.get("pattern_findings", []):
-                sev = getattr(item, "severity", None) or item.get("severity", "MEDIUM") if isinstance(item, dict) else getattr(item, "severity", "MEDIUM")
-                rid = getattr(item, "rule_id", None) or (item.get("rule_id") if isinstance(item, dict) else None) or "solana_issue"
-                loc_file = getattr(item, "file", None) or (item.get("file") if isinstance(item, dict) else "unknown") or "unknown"
-                loc_line = getattr(item, "line_no", None) or (item.get("line_no") if isinstance(item, dict) else "?") or "?"
-                msg = getattr(item, "description", None) or (item.get("description") if isinstance(item, dict) else "") or ""
-                all_findings.append({
-                    "severity": str(sev).upper(),
-                    "rule_id": str(rid),
-                    "location": f"{loc_file}:{loc_line}",
-                    "message": str(msg)[:80],
-                })
-
-        # Count by severity
-        _severity_counts: Dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-        for _f in all_findings:
-            _sev = _f.get("severity", "MEDIUM").upper()
-            if _sev in _severity_counts:
-                _severity_counts[_sev] += 1
-
-        # Sort: CRITICAL first
-        _severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
-        all_findings.sort(key=lambda _x: _severity_order.get(_x.get("severity", "MEDIUM").upper(), 5))
-
-        _total_findings = sum(_severity_counts.values())
-        f.write("## Executive Summary\n\n")
-        f.write("| Severity | Count |\n")
-        f.write("|----------|-------|\n")
-        f.write(f"| CRITICAL | {_severity_counts['CRITICAL']} |\n")
-        f.write(f"| HIGH | {_severity_counts['HIGH']} |\n")
-        f.write(f"| MEDIUM | {_severity_counts['MEDIUM']} |\n")
-        f.write(f"| LOW | {_severity_counts['LOW']} |\n")
-        f.write(f"| INFO | {_severity_counts['INFO']} |\n")
-        f.write(f"| **Total** | **{_total_findings}** |\n\n")
-
-        top10 = all_findings[:10]
-        if top10:
-            f.write("### Top 10 Priority Issues\n\n")
-            f.write("| # | Severity | Issue | Location | Description |\n")
-            f.write("|---|----------|-------|----------|-------------|\n")
-            for _idx, _finding in enumerate(top10, 1):
-                _sev = _finding.get("severity", "MEDIUM")
-                _issue = _finding.get("rule_id", "unknown")
-                _loc = _finding.get("location", "unknown")
-                _desc = _finding.get("message", "").replace("|", "\\|")
-                f.write(f"| {_idx} | {_sev} | {_issue} | {_loc} | {_desc} |\n")
-            f.write("\n")
-
-        f.write("---\n\n")
-
-        # ---------------------------------------------------------
-        # ANALYZER COVERAGE TABLE
-        # ---------------------------------------------------------
-        if analyzer_status:
-            f.write("## Analyzer Coverage\n\n")
-            f.write("| Analyzer | Status | Findings |\n")
-            f.write("|----------|--------|----------|\n")
-            _failed_analyzers = []
-            for _aname, _astatus in analyzer_status.items():
-                if _astatus.get("ran"):
-                    _acount = _astatus.get("finding_count", 0)
-                    f.write(f"| {_aname} | Completed | {_acount} |\n")
-                elif _astatus.get("error") == "Not enabled":
-                    f.write(f"| {_aname} | Skipped (not enabled) | — |\n")
-                else:
-                    f.write(f"| {_aname} | **FAILED** | — |\n")
-                    _failed_analyzers.append((_aname, _astatus.get("error", "Unknown error")))
-            f.write("\n")
-            for _aname, _aerr in _failed_analyzers:
-                f.write(f"> **Warning:** {_aname} did not complete successfully ({_aerr}). Results below may be incomplete.\n\n")
-            f.write("---\n\n")
-
-        # ---------------------------------------------------------
-        # SECTION 1: SUPPLY CHAIN (DEPENDENCIES)
-        # ---------------------------------------------------------
-        f.write("## 1. Dependency Updates (Supply Chain)\n")
-        if not supply_results:
-            f.write("[OK] **No Action Required.** All dependencies are up to date.\n\n")
-        else:
-            f.write("| Severity | Library | Action Required |\n")
-            f.write("| :--- | :--- | :--- |\n")
-            for item in supply_results:
-                # Assuming Supply Chain script returns 'library', 'installed', 'id'
-                f.write(
-                    f"| [!] | `{item['library']}` | **Run:** `npm update {item['library']}` <br> **Reason:** {item.get('summary', 'Known Vulnerability')} |\n"
-                )
-            f.write("\n")
-
-        f.write("---\n\n")
-
-        # ---------------------------------------------------------
-        # SECTION 2: CODE VULNERABILITIES (STATIC)
-        # ---------------------------------------------------------
-        f.write("## 2. Code Patches (Static Analysis)\n")
-        if not static_results:
-            f.write("[OK] **No Action Required.** No critical patterns found.\n\n")
-        else:
-            for i, item in enumerate(static_results, 1):
-                impact = item.get("impact", "Unknown")
-                priority = "[IMMEDIATE]" if impact == "High" else "[HIGH]"
-                action = get_remediation(item.get("title", ""), item.get("description", ""))
-
-                f.write(f"### {i}. {item.get('title', 'Unknown Issue')} ({priority})\n")
-                f.write(f"- **Location:** `{item.get('location', 'Unknown location')}`\n")
-                f.write(f"- **The Issue:** {item.get('description', 'No description provided')}\n")
-                f.write(f"- **ACTION:** {action}\n\n")
-
-        f.write("---\n\n")
-
-        # ---------------------------------------------------------
-        # SECTION 3: LOGIC FAILURES (FUZZING)
-        # ---------------------------------------------------------
-        f.write("## 3. Logic & Invariant Patches (Dynamic)\n")
-        if not fuzz_results:
-            f.write("[OK] **No Action Required.** Logic held up against stress testing.\n\n")
-        else:
-            for item in fuzz_results:
-                test_name = item.get("test_name", "UnknownTest")
-                steps = item.get("steps", [])
-
-                f.write(f"### Logic Failure: `{test_name}`\n")
-                f.write("**Diagnosis:** The protocol entered an invalid state (Invariant broken).\n\n")
-                f.write("**ACTION:**\n")
-                f.write("1. Create a new test file `test/Exploit.t.sol`.\n")
-                f.write("2. Paste the 'Kill Shot' sequence below into it.\n")
-                f.write(f"3. Modify `{test_name}` to handle this edge case (usually by adding `require()` checks).\n\n")
-
-                f.write("**The Kill Shot (Trace):**\n")
-                f.write("```solidity\n")
-                for step in steps:
-                    f.write(f"{step}\n")
-                f.write("```\n\n")
-
-        f.write("---\n\n")
-
-        # ---------------------------------------------------------
-        # SECTION 4: HEURISTIC FINDINGS (PATTERN-BASED)
-        # ---------------------------------------------------------
-        f.write("## 4. Heuristic Findings (Pattern-Based)\n")
-        if not heuristic_results:
-            f.write("[OK] **No heuristic red flags detected.** (Note: this does *not* guarantee safety.)\n\n")
-        else:
-            for item in heuristic_results:
-                severity = item.get("severity", "INFO")
-                rule_id = item.get("rule_id", "")
-                message = item.get("message", "")
-                location = f"{item.get('file', 'unknown_file')}:{item.get('line_no', '?')}"
-                code = (item.get("line_text", "") or "").strip()
-
-                f.write(f"- **[{severity}] {rule_id}:** {message}\n")
-                f.write(f"  - Location: `{location}`\n")
-                if code:
-                    f.write(f"  - Code: `{code}`\n")
-                f.write("\n")
-
-        f.write("---\n\n")
-
-        # ---------------------------------------------------------
-        # SECTION 5: SYMBOLIC ANALYSIS (MYTHRIL)
-        # ---------------------------------------------------------
-        f.write("## 5. Symbolic Analysis (Mythril)\n")
-        if not symbolic_results:
-            f.write("[OK] **No issues reported by Mythril for this run.**\n\n")
-        else:
-            for i, issue in enumerate(symbolic_results, 1):
-                title = issue.get("title") or "Unnamed issue"
-                severity = issue.get("severity") or "UNKNOWN"
-                f.write(f"### {i}. {title} ({severity})\n")
-                if issue.get("swc_id"):
-                    f.write(f"- **SWC:** {issue['swc_id']}\n")
-                if issue.get("function"):
-                    f.write(f"- **Function:** `{issue['function']}`\n")
-                if issue.get("address"):
-                    f.write(f"- **Address/PC:** `{issue['address']}`\n")
-                desc = issue.get("description") or ""
-                if desc:
-                    f.write(f"- **Details:** {desc}\n")
-                f.write("\n")
-
-        # ---------------------------------------------------------
-        # SECTION 6: ADERYN STATIC ANALYSIS (OPTIONAL)
-        # ---------------------------------------------------------
-        f.write("---\n\n")
-        f.write("## 6. Aderyn Static Analysis (Optional)\n")
-        if not aderyn_results:
-            f.write("ℹ️ Aderyn analysis not run or produced no results.\n\n")
-        elif isinstance(aderyn_results, dict) and aderyn_results.get("error"):
-            f.write(f"[!] Aderyn error: {aderyn_results['error']}\n\n")
-        else:
-            total = aderyn_results.get("total", 0)
-            high_count = len(aderyn_results.get("high", []))
-            low_count = len(aderyn_results.get("low", []))
-            nc_count = len(aderyn_results.get("nc", []))
-            f.write(
-                f"[*] Total issues: {total} (High: {high_count}, Low: {low_count}, Non-critical: {nc_count})\n\n"
-            )
-            high_issues = aderyn_results.get("high", [])[:5]
-            if high_issues:
-                f.write("### Top High Severity Findings (Aderyn)\n")
-                for issue in high_issues:
-                    title = issue.get("title", "Unknown issue")
-                    detector = issue.get("detector_name", "unknown")
-                    f.write(f"- **{title}** (Detector: {detector})\n")
-                f.write("\n")
-
-        # ---------------------------------------------------------
-        # SECTION 7: MEDUSA FUZZING (OPTIONAL)
-        # ---------------------------------------------------------
-        f.write("---\n\n")
-        f.write("## 7. Medusa Fuzzing (Coverage-Guided)\n")
-        if not medusa_results:
-            f.write("ℹ️ Medusa fuzzing not run or produced no results.\n\n")
-        elif isinstance(medusa_results, dict) and medusa_results.get("error"):
-            f.write(f"[!] Medusa error: {medusa_results['error']}\n\n")
-        else:
-            findings = medusa_results.get("findings", [])
-            stats = medusa_results.get("statistics", {})
-            total_seq = medusa_results.get("total_sequences", "unknown")
-            coverage = stats.get("coverage_percent", "N/A")
-            f.write(f"[*] Total sequences run: {total_seq}, Coverage: {coverage}%\n\n")
-            if not findings:
-                f.write("[+] No invariant violations found by Medusa.\n\n")
-            else:
-                f.write(f"[!] Medusa found {len(findings)} invariant violations.\n\n")
-                for finding in findings[:5]:
-                    test_name = finding.get("test", "unknown")
-                    status = finding.get("status", "")
-                    f.write(f"- **{test_name}** ({status})\n")
-                if len(findings) > 5:
-                    f.write(f"- ... ({len(findings) - 5} more violations)\n")
-                f.write("\n")
-
-        # ---------------------------------------------------------
-        # SECTION 8: SOLANA/ANCHOR STATIC ANALYSIS (OPTIONAL)
-        # ---------------------------------------------------------
-        f.write("---\n\n")
-        f.write("## 8. Solana/Anchor Static Analysis (Optional)\n")
-        if not solana_results:
-            f.write("ℹ️ Solana analysis not run or no Solana project configured.\n\n")
-        elif isinstance(solana_results, dict) and solana_results.get("summary"):
-            summary = solana_results["summary"]
-            f.write(
-                f"[*] Findings → CRITICAL: {summary.get('CRITICAL', 0)}, HIGH: {summary.get('HIGH', 0)}, "
-                f"MEDIUM: {summary.get('MEDIUM', 0)}, LOW: {summary.get('LOW', 0)}\n\n"
-            )
-            pattern_findings = solana_results.get("pattern_findings", [])
-            criticals = [
-                f for f in pattern_findings if getattr(f, "severity", None) == "CRITICAL"
-            ][:5]
-            if criticals:
-                f.write("### Top Critical Solana Findings\n")
-                for finding in criticals:
-                    f.write(
-                        f"- **{finding.title}** in `{finding.file}:{finding.line_no}` – {finding.description}\n"
-                    )
-                f.write("\n")
-
-        # ---------------------------------------------------------
-        # SECTION 9: UPGRADE DIFF ANALYSIS (OPTIONAL)
-        # ---------------------------------------------------------
-        f.write("---\n\n")
-        f.write("## 9. Upgrade Diff Analysis (Optional)\n")
-        if not upgrade_results:
-            f.write("ℹ️ No upgrade diff analysis run for this report.\n\n")
-        elif isinstance(upgrade_results, dict) and upgrade_results.get("summary"):
-            summary = upgrade_results["summary"]
-            f.write(
-                f"[*] Issues → CRITICAL: {summary.get('CRITICAL', 0)}, HIGH: {summary.get('HIGH', 0)}, "
-                f"MEDIUM: {summary.get('MEDIUM', 0)}, LOW: {summary.get('LOW', 0)}\n\n"
-            )
-            if upgrade_results.get("safe"):
-                f.write("[OK] SAFE TO UPGRADE (no critical/high issues detected).\n\n")
-            else:
-                f.write("[!] UNSAFE TO UPGRADE - address critical/high issues before deploying.\n\n")
-
-        # ---------------------------------------------------------
-        # SECTION 10: PROTOCOL FINGERPRINT ANALYSIS (OPTIONAL)
-        # ---------------------------------------------------------
-        f.write("---\n\n")
-        f.write("## 10. Protocol Fingerprint Analysis (Optional)\n")
-        if not fingerprint_results:
-            f.write("ℹ️ No protocol fingerprint analysis run for this report.\n\n")
-        else:
-            total_matches = sum(len(r.get("matches", [])) for r in fingerprint_results)
-            f.write(f"[*] Found {len(fingerprint_results)} contract(s) with {total_matches} protocol match(es)\n\n")
-
-            for result in fingerprint_results:
-                file_path = result.get("file", "unknown")
-                matches = result.get("matches", [])
-                risk = result.get("risk_assessment", {})
-
-                f.write(f"### {os.path.basename(file_path)}\n")
-                f.write(f"- **Path:** `{file_path}`\n")
-                f.write(f"- **Risk Level:** {risk.get('risk_level', 'N/A')}\n")
-                f.write(f"- **Risk Score:** {risk.get('risk_score', 0)}/100\n")
-                f.write(f"- **Inherited Vulnerabilities:** {risk.get('total_vulnerabilities', 0)}\n\n")
-
-                if matches:
-                    f.write("**Protocol Matches:**\n")
-                    for match in matches[:3]:  # Show top 3
-                        f.write(f"- **{match.get('protocol', 'Unknown')}** ({match.get('category', 'Unknown')}) - {match.get('confidence', 0) * 100:.1f}% confidence\n")
-                        if match.get('known_vulnerabilities'):
-                            high_crit = sum(1 for v in match.get('known_vulnerabilities', []) if v.get('severity') in ['CRITICAL', 'HIGH'])
-                            if high_crit > 0:
-                                f.write(f"  [!] {high_crit} high/critical vulnerabilities inherited\n")
-                    if len(matches) > 3:
-                        f.write(f"- ... and {len(matches) - 3} more match(es)\n")
-                    f.write("\n")
-
-                if risk.get('recommendations'):
-                    f.write("**Recommendations:**\n")
-                    for rec in risk.get('recommendations', [])[:3]:
-                        f.write(f"- {rec}\n")
-                    f.write("\n")
-
-        # ---------------------------------------------------------
-        # SECTION 11: EXPLOIT PROOF-OF-CONCEPT TESTS (PRO TIER)
-        # ---------------------------------------------------------
-        if exploit_results:
-            f.write("---\n\n")
-            f.write("## 11. Exploit Proof-of-Concept Tests\n\n")
-            successful_exploits = [r for r in exploit_results if r.status == "success"]
-            if successful_exploits:
-                f.write(f"Generated **{len(successful_exploits)}** exploit PoC test(s) for critical findings.\n\n")
-                f.write("| Finding | Severity | Output File | Status |\n")
-                f.write("|---------|----------|-------------|--------|\n")
-                for r in exploit_results:
-                    finding_name = r.finding.get("rule_id", r.finding.get("check", "unknown"))
-                    severity = r.finding.get("severity", "N/A")
-                    output_path = r.output_path or "\u2014"
-                    f.write(f"| {finding_name} | {severity} | `{output_path}` | {r.status} |\n")
-                f.write("\n> **Run:** `forge test --match-path exploits/` to validate generated PoCs\n\n")
-            else:
-                f.write("No exploit PoCs were successfully generated for the detected findings.\n\n")
+        _render_markdown_report(
+            f,
+            project_name=project_name,
+            all_findings=all_findings,
+            metrics=metrics,
+            static_results=static_results,
+            supply_results=supply_results,
+            fuzz_results=fuzz_results,
+            heuristic_results=heuristic_results,
+            symbolic_results=symbolic_results,
+            aderyn_results=aderyn_results,
+            medusa_results=medusa_results,
+            solana_results=solana_results,
+            upgrade_results=upgrade_results,
+            fingerprint_results=fingerprint_results,
+            exploit_results=exploit_results,
+            analyzer_status=analyzer_status,
+        )
 
     return filename
 
@@ -710,23 +797,30 @@ def _restore_ctx_from_cache(phase: Any, ctx: Any, cached: Any) -> None:
 # Async phase execution helpers (used by webapp / async callers)
 # ---------------------------------------------------------------------------
 
-import asyncio as _asyncio
-
 
 # Concurrency groups for run_phases_async.
 # Phases within a group run concurrently; groups run sequentially.
-_CONCURRENT_GROUPS: List[List[str]] = [
-    ["supply_chain"],
-    ["slither", "aderyn"],
-    ["foundry_fuzz", "medusa_fuzz"],
-    ["heuristic", "fingerprint"],
-    ["plugins"],
-    ["mythril"],
-    ["solana", "upgrade_diff"],
-    ["rag_enrichment"],
-    ["exploit_gen", "time_travel"],
-    ["report"],
-]
+# _CONCURRENT_GROUPS: List[List[str]] = [
+#     ["supply_chain"],
+#     ["slither", "aderyn"],
+#     ["foundry_fuzz", "medusa_fuzz"],
+#     ["heuristic", "fingerprint"],
+#     ["plugins"],
+#     ["mythril"],
+#     ["solana", "upgrade_diff"],
+#     ["rag_enrichment"],
+#     ["exploit_gen", "time_travel"],
+#     ["report"],
+# ]
+
+
+def _build_concurrent_groups(registry):
+    """Build concurrent execution groups from phase metadata."""
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for phase in registry:
+        groups[phase.group].append(phase.name)
+    return [groups[k] for k in sorted(groups.keys())]
 
 
 async def _run_single_phase_async(ctx: Any, phase: Any) -> None:
@@ -773,7 +867,7 @@ async def run_phases_async(ctx: Any, phases: List[Any]) -> None:
     """
     phase_map = {p.name: p for p in phases}
 
-    for group_names in _CONCURRENT_GROUPS:
+    for group_names in _build_concurrent_groups(phases):
         group_phases = [phase_map[n] for n in group_names if n in phase_map]
         runnable = [
             p for p in group_phases
@@ -793,7 +887,7 @@ async def run_phases_async(ctx: Any, phases: List[Any]) -> None:
         if len(runnable) == 1:
             await _run_single_phase_async(ctx, runnable[0])
         else:
-            await _asyncio.gather(*[
+            await asyncio.gather(*[
                 _run_single_phase_async(ctx, p) for p in runnable
             ])
 

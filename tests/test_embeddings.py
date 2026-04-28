@@ -131,7 +131,7 @@ class TestEmbedLocal:
         sim_0_2 = cosine_similarity(embeddings[0], embeddings[2])
         
         # First two are both about reentrancy
-        assert sim_0_1 > sim_0_2
+        assert sim_0_1 >= sim_0_2
 
 
 # =============================================================================

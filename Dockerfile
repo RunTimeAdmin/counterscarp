@@ -8,9 +8,11 @@
 # ------------------------------------------------------------------------------
 FROM golang:1.24-bookworm AS go-builder
 
+ARG MEDUSA_VERSION=v0.1.8
+
 # Build Medusa from source via go install
 # Pin to a specific release tag so the binary is reproducible
-RUN go install github.com/crytic/medusa@latest
+RUN go install github.com/crytic/medusa@${MEDUSA_VERSION}
 
 # Confirm the binary was placed at the expected path
 RUN ls /go/bin/medusa
@@ -22,9 +24,10 @@ RUN ls /go/bin/medusa
 FROM python:3.12-slim-bookworm
 
 # ── Metadata ──────────────────────────────────────────────────────────────────
+ARG APP_VERSION=5.0.5
 LABEL maintainer="Counterscarp Engine Team"
 LABEL description="Smart contract security auditing platform — 21-analyzer stack"
-LABEL version="5.0.3"
+LABEL version="${APP_VERSION}"
 
 # ── Environment variables ─────────────────────────────────────────────────────
 # Prevent .pyc files and enable unbuffered output for clean container logs
@@ -32,6 +35,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Add all tool binary paths to PATH so they can be invoked by name anywhere
+# Note: paths use /root/ during build; overridden to /home/counterscarp/ after USER switch
 ENV PATH="/root/.foundry/bin:/root/.cargo/bin:/root/.local/bin:/usr/local/go/bin:/root/go/bin:$PATH"
 
 # ── 1. System dependencies ────────────────────────────────────────────────────
@@ -109,13 +113,27 @@ RUN solc-select install 0.8.19 \
 # /scan is the conventional mount point for the target contract tree
 WORKDIR /scan
 
-# ── 12. Docker HEALTHCHECK ───────────────────────────────────────────────────
+# ── 12. Create non-root user ─────────────────────────────────────────────────
+# Run as unprivileged user for defense-in-depth.  Copy Foundry/solc
+# caches from root's home into the new user's home so tools still work.
+RUN useradd -m -u 1000 counterscarp \
+    && mkdir -p /output /scan \
+    && cp -r /root/.foundry /home/counterscarp/.foundry || true \
+    && cp -r /root/.solc-select /home/counterscarp/.solc-select || true \
+    && cp -r /root/.svm /home/counterscarp/.svm 2>/dev/null || true \
+    && chown -R counterscarp:counterscarp /app /scan /output /home/counterscarp
+
+ENV PATH="/home/counterscarp/.foundry/bin:/home/counterscarp/.cargo/bin:/home/counterscarp/.local/bin:/usr/local/go/bin:/home/counterscarp/go/bin:$PATH"
+
+USER counterscarp
+
+# ── 13. Docker HEALTHCHECK ───────────────────────────────────────────────────
 # Runs `counterscarp --doctor` — the built-in environment diagnostic command.
 # exit 0 = all critical tools found; non-zero = something is missing.
 HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
     CMD counterscarp --doctor
 
-# ── 13. Entrypoint ───────────────────────────────────────────────────────────
+# ── 14. Entrypoint ───────────────────────────────────────────────────────────
 # counterscarp is the console_scripts entry point defined in pyproject.toml:
 #   counterscarp = "orchestrator:main"
 # Pass `--help` as the default CMD so a bare `docker run` prints usage.
@@ -127,18 +145,18 @@ CMD ["--help"]
 # ==============================================================================
 #
 # Build the image:
-#   docker build -t counterscarp-engine:5.0.3 .
+#   docker build -t counterscarp-engine:5.0.5 .
 #
 # Run a full audit scan (mounts current directory as /scan):
 #   docker run --rm -v $(pwd):/scan -v $(pwd)/output:/output \
-#       counterscarp-engine:5.0.3 --target /scan --report --output-dir /output
+#       counterscarp-engine:5.0.5 --target /scan --report --output-dir /output
 #
 # Run only heuristic + Slither (no fuzzing):
-#   docker run --rm -v $(pwd):/scan counterscarp-engine:5.0.3 --target /scan
+#   docker run --rm -v $(pwd):/scan counterscarp-engine:5.0.5 --target /scan
 #
 # Run environment diagnostics:
-#   docker run --rm counterscarp-engine:5.0.3 --doctor
+#   docker run --rm counterscarp-engine:5.0.5 --doctor
 #
 # Interactive shell:
-#   docker run --rm -it -v $(pwd):/scan counterscarp-engine:5.0.3 /bin/bash
+#   docker run --rm -it -v $(pwd):/scan counterscarp-engine:5.0.5 /bin/bash
 # ==============================================================================

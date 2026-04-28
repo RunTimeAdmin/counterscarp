@@ -13,8 +13,11 @@ from scan_phase import ScanContext, ScanPhase
 class RagEnrichPhase(ScanPhase):
     """Phase 7.5 — RAG/LLM enrichment of findings (optional, --rag + Pro)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="rag_enrichment", display_name="RAG Enrichment", requires_pro=True)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            name="rag_enrichment", display_name="RAG Enrichment",
+            requires_pro=True, **kwargs,
+        )
 
     def should_run(self, ctx: ScanContext) -> bool:
         if not ctx.args.rag:
@@ -128,8 +131,8 @@ class RagEnrichPhase(ScanPhase):
 class ExploitGenPhase(ScanPhase):
     """Phase 8 — Exploit PoC generation for CRITICAL/HIGH findings (Pro)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="exploit_gen", display_name="Exploit Generator")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(name="exploit_gen", display_name="Exploit Generator", **kwargs)
 
     def run(self, ctx: ScanContext) -> Any:
         exploit_results: Optional[List] = None
@@ -235,8 +238,11 @@ class ExploitGenPhase(ScanPhase):
 class HistoryPhase(ScanPhase):
     """Phase 8B — Inline Time-Travel historical scan (Pro, when --report + git repo)."""
 
-    def __init__(self) -> None:
-        super().__init__(name="time_travel", display_name="Time-Travel Scan", requires_pro=True)
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            name="time_travel", display_name="Time-Travel Scan",
+            requires_pro=True, **kwargs,
+        )
 
     def should_run(self, ctx: ScanContext) -> bool:
         if not ctx.args.report:

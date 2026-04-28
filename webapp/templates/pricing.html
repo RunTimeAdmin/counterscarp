@@ -658,6 +658,7 @@
             <p class="pricing-desc">Everything in Community, plus web app and advanced reports.</p>
             <div class="pricing-cta">
                 <form method="POST" action="/checkout/create-session">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="product" value="dev_monthly" class="product-input" data-monthly="dev_monthly" data-annual="dev_annual">
                     <button type="submit" class="btn-buy btn-buy-secondary">Start Developer</button>
                 </form>
@@ -704,6 +705,7 @@
             <p class="pricing-desc">Everything in Developer, plus AI-powered features and unlimited scans.</p>
             <div class="pricing-cta">
                 <form method="POST" action="/checkout/create-session">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="product" value="pro_monthly" class="product-input" data-monthly="pro_monthly" data-annual="pro_annual">
                     <button type="submit" class="btn-buy">Start Pro</button>
                 </form>
@@ -742,6 +744,7 @@
             <p class="pricing-desc">Everything in Pro, plus collaboration features for teams.</p>
             <div class="pricing-cta">
                 <form method="POST" action="/checkout/create-session">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="product" value="team_monthly" class="product-input" data-monthly="team_monthly" data-annual="team_annual">
                     <button type="submit" class="btn-buy btn-buy-secondary">Start Team</button>
                 </form>

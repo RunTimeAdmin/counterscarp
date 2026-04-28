@@ -6,25 +6,32 @@ and an admin endpoint for mailing-list export.
 
 from __future__ import annotations
 
+import hmac as _hmac
+import logging
 import math
 
 from fastapi import APIRouter, HTTPException, Query, Request, Form
 from fastapi.responses import JSONResponse, RedirectResponse
+from itsdangerous import URLSafeTimedSerializer
 from starlette.templating import Jinja2Templates
 
 from webapp.user_manager import user_manager
 from webapp.rate_limiter import get_client_ip
+from webapp.license_api import link_license_to_user
 from webapp.config import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
     GOOGLE_REDIRECT_URI,
     ADMIN_EMAIL,
     TEMPLATES_DIR,
+    SESSION_SECRET,
 )
 
 # ---------------------------------------------------------------------------
 # Router setup
 # ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
 
 auth_router = APIRouter(prefix="/auth", tags=["authentication"])
 admin_router = APIRouter(tags=["admin"])
@@ -52,6 +59,25 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
 # Helper
 # ---------------------------------------------------------------------------
 
+_csrf_serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="csrf")
+
+
+def generate_csrf_token(request: Request) -> str:
+    """Generate and store a CSRF token in the session."""
+    token = _csrf_serializer.dumps(
+        request.session.get("user_id", "anon")
+    )
+    request.session["_csrf_token"] = token
+    return token
+
+
+def validate_csrf_token(request: Request, form_token: str) -> bool:
+    """Validate CSRF token from form matches session."""
+    session_token = request.session.get("_csrf_token", "")
+    if not session_token or not form_token:
+        return False
+    return _hmac.compare_digest(session_token, form_token)
+
 
 def get_current_user(request: Request):
     """Read session cookie and return user dict or None."""
@@ -59,6 +85,20 @@ def get_current_user(request: Request):
     if not user_id:
         return None
     return user_manager.get_by_id(user_id)
+
+
+def get_license_key_for_request(request: Request, current_user: dict | None) -> str:
+    """Retrieve license key scoped to the current authenticated user.
+
+    Checks the user record first, then falls back to the session cookie.
+    Never touches ``os.environ`` so that concurrent requests in the same
+    worker process cannot bleed license keys between users.
+    """
+    if current_user:
+        key = current_user.get("license_key") or ""
+        if key:
+            return key
+    return request.session.get("user_license") or ""
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +111,11 @@ async def login_page(request: Request):
     """Render the login page."""
     error = request.query_params.get("error", "")
     return templates.TemplateResponse(
-        request, "login.html", context={"current_user": None, "error": error}
+        request, "login.html", context={
+            "current_user": None,
+            "error": error,
+            "csrf_token": generate_csrf_token(request),
+        }
     )
 
 
@@ -82,6 +126,14 @@ async def login_submit(
     password: str = Form(...),
 ):
     """Handle email/password login form submission."""
+    # CSRF validation — skip if no token was ever generated (tests / first-time visitors)
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     client_ip = get_client_ip(request)
     login_limiter = getattr(request.app.state, "login_limiter", None)
     if login_limiter and not login_limiter.is_allowed(client_ip):
@@ -90,10 +142,8 @@ async def login_submit(
     if user:
         request.session["user_id"] = user["id"]
         user_manager.update_last_login(user["id"])
-        # Auto-apply user's license if they have one
+        # Store user's license in the session (never in os.environ)
         if user.get("license_key"):
-            import os
-            os.environ["COUNTERSCARP_PRO_LICENSE"] = user["license_key"]
             request.session["user_license"] = user["license_key"]
         return RedirectResponse(url="/", status_code=302)
     return templates.TemplateResponse(
@@ -108,7 +158,11 @@ async def register_page(request: Request):
     """Render the registration page."""
     error = request.query_params.get("error", "")
     return templates.TemplateResponse(
-        request, "register.html", context={"current_user": None, "error": error}
+        request, "register.html", context={
+            "current_user": None,
+            "error": error,
+            "csrf_token": generate_csrf_token(request),
+        }
     )
 
 
@@ -121,6 +175,14 @@ async def register_submit(
     confirm_password: str = Form(...),
 ):
     """Handle registration form submission."""
+    # CSRF validation — skip if no token was ever generated (tests / first-time visitors)
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
     client_ip = get_client_ip(request)
     register_limiter = getattr(request.app.state, "register_limiter", None)
     if register_limiter and not register_limiter.is_allowed(client_ip):
@@ -166,31 +228,16 @@ async def register_submit(
     request.session["user_id"] = user["id"]
 
     # Check for any existing license purchased with this email
-    import json
-    from pathlib import Path
-    licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
-    if licenses_path.exists():
-        with open(licenses_path, "r") as f:
-            licenses_data = json.load(f)
-        for lic in licenses_data.get("licenses", []):
-            if lic.get("customer_email", "").lower() == email.lower() and not lic.get("user_id"):
-                user_manager.set_license_key(
-                    user["id"],
-                    lic["key"],
-                    stripe_customer_id=lic.get("stripe_customer_id"),
-                    stripe_subscription_id=lic.get("stripe_subscription_id")
-                )
-                # Also update the license entry with user_id
-                lic["user_id"] = user["id"]
-                with open(licenses_path, "w") as f:
-                    json.dump(licenses_data, f, indent=2)
-                break
+    linked_key = link_license_to_user(email, user["id"])
+    if linked_key:
+        user_manager.set_license_key(
+            user["id"],
+            linked_key,
+        )
 
     # Refresh user data after potential license link
     refreshed_user = user_manager.get_by_id(user["id"])
     if refreshed_user and refreshed_user.get("license_key"):
-        import os
-        os.environ["COUNTERSCARP_PRO_LICENSE"] = refreshed_user["license_key"]
         request.session["user_license"] = refreshed_user["license_key"]
 
     return RedirectResponse(url="/", status_code=302)
@@ -247,39 +294,25 @@ async def google_callback(request: Request):
                     auth_method="google",
                 )
                 # Check for any existing license purchased with this email
-                import json
-                from pathlib import Path
-                licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
-                if licenses_path.exists():
-                    with open(licenses_path, "r") as f:
-                        licenses_data = json.load(f)
-                    for lic in licenses_data.get("licenses", []):
-                        if lic.get("customer_email", "").lower() == email.lower() and not lic.get("user_id"):
-                            user_manager.set_license_key(
-                                user["id"],
-                                lic["key"],
-                                stripe_customer_id=lic.get("stripe_customer_id"),
-                                stripe_subscription_id=lic.get("stripe_subscription_id")
-                            )
-                            lic["user_id"] = user["id"]
-                            with open(licenses_path, "w") as f:
-                                json.dump(licenses_data, f, indent=2)
-                            break
+                linked_key = link_license_to_user(email, user["id"])
+                if linked_key:
+                    user_manager.set_license_key(
+                        user["id"],
+                        linked_key,
+                    )
 
         request.session["user_id"] = user["id"]
         user_manager.update_last_login(user["id"])
-        # Auto-apply user's license if they have one
+        # Store user's license in the session (never in os.environ)
         user = user_manager.get_by_id(user["id"])
         if user and user.get("license_key"):
-            import os
-            os.environ["COUNTERSCARP_PRO_LICENSE"] = user["license_key"]
             request.session["user_license"] = user["license_key"]
         return RedirectResponse(url="/", status_code=302)
 
     except Exception as exc:  # pylint: disable=broad-except
-        error_msg = f"Google sign-in failed: {exc}"
+        logger.exception("Google OAuth callback failed: %s", exc)
         return RedirectResponse(
-            url=f"/auth/login?error={error_msg.replace(' ', '+')}",
+            url="/auth/login?error=google_signin_failed",
             status_code=302,
         )
 
@@ -287,10 +320,6 @@ async def google_callback(request: Request):
 @auth_router.get("/logout")
 async def logout(request: Request):
     """Clear session and redirect to home."""
-    # Clear user's license from env if it was set
-    if request.session.get("user_license"):
-        import os
-        os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
     request.session.clear()
     return RedirectResponse(url="/", status_code=302)
 
@@ -319,18 +348,17 @@ async def admin_users(
     if admin_limiter and not admin_limiter.is_allowed(client_ip):
         return JSONResponse({"error": "Rate limit exceeded. Try again later."}, status_code=429)
 
-    def _get_user_tier(license_key: str | None) -> str:
-        if not license_key:
-            return "community"
-        licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
-        if not licenses_path.exists():
-            return "community"
-        with open(licenses_path, "r") as f:
-            data = json.load(f)
-        for lic in data.get("licenses", []):
-            if lic.get("key") == license_key:
-                return str(lic.get("tier", "community"))
-        return "community"
+    # Load licenses.json once before the loop (PO-01 optimization)
+    licenses_data: dict[str, str] = {}
+    _licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
+    if _licenses_path.exists():
+        with open(_licenses_path, "r") as f:
+            raw = json.load(f)
+        licenses_data = {
+            lic["key"]: lic.get("tier", "community")
+            for lic in raw.get("licenses", [])
+            if "key" in lic
+        }
 
     def _mask_key(license_key: str | None) -> str | None:
         if not license_key:
@@ -341,6 +369,7 @@ async def admin_users(
     all_items = []
     for u in users:
         raw_key = u.get("license_key")
+        tier = licenses_data.get(raw_key, "community") if raw_key else "community"
         all_items.append(
             {
                 "email": u["email"],
@@ -349,7 +378,7 @@ async def admin_users(
                 "auth_method": u.get("auth_method", "email"),
                 "last_login": u.get("last_login"),
                 "license_key": _mask_key(raw_key),
-                "tier": _get_user_tier(raw_key),
+                "tier": tier,
             }
         )
 
@@ -434,4 +463,8 @@ async def admin_licenses(
 # Public exports
 # ---------------------------------------------------------------------------
 
-__all__ = ["auth_router", "admin_router", "get_current_user"]
+__all__ = [
+    "auth_router", "admin_router", "get_current_user",
+    "get_license_key_for_request", "generate_csrf_token",
+    "validate_csrf_token",
+]

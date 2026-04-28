@@ -1,4 +1,4 @@
-﻿"""Server-side License Validation API for Counterscarp Engine.
+"""Server-side License Validation API for Counterscarp Engine.
 
 Provides endpoints for license key validation, deactivation,
 and info lookups.  These routes are consumed by the client-side
@@ -28,6 +28,33 @@ security_logger = logging.getLogger("counterscarp.security")
 
 _LICENSE_DB_PATH = Path(__file__).parent.parent / "data" / "licenses.json"
 _file_lock = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Public helper — license linking
+# ---------------------------------------------------------------------------
+
+
+def link_license_to_user(email: str, user_id: str) -> Optional[str]:
+    """Atomically link first unlinked license for *email* to *user_id*. Returns key or None."""
+    with _file_lock:
+        if not _LICENSE_DB_PATH.exists():
+            return None
+        try:
+            with open(_LICENSE_DB_PATH, "r", encoding="utf-8") as f:
+                db = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+        for lic in db.get("licenses", []):
+            if lic.get("customer_email", "").lower() == email.lower() and not lic.get("user_id"):
+                lic["user_id"] = user_id
+                tmp = _LICENSE_DB_PATH.with_suffix(".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(db, f, indent=2)
+                tmp.replace(_LICENSE_DB_PATH)
+                return str(lic["key"])
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
