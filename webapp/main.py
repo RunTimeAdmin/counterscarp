@@ -138,7 +138,7 @@ from visualizer import generate_attack_graph_html
 app = FastAPI(
     title="Counterscarp Engine",
     description="Smart Contract Security Audit Platform",
-    version="5.0.5",
+    version="5.0.6",
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)

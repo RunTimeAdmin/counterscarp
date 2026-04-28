@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
 
     # Tag the locally-built image for easy reference
-    image: counterscarp-engine:5.0.5
+    image: counterscarp-engine:5.0.6
 
     # ── Volume mounts ───────────────────────────────────────────────────────────
     volumes:
@@ -72,7 +72,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.5
+    image: counterscarp-engine:5.0.6
     command: ["--doctor"]
 
   # ── Heuristic-only scan (no external tool dependencies) ──────────────────────
@@ -81,7 +81,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.5
+    image: counterscarp-engine:5.0.6
     volumes:
       - ./target:/scan
       - ./output:/output
@@ -93,7 +93,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.5
+    image: counterscarp-engine:5.0.6
     volumes:
       - ./target:/scan
       - ./output:/output

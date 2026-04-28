@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v5.0.6 — 2026-04-28
+
+### Features
+- **FS-06**: Audit trail logging — append-only JSONL log for all license operations (`data/audit_log.jsonl`)
+- **FS-04**: Stripe webhook event idempotency — Redis-backed dedup with file fallback
+- **FS-02**: Per-user audit history dashboard — `/dashboard` with paginated scan history
+- **FS-03**: Rate limit headers — `X-RateLimit-Limit/Remaining/Reset` on all rate-limited endpoints
+- **FS-01**: Async audit processing — `arq` Redis job queue with sync fallback and progress polling
+- **FS-05**: TOTP/2FA for admin accounts — `pyotp` enrollment, challenge flow, Fernet-encrypted secrets
+- **FS-07**: Grace period countdown notification — dismissible banner in web UI
+
+### Fixes
+- Docker: Medusa build switched from `go install` to `git clone` + `go build` (Go replace directive compat)
+- Docker: Added `[web]` extras to pip install for full webapp support in container
+- Removed stale `pytest.ini` (merged config into `pyproject.toml`)
+- Fixed `threading.Lock` deadlock in license_api.py (changed to `RLock`)
+- Fixed mypy variable shadowing in main.py Slither integration
+
 ## v5.0.5 — 2026-04-25
 
 ### Major Changes

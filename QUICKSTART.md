@@ -1,6 +1,6 @@
 # Counterscarp Engine — Quick Start Guide
 
-> **Version 5.0.3** | Smart contract security auditing for EVM + Solana
+> **Version 5.0.6** | Smart contract security auditing for EVM + Solana
 
 ---
 
