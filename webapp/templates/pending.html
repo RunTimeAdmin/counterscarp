@@ -124,6 +124,7 @@
 
     <div class="error-box" id="error-box">
         <p class="error-msg" id="error-msg"></p>
+        <p style="color:#a0a0b0;font-size:0.9rem;margin-bottom:1rem;">If the problem persists, contact <a href="mailto:security@counterscarp.io" style="color:#6c5ce7;background:none;padding:0;font-weight:normal;display:inline;">security@counterscarp.io</a> with your audit ID.</p>
         <a href="/">Try Another Audit</a>
     </div>
 </div>
@@ -135,6 +136,8 @@
     var spinnerWrap = document.getElementById("spinner-wrap");
     var errorBox = document.getElementById("error-box");
     var errorMsg = document.getElementById("error-msg");
+    var pollTimer = null;
+    var startTime = Date.now();
 
     var phaseMap = {
         "Queued":       "ph-queue",
@@ -178,6 +181,14 @@
         }
     }
 
+    function getInterval() {
+        var elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed > 120) return 15000;  // after 2 min → 15s
+        if (elapsed > 60)  return 8000;   // after 1 min → 8s
+        if (elapsed > 15)  return 4000;   // after 15s   → 4s
+        return 2000;                       // initial     → 2s
+    }
+
     function poll() {
         fetch("/api/audit/" + auditId + "/status")
             .then(function(r) { return r.json(); })
@@ -189,6 +200,7 @@
                 if (data.status === "complete") {
                     spinnerWrap.style.display = "none";
                     updatePhases("ph-done");
+                    pollTimer = null;  // clear before redirect
                     window.location.href = "/results/" + auditId;
                     return;
                 }
@@ -196,18 +208,26 @@
                     spinnerWrap.style.display = "none";
                     progressEl.style.display = "none";
                     document.getElementById("phase-list").style.display = "none";
-                    errorMsg.textContent = data.progress || "An error occurred during the scan.";
+                    errorMsg.textContent = data.progress || "Scan failed. Please try again or contact support.";
                     errorBox.style.display = "block";
+                    pollTimer = null;
                     return;
                 }
-                setTimeout(poll, 3000);
+                if (data.status === "retrying") {
+                    progressEl.textContent = data.progress || "Retrying after transient failure\u2026";
+                }
+                pollTimer = setTimeout(poll, getInterval());
             })
             .catch(function() {
-                setTimeout(poll, 5000);
+                pollTimer = setTimeout(poll, getInterval());
             });
     }
 
-    setTimeout(poll, 1500);
+    window.addEventListener('beforeunload', function() {
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    });
+
+    pollTimer = setTimeout(poll, 1500);
 })();
 </script>
 {% endblock %}

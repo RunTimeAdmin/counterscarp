@@ -637,6 +637,82 @@ def _render_markdown_report(
             f.write("No exploit PoCs were successfully generated for the detected findings.\n\n")
 
 
+def _resolve_action_plan_path(output_dir: Optional[str] = None) -> str:
+    """Compute the output file path for the action plan report.
+
+    Args:
+        output_dir: Optional directory to place the report in (created if absent).
+
+    Returns:
+        Resolved file path string.
+    """
+    _action_plan_name = "ACTION_PLAN.md"
+    if output_dir:
+        from pathlib import Path as _Path
+        _Path(output_dir).mkdir(parents=True, exist_ok=True)
+        return str(_Path(output_dir) / _action_plan_name)
+    return f"ACTION_PLAN_{datetime.date.today()}.md"
+
+
+def _format_action_plan_section(
+    project_name: str,
+    all_findings: List[Dict[str, Any]],
+    metrics: Dict[str, Any],
+    static_results: List[Dict[str, Any]],
+    supply_results: List[Dict[str, Any]],
+    fuzz_results: List[Dict[str, Any]],
+    heuristic_results: List[Dict[str, Any]],
+    symbolic_results: List[Dict[str, Any]],
+    aderyn_results: Optional[Dict[str, Any]] = None,
+    medusa_results: Optional[Dict[str, Any]] = None,
+    solana_results: Optional[Dict[str, Any]] = None,
+    upgrade_results: Optional[Dict[str, Any]] = None,
+    fingerprint_results: Optional[List[Dict[str, Any]]] = None,
+    exploit_results: Optional[List] = None,
+    analyzer_status: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Pure formatting: render the complete action plan as a Markdown string.
+
+    Delegates to ``_render_markdown_report`` using an in-memory buffer so that
+    no file I/O occurs in this function.
+
+    Returns:
+        The full Markdown report content as a string.
+    """
+    import io
+    buf = io.StringIO()
+    _render_markdown_report(
+        buf,
+        project_name=project_name,
+        all_findings=all_findings,
+        metrics=metrics,
+        static_results=static_results,
+        supply_results=supply_results,
+        fuzz_results=fuzz_results,
+        heuristic_results=heuristic_results,
+        symbolic_results=symbolic_results,
+        aderyn_results=aderyn_results,
+        medusa_results=medusa_results,
+        solana_results=solana_results,
+        upgrade_results=upgrade_results,
+        fingerprint_results=fingerprint_results,
+        exploit_results=exploit_results,
+        analyzer_status=analyzer_status,
+    )
+    return buf.getvalue()
+
+
+def _write_action_plan_file(path: str, content: str) -> None:
+    """Write action plan content to the specified file path.
+
+    Args:
+        path: Destination file path.
+        content: Markdown content to write.
+    """
+    with open(path, "w", encoding="utf-8", errors="replace") as f:
+        f.write(content)
+
+
 def _generate_action_plan_report(
     project_name: str,
     static_results: List[Dict[str, Any]],
@@ -655,37 +731,17 @@ def _generate_action_plan_report(
 ) -> str:
     """Generates an action-plan report focused on REMEDIATION (Fixing the bugs).
 
-    This is distinct from report_generator.generate_markdown_report which produces
-    a full AuditReport-based markdown. This function writes ACTION_PLAN.md with
-    a remediation-focused layout directly from raw orchestrator result lists.
-
-    Args:
-        project_name: Name of the project being audited.
-        static_results: Results from static analysis (Slither).
-        supply_results: Results from supply chain vulnerability scan.
-        fuzz_results: Results from fuzzing tests.
-        heuristic_results: Results from heuristic pattern matching.
-        symbolic_results: Results from symbolic execution (Mythril).
-        aderyn_results: Optional results from Aderyn static analysis.
-        medusa_results: Optional results from Medusa fuzzing.
-        solana_results: Optional results from Solana analysis.
-        upgrade_results: Optional results from upgrade diff analysis.
-        fingerprint_results: Optional results from protocol fingerprint scan.
-        exploit_results: Optional list of ExploitResult objects from PoC generation.
+    Thin orchestrator that delegates to focused helpers:
+    - ``_resolve_action_plan_path`` — file path resolution
+    - ``_aggregate_findings`` / ``_compute_risk_metrics`` — data aggregation
+    - ``_format_action_plan_section`` — pure Markdown formatting
+    - ``_write_action_plan_file`` — file I/O
 
     Returns:
         Path to the generated markdown report file.
     """
+    filename = _resolve_action_plan_path(output_dir)
 
-    _action_plan_name = "ACTION_PLAN.md"
-    if output_dir:
-        from pathlib import Path as _Path
-        _Path(output_dir).mkdir(parents=True, exist_ok=True)
-        filename = str(_Path(output_dir) / _action_plan_name)
-    else:
-        filename = f"ACTION_PLAN_{datetime.date.today()}.md"
-
-    # Step 1: Aggregate all findings into a unified list
     all_findings = _aggregate_findings(
         static_results=static_results,
         supply_results=supply_results,
@@ -697,7 +753,6 @@ def _generate_action_plan_report(
         solana_results=solana_results,
     )
 
-    # Step 2: Compute risk metrics
     metrics = _compute_risk_metrics(
         all_findings=all_findings,
         fuzz_results=fuzz_results,
@@ -705,27 +760,25 @@ def _generate_action_plan_report(
         heuristic_results=heuristic_results,
     )
 
-    # Step 3: Render Markdown report
-    with open(filename, "w", encoding="utf-8", errors="replace") as f:
-        _render_markdown_report(
-            f,
-            project_name=project_name,
-            all_findings=all_findings,
-            metrics=metrics,
-            static_results=static_results,
-            supply_results=supply_results,
-            fuzz_results=fuzz_results,
-            heuristic_results=heuristic_results,
-            symbolic_results=symbolic_results,
-            aderyn_results=aderyn_results,
-            medusa_results=medusa_results,
-            solana_results=solana_results,
-            upgrade_results=upgrade_results,
-            fingerprint_results=fingerprint_results,
-            exploit_results=exploit_results,
-            analyzer_status=analyzer_status,
-        )
+    content = _format_action_plan_section(
+        project_name=project_name,
+        all_findings=all_findings,
+        metrics=metrics,
+        static_results=static_results,
+        supply_results=supply_results,
+        fuzz_results=fuzz_results,
+        heuristic_results=heuristic_results,
+        symbolic_results=symbolic_results,
+        aderyn_results=aderyn_results,
+        medusa_results=medusa_results,
+        solana_results=solana_results,
+        upgrade_results=upgrade_results,
+        fingerprint_results=fingerprint_results,
+        exploit_results=exploit_results,
+        analyzer_status=analyzer_status,
+    )
 
+    _write_action_plan_file(filename, content)
     return filename
 
 
@@ -815,11 +868,45 @@ def _restore_ctx_from_cache(phase: Any, ctx: Any, cached: Any) -> None:
 
 
 def _build_concurrent_groups(registry):
-    """Build concurrent execution groups from phase metadata."""
+    """Build concurrent execution groups from phase metadata.
+
+    If a phase is missing the `group` attribute, it is assigned to group 0
+    (default sequential group) and a warning is logged.  If the result is
+    empty (no phases processed), a fallback single-group containing all
+    phase names is returned so execution is never silently skipped.
+    """
     from collections import defaultdict
     groups = defaultdict(list)
     for phase in registry:
-        groups[phase.group].append(phase.name)
+        try:
+            group = getattr(phase, "group", 0)
+        except Exception as exc:
+            logger.warning(
+                "Phase %s missing group metadata, defaulting to group 0: %s",
+                getattr(phase, "name", repr(phase)),
+                exc,
+            )
+            group = 0
+        phase_name = getattr(phase, "name", None)
+        if phase_name is None:
+            logger.warning("Phase object %r has no 'name' attribute, skipping", phase)
+            continue
+        groups[group].append(phase_name)
+
+    if not groups:
+        logger.warning(
+            "_build_concurrent_groups produced empty result; "
+            "falling back to sequential single-group with all phases"
+        )
+        # Fallback: put every phase into one group so nothing is silently skipped
+        fallback_names = [
+            getattr(p, "name", None) for p in registry
+            if getattr(p, "name", None) is not None
+        ]
+        if fallback_names:
+            return [fallback_names]
+        return []
+
     return [groups[k] for k in sorted(groups.keys())]
 
 

@@ -15,11 +15,15 @@ from typing import Any, Dict, List, Optional
 
 import base64
 import hashlib
+import logging
+import os
 
 import bcrypt as _bcrypt
 from cryptography.fernet import Fernet
 
 from webapp.config import BASE_DIR, SESSION_SECRET
+
+_logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -27,9 +31,39 @@ from webapp.config import BASE_DIR, SESSION_SECRET
 
 _USERS_DB_PATH: Path = BASE_DIR / "data" / "users.json"
 
+_KNOWN_INSECURE_DEFAULT = "counterscarp-dev-session-secret-INSECURE-DEFAULT"
+
 
 def _derive_fernet_key() -> bytes:
-    """Derive a Fernet-compatible key from SESSION_SECRET."""
+    """Derive a Fernet-compatible key for TOTP encryption.
+
+    Priority:
+      1. ``TOTP_ENCRYPTION_KEY`` env var (dedicated key — recommended)
+      2. ``SESSION_SECRET`` (fallback with warning)
+
+    A CRITICAL log is emitted when the key source is the hardcoded insecure
+    default and no dedicated key has been configured.
+    """
+    totp_key_env = os.environ.get("TOTP_ENCRYPTION_KEY", "").strip()
+
+    if totp_key_env:
+        # Dedicated key provided — derive via SHA-256 just like the legacy path
+        digest = hashlib.sha256(totp_key_env.encode("utf-8")).digest()
+        return base64.urlsafe_b64encode(digest)
+
+    # Fallback to SESSION_SECRET
+    _logger.warning(
+        "TOTP_ENCRYPTION_KEY not set — falling back to SESSION_SECRET. "
+        "Set a dedicated key for production."
+    )
+
+    if SESSION_SECRET == _KNOWN_INSECURE_DEFAULT:
+        _logger.critical(
+            "TOTP encryption is using the hardcoded insecure default "
+            "SESSION_SECRET. All TOTP secrets are trivially decryptable! "
+            "Set TOTP_ENCRYPTION_KEY or a strong SESSION_SECRET immediately."
+        )
+
     digest = hashlib.sha256(SESSION_SECRET.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest)
 
@@ -402,6 +436,68 @@ class UserManager:
                         ).decode("utf-8")
                     except Exception:
                         return None
+        return None
+
+    # ------------------------------------------------------------------
+    # TOTP recovery codes
+    # ------------------------------------------------------------------
+
+    def set_recovery_codes(self, user_id: str, codes_hashed: List[str]) -> None:
+        """Store hashed recovery codes for a user."""
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user["recovery_codes"] = codes_hashed
+                    self._write_db(db)
+                    return
+
+    def use_recovery_code(self, user_id: str, code: str) -> bool:
+        """Verify and consume a one-time recovery code.
+
+        Returns True if the code matched (and was removed), False otherwise.
+        """
+        code_hash = hashlib.sha256(
+            code.strip().encode("utf-8")
+        ).hexdigest()
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    stored: List[str] = user.get("recovery_codes", [])
+                    if code_hash in stored:
+                        stored.remove(code_hash)
+                        user["recovery_codes"] = stored
+                        self._write_db(db)
+                        return True
+                    return False
+        return False
+
+    # ------------------------------------------------------------------
+    # Notification email
+    # ------------------------------------------------------------------
+
+    def set_notification_email(self, user_id: str, email: str) -> bool:
+        """Set the notification email for a user.
+
+        Returns True if the user was found and updated.
+        """
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user["notification_email"] = email
+                    self._write_db(db)
+                    return True
+        return False
+
+    def get_notification_email(self, user_id: str) -> Optional[str]:
+        """Return the notification email for *user_id*, or None."""
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    return user.get("notification_email") or None
         return None
 
 

@@ -117,15 +117,14 @@
         <form method="POST" action="/auth/totp/verify">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
             <div class="auth-field">
-                <label for="code">Verification Code</label>
+                <label for="code">Verification Code or Recovery Code</label>
                 <input type="text"
                        id="code"
                        name="code"
                        class="auth-input"
                        placeholder="000000"
-                       maxlength="6"
-                       pattern="[0-9]{6}"
-                       inputmode="numeric"
+                       maxlength="8"
+                       inputmode="text"
                        autocomplete="one-time-code"
                        required
                        autofocus>
@@ -134,6 +133,7 @@
         </form>
 
         <p class="auth-footer">
+            Lost your authenticator? Enter a recovery code above instead.<br>
             <a href="/auth/login">Back to login</a>
         </p>
     </div>

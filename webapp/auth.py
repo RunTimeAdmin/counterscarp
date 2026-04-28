@@ -6,9 +6,13 @@ and an admin endpoint for mailing-list export.
 
 from __future__ import annotations
 
+import hashlib
 import hmac as _hmac
 import logging
 import math
+import secrets
+import string
+import time
 
 import pyotp
 from fastapi import APIRouter, HTTPException, Query, Request, Form
@@ -157,6 +161,8 @@ async def login_submit(
         totp_on = user.get("totp_enabled", False)
         if is_admin and totp_on:
             request.session["pending_2fa"] = user["id"]
+            request.session["pending_2fa_expires"] = time.time() + 1800
+            request.session["totp_attempts"] = 0
             resp = RedirectResponse(
                 url="/auth/totp/verify", status_code=302,
             )
@@ -376,11 +382,18 @@ async def logout(request: Request):
 
 @auth_router.get("/totp/setup")
 async def totp_setup_page(request: Request):
-    """Show TOTP enrollment page (requires authentication)."""
+    """Show TOTP enrollment page (admin-only, requires authentication)."""
     current_user = get_current_user(request)
     if not current_user:
         return RedirectResponse(
             url="/auth/login", status_code=302,
+        )
+
+    # TOTP 2FA is only available for admin accounts
+    if not ADMIN_EMAIL or current_user["email"] != ADMIN_EMAIL:
+        return JSONResponse(
+            {"error": "TOTP two-factor authentication is only available for admin accounts"},
+            status_code=403,
         )
 
     secret = pyotp.random_base32()
@@ -410,11 +423,18 @@ async def totp_setup_submit(
     request: Request,
     code: str = Form(...),
 ):
-    """Verify the TOTP code and enable 2FA for the user."""
+    """Verify the TOTP code and enable 2FA for the user (admin-only)."""
     current_user = get_current_user(request)
     if not current_user:
         return RedirectResponse(
             url="/auth/login", status_code=302,
+        )
+
+    # TOTP 2FA is only available for admin accounts
+    if not ADMIN_EMAIL or current_user["email"] != ADMIN_EMAIL:
+        return JSONResponse(
+            {"error": "TOTP two-factor authentication is only available for admin accounts"},
+            status_code=403,
         )
 
     form = await request.form()
@@ -439,9 +459,31 @@ async def totp_setup_submit(
             current_user["id"], secret,
         )
         request.session.pop("pending_totp_secret", None)
-        return RedirectResponse(
-            url="/settings?msg=2FA+enabled+successfully",
-            status_code=302,
+
+        # Generate 10 one-time recovery codes
+        _alphabet = string.ascii_lowercase + string.digits
+        recovery_codes = [
+            "".join(secrets.choice(_alphabet) for _ in range(8))
+            for _ in range(10)
+        ]
+        codes_hashed = [
+            hashlib.sha256(c.encode("utf-8")).hexdigest()
+            for c in recovery_codes
+        ]
+        user_manager.set_recovery_codes(current_user["id"], codes_hashed)
+
+        return templates.TemplateResponse(
+            request,
+            "totp_setup.html",
+            context={
+                "current_user": current_user,
+                "provisioning_uri": "",
+                "totp_secret": "",
+                "error": "",
+                "csrf_token": "",
+                "setup_complete": True,
+                "recovery_codes": recovery_codes,
+            },
         )
 
     # Invalid code — re-render with error
@@ -470,6 +512,16 @@ async def totp_verify_page(request: Request):
         return RedirectResponse(
             url="/auth/login", status_code=302,
         )
+    # Check expiry
+    expires_at = request.session.get("pending_2fa_expires", 0)
+    if time.time() > expires_at:
+        request.session.pop("pending_2fa", None)
+        request.session.pop("pending_2fa_expires", None)
+        request.session.pop("totp_attempts", None)
+        return RedirectResponse(
+            url="/auth/login?error=2FA+session+expired.+Please+log+in+again.",
+            status_code=302,
+        )
     return templates.TemplateResponse(
         request,
         "totp_challenge.html",
@@ -497,10 +549,36 @@ async def totp_verify_submit(
                 detail="CSRF validation failed",
             )
 
+    # --- Rate limiting (IP-based, reuse app-level limiter pattern) ---
+    client_ip = get_client_ip(request)
+    totp_limiter = getattr(request.app.state, "totp_limiter", None)
+    if totp_limiter and not totp_limiter.is_allowed(client_ip):
+        # After 10 consecutive failures by IP, enforce cooldown
+        resp_429 = JSONResponse(
+            {"detail": "Too many TOTP attempts. Try again later."},
+            status_code=429,
+        )
+        add_rate_limit_headers(resp_429, totp_limiter, client_ip)
+        resp_429.headers["Retry-After"] = str(
+            totp_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
+
     user_id = request.session.get("pending_2fa")
     if not user_id:
         return RedirectResponse(
             url="/auth/login", status_code=302,
+        )
+
+    # --- Expiry check (30 min window) ---
+    expires_at = request.session.get("pending_2fa_expires", 0)
+    if time.time() > expires_at:
+        request.session.pop("pending_2fa", None)
+        request.session.pop("pending_2fa_expires", None)
+        request.session.pop("totp_attempts", None)
+        return RedirectResponse(
+            url="/auth/login?error=2FA+session+expired.+Please+log+in+again.",
+            status_code=302,
         )
 
     secret = user_manager.get_totp_secret(user_id)
@@ -513,7 +591,7 @@ async def totp_verify_submit(
 
     totp = pyotp.TOTP(secret)
     if totp.verify(code):
-        # Complete authentication
+        # Complete authentication — reset attempt counters
         user = user_manager.get_by_id(user_id)
         if user:
             request.session["user_id"] = user["id"]
@@ -524,7 +602,37 @@ async def totp_verify_submit(
                 )
             request.session["totp_verified"] = True
         request.session.pop("pending_2fa", None)
+        request.session.pop("pending_2fa_expires", None)
+        request.session.pop("totp_attempts", None)
         return RedirectResponse(url="/", status_code=302)
+
+    # --- Recovery code fallback ---
+    if user_manager.use_recovery_code(user_id, code):
+        user = user_manager.get_by_id(user_id)
+        if user:
+            request.session["user_id"] = user["id"]
+            user_manager.update_last_login(user["id"])
+            if user.get("license_key"):
+                request.session["user_license"] = user["license_key"]
+            request.session["totp_verified"] = True
+        request.session.pop("pending_2fa", None)
+        request.session.pop("pending_2fa_expires", None)
+        request.session.pop("totp_attempts", None)
+        return RedirectResponse(url="/", status_code=302)
+
+    # --- Session-level attempt tracking ---
+    attempts = request.session.get("totp_attempts", 0) + 1
+    request.session["totp_attempts"] = attempts
+
+    if attempts >= 5:
+        # Invalidate pending 2FA after 5 failed attempts in this session
+        request.session.pop("pending_2fa", None)
+        request.session.pop("pending_2fa_expires", None)
+        request.session.pop("totp_attempts", None)
+        return RedirectResponse(
+            url="/auth/login?error=Too+many+failed+2FA+attempts.+Please+log+in+again.",
+            status_code=302,
+        )
 
     # Invalid code
     return templates.TemplateResponse(

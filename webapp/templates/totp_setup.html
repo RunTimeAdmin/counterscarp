@@ -141,6 +141,35 @@
 
 <div class="auth-container">
     <div class="auth-card">
+        {% if setup_complete %}
+        <h1>Two-Factor Authentication Enabled</h1>
+        <p class="auth-subtitle" style="color:#4ade80;">2FA has been successfully enabled for your account.</p>
+
+        <div class="totp-section">
+            <h2 style="color:#fbbf24;">&#9888; Save Your Recovery Codes</h2>
+            <p class="totp-hint" style="color:#e0e0e0; margin-bottom:0.75rem;">
+                These 10 one-time recovery codes can be used to access your account if you lose your authenticator.
+                <strong style="color:#dc3545;">They will NOT be shown again.</strong>
+            </p>
+            <div class="recovery-codes-box" id="recovery-codes-box" style="background:#0f1629; border:1px solid #2a2a4e; border-radius:8px; padding:1rem; font-family:'Courier New',monospace; font-size:1rem; color:#667eea; line-height:2; text-align:center; user-select:all;">
+                {% for code in recovery_codes %}{{ code }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+            </div>
+            <button type="button" onclick="copyRecoveryCodes()" style="width:100%; margin-top:0.75rem; padding:0.6rem 1rem; background:#2a2a4e; color:#e0e0e0; border:1px solid #444; border-radius:8px; font-size:0.9rem; cursor:pointer;" id="copy-codes-btn">Copy codes</button>
+        </div>
+
+        <a href="/settings?msg=2FA+enabled+successfully" class="btn-auth-submit" style="display:block; text-align:center; text-decoration:none; margin-top:1rem;">Continue to Settings</a>
+
+        <script>
+        function copyRecoveryCodes() {
+            var codes = [{% for code in recovery_codes %}"{{ code }}"{% if not loop.last %},{% endif %}{% endfor %}];
+            var text = codes.join("\n");
+            navigator.clipboard.writeText(text).then(function() {
+                document.getElementById('copy-codes-btn').textContent = 'Copied!';
+                setTimeout(function(){ document.getElementById('copy-codes-btn').textContent = 'Copy codes'; }, 2000);
+            });
+        }
+        </script>
+        {% else %}
         <h1>Set Up Two-Factor Authentication</h1>
         <p class="auth-subtitle">Scan the QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)</p>
 
@@ -183,9 +212,11 @@
             </div>
             <button type="submit" class="btn-auth-submit">Verify &amp; Enable 2FA</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
+{% if not setup_complete %}
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 <script>
 (function() {
@@ -203,4 +234,5 @@
     }
 })();
 </script>
+{% endif %}
 {% endblock %}

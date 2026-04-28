@@ -364,19 +364,49 @@ _MAX_FILE_EVENTS = 1000
 _events_file_lock = threading.Lock()
 
 
+_redis_client: Any = None
+_redis_client_checked: bool = False
+
+
 def _get_redis_client() -> Any:
-    """Return a Redis client connected via REDIS_URL, or None."""
+    """Return a cached Redis client connected via REDIS_URL, or None.
+
+    Uses a module-level singleton so at most ONE connection is created per
+    worker process, reused across all calls.  If the cached client loses
+    its connection, falls back gracefully (returns None).
+    """
+    global _redis_client, _redis_client_checked
+
     if redis_lib is None:
         return None
+
+    # Fast path: already attempted connection (result may be None)
+    if _redis_client_checked:
+        # Verify cached client is still alive
+        if _redis_client is not None:
+            try:
+                _redis_client.ping()
+                return _redis_client
+            except Exception:
+                logger.debug("Cached Redis connection lost, returning None")
+                _redis_client = None
+        return _redis_client
+
+    # First call: try to connect once, cache the result (even if None)
     url = os.environ.get("REDIS_URL")
     if not url:
+        _redis_client = None
+        _redis_client_checked = True
         return None
+
     try:
-        client = redis_lib.from_url(url, decode_responses=True, socket_timeout=2)
-        client.ping()
-        return client
+        _redis_client = redis_lib.from_url(url, decode_responses=True, socket_timeout=2)
+        _redis_client.ping()  # verify connection
     except Exception:
-        return None
+        _redis_client = None
+
+    _redis_client_checked = True
+    return _redis_client
 
 
 def is_event_processed(event_id: str) -> bool:
@@ -415,6 +445,70 @@ def mark_event_processed(event_id: str) -> None:
         logger.debug("Redis unavailable for marking event, falling back to file")
 
     # Always persist to file as well (durable fallback)
+    _file_mark_event(event_id)
+
+
+def _file_mark_event(event_id: str) -> None:
+    """Persist event_id to the file fallback (caller may or may not hold lock)."""
+    try:
+        _PROCESSED_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if _PROCESSED_EVENTS_PATH.exists():
+            try:
+                data = json.loads(
+                    _PROCESSED_EVENTS_PATH.read_text(encoding="utf-8")
+                )
+            except (json.JSONDecodeError, OSError):
+                data = []
+        else:
+            data = []
+
+        if event_id not in data:
+            data.append(event_id)
+
+        # Prune to last N entries
+        if len(data) > _MAX_FILE_EVENTS:
+            data = data[-_MAX_FILE_EVENTS:]
+
+        tmp = _PROCESSED_EVENTS_PATH.with_suffix(".tmp")
+        try:
+            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            tmp.replace(_PROCESSED_EVENTS_PATH)
+        except OSError:
+            _PROCESSED_EVENTS_PATH.write_text(
+                json.dumps(data, indent=2), encoding="utf-8"
+            )
+    except Exception:
+        logger.warning("Failed to persist processed event to file: %s", event_id)
+
+
+def check_and_mark_event(event_id: str) -> bool:
+    """Atomically check if event was processed and mark it if not.
+
+    Returns True if the event was ALREADY processed (duplicate).
+    Returns False if the event is new and has now been marked as processed.
+
+    This eliminates the TOCTOU race between is_event_processed() and
+    mark_event_processed() in the file fallback path.
+    """
+    # Try Redis first — SETNX is inherently atomic
+    try:
+        client = _get_redis_client()
+        if client is not None:
+            # SET with NX returns True if set (new), None/False if already exists
+            was_set = client.set(
+                f"{_REDIS_KEY_PREFIX}:{event_id}", "1",
+                nx=True, ex=_REDIS_WEBHOOK_TTL,
+            )
+            if not was_set:
+                return True  # Already processed
+            # Also persist to file for durability
+            with _events_file_lock:
+                _file_mark_event(event_id)
+            return False  # Newly marked
+    except Exception:
+        logger.debug("Redis unavailable for atomic check-and-mark, falling back to file")
+
+    # File fallback — single lock acquisition for check + mark
     try:
         with _events_file_lock:
             _PROCESSED_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -428,10 +522,11 @@ def mark_event_processed(event_id: str) -> None:
             else:
                 data = []
 
-            if event_id not in data:
-                data.append(event_id)
+            if event_id in data:
+                return True  # Already processed
 
-            # Prune to last N entries
+            # Mark as processed
+            data.append(event_id)
             if len(data) > _MAX_FILE_EVENTS:
                 data = data[-_MAX_FILE_EVENTS:]
 
@@ -443,5 +538,7 @@ def mark_event_processed(event_id: str) -> None:
                 _PROCESSED_EVENTS_PATH.write_text(
                     json.dumps(data, indent=2), encoding="utf-8"
                 )
+            return False  # Newly marked
     except Exception:
-        logger.warning("Failed to persist processed event to file: %s", event_id)
+        logger.warning("Failed atomic check-and-mark for event: %s", event_id)
+        return False  # Fail open — allow processing

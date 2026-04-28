@@ -7,7 +7,6 @@ import logging
 import os
 import re
 import shutil
-import subprocess
 import sys
 import time
 import uuid
@@ -64,6 +63,7 @@ from webapp.stripe_integration import (
     handle_checkout_completed,
     get_session_license_key,
     update_license_in_db,
+    check_and_mark_event,
     is_event_processed,
     mark_event_processed,
     STRIPE_PUBLISHABLE_KEY,
@@ -86,15 +86,22 @@ _register_limiter = RedisRateLimiter(max_requests=3, window_seconds=3600, redis_
 _audit_limiter = RedisRateLimiter(max_requests=10, window_seconds=3600, redis_url=_redis_url, prefix="rl:audit")
 _license_limiter = RedisRateLimiter(max_requests=100, window_seconds=3600, redis_url=_redis_url, prefix="rl:license")
 _admin_limiter = RedisRateLimiter(max_requests=30, window_seconds=3600, redis_url=_redis_url, prefix="rl:admin")
+_totp_limiter = RedisRateLimiter(max_requests=10, window_seconds=1800, redis_url=_redis_url, prefix="rl:totp")
 security_logger = logging.getLogger("counterscarp.security")
 
 _license = LicenseManager()
 
 
-def _count_lines(path: str) -> int:
-    """Count lines in a file using a context manager."""
-    with open(path, encoding="utf-8", errors="ignore") as f:
-        return sum(1 for _ in f)
+from webapp.scan_utils import (
+    heuristic_finding_to_finding,
+    count_lines as _count_lines,
+    run_slither_analysis,
+    run_ai_copilot,
+    serialize_findings,
+    generate_reports,
+    generate_attack_graph,
+    build_analyzers_list,
+)
 
 
 def validate_audit_id(audit_id: str) -> str:
@@ -109,7 +116,7 @@ def validate_audit_id(audit_id: str) -> str:
     return audit_id
 
 
-# Import Counterscarp Engine modules
+# Import Counterscarp Engine modules (scan_utils re-exports shared logic)
 from heuristic_scanner import (
     HeuristicFinding,
     RULE_CATEGORIES,
@@ -120,20 +127,7 @@ from report_generator import (
     AuditReport,
     Finding,
     create_audit_report,
-    generate_html_report,
-    generate_markdown_report,
-    save_sarif_report,
 )
-
-try:
-    from report_generator import generate_pdf_report as _generate_pdf_report_impl
-    def generate_pdf_report(report: AuditReport, output_path: str, logo_path: str | None = None) -> None:
-        _generate_pdf_report_impl(report, output_path, logo_path=logo_path)
-except (ImportError, AttributeError):
-    def generate_pdf_report(report: AuditReport, output_path: str, logo_path: str | None = None) -> None:
-        raise RuntimeError("generate_pdf_report is not available in this environment")
-from attack_graph import build_graph, export_graph_json
-from visualizer import generate_attack_graph_html
 
 app = FastAPI(
     title="Counterscarp Engine",
@@ -174,7 +168,7 @@ app.add_middleware(
         "http://localhost:8001",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -198,108 +192,20 @@ def ensure_directories():
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def heuristic_finding_to_finding(hf: HeuristicFinding) -> Finding:
-    """Convert HeuristicFinding to Finding."""
-    return Finding(
-        rule_id=hf.rule_id,
-        severity=hf.severity,
-        category="Heuristic",
-        title=hf.rule_id.replace("_", " ").title(),
-        description=hf.message,
-        file=hf.file,
-        line_no=hf.line_no,
-        code_snippet=hf.line_text,
-        remediation="",
-        references=[],
-    )
-
-
-def run_slither_analysis(file_path: str) -> tuple[list[Finding], str]:
-    """Run Slither on a file, return findings and status.
-
-    Gracefully degrades if Slither is not installed or times out.
-    Returns a tuple of (list of Finding objects, status string).
-    Status can be: 'completed', 'not_installed', 'timeout', 'error'.
-    """
-    try:
-        # Validate file_path is within upload directory (defense in depth)
-        upload_dir = Path(UPLOAD_DIR).resolve()
-        resolved = Path(file_path).resolve()
-        if not resolved.is_relative_to(upload_dir):
-            raise HTTPException(status_code=400, detail="Invalid file path")
-
-        # Use the slither binary from the same venv as this process
-        venv_bin = Path(sys.executable).parent
-        slither_bin = str(venv_bin / "slither")
-
-        result = subprocess.run(
-            [slither_bin, "--json", "-", "--", str(resolved)],
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode not in (0, 1):  # 1 means findings found
-            return [], "error"
-
-        # Parse Slither JSON output
-        data = json.loads(result.stdout) if result.stdout else {}
-        detectors = data.get("results", {}).get("detectors", [])
-
-        slither_findings: list[Finding] = []
-        severity_map = {
-            "High": "HIGH", "Medium": "MEDIUM", "Low": "LOW",
-            "Informational": "INFO", "Optimization": "INFO",
-        }
-
-        for det in detectors:
-            elements = det.get("elements", [])
-            file_name = ""
-            line_no = 0
-            code_snippet = ""
-            if elements:
-                src = elements[0].get("source_mapping", {})
-                file_name = src.get("filename_short", "")
-                lines = src.get("lines", [])
-                line_no = lines[0] if lines else 0
-                code_snippet = elements[0].get("name", "")
-
-            finding = Finding(
-                rule_id=f"SLITHER-{det.get('check', 'unknown').upper()}",
-                severity=severity_map.get(det.get("impact", ""), "INFO"),
-                category="Slither",
-                title=det.get("check", "Unknown").replace("-", " ").title(),
-                description=det.get("description", ""),
-                file=file_name,
-                line_no=line_no,
-                code_snippet=code_snippet,
-                remediation=det.get("markdown", ""),
-                references=[],
-            )
-            slither_findings.append(finding)
-
-        return slither_findings, "completed"
-    except FileNotFoundError:
-        return [], "not_installed"
-    except subprocess.TimeoutExpired:
-        return [], "timeout"
-    except Exception:
-        return [], "error"
-
-
 async def async_run_slither_analysis(file_path: str) -> tuple[list[Finding], str]:
-    """Async version of run_slither_analysis using async_subprocess.run_tool().
+    """Async version of run_slither_analysis.
 
-    Runs Slither without blocking the event loop. The sync run_slither_analysis()
-    is preserved for CLI/non-async usage.
-
+    Runs Slither without blocking the event loop via thread executor.
     Returns a tuple of (list of Finding objects, status string).
-    Status can be: 'completed', 'not_installed', 'timeout', 'error'.
     """
     import asyncio
     try:
         import async_subprocess as _async_subprocess
     except ImportError:
-        # Fallback: wrap sync version in thread executor
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, run_slither_analysis, file_path)
+        return await loop.run_in_executor(
+            None, run_slither_analysis, file_path, UPLOAD_DIR
+        )
 
     try:
         upload_dir = Path(UPLOAD_DIR).resolve()
@@ -357,76 +263,10 @@ async def async_run_slither_analysis(file_path: str) -> tuple[list[Finding], str
     except FileNotFoundError:
         return [], "not_installed"
     except Exception:
-        # Fallback to sync in executor on any unexpected error
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, run_slither_analysis, file_path)
-
-
-def run_ai_copilot(
-    findings: list[Finding], source_code: str,
-) -> tuple[str, str]:
-    """Run AI Copilot to get summary insights.
-
-    Returns a tuple of (summary_text, status string).
-    Status can be: 'completed', 'error'.
-    """
-    try:
-        from rag_engine import AuditCopilot
-        copilot = AuditCopilot()
-
-        if not findings:
-            return "No findings to analyze.", "completed"
-
-        # Build query from findings
-        query = f"Analyze these {len(findings)} security findings:\n"
-        for f in findings[:10]:  # Limit to top 10 for performance
-            query += f"- [{f.severity}] {f.title}: {f.description[:100]}\n"
-
-        # Query the RAG vector store for relevant context
-        results = copilot.vector_store.query(query, top_k=5)
-
-        if not results:
-            return (
-                "AI Copilot: No relevant historical context "
-                "found in the knowledge base.",
-                "completed",
-            )
-
-        # Build summary from RAG results
-        summary_parts = ["AI Audit Copilot Insights:\n"]
-        for i, res in enumerate(results, 1):
-            metadata = res.get("metadata", {})
-            source = metadata.get("source", "unknown")
-            text = res.get("text", "")
-            similarity = res.get("similarity", 0)
-            summary_parts.append(
-                f"{i}. [Similarity: {similarity:.2f}] ({source})\n"
-                f"   {text[:300]}\n"
-            )
-
-        # Enrich findings with RAG context
-        findings_dicts = [
-            {"rule_id": f.rule_id, "title": f.title,
-             "description": f.description, "severity": f.severity}
-            for f in findings
-        ]
-        enriched = copilot.enrich_findings_batch(findings_dicts)
-
-        # Add remediation guidance if available
-        remediations = []
-        for ef in enriched:
-            rem = ef.get("rag_remediation", "")
-            if rem and rem not in remediations:
-                remediations.append(rem)
-
-        if remediations:
-            summary_parts.append("\nRemediation Guidance:\n")
-            for j, rem in enumerate(remediations[:5], 1):
-                summary_parts.append(f"{j}. {rem}\n")
-
-        return "".join(summary_parts), "completed"
-    except Exception:
-        return "", "error"
+        return await loop.run_in_executor(
+            None, run_slither_analysis, file_path, UPLOAD_DIR
+        )
 
 
 # Load persisted API keys from data/.env.local
@@ -465,6 +305,7 @@ async def startup_event():
     app.state.audit_limiter = _audit_limiter
     app.state.license_limiter = _license_limiter
     app.state.admin_limiter = _admin_limiter
+    app.state.totp_limiter = _totp_limiter
 
     # Initialize arq Redis pool for async job queue (graceful fallback)
     app.state.arq_pool = None
@@ -701,142 +542,46 @@ async def audit(
     )
 
     # Save findings as JSON
-    findings_data = [
-        {
-            "rule_id": f.rule_id,
-            "severity": f.severity,
-            "category": f.category,
-            "title": f.title,
-            "description": f.description,
-            "file": f.file,
-            "line_no": f.line_no,
-            "code_snippet": f.code_snippet,
-            "remediation": f.remediation,
-            "references": f.references,
-            "cwe": f.cwe,
-            "owasp": f.owasp,
-        }
-        for f in findings
-    ]
+    findings_data = serialize_findings(findings)
 
     findings_path = results_dir / "findings.json"
     with open(findings_path, "w", encoding="utf-8") as f:
         json.dump(findings_data, f, indent=2)
 
-    # Generate HTML report (PRO feature)
-    html_path: Path | None = results_dir / "report.html"
-    if _license.check_pro_feature(BRANDED_REPORTS):
-        generate_html_report(
-            report, str(html_path),
-            logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
-        )
-        # Generate PDF report (PRO feature, requires xhtml2pdf)
-        pdf_path = results_dir / "report.pdf"
-        try:
-            generate_pdf_report(
-                report,
-                str(pdf_path),
-                logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
-            )
-        except Exception:
-            # PDF is optional; don't fail the whole audit if xhtml2pdf is missing
-            pass
-    else:
-        html_path = None
-
-    md_path = results_dir / "report.md"
-    generate_markdown_report(report, str(md_path))
-
-    sarif_path = results_dir / "report.sarif"
-    sarif_metadata = {
-        "project_name": project_name,
-        "target_path": str(upload_dir),
-        "timestamp": report.timestamp,
-    }
-    save_sarif_report(findings, str(sarif_path), sarif_metadata)
+    # Generate all report formats
+    generate_reports(
+        report=report,
+        findings=findings,
+        findings_data=findings_data,
+        results_dir=results_dir,
+        logo_path=LOGO_PATH,
+        branded=_license.check_pro_feature(BRANDED_REPORTS),
+        project_name=project_name,
+        upload_dir=upload_dir,
+    )
 
     # Generate attack graph (PRO feature)
     attack_graph_generated = False
     if findings and _license.check_pro_feature(ATTACK_GRAPH):
-        try:
-            finding_dicts = [
-                {
-                    "rule_id": f.rule_id,
-                    "severity": f.severity,
-                    "file": f.file,
-                    "line_no": f.line_no,
-                    "message": f.description,
-                }
-                for f in findings
-            ]
-
-            graph = build_graph(finding_dicts, source_files=uploaded_paths)
-            graph_json = export_graph_json(graph)
-            attack_graph_path = results_dir / "attack_graph.html"
-            generate_attack_graph_html(
-                graph_json,
-                str(attack_graph_path),
-                f"Attack Path Analysis - {project_name}",
-                logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
-            )
-            attack_graph_generated = True
-        except Exception:
-            # Attack graph is optional
-            pass
+        attack_graph_generated = generate_attack_graph(
+            findings=findings,
+            uploaded_paths=uploaded_paths,
+            results_dir=results_dir,
+            project_name=project_name,
+            logo_path=LOGO_PATH,
+        )
 
     # Save scan metadata (coverage / what was checked)
-    findings_per_category: dict[str, int] = {}
-    for cat, rule_ids in RULE_CATEGORIES.items():
-        findings_per_category[cat] = sum(
-            1 for fd in findings_data if fd["rule_id"] in rule_ids
-        )
-
-    # Update AI Copilot analyzer status for free tier
-    ai_copilot_analyzer = {
-        "name": "AI Audit Copilot",
-        "status": ai_status,
-        "findings_count": 0,
-    }
-    # Add pro-only tag so templates can distinguish
-    if ai_status == "pro_required":
-        ai_copilot_analyzer["pro_only"] = True
-
-    analyzers_list = [
-        {
-            "name": "Heuristic Pattern Scanner",
-            "status": "completed",
-            "patterns_checked": len(HEURISTIC_RULES),
-            "categories": {
-                cat: {
-                    "patterns": len(rules),
-                    "findings": findings_per_category.get(cat, 0),
-                }
-                for cat, rules in RULE_CATEGORIES.items()
-            },
-            "findings_count": heuristic_count,
-        },
-        {
-            "name": "Slither Static Analysis",
-            "status": slither_status,
-            "findings_count": len(slither_findings),
-        },
-        ai_copilot_analyzer,
-    ]
-    if findings:
-        ag_status = (
-            "completed" if attack_graph_generated
-            else ("pro_required"
-                  if not _license.check_pro_feature(ATTACK_GRAPH)
-                  else "skipped")
-        )
-        attack_graph_analyzer = {
-            "name": "Attack Graph Generator",
-            "status": ag_status,
-            "findings_count": 0,
-        }
-        if attack_graph_analyzer["status"] == "pro_required":
-            attack_graph_analyzer["pro_only"] = True
-        analyzers_list.append(attack_graph_analyzer)
+    analyzers_list = build_analyzers_list(
+        heuristic_count=heuristic_count,
+        slither_findings_count=len(slither_findings),
+        slither_status=slither_status,
+        ai_status=ai_status,
+        attack_graph_generated=attack_graph_generated,
+        has_findings=bool(findings),
+        has_attack_graph_feature=_license.check_pro_feature(ATTACK_GRAPH),
+        findings_data=findings_data,
+    )
 
     current_user = get_current_user(request)
     scan_meta = {
@@ -854,6 +599,28 @@ async def audit(
     meta_path = results_dir / "scan_meta.json"
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(scan_meta, f, indent=2)
+
+    # Write lightweight scan index for fast dashboard reads
+    _write_scan_index(results_dir, audit_id, findings_data, scan_meta)
+
+    # Update per-user audit index for O(1) dashboard performance
+    _update_user_audit_index(user_id, {
+        "audit_id": audit_id,
+        "project_name": scan_meta.get("project_name", "Unknown"),
+        "timestamp": scan_meta.get("timestamp", ""),
+        "severity_counts": {
+            k: v for k, v in {
+                "critical": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "CRITICAL"),
+                "high": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "HIGH"),
+                "medium": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "MEDIUM"),
+                "low": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "LOW"),
+            }.items()
+        },
+        "risk_score": round(min(100.0, (sum(
+            {"CRITICAL": 10.0, "HIGH": 5.0, "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1}.get(fd.get("severity", "INFO"), 0)
+            for fd in findings_data
+        ) / max(len(findings_data) * 10.0, 1.0)) * 100), 1) if findings_data else 0.0,
+    })
 
     redirect = RedirectResponse(
         url=f"/results/{audit_id}", status_code=303,
@@ -890,6 +657,53 @@ async def audit_status_api(audit_id: str = Depends(validate_audit_id)):
     return JSONResponse(data)
 
 
+@app.delete("/api/audit/{audit_id}")
+async def delete_audit(request: Request, audit_id: str = Depends(validate_audit_id)):
+    """Delete an audit and its results with ownership verification."""
+    current_user = get_current_user(request)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    results_dir = RESULTS_DIR / audit_id
+    if not results_dir.exists():
+        raise HTTPException(status_code=404, detail="Audit not found")
+
+    # Verify ownership via scan_meta.json
+    meta_path = results_dir / "scan_meta.json"
+    if meta_path.exists():
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        owner = meta.get("owner_user_id")
+        if owner and owner != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        raise HTTPException(status_code=404, detail="Audit metadata not found")
+
+    user_id = current_user["id"]
+
+    # Remove the results directory
+    shutil.rmtree(results_dir, ignore_errors=True)
+
+    # Remove from per-user audit index
+    _remove_from_user_audit_index(user_id, audit_id)
+
+    # Also clean up the upload directory if it exists
+    upload_dir = UPLOAD_DIR / audit_id
+    if upload_dir.exists():
+        shutil.rmtree(upload_dir, ignore_errors=True)
+
+    # Log the deletion
+    append_audit_log(
+        "audit_deleted",
+        audit_id,
+        user_id,
+        request.client.host if request.client else "unknown",
+        {"audit_id": audit_id},
+    )
+
+    return JSONResponse({"status": "deleted", "audit_id": audit_id})
+
+
 @app.get("/results/{audit_id}", response_class=HTMLResponse)
 async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
     """Display audit results."""
@@ -900,13 +714,13 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
         raise HTTPException(status_code=404, detail="Audit not found")
 
     # Ownership check
-    current_user = request.session.get("user")
+    current_user = get_current_user(request)
     meta_path_acl = results_dir / "scan_meta.json"
     if meta_path_acl.exists():
         with open(meta_path_acl) as _mf:
             _acl_meta = json.load(_mf)
         if _acl_meta.get("owner_user_id") and current_user:
-            if _acl_meta["owner_user_id"] != current_user.get("id"):
+            if _acl_meta["owner_user_id"] != current_user["id"]:
                 raise HTTPException(status_code=403, detail="Access denied")
         elif _acl_meta.get("owner_user_id") and not current_user:
             return RedirectResponse(url="/auth/login")
@@ -1013,6 +827,84 @@ async def terms_page(request: Request):
     return templates.TemplateResponse(request, "terms.html", context={"current_user": get_current_user(request), **_get_grace_period_context(request)})
 
 
+def _write_scan_index(results_dir: Path, audit_id: str, findings_data: list, scan_meta: dict) -> None:
+    """Write a lightweight scan_index.json for fast dashboard reads."""
+    severity_weights = {
+        "CRITICAL": 10.0, "HIGH": 5.0,
+        "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
+    }
+    sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for fd in findings_data:
+        sev = fd.get("severity", "INFO").upper()
+        key = sev.lower()
+        if key in sev_counts:
+            sev_counts[key] += 1
+
+    total = len(findings_data)
+    if total:
+        total_w = sum(severity_weights.get(fd.get("severity", "INFO"), 0) for fd in findings_data)
+        max_w = total * severity_weights["CRITICAL"]
+        risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
+    else:
+        risk_score = 0.0
+
+    index = {
+        "audit_id": audit_id,
+        "project_name": scan_meta.get("project_name", "Unknown"),
+        "timestamp": scan_meta.get("timestamp", ""),
+        "severity_counts": sev_counts,
+        "risk_score": risk_score,
+        "total_findings": total,
+        "has_pdf": (results_dir / "report.pdf").exists(),
+        "has_html": (results_dir / "report.html").exists(),
+        "has_md": (results_dir / "report.md").exists(),
+    }
+    index_path = results_dir / "scan_index.json"
+    index_path.write_text(json.dumps(index, indent=2), encoding="utf-8")
+
+
+_USER_AUDIT_INDEX_PATH: Path = BASE_DIR / "data" / "user_audit_index.json"
+_user_audit_index_lock = __import__("threading").Lock()
+
+
+def _update_user_audit_index(user_id: str, audit_summary: dict) -> None:
+    """Append an audit summary to the per-user audit index for O(1) dashboard reads."""
+    if not user_id:
+        return
+    with _user_audit_index_lock:
+        data: Dict[str, list] = {}
+        if _USER_AUDIT_INDEX_PATH.exists():
+            try:
+                data = json.loads(_USER_AUDIT_INDEX_PATH.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                data = {}
+        user_audits = data.get(user_id, [])
+        user_audits.append(audit_summary)
+        data[user_id] = user_audits
+        _USER_AUDIT_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _USER_AUDIT_INDEX_PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(_USER_AUDIT_INDEX_PATH)
+
+
+def _remove_from_user_audit_index(user_id: str, audit_id: str) -> None:
+    """Remove an audit entry from the per-user audit index."""
+    if not user_id:
+        return
+    with _user_audit_index_lock:
+        data: Dict[str, list] = {}
+        if _USER_AUDIT_INDEX_PATH.exists():
+            try:
+                data = json.loads(_USER_AUDIT_INDEX_PATH.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                data = {}
+        user_audits = data.get(user_id, [])
+        data[user_id] = [a for a in user_audits if a.get("audit_id") != audit_id]
+        tmp = _USER_AUDIT_INDEX_PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(_USER_AUDIT_INDEX_PATH)
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     """Per-user audit history dashboard with pagination."""
@@ -1023,12 +915,45 @@ async def dashboard_page(request: Request):
     user_id = current_user.get("id")
     audits: List[Dict] = []
 
+    # --- Fast path: read from per-user audit index ---
+    _used_user_index = False
+    if _USER_AUDIT_INDEX_PATH.exists():
+        try:
+            _idx_data = json.loads(_USER_AUDIT_INDEX_PATH.read_text(encoding="utf-8"))
+            _user_entries = _idx_data.get(user_id, [])
+            if _user_entries:
+                for entry in _user_entries:
+                    ts = None
+                    ts_raw = entry.get("timestamp", "")
+                    try:
+                        ts = datetime.fromisoformat(ts_raw)
+                    except (ValueError, TypeError):
+                        pass
+                    raw_sev = entry.get("severity_counts", {})
+                    audits.append({
+                        "audit_id": entry.get("audit_id", ""),
+                        "project_name": entry.get("project_name", "Unknown"),
+                        "timestamp": ts,
+                        "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
+                        "severity_counts": {
+                            "CRITICAL": raw_sev.get("critical", 0),
+                            "HIGH": raw_sev.get("high", 0),
+                            "MEDIUM": raw_sev.get("medium", 0),
+                            "LOW": raw_sev.get("low", 0),
+                        },
+                        "risk_score": entry.get("risk_score", 0.0),
+                        "has_report": True,
+                    })
+                _used_user_index = True
+        except (json.JSONDecodeError, OSError):
+            pass
+
     severity_weights = {
         "CRITICAL": 10.0, "HIGH": 5.0,
         "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
     }
 
-    if RESULTS_DIR.exists():
+    if not _used_user_index and RESULTS_DIR.exists():
         for entry in RESULTS_DIR.iterdir():
             if not entry.is_dir():
                 continue
@@ -1045,6 +970,43 @@ async def dashboard_page(request: Request):
                 continue
 
             audit_id = entry.name
+
+            # Try lightweight scan_index.json first (fast path)
+            index_path = entry / "scan_index.json"
+            if index_path.exists():
+                try:
+                    with open(index_path, "r", encoding="utf-8") as f:
+                        idx = json.load(f)
+                    project_name = idx.get("project_name", "Unknown")
+                    timestamp_raw = idx.get("timestamp", "")
+                    try:
+                        ts = datetime.fromisoformat(timestamp_raw)
+                    except (ValueError, TypeError):
+                        ts = None
+                    # scan_index stores lowercase keys
+                    raw_sev = idx.get("severity_counts", {})
+                    sev_counts = {
+                        "CRITICAL": raw_sev.get("critical", 0),
+                        "HIGH": raw_sev.get("high", 0),
+                        "MEDIUM": raw_sev.get("medium", 0),
+                        "LOW": raw_sev.get("low", 0),
+                    }
+                    risk_score = idx.get("risk_score", 0.0)
+                    has_report = idx.get("has_pdf", False) or idx.get("has_html", False) or idx.get("has_md", False)
+                    audits.append({
+                        "audit_id": audit_id,
+                        "project_name": project_name,
+                        "timestamp": ts,
+                        "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
+                        "severity_counts": sev_counts,
+                        "risk_score": risk_score,
+                        "has_report": has_report,
+                    })
+                    continue
+                except (json.JSONDecodeError, OSError):
+                    pass  # Fall through to legacy path
+
+            # Legacy fallback: read findings.json for old audits without scan_index
             project_name = meta.get("project_name", "Unknown")
             timestamp_raw = meta.get("timestamp", "")
             try:
@@ -1052,7 +1014,6 @@ async def dashboard_page(request: Request):
             except (ValueError, TypeError):
                 ts = None
 
-            # Severity counts from findings.json
             sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
             findings_path = entry / "findings.json"
             findings_data: list = []
@@ -1068,7 +1029,6 @@ async def dashboard_page(request: Request):
                 except (json.JSONDecodeError, OSError):
                     pass
 
-            # Risk score
             if findings_data:
                 total_w = sum(
                     severity_weights.get(fd.get("severity", "INFO"), 0)
@@ -1240,8 +1200,8 @@ async def stripe_webhook(request: Request):
         logger.warning("Invalid Stripe webhook signature: %s", e)
         return JSONResponse({"error": "Invalid signature"}, status_code=400)
 
-    # Idempotency check — skip duplicate events
-    if is_event_processed(event["id"]):
+    # Atomic idempotency check-and-mark — eliminates TOCTOU race in file fallback
+    if check_and_mark_event(event["id"]):
         return JSONResponse({"status": "already_processed"})
 
     event_type = event.get("type")
@@ -1386,9 +1346,6 @@ async def stripe_webhook(request: Request):
                 })
                 logger.info(f"Subscription resumed: {license_key[:12]}...")
 
-    # Mark event as processed for idempotency
-    mark_event_processed(event["id"])
-
     resp_ok = JSONResponse({"status": "ok"})
     add_rate_limit_headers(resp_ok, _stripe_webhook_limiter, ip)
     return resp_ok
@@ -1495,21 +1452,35 @@ def _get_grace_period_context(request: Request) -> dict:
 
     Returns a dict with ``grace_period_active`` and ``grace_days_remaining``
     suitable for injection into Jinja template contexts.
+
+    Results are cached on request.state to avoid redundant DB/license lookups
+    when called multiple times within the same HTTP request.
     """
+    if hasattr(request.state, '_grace_period_ctx'):
+        return request.state._grace_period_ctx
+
     current_user = get_current_user(request)
     if not current_user:
-        return {"grace_period_active": False, "grace_days_remaining": None}
+        result = {"grace_period_active": False, "grace_days_remaining": None}
+        request.state._grace_period_ctx = result
+        return result
 
     license_key = get_license_key_for_request(request, current_user)
     if not license_key:
-        return {"grace_period_active": False, "grace_days_remaining": None}
+        result = {"grace_period_active": False, "grace_days_remaining": None}
+        request.state._grace_period_ctx = result
+        return result
 
     lic_entry = find_license_in_db(license_key)
     if not lic_entry:
-        return {"grace_period_active": False, "grace_days_remaining": None}
+        result = {"grace_period_active": False, "grace_days_remaining": None}
+        request.state._grace_period_ctx = result
+        return result
 
     if lic_entry.get("revoked"):
-        return {"grace_period_active": False, "grace_days_remaining": None}
+        result = {"grace_period_active": False, "grace_days_remaining": None}
+        request.state._grace_period_ctx = result
+        return result
 
     now = datetime.now(timezone.utc)
 
@@ -1523,7 +1494,9 @@ def _get_grace_period_context(request: Request) -> dict:
             grace_end = failed_at + timedelta(days=GRACE_PERIOD_DAYS)
             if now < grace_end:
                 days_left = max((grace_end - now).days, 0)
-                return {"grace_period_active": True, "grace_days_remaining": days_left}
+                result = {"grace_period_active": True, "grace_days_remaining": days_left}
+                request.state._grace_period_ctx = result
+                return result
         except (ValueError, TypeError):
             pass
 
@@ -1537,11 +1510,15 @@ def _get_grace_period_context(request: Request) -> dict:
                 grace_end_date = expires_at_date + timedelta(days=GRACE_PERIOD_DAYS)
                 if today <= grace_end_date:
                     days_left = (grace_end_date - today).days
-                    return {"grace_period_active": True, "grace_days_remaining": days_left}
+                    result = {"grace_period_active": True, "grace_days_remaining": days_left}
+                    request.state._grace_period_ctx = result
+                    return result
         except (ValueError, TypeError):
             pass
 
-    return {"grace_period_active": False, "grace_days_remaining": None}
+    result = {"grace_period_active": False, "grace_days_remaining": None}
+    request.state._grace_period_ctx = result
+    return result
 
 
 @app.get("/api/license/status")
@@ -1847,13 +1824,13 @@ async def attack_graph(request: Request, audit_id: str = Depends(validate_audit_
         raise HTTPException(status_code=404, detail="Attack graph not found")
 
     # Ownership check
-    current_user = request.session.get("user")
+    current_user = get_current_user(request)
     meta_path_acl = results_dir / "scan_meta.json"
     if meta_path_acl.exists():
         with open(meta_path_acl) as _mf:
             _acl_meta = json.load(_mf)
         if _acl_meta.get("owner_user_id") and current_user:
-            if _acl_meta["owner_user_id"] != current_user.get("id"):
+            if _acl_meta["owner_user_id"] != current_user["id"]:
                 raise HTTPException(status_code=403, detail="Access denied")
         elif _acl_meta.get("owner_user_id") and not current_user:
             return RedirectResponse(url="/auth/login")

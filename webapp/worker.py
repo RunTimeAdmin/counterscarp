@@ -47,6 +47,113 @@ def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+import threading
+
+_user_audit_index_lock = threading.Lock()
+
+
+def _update_user_audit_index_worker(user_id: str, audit_summary: dict) -> None:
+    """Append an audit summary to the per-user audit index (worker variant)."""
+    if not user_id:
+        return
+    index_path = _project_root / "data" / "user_audit_index.json"
+    with _user_audit_index_lock:
+        data: dict = {}
+        if index_path.exists():
+            try:
+                data = json.loads(index_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                data = {}
+        user_audits = data.get(user_id, [])
+        user_audits.append(audit_summary)
+        data[user_id] = user_audits
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = index_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(index_path)
+
+
+def _send_scan_notification(email: str, audit_id: str, status: str, project_name: str) -> None:
+    """Send an email notification on scan completion/failure.
+
+    Wraps in try/except so notification failure never crashes the worker.
+    """
+    try:
+        from webapp.config import (
+            SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM,
+            NOTIFICATIONS_ENABLED,
+        )
+        if not NOTIFICATIONS_ENABLED or not email:
+            return
+        if not SMTP_HOST:
+            logger.debug("SMTP not configured — skipping notification")
+            return
+
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        subject = f"Counterscarp Scan {status.title()}: {project_name}"
+        link = f"https://app.counterscarp.io/results/{audit_id}"
+        html_body = (
+            f"<p>Your Counterscarp scan for <strong>{project_name}</strong> "
+            f"is <strong>{status}</strong>.</p>"
+            f'<p><a href="{link}">View results</a></p>'
+        )
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = SMTP_FROM or SMTP_USER or "noreply@counterscarp.io"
+        msg["To"] = email
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT or 587)) as server:
+            server.starttls()
+            if SMTP_USER and SMTP_PASSWORD:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(msg["From"], [email], msg.as_string())
+
+        logger.info("Notification sent to %s for audit %s", email, audit_id)
+    except Exception as exc:
+        logger.warning("Failed to send notification to %s: %s", email, exc)
+
+
+def _write_scan_index_worker(results_dir: Path, audit_id: str, findings_data: list, scan_meta: dict) -> None:
+    """Write a lightweight scan_index.json for fast dashboard reads."""
+    severity_weights = {
+        "CRITICAL": 10.0, "HIGH": 5.0,
+        "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
+    }
+    sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for fd in findings_data:
+        sev = fd.get("severity", "INFO").upper()
+        key = sev.lower()
+        if key in sev_counts:
+            sev_counts[key] += 1
+
+    total = len(findings_data)
+    if total:
+        total_w = sum(severity_weights.get(fd.get("severity", "INFO"), 0) for fd in findings_data)
+        max_w = total * severity_weights["CRITICAL"]
+        risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
+    else:
+        risk_score = 0.0
+
+    index = {
+        "audit_id": audit_id,
+        "project_name": scan_meta.get("project_name", "Unknown"),
+        "timestamp": scan_meta.get("timestamp", ""),
+        "severity_counts": sev_counts,
+        "risk_score": risk_score,
+        "total_findings": total,
+        "has_pdf": (results_dir / "report.pdf").exists(),
+        "has_html": (results_dir / "report.html").exists(),
+        "has_md": (results_dir / "report.md").exists(),
+    }
+    index_path = results_dir / "scan_index.json"
+    index_path.write_text(json.dumps(index, indent=2), encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Task function
 # ---------------------------------------------------------------------------
@@ -70,31 +177,18 @@ async def run_audit(
         ATTACK_GRAPH,
         BRANDED_REPORTS,
     )
-    from heuristic_scanner import (
-        HeuristicFinding,
-        RULE_CATEGORIES,
-        HEURISTIC_RULES,
-        scan_target,
+    from webapp.scan_utils import (
+        heuristic_finding_to_finding,
+        count_lines,
+        run_slither_analysis,
+        run_ai_copilot,
+        serialize_findings,
+        generate_reports,
+        generate_attack_graph,
+        build_analyzers_list,
     )
-    from report_generator import (
-        AuditReport,
-        Finding,
-        create_audit_report,
-        generate_html_report,
-        generate_markdown_report,
-        save_sarif_report,
-    )
-    try:
-        from report_generator import generate_pdf_report as _generate_pdf_report_impl
-
-        def generate_pdf_report(report: AuditReport, output_path: str, logo_path: str | None = None) -> None:
-            _generate_pdf_report_impl(report, output_path, logo_path=logo_path)
-    except (ImportError, AttributeError):
-        def generate_pdf_report(report: AuditReport, output_path: str, logo_path: str | None = None) -> None:
-            raise RuntimeError("generate_pdf_report is not available")
-
-    from attack_graph import build_graph, export_graph_json
-    from visualizer import generate_attack_graph_html
+    from heuristic_scanner import scan_target
+    from report_generator import Finding, create_audit_report
 
     results_dir = RESULTS_DIR / audit_id
     upload_dir = UPLOAD_DIR / audit_id
@@ -105,25 +199,6 @@ async def run_audit(
 
     _license = LicenseManager()
 
-    # --- helpers (same as main.py) ---
-    def _heuristic_finding_to_finding(hf: HeuristicFinding) -> Finding:
-        return Finding(
-            rule_id=hf.rule_id,
-            severity=hf.severity,
-            category="Heuristic",
-            title=hf.rule_id.replace("_", " ").title(),
-            description=hf.message,
-            file=hf.file,
-            line_no=hf.line_no,
-            code_snippet=hf.line_text,
-            remediation="",
-            references=[],
-        )
-
-    def _count_lines(path: str) -> int:
-        with open(path, encoding="utf-8", errors="ignore") as f:
-            return sum(1 for _ in f)
-
     try:
         # 1. Heuristic scan
         _write_status(results_dir, "running", "Running heuristic scan...", started_at)
@@ -131,12 +206,11 @@ async def run_audit(
         for fp_str in uploaded_paths:
             heuristic_findings = scan_target(fp_str)
             for hf in heuristic_findings:
-                findings.append(_heuristic_finding_to_finding(hf))
+                findings.append(heuristic_finding_to_finding(hf))
         heuristic_count = len(findings)
 
         # 2. Slither analysis
         _write_status(results_dir, "running", "Running Slither analysis...", started_at)
-        from webapp.main import run_slither_analysis
         slither_findings: list[Finding] = []
         slither_status = "skipped"
         for fp_str in uploaded_paths:
@@ -151,7 +225,6 @@ async def run_audit(
 
         # 3. AI Copilot
         _write_status(results_dir, "running", "Running AI Copilot analysis...", started_at)
-        from webapp.main import run_ai_copilot
         ai_summary = ""
         ai_status = "skipped"
         if findings and _license.check_pro_feature(AI_COPILOT):
@@ -166,9 +239,8 @@ async def run_audit(
         # 4. Report generation
         _write_status(results_dir, "running", "Generating reports...", started_at)
 
-        # Derive project_name from scan_status or upload dir
+        # Derive project_name from scan_meta or upload dir
         project_name = audit_id  # fallback
-        # Check if scan_meta was pre-seeded by the handler
         pre_meta_path = results_dir / "scan_meta.json"
         if pre_meta_path.exists():
             try:
@@ -184,160 +256,129 @@ async def run_audit(
         )
 
         # Save findings JSON
-        findings_data = [
-            {
-                "rule_id": f.rule_id,
-                "severity": f.severity,
-                "category": f.category,
-                "title": f.title,
-                "description": f.description,
-                "file": f.file,
-                "line_no": f.line_no,
-                "code_snippet": f.code_snippet,
-                "remediation": f.remediation,
-                "references": f.references,
-                "cwe": f.cwe,
-                "owasp": f.owasp,
-            }
-            for f in findings
-        ]
+        findings_data = serialize_findings(findings)
         findings_path = results_dir / "findings.json"
         findings_path.write_text(json.dumps(findings_data, indent=2), encoding="utf-8")
 
-        # HTML report (PRO)
-        html_path: Path | None = results_dir / "report.html"
-        if _license.check_pro_feature(BRANDED_REPORTS):
-            generate_html_report(
-                report, str(html_path),
-                logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
-            )
-            pdf_path = results_dir / "report.pdf"
-            try:
-                generate_pdf_report(
-                    report, str(pdf_path),
-                    logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
-                )
-            except Exception:
-                pass
-        else:
-            html_path = None
-
-        # Markdown
-        md_path = results_dir / "report.md"
-        generate_markdown_report(report, str(md_path))
-
-        # SARIF
-        sarif_path = results_dir / "report.sarif"
-        sarif_metadata = {
-            "project_name": project_name,
-            "target_path": str(upload_dir),
-            "timestamp": report.timestamp,
-        }
-        save_sarif_report(findings, str(sarif_path), sarif_metadata)
+        # Generate all report formats
+        generate_reports(
+            report=report,
+            findings=findings,
+            findings_data=findings_data,
+            results_dir=results_dir,
+            logo_path=LOGO_PATH,
+            branded=_license.check_pro_feature(BRANDED_REPORTS),
+            project_name=project_name,
+            upload_dir=upload_dir,
+        )
 
         # 5. Attack graph
         _write_status(results_dir, "running", "Generating attack graph...", started_at)
         attack_graph_generated = False
         if findings and _license.check_pro_feature(ATTACK_GRAPH):
-            try:
-                finding_dicts = [
-                    {
-                        "rule_id": f.rule_id,
-                        "severity": f.severity,
-                        "file": f.file,
-                        "line_no": f.line_no,
-                        "message": f.description,
-                    }
-                    for f in findings
-                ]
-                graph = build_graph(finding_dicts, source_files=uploaded_paths)
-                graph_json = export_graph_json(graph)
-                attack_graph_path = results_dir / "attack_graph.html"
-                generate_attack_graph_html(
-                    graph_json,
-                    str(attack_graph_path),
-                    f"Attack Path Analysis - {project_name}",
-                    logo_path=str(LOGO_PATH) if LOGO_PATH.exists() else None,
-                )
-                attack_graph_generated = True
-            except Exception:
-                pass
+            attack_graph_generated = generate_attack_graph(
+                findings=findings,
+                uploaded_paths=uploaded_paths,
+                results_dir=results_dir,
+                project_name=project_name,
+                logo_path=LOGO_PATH,
+            )
 
         # 6. Save scan metadata
-        findings_per_category: dict[str, int] = {}
-        for cat, rule_ids in RULE_CATEGORIES.items():
-            findings_per_category[cat] = sum(
-                1 for fd in findings_data if fd["rule_id"] in rule_ids
-            )
-
-        ai_copilot_analyzer: dict = {
-            "name": "AI Audit Copilot",
-            "status": ai_status,
-            "findings_count": 0,
-        }
-        if ai_status == "pro_required":
-            ai_copilot_analyzer["pro_only"] = True
-
-        analyzers_list = [
-            {
-                "name": "Heuristic Pattern Scanner",
-                "status": "completed",
-                "patterns_checked": len(HEURISTIC_RULES),
-                "categories": {
-                    cat: {
-                        "patterns": len(rules),
-                        "findings": findings_per_category.get(cat, 0),
-                    }
-                    for cat, rules in RULE_CATEGORIES.items()
-                },
-                "findings_count": heuristic_count,
-            },
-            {
-                "name": "Slither Static Analysis",
-                "status": slither_status,
-                "findings_count": len(slither_findings),
-            },
-            ai_copilot_analyzer,
-        ]
-        if findings:
-            ag_status = (
-                "completed" if attack_graph_generated
-                else ("pro_required"
-                      if not _license.check_pro_feature(ATTACK_GRAPH)
-                      else "skipped")
-            )
-            attack_graph_analyzer: dict = {
-                "name": "Attack Graph Generator",
-                "status": ag_status,
-                "findings_count": 0,
-            }
-            if attack_graph_analyzer["status"] == "pro_required":
-                attack_graph_analyzer["pro_only"] = True
-            analyzers_list.append(attack_graph_analyzer)
+        analyzers_list = build_analyzers_list(
+            heuristic_count=heuristic_count,
+            slither_findings_count=len(slither_findings),
+            slither_status=slither_status,
+            ai_status=ai_status,
+            attack_graph_generated=attack_graph_generated,
+            has_findings=bool(findings),
+            has_attack_graph_feature=_license.check_pro_feature(ATTACK_GRAPH),
+            findings_data=findings_data,
+        )
 
         scan_meta = {
             "owner_user_id": user_id or None,
             "project_name": project_name,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "files_scanned": len(uploaded_paths),
-            "total_source_lines": sum(_count_lines(fp) for fp in uploaded_paths),
+            "total_source_lines": sum(count_lines(fp) for fp in uploaded_paths),
             "analyzers": analyzers_list,
             "rules_triggered": sorted(str(fd["rule_id"]) for fd in findings_data),
         }
         meta_path = results_dir / "scan_meta.json"
         meta_path.write_text(json.dumps(scan_meta, indent=2), encoding="utf-8")
 
+        # Write lightweight scan index for fast dashboard reads
+        _write_scan_index_worker(results_dir, audit_id, findings_data, scan_meta)
+
+        # Update per-user audit index for O(1) dashboard performance
+        _update_user_audit_index_worker(user_id, {
+            "audit_id": audit_id,
+            "project_name": scan_meta.get("project_name", "Unknown"),
+            "timestamp": scan_meta.get("timestamp", ""),
+            "severity_counts": {
+                "critical": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "CRITICAL"),
+                "high": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "HIGH"),
+                "medium": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "MEDIUM"),
+                "low": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "LOW"),
+            },
+            "risk_score": round(min(100.0, (sum(
+                {"CRITICAL": 10.0, "HIGH": 5.0, "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1}.get(fd.get("severity", "INFO"), 0)
+                for fd in findings_data
+            ) / max(len(findings_data) * 10.0, 1.0)) * 100), 1) if findings_data else 0.0,
+        })
+
         # Done!
         _write_status(results_dir, "complete", "Scan complete", started_at, _iso_now())
         logger.info("Audit %s completed successfully", audit_id)
 
+        # Send email notification on success
+        if user_id:
+            from webapp.user_manager import user_manager
+            notif_email = user_manager.get_notification_email(user_id)
+            if notif_email:
+                _send_scan_notification(notif_email, audit_id, "complete", project_name)
+
     except Exception as exc:
-        logger.exception("Audit %s failed: %s", audit_id, exc)
+        # Determine current try number from arq context
+        job_try: int = ctx.get("job_try", 1)
+        max_tries: int = 3
+        if job_try < max_tries:
+            # Will be retried by arq — write retrying status so pending page
+            # shows appropriate feedback instead of a hard failure.
+            logger.warning(
+                "Audit %s failed (attempt %d/%d), will retry: %s",
+                audit_id, job_try, max_tries, exc,
+            )
+            _write_status(
+                results_dir, "retrying",
+                f"Transient failure (attempt {job_try}/{max_tries}). Retrying soon\u2026",
+                started_at,
+            )
+            raise  # re-raise so arq schedules the retry
+        logger.exception("Audit %s failed permanently after %d attempts: %s", audit_id, max_tries, exc)
         _write_status(
             results_dir, "failed",
-            f"Error: {exc}",
+            "Scan failed. Please try again or contact support.",
             started_at, _iso_now(),
         )
+
+        # Send email notification on failure
+        if user_id:
+            try:
+                from webapp.user_manager import user_manager as _um
+                notif_email = _um.get_notification_email(user_id)
+                if notif_email:
+                    _pname = audit_id
+                    pre_meta_path = results_dir / "scan_meta.json"
+                    if pre_meta_path.exists():
+                        try:
+                            _pname = json.loads(pre_meta_path.read_text()).get("project_name", audit_id)
+                        except Exception:
+                            pass
+                    _send_scan_notification(notif_email, audit_id, "failed", _pname)
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -359,3 +400,5 @@ class WorkerSettings:
     redis_settings = _redis_settings()
     max_jobs = 4
     job_timeout = 600  # 10 minutes per audit
+    max_tries = 3          # retry transient failures up to 3 attempts
+    retry_delay = 30       # seconds between retries

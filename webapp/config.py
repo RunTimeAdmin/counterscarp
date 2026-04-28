@@ -36,6 +36,14 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8001/auth/google/callback")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
 
+# SMTP / notification settings
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = os.environ.get("SMTP_PORT", "587")
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", "")
+NOTIFICATIONS_ENABLED = os.environ.get("NOTIFICATIONS_ENABLED", "").lower() in ("1", "true", "yes")
+
 
 def validate_production_config() -> None:
     """Validate all required secrets are set for production deployment."""

@@ -29,7 +29,8 @@ security_logger = logging.getLogger("counterscarp.security")
 
 _LICENSE_DB_PATH = Path(__file__).parent.parent / "data" / "licenses.json"
 _AUDIT_LOG_PATH = Path(__file__).parent.parent / "data" / "audit_log.jsonl"
-_file_lock = threading.RLock()
+_licenses_file_lock = threading.Lock()
+_audit_log_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +48,7 @@ def append_audit_log(event_type: str, key: str, actor: str, ip: str, changes: di
         "ip": ip,
         "changes": changes,
     }
-    with _file_lock:
+    with _audit_log_lock:
         _AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, default=str) + "\n")
@@ -60,7 +61,8 @@ def append_audit_log(event_type: str, key: str, actor: str, ip: str, changes: di
 
 def link_license_to_user(email: str, user_id: str) -> Optional[str]:
     """Atomically link first unlinked license for *email* to *user_id*. Returns key or None."""
-    with _file_lock:
+    key: Optional[str] = None
+    with _licenses_file_lock:
         if not _LICENSE_DB_PATH.exists():
             return None
         try:
@@ -76,9 +78,10 @@ def link_license_to_user(email: str, user_id: str) -> Optional[str]:
                     json.dump(db, f, indent=2)
                 tmp.replace(_LICENSE_DB_PATH)
                 key = str(lic["key"])
-                append_audit_log("license_linked", key, user_id, "system", {"email": email})
-                return key
-    return None
+                break
+    if key:
+        append_audit_log("license_linked", key, user_id, "system", {"email": email})
+    return key
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +215,8 @@ def validate_license(req: ValidateRequest, request: Request):
         )
         return resp_429
     try:
-        with _file_lock:
+        audit_data = None  # Collect audit info inside lock, log outside
+        with _licenses_file_lock:
             try:
                 db = _load_db()
             except json.JSONDecodeError as exc:
@@ -312,10 +316,7 @@ def validate_license(req: ValidateRequest, request: Request):
                 activated.append(req.machine_id)
                 license_entry["activated_machines"] = activated
                 _save_db(db)
-                append_audit_log(
-                    "license_activated", req.license_key, "system",
-                    client_ip, {"machine_id": req.machine_id},
-                )
+                audit_data = {"machine_id": req.machine_id}
             else:
                 security_logger.warning(
                     "License validation failed: key=%s ip=%s reason=%s",
@@ -332,7 +333,7 @@ def validate_license(req: ValidateRequest, request: Request):
             else:
                 features = []
 
-            return ValidateResponse(
+            result = ValidateResponse(
                 valid=True,
                 tier=tier,
                 expires_at=license_entry.get("expires_at"),
@@ -340,6 +341,14 @@ def validate_license(req: ValidateRequest, request: Request):
                 max_activations=max_act,
                 current_activations=len(activated),
             )
+
+        # Audit log OUTSIDE the license lock
+        if audit_data is not None:
+            append_audit_log(
+                "license_activated", req.license_key, "system",
+                client_ip, audit_data,
+            )
+        return result
 
     except Exception as exc:
         logger.exception(
@@ -366,7 +375,9 @@ def deactivate_license(req: DeactivateRequest, request: Request):
             _deactivate_limiter.get_reset_time(client_ip)
         )
         return resp_429
-    with _file_lock:
+    deactivated = False
+    remaining = 0
+    with _licenses_file_lock:
         db = _load_db()
 
         license_entry = None
@@ -387,18 +398,23 @@ def deactivate_license(req: DeactivateRequest, request: Request):
             activated.remove(req.machine_id)
             license_entry["activated_machines"] = activated
             _save_db(db)
-            security_logger.info(
-                "License deactivation: key=%s machine=%s ip=%s",
-                req.license_key[:10] + "...", req.machine_id, client_ip,
-            )
-            append_audit_log(
-                "license_deactivated", req.license_key, "system",
-                client_ip, {"machine_id": req.machine_id},
-            )
+            deactivated = True
+        remaining = len(activated)
 
-        return DeactivateResponse(
-            success=True,
-            remaining_activations=len(activated),
+    # Audit log and security log OUTSIDE the license lock
+    if deactivated:
+        security_logger.info(
+            "License deactivation: key=%s machine=%s ip=%s",
+            req.license_key[:10] + "...", req.machine_id, client_ip,
+        )
+        append_audit_log(
+            "license_deactivated", req.license_key, "system",
+            client_ip, {"machine_id": req.machine_id},
+        )
+
+    return DeactivateResponse(
+        success=True,
+        remaining_activations=remaining,
         )
 
 
@@ -416,7 +432,7 @@ def license_info(request: Request, key: str = Query(..., description="License ke
     if not user or user.get("email") != ADMIN_EMAIL:
         raise HTTPException(status_code=403, detail="Admin access required")
     # --- License lookup ---
-    with _file_lock:
+    with _licenses_file_lock:
         db = _load_db()
 
         license_entry = None
