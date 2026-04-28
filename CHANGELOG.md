@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v5.0.7 — 2026-04-28
+
+### Added
+- **Pay-As-You-Go scan packs**: One-time purchase credit packs (Starter 1/$9.99, Standard 5/$29.99, Pro Pack 15/$69.99)
+- Atomic credit consumption with thread-safe double-spend prevention
+- Stripe one-time payment checkout integration (`mode="payment"`)
+- Webhook fulfillment for PAYG credit grants
+- Credit gate in scan handler — PAYG users consume 1 credit per audit
+- Credit balance badges on upload and dashboard pages
+- New templates: payg_success.html, payg_no_credits.html
+- PAYG section in pricing page with 3 pack cards
+- Comprehensive PAYG test suite (test_payg.py, test_stripe_payg.py)
+
+### Changed
+- TIER_HIERARCHY now includes PAYG between Community and Developer
+- pricing.html extended with Pay-As-You-Go section
+- docker-compose.yml includes STRIPE_PAYG_*_PRICE_ID env vars
+
 ## v5.0.6 — 2026-04-28
 
 ### Features

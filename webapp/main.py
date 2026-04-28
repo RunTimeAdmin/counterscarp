@@ -47,18 +47,22 @@ from license_manager import (
     AI_COPILOT,
     ATTACK_GRAPH,
     BRANDED_REPORTS,
+    DEVELOPER,
     FEATURE_TIERS,
     FEATURE_NAMES,
     GRACE_PERIOD_DAYS,
     LICENSE_PREFIXES,
     TIER_HIERARCHY,
+    TIER_PREFIXES,
 )
 
 from webapp.license_api import license_router
 from webapp.license_api import append_audit_log
+from webapp.license_api import consume_credit
 from webapp.rate_limiter import RateLimiter, RedisRateLimiter, get_client_ip, add_rate_limit_headers
 from webapp.stripe_integration import (
     create_checkout_session,
+    create_payg_checkout,
     find_license_by_subscription,
     handle_checkout_completed,
     get_session_license_key,
@@ -66,6 +70,7 @@ from webapp.stripe_integration import (
     check_and_mark_event,
     is_event_processed,
     mark_event_processed,
+    PAYG_PACKS,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET,
     PRODUCTS,
@@ -132,7 +137,7 @@ from report_generator import (
 app = FastAPI(
     title="Counterscarp Engine",
     description="Smart Contract Security Audit Platform",
-    version="5.0.6",
+    version="5.0.7",
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -363,11 +368,17 @@ async def startup_cleanup():
 async def index(request: Request):
     """Render the upload page."""
     license_tier = _license.get_tier()
+    current_user = get_current_user(request)
+    scan_credits = 0
+    if current_user:
+        from webapp.user_manager import user_manager as _um
+        scan_credits = _um.get_scan_credits(current_user["id"])
     return templates.TemplateResponse(
         request, "upload.html",
         context={
-            "current_user": get_current_user(request),
+            "current_user": current_user,
             "license_tier": license_tier,
+            "scan_credits": scan_credits,
             "csrf_token": generate_csrf_token(request),
             **_get_grace_period_context(request),
         },
@@ -468,6 +479,42 @@ async def audit(
     current_user = get_current_user(request)
     user_id = current_user["id"] if current_user else ""
     license_key = get_license_key_for_request(request, current_user) or ""
+
+    # --- PAYG Credit Gate ---
+    # Determine user's effective tier
+    user_tier = "community"  # default
+    if license_key:
+        for _tier, _prefix in TIER_PREFIXES.items():
+            if license_key.startswith(_prefix):
+                user_tier = _tier
+                break
+
+    # Check if user needs credits (below DEVELOPER tier)
+    tier_index = TIER_HIERARCHY.index(user_tier) if user_tier in TIER_HIERARCHY else 0
+    developer_index = TIER_HIERARCHY.index(DEVELOPER)
+
+    if tier_index < developer_index:
+        # User is below DEVELOPER tier — check for PAYG credits
+        if current_user:
+            from webapp.user_manager import user_manager as _um
+            credits = _um.get_scan_credits(current_user["id"])
+            if credits > 0:
+                # Consume a credit
+                success = consume_credit(current_user["id"], audit_id, request.client.host if request.client else "")
+                if not success:
+                    return templates.TemplateResponse(
+                        request, "payg_no_credits.html",
+                        context={
+                            "current_user": current_user,
+                            "scan_credits": 0,
+                            **_get_grace_period_context(request),
+                        },
+                        status_code=402,
+                    )
+            # If no credits and community tier, let existing behavior continue
+            # (community users get limited free scans per existing rate limiter)
+    # DEVELOPER+ tiers bypass credit gate entirely (unlimited scans via subscription)
+    # --- End Credit Gate ---
 
     if arq_pool is not None:
         # Write initial pending status
@@ -805,12 +852,19 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
 @app.get("/pricing")
 async def pricing_page(request: Request):
     """Render the pricing / upgrade page."""
+    current_user = get_current_user(request)
+    scan_credits = 0
+    if current_user:
+        from webapp.user_manager import user_manager as _um
+        scan_credits = _um.get_scan_credits(current_user["id"])
     return templates.TemplateResponse(
         request, "pricing.html",
         context={
-            "current_user": get_current_user(request),
+            "current_user": current_user,
             "stripe_key": STRIPE_PUBLISHABLE_KEY,
             "products": PRODUCTS,
+            "payg_packs": PAYG_PACKS,
+            "scan_credits": scan_credits,
             "csrf_token": generate_csrf_token(request),
             **_get_grace_period_context(request),
         },
@@ -1071,6 +1125,11 @@ async def dashboard_page(request: Request):
     start = (page - 1) * per_page
     page_audits = audits[start:start + per_page]
 
+    scan_credits = 0
+    if current_user:
+        from webapp.user_manager import user_manager as _um
+        scan_credits = _um.get_scan_credits(current_user["id"])
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -1080,6 +1139,7 @@ async def dashboard_page(request: Request):
             "page": page,
             "total_pages": total_pages,
             "total": total,
+            "scan_credits": scan_credits,
             **_get_grace_period_context(request),
         },
     )
@@ -1152,6 +1212,83 @@ async def checkout_success(request: Request):
             **_get_grace_period_context(request),
         },
     )
+
+
+@app.post("/payg/checkout")
+async def payg_checkout(request: Request):
+    """Initiate Stripe checkout for a PAYG credit pack."""
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+    current_user = get_current_user(request)
+    if not current_user:
+        return RedirectResponse("/auth/login", status_code=303)
+
+    pack_key = str(form.get("pack_key", ""))
+    if pack_key not in PAYG_PACKS:
+        return JSONResponse({"error": "Invalid pack"}, status_code=400)
+
+    base_url = os.environ.get("COUNTERSCARP_BASE_URL", str(request.base_url).rstrip("/"))
+    success_url = f"{base_url}/payg/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{base_url}/pricing"
+
+    try:
+        session = create_payg_checkout(
+            pack_key=pack_key,
+            user_email=current_user["email"],
+            user_id=current_user["id"],
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+        return RedirectResponse(session.url, status_code=303)
+    except Exception:
+        logger.exception("PAYG checkout failed")
+        return templates.TemplateResponse(
+            request, "pricing.html",
+            context={
+                "current_user": current_user,
+                "error": "Payment processing unavailable. Please try again.",
+                "stripe_key": STRIPE_PUBLISHABLE_KEY,
+                "products": PRODUCTS,
+                "payg_packs": PAYG_PACKS,
+                "csrf_token": generate_csrf_token(request),
+                **_get_grace_period_context(request),
+            },
+        )
+
+
+@app.get("/payg/success")
+async def payg_success(request: Request):
+    """Post-purchase confirmation page for PAYG credit packs."""
+    current_user = get_current_user(request)
+    if not current_user:
+        return RedirectResponse("/auth/login", status_code=303)
+
+    session_id = request.query_params.get("session_id", "")
+    checkout_data = get_session_license_key(session_id) or {}
+
+    credits_added = checkout_data.get("credits", 0)
+    pack_key = checkout_data.get("pack_key", "")
+    pack_name = PAYG_PACKS.get(pack_key, {}).get("name", "Credit Pack")
+
+    from webapp.user_manager import user_manager as _um
+    scan_credits = _um.get_scan_credits(current_user["id"])
+
+    return templates.TemplateResponse(
+        request, "payg_success.html",
+        context={
+            "current_user": current_user,
+            "credits_added": credits_added,
+            "pack_name": pack_name,
+            "scan_credits": scan_credits,
+            **_get_grace_period_context(request),
+        },
+    )
+
 
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):

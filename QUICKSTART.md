@@ -1,6 +1,6 @@
 # Counterscarp Engine — Quick Start Guide
 
-> **Version 5.0.6** | Smart contract security auditing for EVM + Solana
+> **Version 5.0.7** | Smart contract security auditing for EVM + Solana
 
 ---
 
@@ -80,13 +80,13 @@ The Docker image bundles the complete 21-analyzer stack including Python 3.12, S
 
 ```bash
 # Build the image from the repository root
-docker build -t counterscarp-engine:5.0.3 .
+docker build -t counterscarp-engine:5.0.7 .
 
 # Run a full audit with report persistence (recommended)
 docker run --rm \
   -v /path/to/contracts:/scan \
   -v /path/to/reports:/output \
-  counterscarp-engine:5.0.3 \
+  counterscarp-engine:5.0.7 \
   --target /scan --output-dir /output --report
 ```
 
@@ -96,12 +96,12 @@ docker run --rm \
 
 ```bash
 # If using the official registry image:
-docker pull counterscarp-engine:5.0.3
+docker pull counterscarp-engine:5.0.7
 
 docker run --rm \
   -v /path/to/contracts:/scan \
   -v /path/to/reports:/output \
-  counterscarp-engine:5.0.3 \
+  counterscarp-engine:5.0.7 \
   --target /scan --output-dir /output --report
 ```
 
@@ -1332,7 +1332,7 @@ sudo usermod -aG docker $USER
 
 # Or run with --user flag
 docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan \
-  counterscarp-engine:5.0.3 --target /scan --report
+  counterscarp-engine:5.0.7 --target /scan --report
 ```
 
 ### OpenAI API key not set
@@ -1462,4 +1462,4 @@ Operations:
 
 ---
 
-*Counterscarp Engine v5.0.3 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*
+*Counterscarp Engine v5.0.7 — EVM + Solana | 21 analyzers | 34 EVM + 35 Solana patterns*

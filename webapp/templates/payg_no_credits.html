@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}No Credits Remaining — Counterscarp{% endblock %}
+
+{% block content %}
+<style>
+    .no-credits-container {
+        max-width: 550px;
+        margin: 3rem auto;
+        text-align: center;
+        padding: 0 1rem;
+    }
+    .no-credits-icon {
+        font-size: 4rem;
+        margin-bottom: 0.75rem;
+        color: #ff6b35;
+    }
+    .no-credits-header {
+        font-size: 2rem;
+        color: #fff;
+        margin-bottom: 0.75rem;
+        font-weight: 700;
+    }
+    .no-credits-message {
+        color: #a0a0b0;
+        font-size: 1.05rem;
+        margin-bottom: 1.5rem;
+        line-height: 1.6;
+    }
+    .no-credits-balance {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 12px;
+        padding: 1.25rem 2rem;
+        margin-bottom: 2rem;
+        color: #a0a0b0;
+        font-size: 1rem;
+    }
+    .no-credits-balance strong {
+        color: #ff6b35;
+        font-family: 'JetBrains Mono', 'Consolas', monospace;
+        font-size: 1.25rem;
+    }
+    .no-credits-cta {
+        margin-bottom: 1rem;
+    }
+    .no-credits-cta .btn-buy-scans {
+        display: inline-block;
+        background: linear-gradient(135deg, #00d4ff, #00ff88);
+        color: #0a0a1a;
+        padding: 0.85rem 2.5rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: opacity 0.2s, transform 0.2s;
+    }
+    .no-credits-cta .btn-buy-scans:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+    }
+    .no-credits-upgrade {
+        color: #a0a0b0;
+        font-size: 0.9rem;
+    }
+    .no-credits-upgrade a {
+        color: #00d4ff;
+        text-decoration: none;
+    }
+    .no-credits-upgrade a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="container">
+    <div class="no-credits-container">
+        <div class="no-credits-icon">&#9888;</div>
+        <h1 class="no-credits-header">No Scan Credits Remaining</h1>
+        <p class="no-credits-message">
+            You've used all your scan credits. Purchase more to continue auditing smart contracts.
+        </p>
+
+        <div class="no-credits-balance">
+            Current balance: <strong>0</strong> scans
+        </div>
+
+        <div class="no-credits-cta">
+            <a href="/pricing" class="btn-buy-scans">Buy More Scans</a>
+        </div>
+
+        <p class="no-credits-upgrade">
+            Or <a href="/pricing">upgrade to Pro for unlimited scans</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

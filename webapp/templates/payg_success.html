@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Purchase Complete — Counterscarp{% endblock %}
+
+{% block content %}
+<style>
+    .payg-success-container {
+        max-width: 600px;
+        margin: 3rem auto;
+        text-align: center;
+        padding: 0 1rem;
+    }
+    .payg-success-icon {
+        font-size: 4rem;
+        margin-bottom: 0.75rem;
+        color: #28a745;
+    }
+    .payg-success-header {
+        font-size: 2rem;
+        color: #fff;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+    }
+    .payg-success-message {
+        color: #a0a0b0;
+        font-size: 1.05rem;
+        margin-bottom: 0.5rem;
+    }
+    .payg-success-pack {
+        color: #667eea;
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+    }
+    .payg-balance-box {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 12px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 2rem;
+    }
+    .payg-balance-box .balance-label {
+        color: #a0a0b0;
+        font-size: 0.9rem;
+        margin-bottom: 0.35rem;
+    }
+    .payg-balance-box .balance-value {
+        font-family: 'JetBrains Mono', 'Consolas', monospace;
+        font-size: 2.25rem;
+        font-weight: 700;
+        color: #00d4ff;
+    }
+    .payg-balance-box .balance-unit {
+        color: #a0a0b0;
+        font-size: 1rem;
+        margin-left: 0.25rem;
+    }
+    .payg-success-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .payg-success-actions .btn-primary-action {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: opacity 0.2s, transform 0.2s;
+    }
+    .payg-success-actions .btn-primary-action:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+    }
+    .payg-success-actions .btn-secondary-action {
+        display: inline-block;
+        background: transparent;
+        border: 1px solid #2a2a4e;
+        color: #a0a0b0;
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: border-color 0.2s, color 0.2s;
+    }
+    .payg-success-actions .btn-secondary-action:hover {
+        border-color: #667eea;
+        color: #fff;
+    }
+</style>
+
+<div class="container">
+    <div class="payg-success-container">
+        <div class="payg-success-icon">&#10004;</div>
+        <h1 class="payg-success-header">Purchase Complete!</h1>
+        <p class="payg-success-message">
+            {{ credits_added }} scan{{ 's' if credits_added != 1 else '' }} added to your account
+        </p>
+        <p class="payg-success-pack">{{ pack_name }}</p>
+
+        <div class="payg-balance-box">
+            <div class="balance-label">Your current balance</div>
+            <div>
+                <span class="balance-value">{{ scan_credits }}</span>
+                <span class="balance-unit">scan{{ 's' if scan_credits != 1 else '' }} remaining</span>
+            </div>
+        </div>
+
+        <div class="payg-success-actions">
+            <a href="/" class="btn-primary-action">Upload a Contract</a>
+            <a href="/dashboard" class="btn-secondary-action">View Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

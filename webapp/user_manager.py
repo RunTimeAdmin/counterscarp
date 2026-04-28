@@ -195,6 +195,8 @@ class UserManager:
                 "license_key": None,
                 "stripe_customer_id": None,
                 "stripe_subscription_id": None,
+                "scan_credits": 0,
+                "credits_used": 0,
             }
 
             db["users"].append(user)
@@ -214,6 +216,8 @@ class UserManager:
                     user.setdefault("stripe_subscription_id", None)
                     user.setdefault("totp_secret", "")
                     user.setdefault("totp_enabled", False)
+                    user.setdefault("scan_credits", 0)
+                    user.setdefault("credits_used", 0)
                     return dict(user)
         return None
 
@@ -228,6 +232,8 @@ class UserManager:
                     user.setdefault("stripe_subscription_id", None)
                     user.setdefault("totp_secret", "")
                     user.setdefault("totp_enabled", False)
+                    user.setdefault("scan_credits", 0)
+                    user.setdefault("credits_used", 0)
                     return dict(user)
         return None
 
@@ -242,6 +248,8 @@ class UserManager:
                     user.setdefault("stripe_subscription_id", None)
                     user.setdefault("totp_secret", "")
                     user.setdefault("totp_enabled", False)
+                    user.setdefault("scan_credits", 0)
+                    user.setdefault("credits_used", 0)
                     return dict(user)
         return None
 
@@ -499,6 +507,40 @@ class UserManager:
                 if user["id"] == user_id:
                     return user.get("notification_email") or None
         return None
+
+    # ------------------------------------------------------------------
+    # Scan credits (PAYG)
+    # ------------------------------------------------------------------
+
+    def get_scan_credits(self, user_id: str) -> int:
+        """Return the number of remaining scan credits for a user."""
+        user = self.get_by_id(user_id)
+        if not user:
+            return 0
+        return int(user.get("scan_credits", 0))
+
+    def set_scan_credits(self, user_id: str, credits: int) -> None:
+        """Set the scan credit balance for a user (overwrites)."""
+        with self._file_lock:
+            db = self._load_db()
+            for u in db.get("users", []):
+                if u["id"] == user_id:
+                    u["scan_credits"] = credits
+                    self._write_db(db)
+                    return
+
+    def add_scan_credits(self, user_id: str, delta: int) -> int:
+        """Atomically add scan credits and return new balance. Holds lock for full operation."""
+        with self._file_lock:
+            db = self._load_db()
+            for u in db.get("users", []):
+                if u["id"] == user_id:
+                    current = u.get("scan_credits", 0)
+                    new_balance = current + delta
+                    u["scan_credits"] = new_balance
+                    self._write_db(db)
+                    return int(new_balance)
+        return 0
 
 
 # ---------------------------------------------------------------------------

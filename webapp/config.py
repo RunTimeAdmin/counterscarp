@@ -63,3 +63,6 @@ def validate_production_config() -> None:
             f"Missing required secrets for production: {', '.join(missing)}. "
             "Set these environment variables before starting in production mode."
         )
+
+# PAYG credit pack configuration
+PAYG_CREDITS_EXPIRY_DAYS = int(os.environ.get("PAYG_CREDITS_EXPIRY_DAYS", "365"))

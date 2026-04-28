@@ -39,16 +39,18 @@ WEB_APP = "web_app"
 
 # Tier levels
 COMMUNITY = "community"
+PAYG = "payg"
 DEVELOPER = "developer"
 PRO = "pro"
 TEAM = "team"
 ENTERPRISE = "enterprise"
 
 # Tier hierarchy (higher index = more features)
-TIER_HIERARCHY = [COMMUNITY, DEVELOPER, PRO, TEAM, ENTERPRISE]
+TIER_HIERARCHY = [COMMUNITY, PAYG, DEVELOPER, PRO, TEAM, ENTERPRISE]
 
 # Tier key prefixes
 TIER_PREFIXES = {
+    PAYG: "SE-PAYG-",
     DEVELOPER: "SE-DEV-",
     PRO: "SE-PRO-",
     TEAM: "SE-TEAM-",
@@ -60,11 +62,16 @@ LICENSE_PREFIXES = tuple(TIER_PREFIXES.values())
 
 # Default max activations per tier
 TIER_DEFAULT_ACTIVATIONS = {
+    PAYG: 1,
     DEVELOPER: 1,
     PRO: 3,
     TEAM: 5,
     ENTERPRISE: 100,
 }
+
+# PAYG tier gets same feature access as Community — no PRO features.
+# It only grants scan credits, not access to DEVELOPER+ or PRO-gated features.
+PAYG_FEATURES: set = set()  # Empty — PAYG does not unlock any gated features
 
 ALL_PRO_FEATURES = [
     AI_COPILOT,

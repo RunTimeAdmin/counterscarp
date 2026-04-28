@@ -18,6 +18,7 @@ from license_manager import (
     WEB_APP,
     ALL_PRO_FEATURES,
     COMMUNITY,
+    PAYG,
     DEVELOPER,
     PRO,
     TEAM,
@@ -243,7 +244,7 @@ class TestTierHierarchy:
 
     def test_tier_hierarchy_order(self):
         assert TIER_HIERARCHY == [
-            COMMUNITY, DEVELOPER, PRO, TEAM, ENTERPRISE
+            COMMUNITY, PAYG, DEVELOPER, PRO, TEAM, ENTERPRISE
         ]
 
     def test_feature_tiers_mapping(self):

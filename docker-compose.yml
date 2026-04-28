@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
 
     # Tag the locally-built image for easy reference
-    image: counterscarp-engine:5.0.6
+    image: counterscarp-engine:5.0.7
 
     # ── Volume mounts ───────────────────────────────────────────────────────────
     volumes:
@@ -39,6 +39,9 @@ services:
     environment:
       # Pro license key — pass via .env or export COUNTERSCARP_PRO_LICENSE=<key>
       - COUNTERSCARP_PRO_LICENSE=${COUNTERSCARP_PRO_LICENSE:-}
+      - STRIPE_PAYG_STARTER_PRICE_ID=${STRIPE_PAYG_STARTER_PRICE_ID:-}
+      - STRIPE_PAYG_STANDARD_PRICE_ID=${STRIPE_PAYG_STANDARD_PRICE_ID:-}
+      - STRIPE_PAYG_PRO_PACK_PRICE_ID=${STRIPE_PAYG_PRO_PACK_PRICE_ID:-}
       # Prevent Python from buffering stdout (so logs stream live)
       - PYTHONUNBUFFERED=1
 
@@ -72,7 +75,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.6
+    image: counterscarp-engine:5.0.7
     command: ["--doctor"]
 
   # ── Heuristic-only scan (no external tool dependencies) ──────────────────────
@@ -81,7 +84,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.6
+    image: counterscarp-engine:5.0.7
     volumes:
       - ./target:/scan
       - ./output:/output
@@ -93,7 +96,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: counterscarp-engine:5.0.6
+    image: counterscarp-engine:5.0.7
     volumes:
       - ./target:/scan
       - ./output:/output

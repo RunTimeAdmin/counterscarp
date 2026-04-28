@@ -28,7 +28,7 @@ RUN ls /go/bin/medusa
 FROM python:3.12-slim-bookworm
 
 # ── Metadata ──────────────────────────────────────────────────────────────────
-ARG APP_VERSION=5.0.6
+ARG APP_VERSION=5.0.7
 LABEL maintainer="Counterscarp Engine Team"
 LABEL description="Smart contract security auditing platform — 21-analyzer stack"
 LABEL version="${APP_VERSION}"
@@ -149,18 +149,18 @@ CMD ["--help"]
 # ==============================================================================
 #
 # Build the image:
-#   docker build -t counterscarp-engine:5.0.6 .
+#   docker build -t counterscarp-engine:5.0.7 .
 #
 # Run a full audit scan (mounts current directory as /scan):
 #   docker run --rm -v $(pwd):/scan -v $(pwd)/output:/output \
-#       counterscarp-engine:5.0.6 --target /scan --report --output-dir /output
+#       counterscarp-engine:5.0.7 --target /scan --report --output-dir /output
 #
 # Run only heuristic + Slither (no fuzzing):
-#   docker run --rm -v $(pwd):/scan counterscarp-engine:5.0.6 --target /scan
+#   docker run --rm -v $(pwd):/scan counterscarp-engine:5.0.7 --target /scan
 #
 # Run environment diagnostics:
-#   docker run --rm counterscarp-engine:5.0.6 --doctor
+#   docker run --rm counterscarp-engine:5.0.7 --doctor
 #
 # Interactive shell:
-#   docker run --rm -it -v $(pwd):/scan counterscarp-engine:5.0.6 /bin/bash
+#   docker run --rm -it -v $(pwd):/scan counterscarp-engine:5.0.7 /bin/bash
 # ==============================================================================

@@ -96,6 +96,31 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Pay-As-You-Go scan credit packs (one-time purchases, not subscriptions)
+PAYG_PACKS: Dict[str, Dict[str, Any]] = {
+    "payg_starter": {
+        "name": "Counterscarp Starter Pack",
+        "description": "1 smart contract audit scan",
+        "credits": 1,
+        "price_cents": 999,
+        "price_id_env": "STRIPE_PAYG_STARTER_PRICE_ID",
+    },
+    "payg_standard": {
+        "name": "Counterscarp Standard Pack",
+        "description": "5 smart contract audit scans",
+        "credits": 5,
+        "price_cents": 2999,
+        "price_id_env": "STRIPE_PAYG_STANDARD_PRICE_ID",
+    },
+    "payg_pro_pack": {
+        "name": "Counterscarp Pro Pack",
+        "description": "15 smart contract audit scans",
+        "credits": 15,
+        "price_cents": 6999,
+        "price_id_env": "STRIPE_PAYG_PRO_PACK_PRICE_ID",
+    },
+}
+
 # ---------------------------------------------------------------------------
 # File paths
 # ---------------------------------------------------------------------------
@@ -269,6 +294,66 @@ def create_checkout_session(
     return session
 
 
+def create_payg_checkout(
+    pack_key: str,
+    user_email: str,
+    user_id: str,
+    success_url: str,
+    cancel_url: str,
+) -> Any:
+    """Create a Stripe Checkout session for a one-time PAYG credit pack purchase."""
+    if not stripe:
+        raise RuntimeError("Stripe SDK not available")
+
+    pack = PAYG_PACKS.get(pack_key)
+    if not pack:
+        raise ValueError(f"Unknown PAYG pack: {pack_key}")
+
+    price_id = os.environ.get(pack["price_id_env"], "")
+    if not price_id:
+        raise ValueError(f"Stripe Price ID not configured for {pack_key}")
+
+    session = stripe.checkout.Session.create(
+        mode="payment",  # One-time payment, NOT subscription
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        customer_email=user_email,
+        payment_method_types=["card"],
+        metadata={
+            "purchase_type": "payg",
+            "pack_key": pack_key,
+            "user_id": user_id,
+            "credits": str(pack["credits"]),
+        },
+    )
+    return session
+
+
+def link_payg_credits_to_user(user_id: str, pack_key: str, ip: str = "") -> int:
+    """Grant scan credits to a user after PAYG pack purchase. Returns new balance."""
+    from webapp.user_manager import user_manager as _um
+
+    pack = PAYG_PACKS.get(pack_key)
+    if not pack:
+        logger.error("Unknown PAYG pack key in webhook: %s", pack_key)
+        return 0
+
+    credits = pack["credits"]
+    new_balance = _um.add_scan_credits(user_id, credits)
+
+    append_audit_log(
+        event_type="payg_credits_granted",
+        key=pack_key,
+        actor=user_id,
+        ip=ip,
+        changes={"pack": pack_key, "credits_added": credits, "new_balance": new_balance},
+    )
+
+    logger.info("PAYG credits granted: user=%s pack=%s credits=%d balance=%d", user_id, pack_key, credits, new_balance)
+    return new_balance
+
+
 # ---------------------------------------------------------------------------
 # Stripe event handlers
 # ---------------------------------------------------------------------------
@@ -280,6 +365,26 @@ def handle_checkout_completed(session: Dict[str, Any]) -> Dict[str, Any]:
     Generates a license key, stores it in the DB and session map, and
     returns the new license entry dict.
     """
+    # Check if this is a PAYG purchase
+    purchase_type = session.get("metadata", {}).get("purchase_type", "")
+    if purchase_type == "payg":
+        pack_key = session["metadata"].get("pack_key", "")
+        user_id_val = session["metadata"].get("user_id", "")
+        if pack_key and user_id_val:
+            link_payg_credits_to_user(user_id_val, pack_key)
+            # Store in session map for success page
+            session_map = _load_session_map()
+            sid: str = session.get("id", "")
+            if sid:
+                session_map[sid] = {
+                    "purchase_type": "payg",
+                    "pack_key": pack_key,
+                    "user_id": user_id_val,
+                    "credits": PAYG_PACKS.get(pack_key, {}).get("credits", 0),
+                }
+                _save_session_map(session_map)
+        return {}  # Don't process as subscription
+
     import license_manager  # local import to avoid circular deps
 
     product_key: str = (session.get("metadata") or {}).get("product_key", "")

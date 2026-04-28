@@ -87,3 +87,54 @@
 {"ts": "2026-04-28T21:15:46.163583+00:00", "event": "license_activated", "key": "SE-PRO-email...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "specific@test.com"}}
 {"ts": "2026-04-28T21:15:46.170585+00:00", "event": "license_activated", "key": "SE-PRO-sessm...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
 {"ts": "2026-04-28T21:15:46.174585+00:00", "event": "license_activated", "key": "SE-DEV-devte...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "developer", "email": "user@example.com"}}
+{"ts": "2026-04-28T22:39:47.606477+00:00", "event": "license_activated", "key": "SE-PRO-098f6...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "test-machine-1"}}
+{"ts": "2026-04-28T22:39:47.670483+00:00", "event": "license_activated", "key": "SE-PRO-098f6...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "test-machine-001"}}
+{"ts": "2026-04-28T22:39:47.783331+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T22:39:47.801329+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T22:39:47.805330+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-002"}}
+{"ts": "2026-04-28T22:39:47.821331+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-same"}}
+{"ts": "2026-04-28T22:39:47.841340+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-000"}}
+{"ts": "2026-04-28T22:39:47.845330+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T22:39:47.849330+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-002"}}
+{"ts": "2026-04-28T22:39:47.867331+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "deact-machine"}}
+{"ts": "2026-04-28T22:39:47.872331+00:00", "event": "license_deactivated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "deact-machine"}}
+{"ts": "2026-04-28T23:16:28.061236+00:00", "event": "license_activated", "key": "SE-PRO-098f6...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "test-machine-1"}}
+{"ts": "2026-04-28T23:16:28.094567+00:00", "event": "license_activated", "key": "SE-PRO-098f6...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "test-machine-001"}}
+{"ts": "2026-04-28T23:16:28.211463+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T23:16:28.231565+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T23:16:28.244528+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-002"}}
+{"ts": "2026-04-28T23:16:28.264635+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-same"}}
+{"ts": "2026-04-28T23:16:28.277805+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-000"}}
+{"ts": "2026-04-28T23:16:28.277805+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T23:16:28.293430+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-002"}}
+{"ts": "2026-04-28T23:16:28.311185+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "deact-machine"}}
+{"ts": "2026-04-28T23:16:28.318251+00:00", "event": "license_deactivated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "deact-machine"}}
+{"ts": "2026-04-28T23:16:32.668523+00:00", "event": "license_activated", "key": "SE-PRO-fake1...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:16:32.672522+00:00", "event": "license_activated", "key": "SE-PRO-fake4...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:16:32.676260+00:00", "event": "license_activated", "key": "SE-PRO-fake7...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:16:32.682279+00:00", "event": "license_activated", "key": "SE-PRO-month...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:16:32.686581+00:00", "event": "license_activated", "key": "SE-PRO-annua...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:16:32.690582+00:00", "event": "license_activated", "key": "SE-PRO-fallb...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:16:32.694460+00:00", "event": "license_activated", "key": "SE-PRO-email...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "specific@test.com"}}
+{"ts": "2026-04-28T23:16:32.700993+00:00", "event": "license_activated", "key": "SE-PRO-sessm...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:16:32.703989+00:00", "event": "license_activated", "key": "SE-DEV-devte...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "developer", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:04.254413+00:00", "event": "license_activated", "key": "SE-PRO-098f6...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "test-machine-1"}}
+{"ts": "2026-04-28T23:19:04.292770+00:00", "event": "license_activated", "key": "SE-PRO-098f6...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "test-machine-001"}}
+{"ts": "2026-04-28T23:19:04.423862+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T23:19:04.443038+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T23:19:04.443038+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-002"}}
+{"ts": "2026-04-28T23:19:04.470831+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-same"}}
+{"ts": "2026-04-28T23:19:04.492038+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-000"}}
+{"ts": "2026-04-28T23:19:04.502045+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-001"}}
+{"ts": "2026-04-28T23:19:04.506532+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "machine-002"}}
+{"ts": "2026-04-28T23:19:04.527754+00:00", "event": "license_activated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "deact-machine"}}
+{"ts": "2026-04-28T23:19:04.534207+00:00", "event": "license_deactivated", "key": "SE-PRO-76010...", "actor": "system", "ip": "unknown", "changes": {"machine_id": "deact-machine"}}
+{"ts": "2026-04-28T23:19:09.281963+00:00", "event": "license_activated", "key": "SE-PRO-fake1...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:09.285962+00:00", "event": "license_activated", "key": "SE-PRO-fake4...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:09.289267+00:00", "event": "license_activated", "key": "SE-PRO-fake7...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:09.291267+00:00", "event": "license_activated", "key": "SE-PRO-month...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:09.298212+00:00", "event": "license_activated", "key": "SE-PRO-annua...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:09.301213+00:00", "event": "license_activated", "key": "SE-PRO-fallb...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:09.305113+00:00", "event": "license_activated", "key": "SE-PRO-email...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "specific@test.com"}}
+{"ts": "2026-04-28T23:19:09.308112+00:00", "event": "license_activated", "key": "SE-PRO-sessm...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "pro", "email": "user@example.com"}}
+{"ts": "2026-04-28T23:19:09.311330+00:00", "event": "license_activated", "key": "SE-DEV-devte...", "actor": "stripe_webhook", "ip": "system", "changes": {"tier": "developer", "email": "user@example.com"}}

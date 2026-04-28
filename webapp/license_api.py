@@ -84,6 +84,40 @@ def link_license_to_user(email: str, user_id: str) -> Optional[str]:
     return key
 
 
+def consume_credit(user_id: str, audit_id: str, ip: str) -> bool:
+    """Atomically consume one scan credit for a PAYG user.
+
+    Returns True if a credit was successfully consumed, False if no credits remain.
+    Thread-safe: holds user_manager's file lock for the entire read-check-write cycle.
+    """
+    from webapp.user_manager import user_manager as _um
+
+    # Use user_manager's internal lock for atomic read-check-write
+    with _um._file_lock:
+        db = _um._load_db()
+        for u in db.get("users", []):
+            if u["id"] == user_id:
+                current_credits = u.get("scan_credits", 0)
+                if current_credits <= 0:
+                    return False
+                u["scan_credits"] = current_credits - 1
+                u["credits_used"] = u.get("credits_used", 0) + 1
+                _um._write_db(db)
+                break
+        else:
+            return False
+
+    # Log outside the user lock (audit log has its own lock)
+    append_audit_log(
+        event_type="payg_credit_consumed",
+        key=audit_id,
+        actor=user_id,
+        ip=ip,
+        changes={"credits_before": current_credits, "credits_after": current_credits - 1, "audit_id": audit_id},
+    )
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
