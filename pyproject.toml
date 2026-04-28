@@ -65,6 +65,9 @@ web = [
     "httpx~=0.25",
     "itsdangerous~=2.1",
     "redis~=5.0",
+    "arq~=0.26",
+    "pyotp~=2.9",
+    "cryptography~=42.0",
 ]
 pdf = [
     # PDF report generation (pure Python, no system dependencies)
@@ -100,6 +103,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
 ]
 
 [tool.setuptools]

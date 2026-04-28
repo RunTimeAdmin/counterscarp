@@ -10,9 +10,13 @@ FROM golang:1.24-bookworm AS go-builder
 
 ARG MEDUSA_VERSION=v0.1.8
 
-# Build Medusa from source via go install
-# Pin to a specific release tag so the binary is reproducible
-RUN go install github.com/crytic/medusa@${MEDUSA_VERSION}
+# Clone and build Medusa from source (go install fails because
+# Medusa's go.mod contains 'replace' directives, which are rejected
+# by 'go install pkg@version' in every Go version).
+RUN git clone --depth 1 --branch ${MEDUSA_VERSION} https://github.com/crytic/medusa.git /tmp/medusa \
+    && cd /tmp/medusa \
+    && go build -o /go/bin/medusa . \
+    && rm -rf /tmp/medusa
 
 # Confirm the binary was placed at the expected path
 RUN ls /go/bin/medusa
@@ -85,7 +89,7 @@ RUN pip install --no-cache-dir solc-select==1.2.0 \
 WORKDIR /app
 COPY . /app
 
-RUN pip install --no-cache-dir ".[pdf]" \
+RUN pip install --no-cache-dir ".[web,pdf]" \
     && echo "[counterscarp-engine] installed OK"
 
 # ── 7. Install Slither (Python-based EVM static analyser) ────────────────────

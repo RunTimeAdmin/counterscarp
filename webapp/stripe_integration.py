@@ -16,7 +16,13 @@ try:
 except ImportError:
     stripe = None  # type: ignore[assignment,unused-ignore]
 
+try:
+    import redis as redis_lib
+except ImportError:
+    redis_lib = None  # type: ignore[assignment,unused-ignore]
+
 from webapp.user_manager import user_manager
+from webapp.license_api import append_audit_log
 
 # ---------------------------------------------------------------------------
 # Stripe configuration — loaded from environment variables
@@ -97,6 +103,7 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _LICENSES_PATH = _DATA_DIR / "licenses.json"
 _SESSION_MAP_PATH = _DATA_DIR / "session_license_map.json"
+_PROCESSED_EVENTS_PATH = _DATA_DIR / "processed_webhook_events.json"
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -156,6 +163,7 @@ def update_license_in_db(key: str, updates: Dict[str, Any]) -> bool:
 
         for entry in db.get("licenses", []):
             if entry.get("key") == key:
+                old_tier = entry.get("tier")
                 entry.update(updates)
                 tmp = _LICENSES_PATH.with_suffix(".tmp")
                 try:
@@ -166,6 +174,12 @@ def update_license_in_db(key: str, updates: Dict[str, Any]) -> bool:
                     # Fallback: direct write if atomic rename fails
                     with open(_LICENSES_PATH, "w", encoding="utf-8") as fh:
                         json.dump(db, fh, indent=2)
+                # Log tier change if tier was updated
+                if "tier" in updates and updates["tier"] != old_tier:
+                    append_audit_log(
+                        "tier_changed", key, "system", "system",
+                        {"old_tier": old_tier, "new_tier": updates["tier"]},
+                    )
                 return True
     return False
 
@@ -322,6 +336,11 @@ def handle_checkout_completed(session: Dict[str, Any]) -> Dict[str, Any]:
         }
         _save_session_map(session_map)
 
+    append_audit_log(
+        "license_activated", entry["key"], "stripe_webhook", "system",
+        {"tier": entry.get("tier", ""), "email": email},
+    )
+
     return entry
 
 
@@ -332,3 +351,97 @@ def get_session_license_key(session_id: str) -> Optional[Dict[str, Any]]:
     if val is None:
         return None
     return dict(val)
+
+
+# ---------------------------------------------------------------------------
+# Webhook event idempotency
+# ---------------------------------------------------------------------------
+
+_REDIS_WEBHOOK_TTL = 259200  # 72 hours
+_REDIS_KEY_PREFIX = "counterscarp:webhook_events"
+_MAX_FILE_EVENTS = 1000
+
+_events_file_lock = threading.Lock()
+
+
+def _get_redis_client() -> Any:
+    """Return a Redis client connected via REDIS_URL, or None."""
+    if redis_lib is None:
+        return None
+    url = os.environ.get("REDIS_URL")
+    if not url:
+        return None
+    try:
+        client = redis_lib.from_url(url, decode_responses=True, socket_timeout=2)
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+
+def is_event_processed(event_id: str) -> bool:
+    """Check if a Stripe webhook event has already been processed."""
+    # Try Redis first
+    try:
+        client = _get_redis_client()
+        if client is not None:
+            return bool(client.exists(f"{_REDIS_KEY_PREFIX}:{event_id}"))
+    except Exception:
+        logger.debug("Redis unavailable for idempotency check, falling back to file")
+
+    # File fallback
+    try:
+        with _events_file_lock:
+            if not _PROCESSED_EVENTS_PATH.exists():
+                return False
+            data = json.loads(_PROCESSED_EVENTS_PATH.read_text(encoding="utf-8"))
+            return event_id in data
+    except Exception:
+        logger.warning("Failed to check processed events file: %s", event_id)
+        return False
+
+
+def mark_event_processed(event_id: str) -> None:
+    """Mark a Stripe webhook event as processed."""
+    # Try Redis first
+    try:
+        client = _get_redis_client()
+        if client is not None:
+            client.set(
+                f"{_REDIS_KEY_PREFIX}:{event_id}", "1",
+                nx=True, ex=_REDIS_WEBHOOK_TTL,
+            )
+    except Exception:
+        logger.debug("Redis unavailable for marking event, falling back to file")
+
+    # Always persist to file as well (durable fallback)
+    try:
+        with _events_file_lock:
+            _PROCESSED_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            if _PROCESSED_EVENTS_PATH.exists():
+                try:
+                    data = json.loads(
+                        _PROCESSED_EVENTS_PATH.read_text(encoding="utf-8")
+                    )
+                except (json.JSONDecodeError, OSError):
+                    data = []
+            else:
+                data = []
+
+            if event_id not in data:
+                data.append(event_id)
+
+            # Prune to last N entries
+            if len(data) > _MAX_FILE_EVENTS:
+                data = data[-_MAX_FILE_EVENTS:]
+
+            tmp = _PROCESSED_EVENTS_PATH.with_suffix(".tmp")
+            try:
+                tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                tmp.replace(_PROCESSED_EVENTS_PATH)
+            except OSError:
+                _PROCESSED_EVENTS_PATH.write_text(
+                    json.dumps(data, indent=2), encoding="utf-8"
+                )
+    except Exception:
+        logger.warning("Failed to persist processed event to file: %s", event_id)

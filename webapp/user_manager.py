@@ -13,15 +13,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import bcrypt as _bcrypt
+import base64
+import hashlib
 
-from webapp.config import BASE_DIR
+import bcrypt as _bcrypt
+from cryptography.fernet import Fernet
+
+from webapp.config import BASE_DIR, SESSION_SECRET
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 _USERS_DB_PATH: Path = BASE_DIR / "data" / "users.json"
+
+
+def _derive_fernet_key() -> bytes:
+    """Derive a Fernet-compatible key from SESSION_SECRET."""
+    digest = hashlib.sha256(SESSION_SECRET.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest)
+
+
+_fernet = Fernet(_derive_fernet_key())
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +178,8 @@ class UserManager:
                     user.setdefault("license_key", None)
                     user.setdefault("stripe_customer_id", None)
                     user.setdefault("stripe_subscription_id", None)
+                    user.setdefault("totp_secret", "")
+                    user.setdefault("totp_enabled", False)
                     return dict(user)
         return None
 
@@ -177,6 +192,8 @@ class UserManager:
                     user.setdefault("license_key", None)
                     user.setdefault("stripe_customer_id", None)
                     user.setdefault("stripe_subscription_id", None)
+                    user.setdefault("totp_secret", "")
+                    user.setdefault("totp_enabled", False)
                     return dict(user)
         return None
 
@@ -189,6 +206,8 @@ class UserManager:
                     user.setdefault("license_key", None)
                     user.setdefault("stripe_customer_id", None)
                     user.setdefault("stripe_subscription_id", None)
+                    user.setdefault("totp_secret", "")
+                    user.setdefault("totp_enabled", False)
                     return dict(user)
         return None
 
@@ -335,6 +354,54 @@ class UserManager:
             for user in db["users"]:
                 if user.get("license_key") == license_key:
                     return dict(user)
+        return None
+
+    # ------------------------------------------------------------------
+    # TOTP two-factor authentication
+    # ------------------------------------------------------------------
+
+    def enable_totp(self, user_id: str, secret: str) -> None:
+        """Store an encrypted TOTP secret and enable 2FA for the user."""
+        encrypted = _fernet.encrypt(
+            secret.encode("utf-8")
+        ).decode("utf-8")
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user["totp_secret"] = encrypted
+                    user["totp_enabled"] = True
+                    self._write_db(db)
+                    return
+
+    def disable_totp(self, user_id: str) -> None:
+        """Clear TOTP secret and disable 2FA for the user."""
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user["totp_secret"] = ""
+                    user["totp_enabled"] = False
+                    self._write_db(db)
+                    return
+
+    def get_totp_secret(
+        self, user_id: str,
+    ) -> Optional[str]:
+        """Return the decrypted TOTP secret, or None."""
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    enc = user.get("totp_secret", "")
+                    if not enc:
+                        return None
+                    try:
+                        return _fernet.decrypt(
+                            enc.encode("utf-8")
+                        ).decode("utf-8")
+                    except Exception:
+                        return None
         return None
 
 

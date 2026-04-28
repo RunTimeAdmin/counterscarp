@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Scan in Progress — Counterscarp{% endblock %}
+
+{% block content %}
+<style>
+    .pending-container {
+        max-width: 600px;
+        margin: 4rem auto;
+        text-align: center;
+        padding: 2rem;
+    }
+    .pending-container h1 {
+        font-size: 1.75rem;
+        color: #fff;
+        margin-bottom: 0.5rem;
+    }
+    .pending-container .subtitle {
+        color: #a0a0b0;
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Spinner */
+    .spinner-wrap {
+        margin: 2rem auto;
+    }
+    .spinner {
+        width: 56px;
+        height: 56px;
+        border: 4px solid rgba(255,255,255,0.1);
+        border-top-color: #6c5ce7;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Progress text */
+    #progress-text {
+        color: #ccc;
+        font-size: 1.05rem;
+        margin-top: 1.5rem;
+        min-height: 1.5em;
+        transition: opacity 0.3s;
+    }
+
+    /* Error state */
+    .error-box {
+        display: none;
+        background: rgba(231, 76, 60, 0.12);
+        border: 1px solid #e74c3c;
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin-top: 2rem;
+        color: #e74c3c;
+    }
+    .error-box .error-msg {
+        margin-bottom: 1rem;
+        word-break: break-word;
+    }
+    .error-box a {
+        display: inline-block;
+        padding: 0.5rem 1.25rem;
+        background: #e74c3c;
+        color: #fff;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .error-box a:hover {
+        background: #c0392b;
+    }
+
+    /* Phase list */
+    .phase-list {
+        list-style: none;
+        padding: 0;
+        margin: 2rem auto 0;
+        max-width: 360px;
+        text-align: left;
+    }
+    .phase-list li {
+        padding: 0.4rem 0;
+        color: #666;
+        font-size: 0.95rem;
+    }
+    .phase-list li.active {
+        color: #6c5ce7;
+        font-weight: 600;
+    }
+    .phase-list li.done {
+        color: #2ecc71;
+    }
+    .phase-list li.done::before {
+        content: "✓ ";
+    }
+    .phase-list li.active::before {
+        content: "▸ ";
+    }
+</style>
+
+<div class="pending-container">
+    <h1>Scan in Progress</h1>
+    <p class="subtitle">Your audit is being processed. This page will update automatically.</p>
+
+    <div class="spinner-wrap" id="spinner-wrap">
+        <div class="spinner"></div>
+    </div>
+
+    <p id="progress-text">Queued...</p>
+
+    <ul class="phase-list" id="phase-list">
+        <li id="ph-queue" class="active">Queued</li>
+        <li id="ph-heuristic">Heuristic scan</li>
+        <li id="ph-slither">Slither analysis</li>
+        <li id="ph-ai">AI Copilot analysis</li>
+        <li id="ph-reports">Report generation</li>
+        <li id="ph-graph">Attack graph</li>
+        <li id="ph-done">Complete</li>
+    </ul>
+
+    <div class="error-box" id="error-box">
+        <p class="error-msg" id="error-msg"></p>
+        <a href="/">Try Another Audit</a>
+    </div>
+</div>
+
+<script>
+(function() {
+    var auditId = "{{ audit_id }}";
+    var progressEl = document.getElementById("progress-text");
+    var spinnerWrap = document.getElementById("spinner-wrap");
+    var errorBox = document.getElementById("error-box");
+    var errorMsg = document.getElementById("error-msg");
+
+    var phaseMap = {
+        "Queued":       "ph-queue",
+        "Starting":     "ph-queue",
+        "heuristic":    "ph-heuristic",
+        "Slither":      "ph-slither",
+        "AI Copilot":   "ph-ai",
+        "Generating reports": "ph-reports",
+        "attack graph": "ph-graph",
+        "complete":     "ph-done"
+    };
+
+    function matchPhase(progress) {
+        var lower = (progress || "").toLowerCase();
+        if (lower.indexOf("heuristic") !== -1) return "ph-heuristic";
+        if (lower.indexOf("slither") !== -1)   return "ph-slither";
+        if (lower.indexOf("copilot") !== -1 || lower.indexOf("ai") !== -1) return "ph-ai";
+        if (lower.indexOf("report") !== -1)    return "ph-reports";
+        if (lower.indexOf("attack") !== -1 || lower.indexOf("graph") !== -1) return "ph-graph";
+        if (lower.indexOf("complete") !== -1)  return "ph-done";
+        if (lower.indexOf("queue") !== -1 || lower.indexOf("start") !== -1) return "ph-queue";
+        return null;
+    }
+
+    var phases = ["ph-queue","ph-heuristic","ph-slither","ph-ai","ph-reports","ph-graph","ph-done"];
+
+    function updatePhases(currentId) {
+        if (!currentId) return;
+        var reached = false;
+        for (var i = 0; i < phases.length; i++) {
+            var el = document.getElementById(phases[i]);
+            if (!el) continue;
+            if (phases[i] === currentId) {
+                el.className = "active";
+                reached = true;
+            } else if (!reached) {
+                el.className = "done";
+            } else {
+                el.className = "";
+            }
+        }
+    }
+
+    function poll() {
+        fetch("/api/audit/" + auditId + "/status")
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                progressEl.textContent = data.progress || "Processing...";
+                var phase = matchPhase(data.progress);
+                if (phase) updatePhases(phase);
+
+                if (data.status === "complete") {
+                    spinnerWrap.style.display = "none";
+                    updatePhases("ph-done");
+                    window.location.href = "/results/" + auditId;
+                    return;
+                }
+                if (data.status === "failed") {
+                    spinnerWrap.style.display = "none";
+                    progressEl.style.display = "none";
+                    document.getElementById("phase-list").style.display = "none";
+                    errorMsg.textContent = data.progress || "An error occurred during the scan.";
+                    errorBox.style.display = "block";
+                    return;
+                }
+                setTimeout(poll, 3000);
+            })
+            .catch(function() {
+                setTimeout(poll, 5000);
+            });
+    }
+
+    setTimeout(poll, 1500);
+})();
+</script>
+{% endblock %}

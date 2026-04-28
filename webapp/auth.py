@@ -10,13 +10,14 @@ import hmac as _hmac
 import logging
 import math
 
+import pyotp
 from fastapi import APIRouter, HTTPException, Query, Request, Form
 from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import URLSafeTimedSerializer
 from starlette.templating import Jinja2Templates
 
 from webapp.user_manager import user_manager
-from webapp.rate_limiter import get_client_ip
+from webapp.rate_limiter import get_client_ip, add_rate_limit_headers
 from webapp.license_api import link_license_to_user
 from webapp.config import (
     GOOGLE_CLIENT_ID,
@@ -137,15 +138,44 @@ async def login_submit(
     client_ip = get_client_ip(request)
     login_limiter = getattr(request.app.state, "login_limiter", None)
     if login_limiter and not login_limiter.is_allowed(client_ip):
-        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+        resp_429 = JSONResponse(
+            {"detail": "Too many login attempts. Try again later."},
+            status_code=429,
+        )
+        add_rate_limit_headers(resp_429, login_limiter, client_ip)
+        resp_429.headers["Retry-After"] = str(
+            login_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
     user = user_manager.verify_password(email, password)
     if user:
+        # Check if admin with TOTP enabled — require 2FA challenge
+        is_admin = (
+            ADMIN_EMAIL
+            and user["email"] == ADMIN_EMAIL
+        )
+        totp_on = user.get("totp_enabled", False)
+        if is_admin and totp_on:
+            request.session["pending_2fa"] = user["id"]
+            resp = RedirectResponse(
+                url="/auth/totp/verify", status_code=302,
+            )
+            if login_limiter:
+                add_rate_limit_headers(
+                    resp, login_limiter, client_ip,
+                )
+            return resp
+
+        # Normal login — no 2FA needed
         request.session["user_id"] = user["id"]
         user_manager.update_last_login(user["id"])
         # Store user's license in the session (never in os.environ)
         if user.get("license_key"):
             request.session["user_license"] = user["license_key"]
-        return RedirectResponse(url="/", status_code=302)
+        resp = RedirectResponse(url="/", status_code=302)
+        if login_limiter:
+            add_rate_limit_headers(resp, login_limiter, client_ip)
+        return resp
     return templates.TemplateResponse(
         request,
         "login.html",
@@ -184,9 +214,21 @@ async def register_submit(
             raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     client_ip = get_client_ip(request)
-    register_limiter = getattr(request.app.state, "register_limiter", None)
+    register_limiter = getattr(
+        request.app.state, "register_limiter", None,
+    )
     if register_limiter and not register_limiter.is_allowed(client_ip):
-        raise HTTPException(status_code=429, detail="Too many registration attempts. Try again later.")
+        resp_429 = JSONResponse(
+            {"detail": "Too many registration attempts. Try again later."},
+            status_code=429,
+        )
+        add_rate_limit_headers(
+            resp_429, register_limiter, client_ip,
+        )
+        resp_429.headers["Retry-After"] = str(
+            register_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
     if password != confirm_password:
         return templates.TemplateResponse(
             request,
@@ -240,7 +282,10 @@ async def register_submit(
     if refreshed_user and refreshed_user.get("license_key"):
         request.session["user_license"] = refreshed_user["license_key"]
 
-    return RedirectResponse(url="/", status_code=302)
+    resp = RedirectResponse(url="/", status_code=302)
+    if register_limiter:
+        add_rate_limit_headers(resp, register_limiter, client_ip)
+    return resp
 
 
 @auth_router.get("/google")
@@ -325,6 +370,199 @@ async def logout(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# TOTP two-factor authentication routes
+# ---------------------------------------------------------------------------
+
+
+@auth_router.get("/totp/setup")
+async def totp_setup_page(request: Request):
+    """Show TOTP enrollment page (requires authentication)."""
+    current_user = get_current_user(request)
+    if not current_user:
+        return RedirectResponse(
+            url="/auth/login", status_code=302,
+        )
+
+    secret = pyotp.random_base32()
+    request.session["pending_totp_secret"] = secret
+
+    totp = pyotp.totp.TOTP(secret)
+    prov_uri = totp.provisioning_uri(
+        current_user["email"],
+        issuer_name="Counterscarp",
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "totp_setup.html",
+        context={
+            "current_user": current_user,
+            "provisioning_uri": prov_uri,
+            "totp_secret": secret,
+            "error": "",
+            "csrf_token": generate_csrf_token(request),
+        },
+    )
+
+
+@auth_router.post("/totp/setup")
+async def totp_setup_submit(
+    request: Request,
+    code: str = Form(...),
+):
+    """Verify the TOTP code and enable 2FA for the user."""
+    current_user = get_current_user(request)
+    if not current_user:
+        return RedirectResponse(
+            url="/auth/login", status_code=302,
+        )
+
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(
+                status_code=403,
+                detail="CSRF validation failed",
+            )
+
+    secret = request.session.get("pending_totp_secret", "")
+    if not secret:
+        return RedirectResponse(
+            url="/auth/totp/setup", status_code=302,
+        )
+
+    totp = pyotp.TOTP(secret)
+    if totp.verify(code):
+        user_manager.enable_totp(
+            current_user["id"], secret,
+        )
+        request.session.pop("pending_totp_secret", None)
+        return RedirectResponse(
+            url="/settings?msg=2FA+enabled+successfully",
+            status_code=302,
+        )
+
+    # Invalid code — re-render with error
+    prov_uri = totp.provisioning_uri(
+        current_user["email"],
+        issuer_name="Counterscarp",
+    )
+    return templates.TemplateResponse(
+        request,
+        "totp_setup.html",
+        context={
+            "current_user": current_user,
+            "provisioning_uri": prov_uri,
+            "totp_secret": secret,
+            "error": "Invalid code. Please try again.",
+            "csrf_token": generate_csrf_token(request),
+        },
+    )
+
+
+@auth_router.get("/totp/verify")
+async def totp_verify_page(request: Request):
+    """Show the TOTP challenge page during login."""
+    pending = request.session.get("pending_2fa")
+    if not pending:
+        return RedirectResponse(
+            url="/auth/login", status_code=302,
+        )
+    return templates.TemplateResponse(
+        request,
+        "totp_challenge.html",
+        context={
+            "current_user": None,
+            "error": "",
+            "csrf_token": generate_csrf_token(request),
+        },
+    )
+
+
+@auth_router.post("/totp/verify")
+async def totp_verify_submit(
+    request: Request,
+    code: str = Form(...),
+):
+    """Verify the 6-digit TOTP code during login."""
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(
+                status_code=403,
+                detail="CSRF validation failed",
+            )
+
+    user_id = request.session.get("pending_2fa")
+    if not user_id:
+        return RedirectResponse(
+            url="/auth/login", status_code=302,
+        )
+
+    secret = user_manager.get_totp_secret(user_id)
+    if not secret:
+        # TOTP was disabled between login and now
+        request.session.pop("pending_2fa", None)
+        return RedirectResponse(
+            url="/auth/login", status_code=302,
+        )
+
+    totp = pyotp.TOTP(secret)
+    if totp.verify(code):
+        # Complete authentication
+        user = user_manager.get_by_id(user_id)
+        if user:
+            request.session["user_id"] = user["id"]
+            user_manager.update_last_login(user["id"])
+            if user.get("license_key"):
+                request.session["user_license"] = (
+                    user["license_key"]
+                )
+            request.session["totp_verified"] = True
+        request.session.pop("pending_2fa", None)
+        return RedirectResponse(url="/", status_code=302)
+
+    # Invalid code
+    return templates.TemplateResponse(
+        request,
+        "totp_challenge.html",
+        context={
+            "current_user": None,
+            "error": "Invalid code. Please try again.",
+            "csrf_token": generate_csrf_token(request),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# TOTP guard for admin endpoints
+# ---------------------------------------------------------------------------
+
+
+def _require_totp_or_redirect(
+    request: Request,
+) -> RedirectResponse | None:
+    """If the current admin has TOTP enabled but has not verified
+    this session, return a redirect response; otherwise None."""
+    current_user = get_current_user(request)
+    if not current_user:
+        return None
+    if current_user["email"] != ADMIN_EMAIL:
+        return None
+    if not current_user.get("totp_enabled", False):
+        return None
+    if request.session.get("totp_verified"):
+        return None
+    return RedirectResponse(
+        url="/auth/totp/verify", status_code=302,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Admin routes
 # ---------------------------------------------------------------------------
 
@@ -339,14 +577,29 @@ async def admin_users(
     import json
     from pathlib import Path
 
+    # TOTP guard for admin
+    totp_redirect = _require_totp_or_redirect(request)
+    if totp_redirect:
+        return totp_redirect
+
     current_user = get_current_user(request)
     if not current_user or current_user["email"] != ADMIN_EMAIL:
         return JSONResponse({"error": "Unauthorized"}, status_code=403)
 
     client_ip = get_client_ip(request)
-    admin_limiter = getattr(request.app.state, "admin_limiter", None)
+    admin_limiter = getattr(
+        request.app.state, "admin_limiter", None,
+    )
     if admin_limiter and not admin_limiter.is_allowed(client_ip):
-        return JSONResponse({"error": "Rate limit exceeded. Try again later."}, status_code=429)
+        resp_429 = JSONResponse(
+            {"error": "Rate limit exceeded. Try again later."},
+            status_code=429,
+        )
+        add_rate_limit_headers(resp_429, admin_limiter, client_ip)
+        resp_429.headers["Retry-After"] = str(
+            admin_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
 
     # Load licenses.json once before the loop (PO-01 optimization)
     licenses_data: dict[str, str] = {}
@@ -387,7 +640,7 @@ async def admin_users(
     items = all_items[start : start + limit]
     pages = math.ceil(total / limit) if total > 0 else 1
 
-    return JSONResponse(
+    resp = JSONResponse(
         {
             "items": items,
             "total": total,
@@ -396,6 +649,9 @@ async def admin_users(
             "pages": pages,
         }
     )
+    if admin_limiter:
+        add_rate_limit_headers(resp, admin_limiter, client_ip)
+    return resp
 
 
 @admin_router.get("/admin/licenses")
@@ -408,14 +664,29 @@ async def admin_licenses(
     import json
     from pathlib import Path
 
+    # TOTP guard for admin
+    totp_redirect = _require_totp_or_redirect(request)
+    if totp_redirect:
+        return totp_redirect
+
     current_user = get_current_user(request)
     if not current_user or current_user["email"] != ADMIN_EMAIL:
         return JSONResponse({"error": "Unauthorized"}, status_code=403)
 
     client_ip = get_client_ip(request)
-    admin_limiter = getattr(request.app.state, "admin_limiter", None)
+    admin_limiter = getattr(
+        request.app.state, "admin_limiter", None,
+    )
     if admin_limiter and not admin_limiter.is_allowed(client_ip):
-        return JSONResponse({"error": "Rate limit exceeded. Try again later."}, status_code=429)
+        resp_429 = JSONResponse(
+            {"error": "Rate limit exceeded. Try again later."},
+            status_code=429,
+        )
+        add_rate_limit_headers(resp_429, admin_limiter, client_ip)
+        resp_429.headers["Retry-After"] = str(
+            admin_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
 
     licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
     if not licenses_path.exists():
@@ -448,7 +719,7 @@ async def admin_licenses(
     items = all_items[start : start + limit]
     pages = math.ceil(total / limit) if total > 0 else 1
 
-    return JSONResponse(
+    resp = JSONResponse(
         {
             "items": items,
             "total": total,
@@ -457,6 +728,9 @@ async def admin_licenses(
             "pages": pages,
         }
     )
+    if admin_limiter:
+        add_rate_limit_headers(resp, admin_limiter, client_ip)
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -466,5 +740,5 @@ async def admin_licenses(
 __all__ = [
     "auth_router", "admin_router", "get_current_user",
     "get_license_key_for_request", "generate_csrf_token",
-    "validate_csrf_token",
+    "validate_csrf_token", "_require_totp_or_redirect",
 ]

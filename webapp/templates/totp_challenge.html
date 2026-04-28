@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Two-Factor Authentication - Counterscarp Engine{% endblock %}
+
+{% block content %}
+<style>
+    .auth-container {
+        max-width: 450px;
+        margin: 3rem auto;
+        padding: 0 1rem;
+    }
+    .auth-card {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 16px;
+        padding: 2rem;
+        text-align: center;
+    }
+    .auth-card h1 {
+        font-size: 1.5rem;
+        color: #fff;
+        margin-bottom: 0.4rem;
+    }
+    .auth-subtitle {
+        color: #a0a0b0;
+        font-size: 0.95rem;
+        margin-bottom: 1.75rem;
+    }
+    .auth-error {
+        background: rgba(220, 53, 69, 0.1);
+        border: 1px solid rgba(220, 53, 69, 0.3);
+        color: #dc3545;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        margin-bottom: 1.25rem;
+        text-align: left;
+    }
+    .totp-icon {
+        font-size: 3rem;
+        margin-bottom: 0.75rem;
+    }
+    .auth-field {
+        margin-bottom: 1.25rem;
+        text-align: left;
+    }
+    .auth-field label {
+        display: block;
+        color: #a0a0a0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.4rem;
+    }
+    .auth-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        background: #0f1629;
+        border: 1px solid #2a2a4e;
+        border-radius: 8px;
+        color: #e0e0e0;
+        font-size: 1.5rem;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 8px;
+        text-align: center;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+    }
+    .auth-input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    .btn-auth-submit {
+        width: 100%;
+        padding: 0.8rem 1.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+        margin-top: 0.25rem;
+    }
+    .btn-auth-submit:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+    .auth-footer {
+        margin-top: 1.5rem;
+        color: #888;
+        font-size: 0.85rem;
+    }
+    .auth-footer a {
+        color: #667eea;
+        text-decoration: none;
+    }
+    .auth-footer a:hover {
+        text-decoration: underline;
+    }
+    @media (max-width: 480px) {
+        .auth-container { margin: 1.5rem auto; }
+        .auth-card { padding: 1.5rem; }
+    }
+</style>
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="totp-icon">&#128274;</div>
+        <h1>Two-Factor Authentication</h1>
+        <p class="auth-subtitle">Enter the 6-digit code from your authenticator app</p>
+
+        {% if error %}
+        <div class="auth-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/auth/totp/verify">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <div class="auth-field">
+                <label for="code">Verification Code</label>
+                <input type="text"
+                       id="code"
+                       name="code"
+                       class="auth-input"
+                       placeholder="000000"
+                       maxlength="6"
+                       pattern="[0-9]{6}"
+                       inputmode="numeric"
+                       autocomplete="one-time-code"
+                       required
+                       autofocus>
+            </div>
+            <button type="submit" class="btn-auth-submit">Verify</button>
+        </form>
+
+        <p class="auth-footer">
+            <a href="/auth/login">Back to login</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

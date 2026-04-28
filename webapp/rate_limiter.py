@@ -48,6 +48,23 @@ class RateLimiter:
             self._requests[key].append(now)
             return True
 
+    def remaining(self, key: str) -> int:
+        """Return how many requests are left in the current window."""
+        now = time.time()
+        with self._lock:
+            current = [t for t in self._requests.get(key, []) if now - t < self.window]
+            return max(0, self.max_requests - len(current))
+
+    def get_reset_time(self, key: str) -> int:
+        """Return seconds until the current rate-limit window resets."""
+        now = time.time()
+        with self._lock:
+            timestamps = [t for t in self._requests.get(key, []) if now - t < self.window]
+            if not timestamps:
+                return self.window
+            oldest = min(timestamps)
+            return max(0, int(self.window - (now - oldest)))
+
 
 class RedisRateLimiter:
     """Redis-backed sliding window rate limiter with in-memory fallback.
@@ -103,7 +120,8 @@ class RedisRateLimiter:
         """Return remaining requests in current window."""
         if self._redis is None:
             # approximate from fallback
-            return max(0, self.max_requests - len(self._fallback._requests.get(key, [])))
+            fb_reqs = self._fallback._requests.get(key, [])
+            return max(0, self.max_requests - len(fb_reqs))
 
         redis_key = f"{self._prefix}:{key}"
         now = time.time()
@@ -118,6 +136,33 @@ class RedisRateLimiter:
             return int(max(0, self.max_requests - count))
         except Exception:
             return self.max_requests  # assume allowed on error
+
+    def get_reset_time(self, key: str) -> int:
+        """Return seconds until the current rate-limit window resets."""
+        if self._redis is None:
+            return self._fallback.get_reset_time(key)
+
+        redis_key = f"{self._prefix}:{key}"
+        try:
+            ttl = self._redis.ttl(redis_key)
+            if ttl and ttl > 0:
+                return int(ttl)
+            return self.window
+        except Exception:
+            return self.window
+
+
+def add_rate_limit_headers(
+    response, limiter, key: str,
+) -> None:
+    """Inject standard ``X-RateLimit-*`` headers into *response*."""
+    response.headers["X-RateLimit-Limit"] = str(limiter.max_requests)
+    response.headers["X-RateLimit-Remaining"] = str(
+        limiter.remaining(key)
+    )
+    response.headers["X-RateLimit-Reset"] = str(
+        limiter.get_reset_time(key)
+    )
 
 
 def get_client_ip(request) -> str:

@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}My Audits — Counterscarp{% endblock %}
+
+{% block content %}
+<style>
+    .dashboard-container {
+        max-width: 1000px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .dashboard-container h1 {
+        font-size: 1.75rem;
+        color: #fff;
+        margin-bottom: 0.25rem;
+    }
+    .dashboard-subtitle {
+        color: #a0a0b0;
+        margin-bottom: 2rem;
+        font-size: 1rem;
+    }
+    .audit-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .audit-table th {
+        text-align: left;
+        padding: 0.85rem 1rem;
+        color: #a0a0b0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid #2a2a4e;
+        background: #111a33;
+    }
+    .audit-table td {
+        padding: 0.85rem 1rem;
+        color: #d0d0e0;
+        font-size: 0.92rem;
+        border-bottom: 1px solid #1e2a4a;
+    }
+    .audit-table tr:last-child td {
+        border-bottom: none;
+    }
+    .audit-table tr:hover td {
+        background: #1a2847;
+    }
+    .project-link {
+        color: #7eb6ff;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .project-link:hover {
+        text-decoration: underline;
+    }
+    .sev-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-right: 0.25rem;
+    }
+    .sev-critical { background: #5c1a1a; color: #ff6b6b; }
+    .sev-high     { background: #5c3a1a; color: #ffaa5b; }
+    .sev-medium   { background: #5c4e1a; color: #ffe066; }
+    .sev-low      { background: #1a3c2a; color: #69db7c; }
+    .risk-score {
+        font-weight: 600;
+    }
+    .risk-high   { color: #ff6b6b; }
+    .risk-medium { color: #ffe066; }
+    .risk-low    { color: #69db7c; }
+    .action-btn {
+        display: inline-block;
+        padding: 0.3rem 0.7rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        text-decoration: none;
+        margin-right: 0.3rem;
+    }
+    .btn-view {
+        background: #1a3a6e;
+        color: #7eb6ff;
+    }
+    .btn-view:hover { background: #234e8f; }
+    .btn-download {
+        background: #1a3c2a;
+        color: #69db7c;
+    }
+    .btn-download:hover { background: #255a3a; }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 12px;
+    }
+    .empty-state p {
+        color: #a0a0b0;
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+    }
+    .empty-state a {
+        display: inline-block;
+        padding: 0.65rem 1.5rem;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .empty-state a:hover { opacity: 0.9; }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        color: #a0a0b0;
+        font-size: 0.95rem;
+    }
+    .pagination a {
+        padding: 0.4rem 1rem;
+        border-radius: 6px;
+        background: #1a3a6e;
+        color: #7eb6ff;
+        text-decoration: none;
+        font-size: 0.9rem;
+    }
+    .pagination a:hover { background: #234e8f; }
+    .pagination .disabled {
+        opacity: 0.35;
+        pointer-events: none;
+    }
+</style>
+
+<div class="dashboard-container">
+    <h1>My Audits</h1>
+    <p class="dashboard-subtitle">{{ total }} audit{{ "s" if total != 1 else "" }} completed</p>
+
+    {% if audits %}
+    <table class="audit-table">
+        <thead>
+            <tr>
+                <th>Project</th>
+                <th>Date</th>
+                <th>Findings</th>
+                <th>Risk Score</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in audits %}
+            <tr>
+                <td>
+                    <a href="/results/{{ a.audit_id }}" class="project-link">{{ a.project_name }}</a>
+                </td>
+                <td>{{ a.timestamp_display }}</td>
+                <td>
+                    {% if a.severity_counts.CRITICAL %}
+                    <span class="sev-badge sev-critical">C {{ a.severity_counts.CRITICAL }}</span>
+                    {% endif %}
+                    {% if a.severity_counts.HIGH %}
+                    <span class="sev-badge sev-high">H {{ a.severity_counts.HIGH }}</span>
+                    {% endif %}
+                    {% if a.severity_counts.MEDIUM %}
+                    <span class="sev-badge sev-medium">M {{ a.severity_counts.MEDIUM }}</span>
+                    {% endif %}
+                    {% if a.severity_counts.LOW %}
+                    <span class="sev-badge sev-low">L {{ a.severity_counts.LOW }}</span>
+                    {% endif %}
+                    {% if not a.severity_counts.CRITICAL and not a.severity_counts.HIGH and not a.severity_counts.MEDIUM and not a.severity_counts.LOW %}
+                    <span style="color:#a0a0b0;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="risk-score {% if a.risk_score >= 60 %}risk-high{% elif a.risk_score >= 30 %}risk-medium{% else %}risk-low{% endif %}">
+                        {{ a.risk_score }}
+                    </span>
+                </td>
+                <td>
+                    <a href="/results/{{ a.audit_id }}" class="action-btn btn-view">View</a>
+                    {% if a.has_report %}
+                    <a href="/results/{{ a.audit_id }}/download/pdf" class="action-btn btn-download">Download</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        <a href="/dashboard?page={{ page - 1 }}" class="{% if page <= 1 %}disabled{% endif %}">← Previous</a>
+        <span>Page {{ page }} of {{ total_pages }}</span>
+        <a href="/dashboard?page={{ page + 1 }}" class="{% if page >= total_pages %}disabled{% endif %}">Next →</a>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <p>No audits yet. Upload a contract to get started.</p>
+        <a href="/">Upload a Contract</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

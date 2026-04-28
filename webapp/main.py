@@ -50,18 +50,22 @@ from license_manager import (
     BRANDED_REPORTS,
     FEATURE_TIERS,
     FEATURE_NAMES,
+    GRACE_PERIOD_DAYS,
     LICENSE_PREFIXES,
     TIER_HIERARCHY,
 )
 
 from webapp.license_api import license_router
-from webapp.rate_limiter import RateLimiter, RedisRateLimiter, get_client_ip
+from webapp.license_api import append_audit_log
+from webapp.rate_limiter import RateLimiter, RedisRateLimiter, get_client_ip, add_rate_limit_headers
 from webapp.stripe_integration import (
     create_checkout_session,
     find_license_by_subscription,
     handle_checkout_completed,
     get_session_license_key,
     update_license_in_db,
+    is_event_processed,
+    mark_event_processed,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET,
     PRODUCTS,
@@ -462,6 +466,20 @@ async def startup_event():
     app.state.license_limiter = _license_limiter
     app.state.admin_limiter = _admin_limiter
 
+    # Initialize arq Redis pool for async job queue (graceful fallback)
+    app.state.arq_pool = None
+    if _redis_url:
+        try:
+            from arq import create_pool
+            from arq.connections import RedisSettings
+            app.state.arq_pool = await create_pool(
+                RedisSettings.from_dsn(_redis_url)
+            )
+            logger.info("arq Redis pool initialized for async audit processing")
+        except Exception as exc:
+            logger.warning("arq Redis pool unavailable, falling back to sync: %s", exc)
+            app.state.arq_pool = None
+
 
 @app.on_event("startup")
 async def startup_cleanup():
@@ -510,6 +528,7 @@ async def index(request: Request):
             "current_user": get_current_user(request),
             "license_tier": license_tier,
             "csrf_token": generate_csrf_token(request),
+            **_get_grace_period_context(request),
         },
     )
 
@@ -538,7 +557,15 @@ async def audit(
     # Enforce per-IP audit rate limit
     client_ip = get_client_ip(request)
     if not _audit_limiter.is_allowed(client_ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+        resp_429 = JSONResponse(
+            {"detail": "Rate limit exceeded. Try again later."},
+            status_code=429,
+        )
+        add_rate_limit_headers(resp_429, _audit_limiter, client_ip)
+        resp_429.headers["Retry-After"] = str(
+            _audit_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
 
     # Validate files
     if not files:
@@ -595,6 +622,41 @@ async def audit(
             fw.write(content)
         uploaded_paths.append(str(file_path))
 
+    # --- Async (arq) vs sync scan dispatch ---
+    arq_pool = getattr(request.app.state, "arq_pool", None)
+    current_user = get_current_user(request)
+    user_id = current_user["id"] if current_user else ""
+    license_key = get_license_key_for_request(request, current_user) or ""
+
+    if arq_pool is not None:
+        # Write initial pending status
+        status_payload = {
+            "status": "pending",
+            "progress": "Queued...",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        status_path = results_dir / "scan_status.json"
+        with open(status_path, "w", encoding="utf-8") as sf:
+            json.dump(status_payload, sf, indent=2)
+
+        # Pre-seed scan_meta so the worker can read project_name
+        pre_meta = {"project_name": project_name, "owner_user_id": user_id or None}
+        pre_meta_path = results_dir / "scan_meta.json"
+        with open(pre_meta_path, "w", encoding="utf-8") as mf:
+            json.dump(pre_meta, mf, indent=2)
+
+        await arq_pool.enqueue_job(
+            "run_audit", audit_id, uploaded_paths, license_key, user_id,
+        )
+
+        redirect = RedirectResponse(
+            url=f"/results/{audit_id}/pending", status_code=303,
+        )
+        add_rate_limit_headers(redirect, _audit_limiter, client_ip)
+        return redirect
+
+    # --- Synchronous fallback (no Redis) ---
+
     # Run heuristic scanner
     findings: List[Finding] = []
     for fp_str in uploaded_paths:
@@ -609,8 +671,8 @@ async def audit(
     slither_status = "skipped"
     for fp_str in uploaded_paths:
         if fp_str.endswith(".sol"):
-            sf, status = await async_run_slither_analysis(fp_str)
-            slither_findings.extend(sf)
+            slither_result, status = await async_run_slither_analysis(fp_str)
+            slither_findings.extend(slither_result)
             if status != "completed" and slither_status == "skipped":
                 slither_status = status
             elif status == "completed":
@@ -793,7 +855,39 @@ async def audit(
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(scan_meta, f, indent=2)
 
-    return RedirectResponse(url=f"/results/{audit_id}", status_code=303)
+    redirect = RedirectResponse(
+        url=f"/results/{audit_id}", status_code=303,
+    )
+    add_rate_limit_headers(redirect, _audit_limiter, client_ip)
+    return redirect
+
+
+@app.get("/results/{audit_id}/pending", response_class=HTMLResponse)
+async def results_pending(request: Request, audit_id: str = Depends(validate_audit_id)):
+    """Show the scan-in-progress page for an async audit."""
+    results_dir = RESULTS_DIR / audit_id
+    if not results_dir.exists():
+        raise HTTPException(status_code=404, detail="Audit not found")
+    return templates.TemplateResponse(
+        request, "pending.html",
+        context={
+            "current_user": get_current_user(request),
+            "audit_id": audit_id,
+            **_get_grace_period_context(request),
+        },
+    )
+
+
+@app.get("/api/audit/{audit_id}/status")
+async def audit_status_api(audit_id: str = Depends(validate_audit_id)):
+    """Return the current scan status JSON for an async audit."""
+    results_dir = RESULTS_DIR / audit_id
+    status_path = results_dir / "scan_status.json"
+    if not status_path.exists():
+        raise HTTPException(status_code=404, detail="Audit not found")
+    with open(status_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return JSONResponse(data)
 
 
 @app.get("/results/{audit_id}", response_class=HTMLResponse)
@@ -889,6 +983,7 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
             "scan_meta": scan_meta,
             "ai_summary": ai_summary,
             "license_tier": license_tier,
+            **_get_grace_period_context(request),
         },
     )
 
@@ -903,18 +998,131 @@ async def pricing_page(request: Request):
             "stripe_key": STRIPE_PUBLISHABLE_KEY,
             "products": PRODUCTS,
             "csrf_token": generate_csrf_token(request),
+            **_get_grace_period_context(request),
         },
     )
 
 
 @app.get("/privacy")
 async def privacy_page(request: Request):
-    return templates.TemplateResponse(request, "privacy.html", context={"current_user": get_current_user(request)})
+    return templates.TemplateResponse(request, "privacy.html", context={"current_user": get_current_user(request), **_get_grace_period_context(request)})
 
 
 @app.get("/terms")
 async def terms_page(request: Request):
-    return templates.TemplateResponse(request, "terms.html", context={"current_user": get_current_user(request)})
+    return templates.TemplateResponse(request, "terms.html", context={"current_user": get_current_user(request), **_get_grace_period_context(request)})
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    """Per-user audit history dashboard with pagination."""
+    current_user = get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=302)
+
+    user_id = current_user.get("id")
+    audits: List[Dict] = []
+
+    severity_weights = {
+        "CRITICAL": 10.0, "HIGH": 5.0,
+        "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
+    }
+
+    if RESULTS_DIR.exists():
+        for entry in RESULTS_DIR.iterdir():
+            if not entry.is_dir():
+                continue
+            meta_path = entry / "scan_meta.json"
+            if not meta_path.exists():
+                continue
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+
+            if meta.get("owner_user_id") != user_id:
+                continue
+
+            audit_id = entry.name
+            project_name = meta.get("project_name", "Unknown")
+            timestamp_raw = meta.get("timestamp", "")
+            try:
+                ts = datetime.fromisoformat(timestamp_raw)
+            except (ValueError, TypeError):
+                ts = None
+
+            # Severity counts from findings.json
+            sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+            findings_path = entry / "findings.json"
+            findings_data: list = []
+            if findings_path.exists():
+                try:
+                    with open(findings_path, "r", encoding="utf-8") as f:
+                        findings_data = json.load(f)
+                    if isinstance(findings_data, list):
+                        for fd in findings_data:
+                            sev = fd.get("severity", "INFO")
+                            if sev in sev_counts:
+                                sev_counts[sev] += 1
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            # Risk score
+            if findings_data:
+                total_w = sum(
+                    severity_weights.get(fd.get("severity", "INFO"), 0)
+                    for fd in findings_data
+                )
+                max_w = len(findings_data) * severity_weights["CRITICAL"]
+                risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
+            else:
+                risk_score = 0.0
+
+            has_report = (
+                (entry / "report.pdf").exists()
+                or (entry / "report.html").exists()
+                or (entry / "report.md").exists()
+            )
+
+            audits.append({
+                "audit_id": audit_id,
+                "project_name": project_name,
+                "timestamp": ts,
+                "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
+                "severity_counts": sev_counts,
+                "risk_score": risk_score,
+                "has_report": has_report,
+            })
+
+    # Sort by timestamp descending (None last)
+    audits.sort(key=lambda a: a["timestamp"] or datetime.min, reverse=True)
+
+    # Pagination
+    page_str = request.query_params.get("page", "1")
+    try:
+        page = max(1, int(page_str))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 20
+    total = len(audits)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    page_audits = audits[start:start + per_page]
+
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        context={
+            "current_user": current_user,
+            "audits": page_audits,
+            "page": page,
+            "total_pages": total_pages,
+            "total": total,
+            **_get_grace_period_context(request),
+        },
+    )
 
 @app.post("/checkout/create-session")
 async def create_checkout(request: Request):
@@ -981,6 +1189,7 @@ async def checkout_success(request: Request):
             ),
             "auto_linked": auto_linked,
             "prompt_login": prompt_login,
+            **_get_grace_period_context(request),
         },
     )
 
@@ -1000,9 +1209,17 @@ async def stripe_webhook(request: Request):
     ip = request.client.host if request.client else "unknown"
 
     if not _stripe_webhook_limiter.is_allowed(ip):
-        return JSONResponse(
-            {"error": "Rate limit exceeded. Try again later."}, status_code=429
+        resp_429 = JSONResponse(
+            {"error": "Rate limit exceeded. Try again later."},
+            status_code=429,
         )
+        add_rate_limit_headers(
+            resp_429, _stripe_webhook_limiter, ip,
+        )
+        resp_429.headers["Retry-After"] = str(
+            _stripe_webhook_limiter.get_reset_time(ip)
+        )
+        return resp_429
 
     if not STRIPE_WEBHOOK_SECRET:
         logger.error("Stripe webhook secret not configured — rejecting request")
@@ -1022,6 +1239,10 @@ async def stripe_webhook(request: Request):
         security_logger.warning("Stripe webhook signature invalid: ip=%s", ip)
         logger.warning("Invalid Stripe webhook signature: %s", e)
         return JSONResponse({"error": "Invalid signature"}, status_code=400)
+
+    # Idempotency check — skip duplicate events
+    if is_event_processed(event["id"]):
+        return JSONResponse({"status": "already_processed"})
 
     event_type = event.get("type")
 
@@ -1051,6 +1272,11 @@ async def stripe_webhook(request: Request):
                 logger.info(
                     f"License renewed: {license_entry['key'][:12]}... extended to {new_expiry.strftime('%Y-%m-%d')}"
                 )
+                append_audit_log(
+                    "subscription_renewed",
+                    license_entry["key"], "stripe_webhook", ip,
+                    {"new_expiry": new_expiry.strftime("%Y-%m-%d")},
+                )
 
     elif event_type == "customer.subscription.deleted":
         # Subscription cancelled — revoke license
@@ -1067,6 +1293,11 @@ async def stripe_webhook(request: Request):
                 logger.info(
                     f"License revoked (subscription cancelled): {license_entry['key'][:12]}..."
                 )
+                append_audit_log(
+                    "subscription_cancelled",
+                    license_entry["key"], "stripe_webhook", ip,
+                    {"reason": "subscription_cancelled"},
+                )
 
     elif event_type == "invoice.payment_failed":
         # Payment failed — flag but don't revoke immediately (grace period)
@@ -1080,6 +1311,11 @@ async def stripe_webhook(request: Request):
                 })
                 logger.info(
                     f"Payment failed for license: {license_entry['key'][:12]}... (grace period active)"
+                )
+                append_audit_log(
+                    "payment_failed",
+                    license_entry["key"], "stripe_webhook", ip,
+                    {"subscription_id": subscription_id},
                 )
 
     elif event_type == "customer.subscription.created":
@@ -1150,7 +1386,12 @@ async def stripe_webhook(request: Request):
                 })
                 logger.info(f"Subscription resumed: {license_key[:12]}...")
 
-    return JSONResponse({"status": "ok"})
+    # Mark event as processed for idempotency
+    mark_event_processed(event["id"])
+
+    resp_ok = JSONResponse({"status": "ok"})
+    add_rate_limit_headers(resp_ok, _stripe_webhook_limiter, ip)
+    return resp_ok
 
 @app.get("/settings")
 async def settings_page(request: Request):
@@ -1183,6 +1424,7 @@ async def settings_page(request: Request):
             "license_masked_key": license_masked_key,
             "license_features": license_features,
             "csrf_token": generate_csrf_token(request),
+            **_get_grace_period_context(request),
         },
     )
 
@@ -1246,6 +1488,116 @@ async def test_api_key(request: Request):
         )
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)})
+
+
+def _get_grace_period_context(request: Request) -> dict:
+    """Compute grace period status for the current user's license.
+
+    Returns a dict with ``grace_period_active`` and ``grace_days_remaining``
+    suitable for injection into Jinja template contexts.
+    """
+    current_user = get_current_user(request)
+    if not current_user:
+        return {"grace_period_active": False, "grace_days_remaining": None}
+
+    license_key = get_license_key_for_request(request, current_user)
+    if not license_key:
+        return {"grace_period_active": False, "grace_days_remaining": None}
+
+    lic_entry = find_license_in_db(license_key)
+    if not lic_entry:
+        return {"grace_period_active": False, "grace_days_remaining": None}
+
+    if lic_entry.get("revoked"):
+        return {"grace_period_active": False, "grace_days_remaining": None}
+
+    now = datetime.now(timezone.utc)
+
+    # Check payment_failed_at first — grace window from failure date
+    payment_failed_at_str = lic_entry.get("payment_failed_at")
+    if payment_failed_at_str:
+        try:
+            failed_at = datetime.fromisoformat(
+                payment_failed_at_str.replace("Z", "+00:00")
+            )
+            grace_end = failed_at + timedelta(days=GRACE_PERIOD_DAYS)
+            if now < grace_end:
+                days_left = max((grace_end - now).days, 0)
+                return {"grace_period_active": True, "grace_days_remaining": days_left}
+        except (ValueError, TypeError):
+            pass
+
+    # Standard expiry grace period
+    expires_at_str = lic_entry.get("expires_at")
+    if expires_at_str:
+        try:
+            expires_at_date = date.fromisoformat(expires_at_str)
+            today = date.today()
+            if expires_at_date < today:
+                grace_end_date = expires_at_date + timedelta(days=GRACE_PERIOD_DAYS)
+                if today <= grace_end_date:
+                    days_left = (grace_end_date - today).days
+                    return {"grace_period_active": True, "grace_days_remaining": days_left}
+        except (ValueError, TypeError):
+            pass
+
+    return {"grace_period_active": False, "grace_days_remaining": None}
+
+
+@app.get("/api/license/status")
+async def api_license_status(request: Request):
+    """Return JSON license status including grace period info."""
+    current_user = get_current_user(request)
+    if not current_user:
+        return JSONResponse({
+            "valid": False,
+            "tier": "community",
+            "expires_at": None,
+            "grace_period": False,
+            "grace_days_remaining": None,
+        })
+
+    license_key = get_license_key_for_request(request, current_user)
+    if not license_key:
+        return JSONResponse({
+            "valid": False,
+            "tier": "community",
+            "expires_at": None,
+            "grace_period": False,
+            "grace_days_remaining": None,
+        })
+
+    lic_entry = find_license_in_db(license_key)
+    if not lic_entry or lic_entry.get("revoked"):
+        return JSONResponse({
+            "valid": False,
+            "tier": "community",
+            "expires_at": None,
+            "grace_period": False,
+            "grace_days_remaining": None,
+        })
+
+    gp_ctx = _get_grace_period_context(request)
+    tier = lic_entry.get("tier", "community")
+    expires_at = lic_entry.get("expires_at")
+
+    # License is valid if not expired, or if in grace period
+    is_expired = False
+    if expires_at:
+        try:
+            is_expired = date.fromisoformat(expires_at) < date.today()
+        except (ValueError, TypeError):
+            pass
+
+    valid = not is_expired or gp_ctx["grace_period_active"]
+
+    return JSONResponse({
+        "valid": valid,
+        "tier": tier,
+        "expires_at": expires_at,
+        "grace_period": gp_ctx["grace_period_active"],
+        "grace_days_remaining": gp_ctx["grace_days_remaining"],
+    })
 
 
 @app.get("/license/status")

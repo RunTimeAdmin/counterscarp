@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, StringConstraints
 
 from license_manager import ALL_PRO_FEATURES
-from webapp.rate_limiter import RateLimiter
+from webapp.rate_limiter import RateLimiter, add_rate_limit_headers
 
 logger = logging.getLogger(__name__)
 security_logger = logging.getLogger("counterscarp.security")
@@ -27,7 +28,29 @@ security_logger = logging.getLogger("counterscarp.security")
 # ---------------------------------------------------------------------------
 
 _LICENSE_DB_PATH = Path(__file__).parent.parent / "data" / "licenses.json"
-_file_lock = threading.Lock()
+_AUDIT_LOG_PATH = Path(__file__).parent.parent / "data" / "audit_log.jsonl"
+_file_lock = threading.RLock()
+
+
+# ---------------------------------------------------------------------------
+# Audit trail logging
+# ---------------------------------------------------------------------------
+
+
+def append_audit_log(event_type: str, key: str, actor: str, ip: str, changes: dict) -> None:
+    """Append a single JSON line to the audit log (thread-safe, append-only)."""
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event": event_type,
+        "key": key[:12] + "..." if key else "",
+        "actor": actor,
+        "ip": ip,
+        "changes": changes,
+    }
+    with _file_lock:
+        _AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +75,9 @@ def link_license_to_user(email: str, user_id: str) -> Optional[str]:
                 with open(tmp, "w", encoding="utf-8") as f:
                     json.dump(db, f, indent=2)
                 tmp.replace(_LICENSE_DB_PATH)
-                return str(lic["key"])
+                key = str(lic["key"])
+                append_audit_log("license_linked", key, user_id, "system", {"email": email})
+                return key
     return None
 
 
@@ -175,10 +200,17 @@ def validate_license(req: ValidateRequest, request: Request):
     """Validate a license key and manage machine activations."""
     client_ip = request.client.host if request.client else "unknown"
     if not _validate_limiter.is_allowed(client_ip):
-        raise HTTPException(
+        resp_429 = JSONResponse(
+            {"detail": "Rate limit exceeded. Try again later."},
             status_code=429,
-            detail="Rate limit exceeded. Try again later.",
         )
+        add_rate_limit_headers(
+            resp_429, _validate_limiter, client_ip,
+        )
+        resp_429.headers["Retry-After"] = str(
+            _validate_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
     try:
         with _file_lock:
             try:
@@ -280,6 +312,10 @@ def validate_license(req: ValidateRequest, request: Request):
                 activated.append(req.machine_id)
                 license_entry["activated_machines"] = activated
                 _save_db(db)
+                append_audit_log(
+                    "license_activated", req.license_key, "system",
+                    client_ip, {"machine_id": req.machine_id},
+                )
             else:
                 security_logger.warning(
                     "License validation failed: key=%s ip=%s reason=%s",
@@ -306,8 +342,12 @@ def validate_license(req: ValidateRequest, request: Request):
             )
 
     except Exception as exc:
-        logger.exception("Unexpected error in validate_license: %s", exc)
-        return ValidateResponse(valid=False, error="License validation failed")
+        logger.exception(
+            "Unexpected error in validate_license: %s", exc,
+        )
+        return ValidateResponse(
+            valid=False, error="License validation failed",
+        )
 
 
 @license_router.post("/deactivate", response_model=DeactivateResponse)
@@ -315,10 +355,17 @@ def deactivate_license(req: DeactivateRequest, request: Request):
     """Remove a machine activation from a license key."""
     client_ip = request.client.host if request.client else "unknown"
     if not _deactivate_limiter.is_allowed(client_ip):
-        raise HTTPException(
+        resp_429 = JSONResponse(
+            {"detail": "Rate limit exceeded. Try again later."},
             status_code=429,
-            detail="Rate limit exceeded. Try again later.",
         )
+        add_rate_limit_headers(
+            resp_429, _deactivate_limiter, client_ip,
+        )
+        resp_429.headers["Retry-After"] = str(
+            _deactivate_limiter.get_reset_time(client_ip)
+        )
+        return resp_429
     with _file_lock:
         db = _load_db()
 
@@ -343,6 +390,10 @@ def deactivate_license(req: DeactivateRequest, request: Request):
             security_logger.info(
                 "License deactivation: key=%s machine=%s ip=%s",
                 req.license_key[:10] + "...", req.machine_id, client_ip,
+            )
+            append_audit_log(
+                "license_deactivated", req.license_key, "system",
+                client_ip, {"machine_id": req.machine_id},
             )
 
         return DeactivateResponse(
