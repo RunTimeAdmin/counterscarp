@@ -780,7 +780,8 @@ class SolanaAnalyzer:
     def scan_dependencies(self) -> List[Dict[str, Any]]:
         """Run cargo-audit and return vulnerability list."""
         audit_results = run_cargo_audit(self.project_root)
-        return audit_results.get("vulnerabilities", [])
+        vulns: List[Dict[str, Any]] = audit_results.get("vulnerabilities", [])
+        return vulns
 
     # ------------------------------------------------------------------
     # Main entry point
