@@ -50,9 +50,14 @@ class SolanaFinding:
     code_snippet: str
     fix_suggestion: str
 
+    @property
+    def rule_id(self) -> str:
+        """Alias for category, used by orchestrator aggregation."""
+        return self.category
+
 
 # Anchor-specific vulnerability patterns
-# Expanded to 31 patterns for comprehensive Solana/Anchor security coverage
+# Expanded to 40 patterns for comprehensive Solana/Anchor security coverage
 ANCHOR_PATTERNS: List[Dict[str, Any]] = [
     # ========== ACCOUNT VALIDATION (8 patterns) ==========
     {
@@ -353,6 +358,133 @@ ANCHOR_PATTERNS: List[Dict[str, Any]] = [
         "description": "Multiple mutable borrows of same account",
         "fix": "Ensure accounts are distinct"
     },
+
+    # ========== AUTHORITY & GOVERNANCE (4 patterns) ==========
+    {
+        "id": "AUTHORITY_PUBKEY_MISMATCH",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'(?:authority|admin)\s*:\s*AccountInfo(?!.*constraint\s*=)'
+        ),
+        "description": (
+            "Authority/admin AccountInfo without constraint matching signer"
+        ),
+        "fix": (
+            "Add constraint to verify authority matches expected signer: "
+            "#[account(constraint = authority.key() == state.authority)]"
+        )
+    },
+    {
+        "id": "MISSING_MULTISIG_UPGRADE",
+        "severity": "HIGH",
+        "pattern": re.compile(
+            r'pub\s+fn\s+upgrade\s*\([^)]*\)(?!.*multisig)'
+        ),
+        "description": "Upgrade function without multi-sig requirement",
+        "fix": (
+            "Require multi-sig approval for upgrades: "
+            "add multisig signer account to the instruction context"
+        )
+    },
+    {
+        "id": "TWO_STEP_TRANSFER_NOT_USED",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'set_authority\s*\((?!.*nominate|.*accept|.*pending)'
+        ),
+        "description": (
+            "Single-step authority transfer without nominate/accept pattern"
+        ),
+        "fix": (
+            "Implement two-step authority transfer: "
+            "nominate_new_authority() + accept_authority()"
+        )
+    },
+    {
+        "id": "AUTHORITY_IS_DEFAULT",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'(?:authority|admin|owner)\s*=\s*system_program::ID'
+        ),
+        "description": "Authority set to system program ID (default/zero-like)",
+        "fix": "Use a dedicated keypair for authority, not the system program"
+    },
+
+    # ========== CPI SAFETY (2 patterns) ==========
+    {
+        "id": "CPI_ACCOUNT_LAMPORT_BALANCE_MISMATCH",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'(?:invoke|invoke_signed)\s*\('
+            r'(?!.*lamports.*before|.*pre_balance|.*lamport.*check)'
+        ),
+        "description": (
+            "CPI invoke without pre/post lamport balance verification"
+        ),
+        "fix": (
+            "Record lamports before CPI and verify expected delta after: "
+            "let pre = account.lamports(); invoke(...); "
+            "assert!(account.lamports() == pre - amount);"
+        )
+    },
+    {
+        "id": "CPI_RETURN_VALUE_NOT_CHECKED",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'invoke\s*\([^)]*\)\s*;'
+        ),
+        "description": "CPI invoke result not checked (missing ? or match)",
+        "fix": (
+            "Always check CPI result: invoke(...)? or match invoke(...) {}"
+        )
+    },
+
+    # ========== NUMERIC SAFETY (2 patterns) ==========
+    {
+        "id": "UNSAFE_NARROWING_CAST",
+        "severity": "HIGH",
+        "pattern": re.compile(
+            r'\bas\s+u(?:8|16|32|64)\b(?!.*try_from|.*try_into|.*checked)'
+        ),
+        "description": (
+            "Potentially unsafe narrowing cast (as u8/u16/u32/u64) "
+            "without bounds check"
+        ),
+        "fix": "Use TryFrom/TryInto or validate value fits before casting"
+    },
+    {
+        "id": "SIGN_CHANGE_WITHOUT_CHECK",
+        "severity": "MEDIUM",
+        "pattern": re.compile(
+            r'(?:i64|i128|i32|i16|i8)\b[^;]*\bas\s+u(?:64|128|32|16|8)\b'
+            r'(?!.*>=\s*0|.*is_negative|.*abs|.*unsigned_abs)'
+        ),
+        "description": (
+            "Signed-to-unsigned cast without non-negative check"
+        ),
+        "fix": (
+            "Verify value >= 0 before casting: "
+            "require!(val >= 0, MyError::Negative); let uval = val as u64;"
+        )
+    },
+
+    # ========== TOKEN PROGRAM VERIFICATION (1 pattern) ==========
+    {
+        "id": "UNVALIDATED_SPL_TOKEN_PROGRAM",
+        "severity": "CRITICAL",
+        "pattern": re.compile(
+            r'(?:invoke|invoke_signed)\s*\([^)]*token[^)]*\)'
+            r'(?!.*spl_token::ID|.*spl_token::id\(\)|.*token::ID)'
+        ),
+        "description": (
+            "Token program CPI without verifying program ID against "
+            "spl_token::ID"
+        ),
+        "fix": (
+            "Verify token program before CPI: "
+            "assert!(token_program.key == &spl_token::ID);"
+        )
+    },
 ]
 
 
@@ -495,6 +627,8 @@ def analyze_solana_program(
 ) -> Dict[str, Any]:
     """Full static analysis of Solana/Anchor program.
 
+    Backward-compatible entry point that delegates to SolanaAnalyzer.
+
     Args:
         project_root: Path to the Solana/Anchor project root.
         idl_path: Optional explicit path to IDL file/directory.
@@ -505,123 +639,219 @@ def analyze_solana_program(
         Dict with dependency vulnerabilities, pattern findings,
         account analysis, IDL findings, and severity summary.
     """
-    print("\n" + "="*60)
-    print(" SOLANA STATIC ANALYZER")
-    print("="*60)
-    print(f"\n[*] Analyzing Solana program: {project_root}")
+    try:
+        from config_loader import SolanaIDLConfig
+        config = SolanaIDLConfig(
+            idl_path=idl_path or "target/idl",
+            validate_constraints=validate_idl_constraints,
+            trace_cpi=trace_cpi,
+        )
+    except ImportError:
+        config = None
 
-    results: Dict[str, Any] = {
-        "dependency_vulns": [],
-        "pattern_findings": [],
-        "account_analysis": [],
-        "idl_findings": [],
-        "summary": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-    }
-    
-    # 1. Dependency vulnerabilities (cargo-audit)
-    print("\n[*] Checking dependencies for known vulnerabilities...")
-    audit_results = run_cargo_audit(project_root)
-    
-    if "vulnerabilities" in audit_results:
-        results["dependency_vulns"] = audit_results["vulnerabilities"]
-        vuln_count = len(audit_results['vulnerabilities'])
-        print(f"    Found {vuln_count} dependency vulnerabilities")
-    
-    # 2. Pattern-based scanning
-    print("\n[*] Scanning for Anchor/Solana vulnerability patterns...")
-    
-    # Find all .rs files
-    rust_files = []
-    for root, dirs, files in os.walk(project_root):
-        # Skip target directory
-        if 'target' in root.split(os.sep):
-            continue
-        
-        for file in files:
-            if file.endswith('.rs'):
-                rust_files.append(os.path.join(root, file))
-    
-    print(f"    Found {len(rust_files)} Rust files")
-    
-    # Scan each file
-    for rs_file in rust_files:
-        findings = scan_anchor_patterns(rs_file)
-        results["pattern_findings"].extend(findings)
-        
-        # Account analysis
-        accounts = detect_anchor_accounts(rs_file)
-        results["account_analysis"].extend(accounts)
-    
-    # 3. IDL validation
-    print("\n[*] Checking for Anchor IDL files...")
-    idl_findings = []
+    analyzer = SolanaAnalyzer(project_root, config=config, idl_path_override=idl_path)
+    return analyzer.analyze()
 
-    if IDL_VALIDATOR_AVAILABLE:
-        if idl_path:
-            # Use explicit IDL path
-            if os.path.isfile(idl_path):
-                print(f"    Validating IDL: {idl_path}")
-                idl_findings.extend(
-                    validate_idl(
-                        idl_path,
-                        program_source_dir=project_root,
-                        validate_constraints=validate_idl_constraints,
-                        trace_cpi=trace_cpi
-                    )
-                )
-            elif os.path.isdir(idl_path):
-                print(f"    Searching IDL directory: {idl_path}")
-                for root, dirs, files in os.walk(idl_path):
-                    for file in files:
-                        if file.endswith('.json'):
-                            idl_file = os.path.join(root, file)
-                            idl_findings.extend(
-                                validate_idl(
-                                    idl_file,
-                                    program_source_dir=project_root,
-                                    validate_constraints=(
-                                        validate_idl_constraints
-                                    ),
-                                    trace_cpi=trace_cpi
-                                )
-                            )
+
+class SolanaAnalyzer:
+    """Structured Solana/Anchor static analyzer.
+
+    Wraps pattern scanning, IDL validation, and dependency auditing
+    into a single cohesive class.
+
+    Args:
+        project_root: Path to the Solana/Anchor project root.
+        config: Optional SolanaIDLConfig for IDL settings.
+        idl_path_override: Explicit IDL path (file or dir) that takes
+            precedence over config.idl_path when provided.
+    """
+
+    def __init__(
+        self,
+        project_root: str,
+        config: Optional[Any] = None,
+        idl_path_override: Optional[str] = None,
+    ) -> None:
+        self.project_root = project_root
+        self._config = config
+        self._idl_path_override = idl_path_override
+
+        # Extract config values with safe defaults
+        if config is not None:
+            self._idl_search_path: str = getattr(config, "idl_path", "target/idl")
+            self._validate_constraints: bool = getattr(config, "validate_constraints", True)
+            self._trace_cpi: bool = getattr(config, "trace_cpi", True)
         else:
-            # Auto-discover IDL files
-            idl_files = find_idl_files(project_root)
-            if idl_files:
-                print(f"    Found {len(idl_files)} IDL file(s)")
-                for idl_file in idl_files:
-                    print(f"    Validating: {os.path.basename(idl_file)}")
-                    idl_findings.extend(
-                        validate_idl(
-                            idl_file,
-                            program_source_dir=project_root,
-                            validate_constraints=validate_idl_constraints,
-                            trace_cpi=trace_cpi
-                        )
-                    )
-            else:
-                print("    No IDL files found")
-    else:
-        print("    [!] IDL validator not available")
+            self._idl_search_path = "target/idl"
+            self._validate_constraints = True
+            self._trace_cpi = True
 
-    results["idl_findings"] = idl_findings
+    # ------------------------------------------------------------------
+    # Discovery helpers
+    # ------------------------------------------------------------------
 
-    # 4. Summarize by severity
-    for finding in results["pattern_findings"]:
-        results["summary"][finding.severity] += 1
+    def find_rust_files(self) -> List[str]:
+        """Find all .rs files under project_root, skipping target/."""
+        rust_files: List[str] = []
+        for root, _dirs, files in os.walk(self.project_root):
+            if "target" in root.split(os.sep):
+                continue
+            for fname in files:
+                if fname.endswith(".rs"):
+                    rust_files.append(os.path.join(root, fname))
+        return rust_files
 
-    for finding in idl_findings:
-        sev = finding.get("severity", "INFO")
-        results["summary"][sev] = results["summary"].get(sev, 0) + 1
+    def find_idl_files(self) -> List[str]:
+        """Find Anchor IDL JSON files.
 
-    print("\n[*] Analysis complete:")
-    print(f"    CRITICAL: {results['summary']['CRITICAL']}")
-    print(f"    HIGH:     {results['summary']['HIGH']}")
-    print(f"    MEDIUM:   {results['summary']['MEDIUM']}")
-    print(f"    LOW:      {results['summary']['LOW']}")
+        Uses the explicit override path first, then config idl_path,
+        then auto-discovery via ``idl_validator.find_idl_files``.
+        """
+        # 1. Explicit override
+        if self._idl_path_override:
+            return self._resolve_idl_path(self._idl_path_override)
 
-    return results
+        # 2. Config-based path (relative to project root)
+        config_path = os.path.join(self.project_root, self._idl_search_path)
+        if os.path.exists(config_path):
+            resolved = self._resolve_idl_path(config_path)
+            if resolved:
+                return resolved
+
+        # 3. Auto-discover via idl_validator
+        if IDL_VALIDATOR_AVAILABLE:
+            return find_idl_files(self.project_root)
+
+        return []
+
+    @staticmethod
+    def _resolve_idl_path(path: str) -> List[str]:
+        """Resolve an IDL path (file or directory) to a list of files."""
+        if os.path.isfile(path):
+            return [path]
+        if os.path.isdir(path):
+            result: List[str] = []
+            for root, _dirs, files in os.walk(path):
+                for fname in files:
+                    if fname.endswith(".json"):
+                        result.append(os.path.join(root, fname))
+            return result
+        return []
+
+    # ------------------------------------------------------------------
+    # Analysis passes
+    # ------------------------------------------------------------------
+
+    def scan_rust_patterns(self, file_path: str) -> List[SolanaFinding]:
+        """Scan a single Rust file for vulnerability patterns."""
+        return scan_anchor_patterns(file_path)
+
+    def validate_idl_files(self) -> List[Dict[str, Any]]:
+        """Run IDL validation on discovered IDL files.
+
+        Returns an empty list when the IDL validator is unavailable or
+        no IDL files are found.
+        """
+        if not IDL_VALIDATOR_AVAILABLE:
+            print("    [!] IDL validator not available")
+            return []
+
+        idl_files = self.find_idl_files()
+        if not idl_files:
+            print("    No IDL files found")
+            return []
+
+        print(f"    Found {len(idl_files)} IDL file(s)")
+        all_findings: List[Dict[str, Any]] = []
+        for idl_file in idl_files:
+            print(f"    Validating: {os.path.basename(idl_file)}")
+            try:
+                findings = validate_idl(
+                    idl_file,
+                    program_source_dir=self.project_root,
+                    validate_constraints=self._validate_constraints,
+                    trace_cpi=self._trace_cpi,
+                )
+                all_findings.extend(findings)
+            except Exception as exc:
+                print(f"    [!] IDL validation error for {idl_file}: {exc}")
+        return all_findings
+
+    def scan_dependencies(self) -> List[Dict[str, Any]]:
+        """Run cargo-audit and return vulnerability list."""
+        audit_results = run_cargo_audit(self.project_root)
+        return audit_results.get("vulnerabilities", [])
+
+    # ------------------------------------------------------------------
+    # Main entry point
+    # ------------------------------------------------------------------
+
+    def analyze(self) -> Dict[str, Any]:
+        """Run the full Solana analysis pipeline.
+
+        Returns:
+            Dict with ``pattern_findings``, ``idl_findings``,
+            ``dependency_vulns``, ``account_analysis``, and ``summary``.
+        """
+        print("\n" + "=" * 60)
+        print(" SOLANA STATIC ANALYZER")
+        print("=" * 60)
+        print(f"\n[*] Analyzing Solana program: {self.project_root}")
+
+        results: Dict[str, Any] = {
+            "dependency_vulns": [],
+            "pattern_findings": [],
+            "account_analysis": [],
+            "idl_findings": [],
+            "summary": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0},
+        }
+
+        # 1. Dependency vulnerabilities (cargo-audit)
+        print("\n[*] Checking dependencies for known vulnerabilities...")
+        dep_vulns = self.scan_dependencies()
+        results["dependency_vulns"] = dep_vulns
+        print(f"    Found {len(dep_vulns)} dependency vulnerabilities")
+
+        # 2. Pattern-based scanning
+        print("\n[*] Scanning for Anchor/Solana vulnerability patterns...")
+        rust_files = self.find_rust_files()
+        print(f"    Found {len(rust_files)} Rust files")
+
+        for rs_file in rust_files:
+            findings = self.scan_rust_patterns(rs_file)
+            results["pattern_findings"].extend(findings)
+
+            accounts = detect_anchor_accounts(rs_file)
+            results["account_analysis"].extend(accounts)
+
+        # 3. IDL validation
+        print("\n[*] Checking for Anchor IDL files...")
+        idl_findings = self.validate_idl_files()
+        results["idl_findings"] = idl_findings
+
+        # 4. Summarize by severity — aggregate all three sources
+        summary = results["summary"]
+
+        for finding in results["pattern_findings"]:
+            sev = finding.severity
+            summary[sev] = summary.get(sev, 0) + 1
+
+        for finding in idl_findings:
+            sev = finding.get("severity", "INFO")
+            summary[sev] = summary.get(sev, 0) + 1
+
+        for vuln in dep_vulns:
+            advisory = vuln.get("advisory", {})
+            sev = str(advisory.get("severity", "MEDIUM")).upper()
+            summary[sev] = summary.get(sev, 0) + 1
+
+        print("\n[*] Analysis complete:")
+        print(f"    CRITICAL: {summary.get('CRITICAL', 0)}")
+        print(f"    HIGH:     {summary.get('HIGH', 0)}")
+        print(f"    MEDIUM:   {summary.get('MEDIUM', 0)}")
+        print(f"    LOW:      {summary.get('LOW', 0)}")
+
+        return results
 
 
 def print_report(results: Dict[str, Any]) -> None:
