@@ -914,6 +914,17 @@
 
     <!-- Community Banner -->
     <div class="community-banner">
+        <!-- Webapp vs CLI Legend -->
+        <div style="background:rgba(13,110,253,0.07); border:1px solid rgba(13,110,253,0.2); border-radius:12px; padding:0.75rem 1.25rem; margin-bottom:1rem;">
+            <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; justify-content:center;">
+                <span style="font-size:0.82rem; color:var(--text-primary); font-weight:600;">Platform:</span>
+                <span style="display:inline-block;background:#0d6efd;color:#fff;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:600;">Webapp + CLI</span>
+                <span style="font-size:0.78rem; color:var(--text-muted);">= server-side &amp; local</span>
+                <span style="display:inline-block;background:#6c757d;color:#fff;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:600;">CLI Only</span>
+                <span style="font-size:0.78rem; color:var(--text-muted);">= local <code style="font-family:var(--font-mono);font-size:0.78rem;">counterscarp</code> CLI</span>
+            </div>
+            <p style="text-align:center; font-size:0.75rem; color:var(--text-muted); margin:0.4rem 0 0;">All plans include both Webapp and CLI access. Some analyzers are CLI-only.</p>
+        </div>
         <div class="community-card-horizontal">
             <div class="left">
                 <span class="pricing-tier">Community</span>
@@ -932,6 +943,7 @@
         <div class="payg-section-header">
             <h2>Pay-As-You-Go Scan Packs</h2>
             <p>No subscription required — buy scans when you need them</p>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.4rem;"><span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 6px;border-radius:10px;font-size:0.62rem;font-weight:600;">Webapp</span> PAYG scans run server-side (Heuristic + Slither).</p>
         </div>
         <div class="payg-grid">
             <!-- Starter Pack -->
@@ -1024,20 +1036,22 @@
             <ul class="pricing-features">
                 <li class="section-label">Core Analysis</li>
                 <li><span class="check">&#10003;</span> 16 analyzers (14 free + Solana, Anchor IDL)</li>
-                <li><span class="check">&#10003;</span> Aderyn integration</li>
-                <li><span class="check">&#10003;</span> Medusa integration</li>
-                <li><span class="check">&#10003;</span> Mythril integration</li>
-                <li><span class="check">&#10003;</span> Foundry Fuzz integration</li>
-                <li><span class="check">&#10003;</span> Slither integration</li>
+                <li><span class="check">&#10003;</span> Heuristic + Slither <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp + CLI</span></li>
+                <li><span class="check">&#10003;</span> Aderyn integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
+                <li><span class="check">&#10003;</span> Medusa integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
+                <li><span class="check">&#10003;</span> Mythril integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
+                <li><span class="check">&#10003;</span> Foundry Fuzz integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
+                <li><span class="check">&#10003;</span> Slither integration <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp + CLI</span></li>
                 <li><span class="check">&#10003;</span> CLI access</li>
-                <li><span class="check">&#10003;</span> Markdown + JSON reports</li>
+                <li><span class="check">&#10003;</span> Markdown + JSON reports <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp + CLI</span></li>
                 <li class="section-label">Web App</li>
-                <li><span class="check">&#10003;</span> Web app access (5 scans/mo)</li>
+                <li><span class="check">&#10003;</span> Web app access (5 scans/mo) <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp</span></li>
                 <li class="section-label">Reports</li>
-                <li><span class="check">&#10003;</span> Branded HTML reports</li>
+                <li><span class="check">&#10003;</span> Branded HTML reports <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp + CLI</span></li>
+                <li><span class="check">&#10003;</span> PDF reports <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp + CLI</span></li>
                 <li><span class="check">&#10003;</span> SARIF (GitHub Actions)</li>
                 <li class="section-label">Blockchain</li>
-                <li><span class="check">&#10003;</span> Solana Analyzer (35 rules)</li>
+                <li><span class="check">&#10003;</span> Solana Analyzer (35 rules) <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
                 <li class="section-label">Infrastructure</li>
                 <li><span class="check">&#10003;</span> 1 machine activation</li>
                 <li><span class="check">&#10003;</span> Email support</li>
@@ -1072,11 +1086,12 @@
                 <li class="section-label">Everything in Developer</li>
                 <li><span class="check">&#10003;</span> All Developer features</li>
                 <li class="section-label">AI & Advanced</li>
-                <li><span class="check">&#10003;</span> AI Audit Copilot (RAG)</li>
-                <li><span class="check">&#10003;</span> Attack Graph (D3.js)</li>
-                <li><span class="check">&#10003;</span> Exploit PoC Generator</li>
-                <li><span class="check">&#10003;</span> Time-Travel Git Scanner</li>
-                <li><span class="check">&#10003;</span> Protocol Fingerprinting</li>
+                <li><span class="check">&#10003;</span> AI Audit Copilot (RAG) <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp + CLI</span></li>
+                <li><span class="check">&#10003;</span> Attack Graph (D3.js) <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">Webapp + CLI</span></li>
+                <li><span class="check">&#10003;</span> Exploit PoC Generator <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
+                <li><span class="check">&#10003;</span> Time-Travel Git Scanner <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
+                <li><span class="check">&#10003;</span> Protocol Fingerprinting <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
+                <li><span class="check">&#10003;</span> LLM Enrichment <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 5px;border-radius:10px;font-size:0.58rem;font-weight:600;margin-left:0.3rem;">CLI Only</span></li>
                 <li class="section-label">Infrastructure</li>
                 <li><span class="check">&#10003;</span> Unlimited scans</li>
                 <li><span class="check">&#10003;</span> 3 machine activations</li>
@@ -1178,7 +1193,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Aderyn Integration</td>
+                        <td>Aderyn Integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="y">&#10003;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1186,7 +1201,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Medusa Integration</td>
+                        <td>Medusa Integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="y">&#10003;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1194,7 +1209,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Mythril Integration</td>
+                        <td>Mythril Integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="y">&#10003;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1202,7 +1217,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Foundry Fuzz Integration</td>
+                        <td>Foundry Fuzz Integration <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="y">&#10003;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1210,7 +1225,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Slither Integration</td>
+                        <td>Slither Integration <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">Webapp + CLI</span></td>
                         <td class="y">&#10003;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1237,7 +1252,7 @@
                         <td class="cat-row" colspan="6">Web & Reports</td>
                     </tr>
                     <tr>
-                        <td>Web App Upload</td>
+                        <td>Web App Upload <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">Webapp</span></td>
                         <td class="y">&#10003;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1253,7 +1268,7 @@
                         <td class="y">Unlimited</td>
                     </tr>
                     <tr>
-                        <td>Branded HTML Reports</td>
+                        <td>Branded HTML Reports <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">Webapp + CLI</span></td>
                         <td class="n">&#10007;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1272,7 +1287,7 @@
                         <td class="cat-row" colspan="6">Blockchain</td>
                     </tr>
                     <tr>
-                        <td>Solana Analyzer (35 rules)</td>
+                        <td>Solana Analyzer (35 rules) <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="n">&#10007;</td>
                         <td class="y">&#10003;</td>
                         <td class="y hl">&#10003;</td>
@@ -1283,7 +1298,7 @@
                         <td class="cat-row" colspan="6">AI & Advanced</td>
                     </tr>
                     <tr>
-                        <td>AI Audit Copilot (RAG)</td>
+                        <td>AI Audit Copilot (RAG) <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">Webapp + CLI</span></td>
                         <td class="n">&#10007;</td>
                         <td class="n">&#10007;</td>
                         <td class="y hl">&#10003;</td>
@@ -1291,7 +1306,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Attack Graph (D3.js)</td>
+                        <td>Attack Graph (D3.js) <span style="display:inline-block;background:#0d6efd;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">Webapp + CLI</span></td>
                         <td class="n">&#10007;</td>
                         <td class="n">&#10007;</td>
                         <td class="y hl">&#10003;</td>
@@ -1299,7 +1314,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Exploit PoC Generator</td>
+                        <td>Exploit PoC Generator <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="n">&#10007;</td>
                         <td class="n">&#10007;</td>
                         <td class="y hl">&#10003;</td>
@@ -1307,7 +1322,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Time-Travel Git Scanner</td>
+                        <td>Time-Travel Git Scanner <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="n">&#10007;</td>
                         <td class="n">&#10007;</td>
                         <td class="y hl">&#10003;</td>
@@ -1315,7 +1330,7 @@
                         <td class="y">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Protocol Fingerprinting</td>
+                        <td>Protocol Fingerprinting <span style="display:inline-block;background:#6c757d;color:#fff;padding:1px 4px;border-radius:8px;font-size:0.55rem;font-weight:600;">CLI Only</span></td>
                         <td class="n">&#10007;</td>
                         <td class="n">&#10007;</td>
                         <td class="y hl">&#10003;</td>

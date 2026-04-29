@@ -101,6 +101,10 @@ class TestWebappConfig:
         monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
         monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id-123")
+        monkeypatch.setenv("STRIPE_PAYG_STARTER_PRICE_ID", "price_test_starter")
+        monkeypatch.setenv("STRIPE_PAYG_STANDARD_PRICE_ID", "price_test_standard")
+        monkeypatch.setenv("STRIPE_PAYG_PRO_PACK_PRICE_ID", "price_test_pro")
+        monkeypatch.setenv("TOTP_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0xMjM0NTY3ODk=")
         with patch.object(cfg, "COUNTERSCARP_ENV", "production"), \
              patch.object(cfg, "SESSION_SECRET", "a-real-secret-that-is-long-enough"):
             # Should not raise

@@ -135,21 +135,28 @@ _PROCESSED_EVENTS_PATH = _DATA_DIR / "processed_webhook_events.json"
 # ---------------------------------------------------------------------------
 
 
+_session_map_lock = threading.Lock()
+
+
 def _load_session_map() -> Dict[str, Any]:
     """Load the session → license key mapping from disk."""
-    if not _SESSION_MAP_PATH.exists():
-        return {}
-    try:
-        result: Dict[str, Any] = json.loads(_SESSION_MAP_PATH.read_text(encoding="utf-8"))
-        return result
-    except (json.JSONDecodeError, OSError):
-        return {}
+    with _session_map_lock:
+        if not _SESSION_MAP_PATH.exists():
+            return {}
+        try:
+            result: Dict[str, Any] = json.loads(_SESSION_MAP_PATH.read_text(encoding="utf-8"))
+            return result
+        except (json.JSONDecodeError, OSError):
+            return {}
 
 
 def _save_session_map(data: Dict[str, Any]) -> None:
     """Persist the session → license key mapping to disk."""
-    _SESSION_MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _SESSION_MAP_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    with _session_map_lock:
+        _SESSION_MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _SESSION_MAP_PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        os.replace(str(tmp), str(_SESSION_MAP_PATH))
 
 
 # ---------------------------------------------------------------------------

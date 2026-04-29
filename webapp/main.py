@@ -12,7 +12,7 @@ import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,6 +52,7 @@ from license_manager import (
     FEATURE_NAMES,
     GRACE_PERIOD_DAYS,
     LICENSE_PREFIXES,
+    PAYG,
     TIER_HIERARCHY,
     TIER_PREFIXES,
 )
@@ -494,10 +495,21 @@ async def audit(
     developer_index = TIER_HIERARCHY.index(DEVELOPER)
 
     if tier_index < developer_index:
-        # User is below DEVELOPER tier — check for PAYG credits
         if current_user:
             from webapp.user_manager import user_manager as _um
             credits = _um.get_scan_credits(current_user["id"])
+            # HF-V4-01: PAYG users MUST have credits — no credits means blocked
+            if user_tier == PAYG:
+                if credits <= 0:
+                    return templates.TemplateResponse(
+                        request, "payg_no_credits.html",
+                        context={
+                            "current_user": current_user,
+                            "scan_credits": 0,
+                            **_get_grace_period_context(request),
+                        },
+                        status_code=402,
+                    )
             if credits > 0:
                 # Consume a credit
                 success = consume_credit(current_user["id"], audit_id, request.client.host if request.client else "")
@@ -511,8 +523,15 @@ async def audit(
                         },
                         status_code=402,
                     )
-            # If no credits and community tier, let existing behavior continue
-            # (community users get limited free scans per existing rate limiter)
+            # Community tier with no credits — allowed via rate limiter (existing behavior)
+        else:
+            # HF-V4-02: Unauthenticated users below DEVELOPER tier
+            # must have a valid license key to scan
+            if not license_key:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Authentication or a valid license key is required to run scans.",
+                )
     # DEVELOPER+ tiers bypass credit gate entirely (unlimited scans via subscription)
     # --- End Credit Gate ---
 
@@ -1584,7 +1603,7 @@ async def test_api_key(request: Request):
         return JSONResponse({"ok": False, "error": str(e)})
 
 
-def _get_grace_period_context(request: Request) -> dict:
+def _get_grace_period_context(request: Request) -> Dict[str, Any]:
     """Compute grace period status for the current user's license.
 
     Returns a dict with ``grace_period_active`` and ``grace_days_remaining``
@@ -1594,11 +1613,12 @@ def _get_grace_period_context(request: Request) -> dict:
     when called multiple times within the same HTTP request.
     """
     if hasattr(request.state, '_grace_period_ctx'):
-        return request.state._grace_period_ctx
+        cached: Dict[str, Any] = request.state._grace_period_ctx
+        return cached
 
     current_user = get_current_user(request)
     if not current_user:
-        result = {"grace_period_active": False, "grace_days_remaining": None}
+        result: Dict[str, Any] = {"grace_period_active": False, "grace_days_remaining": None}
         request.state._grace_period_ctx = result
         return result
 
