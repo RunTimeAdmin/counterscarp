@@ -71,6 +71,21 @@ nav a:hover {
     white-space: nowrap;
 }
 
+.nav-main-site {
+    color: #667eea !important;
+    font-weight: 600;
+    border: 1px solid #667eea;
+    padding: 0.2rem 0.7rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+}
+
+.nav-main-site:hover {
+    background: rgba(102, 126, 234, 0.1);
+    color: #fff !important;
+}
+
 .nav-signup {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #fff !important;

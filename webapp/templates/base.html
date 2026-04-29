@@ -9,18 +9,19 @@
 <body>
     <header>
         <div class="header-content">
-            <a href="/" class="logo-link">
+            <a href="https://counterscarp.io" class="logo-link" title="Back to counterscarp.io">
                 <img src="/static/logo.png" alt="Counterscarp Engine" class="logo">
                 <span class="brand-name">Counterscarp Engine</span>
             </a>
             <nav>
-                <a href="/">Home</a>
+                <a href="https://counterscarp.io" class="nav-main-site">Main Site</a>
+                <a href="/">Dashboard</a>
                 <a href="/pricing">Pricing</a>
                 {% if current_user %}
                 <a href="/dashboard">My Audits</a>
                 <a href="/settings">Settings</a>
                 {% endif %}
-                <a href="https://counterscarp.io/docs" target="_blank">Docs</a>
+                <a href="https://counterscarp.io/docs.html">Docs</a>
                 {% if current_user %}
                 <span class="nav-user">{{ current_user.email or current_user.name or current_user }}</span>
                 <a href="/auth/logout">Logout</a>
@@ -42,7 +43,7 @@
         {% block content %}{% endblock %}
     </main>
     <footer>
-        <p>Counterscarp Engine &bull; <a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a> | <a href="mailto:contact@counterscarp.io">contact@counterscarp.io</a></p>
+        <p>Counterscarp Engine &bull; <a href="https://counterscarp.io">counterscarp.io</a> &bull; <a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a> | <a href="mailto:contact@counterscarp.io">contact@counterscarp.io</a></p>
     </footer>
 </body>
 </html>
