@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v5.1.0 — 2026-04-29
+
+### Solana/Anchor Analyzer — Complete Implementation
+- **40 security patterns** across 7 categories: Account Validation, CPI Security, Arithmetic & Logic, State Management, Access Control, Token Security, General Validation
+- New `SolanaAnalyzer` class encapsulating discovery, scanning, IDL validation, and cargo-audit
+- Full IDL validator integration — `idl_validator.validate_idl()` wired into analysis pipeline
+- 9 new patterns added: `AUTHORITY_PUBKEY_MISMATCH`, `MISSING_MULTISIG_UPGRADE`, `UNSAFE_NARROWING_CAST`, `UNVALIDATED_SPL_TOKEN_PROGRAM`, `TWO_STEP_TRANSFER_NOT_USED`, `AUTHORITY_IS_DEFAULT`, `CPI_ACCOUNT_LAMPORT_BALANCE_MISMATCH`, `CPI_RETURN_VALUE_NOT_CHECKED`, `SIGN_CHANGE_WITHOUT_CHECK`
+- `rule_id` property on `SolanaFinding` for proper orchestrator integration
+- Enhanced severity aggregation across pattern, IDL, and dependency findings
+- CLI: `counterscarp --chain solana --solana-root /path/to/project`
+
+### Security Hardening (V4 Code Review Remediation)
+- **HF-V4-01**: Block PAYG users with zero credits from free scans
+- **HF-V4-02**: Require authentication or license key for unauthenticated scan requests
+- **MF-V4-01**: Production config validation — PAYG price IDs (warning) + TOTP encryption key (required)
+- **MF-V4-02**: Thread-safe session map with `_session_map_lock` and atomic file writes
+
+### Marketing & Documentation
+- CLI vs Webapp feature differentiation badges on all pricing/feature pages
+- Honest about page timeline reflecting actual development history
+- Removed false "zero false positives" claims across all pages
+- Standardized analyzer count messaging: "14 free, up to 21 with Pro"
+- Bidirectional navigation between app.counterscarp.io and counterscarp.io
+
 ## v5.0.7 — 2026-04-28
 
 ### Added
