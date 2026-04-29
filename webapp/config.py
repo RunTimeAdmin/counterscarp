@@ -58,15 +58,23 @@ def validate_production_config() -> None:
         missing.append("STRIPE_WEBHOOK_SECRET")
     if not os.environ.get("GOOGLE_CLIENT_ID"):
         missing.append("GOOGLE_CLIENT_ID")
-    # If Stripe is configured, PAYG price IDs must also be present
+    # If Stripe is configured, warn about missing PAYG price IDs (non-fatal)
     if os.environ.get("STRIPE_SECRET_KEY"):
+        payg_missing = []
         for payg_var in (
             "STRIPE_PAYG_STARTER_PRICE_ID",
             "STRIPE_PAYG_STANDARD_PRICE_ID",
             "STRIPE_PAYG_PRO_PACK_PRICE_ID",
         ):
             if not os.environ.get(payg_var):
-                missing.append(payg_var)
+                payg_missing.append(payg_var)
+        if payg_missing:
+            import logging
+            logging.getLogger("counterscarp.config").warning(
+                "PAYG price IDs not configured: %s. "
+                "PAYG checkout will fail until these are set.",
+                ", ".join(payg_missing),
+            )
     # TOTP encryption key is always required in production
     if not os.environ.get("TOTP_ENCRYPTION_KEY"):
         missing.append("TOTP_ENCRYPTION_KEY")
