@@ -61,7 +61,7 @@ counterscarp --gui  # Launch local web interface
 docker run --rm \
   -v /path/to/contracts:/scan \
   -v /path/to/reports:/output \
-  counterscarp-engine:5.0.3 \
+  counterscarp-engine:5.1.0 \
   --target /scan --output-dir /output --report
 ```
 
@@ -222,6 +222,6 @@ Threat intelligence: Code4rena · Immunefi · Solodit · Neodyme · OtterSec · 
 
 ---
 
-**Version:** 5.0.3 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
+**Version:** 5.1.0 | **Chains:** EVM + Solana | **Analyzers:** 21 | **Patterns:** 34 EVM + 35 Solana
 
 **⭐ If this helped you find bugs, please star the repo!**
