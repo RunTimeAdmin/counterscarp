@@ -777,6 +777,7 @@
 
         const formData = new FormData();
         formData.append('project_name', projectName);
+        formData.append('_csrf_token', document.querySelector('input[name="_csrf_token"]').value);
         selectedFiles.forEach(file => formData.append('files', file));
 
         fetch('/audit', {

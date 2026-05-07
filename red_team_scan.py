@@ -485,11 +485,12 @@ def run_slither(
     else:
         # No project root found — run from target's parent directory
         target_path = Path(target).resolve()
-        cwd = str(
-            target_path.parent if target_path.is_file()
-            else target_path
-        )
-        effective_target = target
+        if target_path.is_file():
+            cwd = str(target_path.parent)
+            effective_target = target_path.name  # Just the filename
+        else:
+            cwd = str(target_path)
+            effective_target = "."
         project_root = None
 
     # Build the Slither command
