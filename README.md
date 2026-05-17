@@ -1,6 +1,8 @@
-# Counterscarp&#8482; Security Engine
+# Scarpshield (Counterscarp&#8482; Engine)
 
 **Production-ready smart contract security platform — 21 integrated analyzers, configurable rules, and professional audit reports.**
+
+> Scarpshield is the unified product brand; `counterscarp-engine` is the package/CLI distribution.
 
 > One command. Zero false positives. Client-ready deliverables.
 
