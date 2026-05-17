@@ -106,8 +106,8 @@ RUN pip install --no-cache-dir slither-analyzer==0.11.5 \
 RUN pip install --no-cache-dir mythril==0.24.8 \
     && echo "[mythril] installed OK"
 
-# myth entrypoint relies on pkg_resources in some environments.
-RUN pip install --no-cache-dir setuptools
+# Mythril still imports pkg_resources; keep a setuptools version that ships it.
+RUN pip install --no-cache-dir "setuptools<81"
 
 # ── 9. Clean up caches to reduce final image size ────────────────────────────
 RUN pip cache purge \
