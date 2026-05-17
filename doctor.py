@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import sys
 import re
+import os
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
@@ -80,6 +82,26 @@ def _run_cmd(cmd: List[str]) -> Tuple[bool, str]:
         return False, f"ERROR: {exc}"
 
 
+def _find_binary_candidates(binary: str) -> List[str]:
+    """Find likely binary locations that might not be on PATH."""
+    candidates = [
+        Path("/usr/local/bin") / binary,
+        Path("/usr/bin") / binary,
+        Path("/root/.cargo/bin") / binary,
+        Path("/root/.cyfrin/bin") / binary,
+        Path.home() / ".cargo/bin" / binary,
+        Path.home() / ".local/bin" / binary,
+    ]
+    found: List[str] = []
+    for path in candidates:
+        try:
+            if os.path.lexists(path):
+                found.append(str(path))
+        except OSError:
+            continue
+    return found
+
+
 # ---------------------------------------------------------------------------
 # Individual tool checks
 # ---------------------------------------------------------------------------
@@ -96,6 +118,22 @@ def _check_tool(
     """Return a status dict for a single external tool."""
     found = shutil.which(binary) is not None
     if not found:
+        if binary == "aderyn":
+            candidate_paths = _find_binary_candidates(binary)
+            if candidate_paths:
+                return {
+                    "name": name,
+                    "binary": binary,
+                    "found": True,
+                    "status": "ERROR",
+                    "version": None,
+                    "min_version": min_version,
+                    "notes": (
+                        "Binary exists but is not on PATH for this user: "
+                        f"{candidate_paths[0]}"
+                    ),
+                    "is_core": is_core,
+                }
         return {
             "name": name,
             "binary": binary,
@@ -141,7 +179,13 @@ def _check_tool(
 
     if version is None:
         status = "ERROR"
-        notes_out = f"Version parse failed. Raw: {output[:80]}"
+        if name == "Mythril" and "Traceback" in output:
+            notes_out = (
+                "Mythril command failed before version output; "
+                "check runtime deps (e.g. setuptools) and reinstall mythril."
+            )
+        else:
+            notes_out = f"Version parse failed. Raw: {output[:80]}"
     elif min_version and not _version_ok(version, min_version):
         status = "OUTDATED"
         notes_out = notes

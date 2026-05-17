@@ -71,6 +71,11 @@ RUN curl -L https://foundry.paradigm.xyz | bash \
 RUN curl --proto '=https' --tlsv1.2 -LsSf \
         https://github.com/cyfrin/aderyn/releases/download/aderyn-v0.6.8/aderyn-installer.sh \
         | sh \
+    && if [ -x "/root/.cyfrin/bin/aderyn" ]; then cp /root/.cyfrin/bin/aderyn /usr/local/bin/aderyn; fi \
+    && if [ -x "/root/.cyfrin/bin/aderyn-update" ]; then cp /root/.cyfrin/bin/aderyn-update /usr/local/bin/aderyn-update; fi \
+    && if [ -x "/root/.cargo/bin/aderyn" ]; then cp /root/.cargo/bin/aderyn /usr/local/bin/aderyn; fi \
+    && if [ -x "/root/.cargo/bin/aderyn-update" ]; then cp /root/.cargo/bin/aderyn-update /usr/local/bin/aderyn-update; fi \
+    && chmod +x /usr/local/bin/aderyn /usr/local/bin/aderyn-update 2>/dev/null || true \
     && aderyn --version \
     && echo "[aderyn] installed OK"
 
@@ -100,6 +105,9 @@ RUN pip install --no-cache-dir slither-analyzer==0.11.5 \
 # mythril has heavy C-extension deps — build-essential (above) satisfies them
 RUN pip install --no-cache-dir mythril==0.24.8 \
     && echo "[mythril] installed OK"
+
+# myth entrypoint relies on pkg_resources in some environments.
+RUN pip install --no-cache-dir setuptools
 
 # ── 9. Clean up caches to reduce final image size ────────────────────────────
 RUN pip cache purge \

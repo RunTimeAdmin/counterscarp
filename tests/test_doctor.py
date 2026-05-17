@@ -158,6 +158,17 @@ class TestCheckTool:
         assert result["status"] == "OK"
         assert result["version"] == "0.8.33"
 
+    def test_aderyn_binary_detected_but_not_on_path(self):
+        with patch("shutil.which", return_value=None), \
+             patch("doctor._find_binary_candidates", return_value=["/root/.cyfrin/bin/aderyn"]):
+            result = doctor._check_tool(
+                "Aderyn", "aderyn", ["--version"], r"(\d+\.\d+\.\d+)",
+                "0.6.2", "See QUICKSTART.md", is_core=False
+            )
+        assert result["status"] == "ERROR"
+        assert result["found"] is True
+        assert "not on PATH" in result["notes"]
+
 
 # ---------------------------------------------------------------------------
 # _check_python_package
@@ -376,3 +387,19 @@ class TestRunDoctor:
             )
         assert result["status"] == "OK"
         assert result["version"] == "0.24.8"
+
+    def test_mythril_traceback_without_version_returns_actionable_error(self):
+        bad_output = (
+            "Traceback (most recent call last):\n"
+            "  File '/usr/local/bin/myth', line 5, in <module>\n"
+            "    from mythril.interfaces.cli import main\n"
+        )
+        with patch("shutil.which", return_value="/usr/bin/myth"), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=bad_output, stderr="", returncode=0)
+            result = doctor._check_tool(
+                "Mythril", "myth", ["version"], r"(\d+\.\d+\.\d+)",
+                "0.24.8", "pip install mythril", is_core=False,
+            )
+        assert result["status"] == "ERROR"
+        assert "check runtime deps" in result["notes"]
