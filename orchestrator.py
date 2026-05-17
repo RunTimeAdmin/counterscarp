@@ -273,6 +273,17 @@ def _aggregate_findings(
     return all_findings
 
 
+def _maybe_print_cli_alias_notice() -> None:
+    """Show migration hint when legacy command names are used."""
+    invoked_as = os.path.basename(sys.argv[0]).lower()
+    if invoked_as in {"counterscarp", "counterscarp-engine"}:
+        logger.info(
+            "Command alias note: '%s' remains supported; preferred commands are "
+            "'scarpshield' and 'scarpshield-engine'.",
+            invoked_as,
+        )
+
+
 def _compute_risk_metrics(
     all_findings: List[Dict[str, Any]],
     fuzz_results: List[Dict[str, Any]],
@@ -997,6 +1008,7 @@ def main() -> None:
     setup_logging(log_file=_log_file)
     logger.info("Counterscarp Engine scan initializing...")
     logger.info("Log file: %s", _log_file)
+    _maybe_print_cli_alias_notice()
 
     parser = argparse.ArgumentParser(description="Action-Oriented Security Engine")
     parser.add_argument("--target", required=False, default=None, help="Path to project root or .sol file")
@@ -1033,7 +1045,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        help="Path to counterscarp.toml config file",
+        help=(
+            "Path to config file "
+            "(supports scarpshield.toml or counterscarp.toml)"
+        ),
         default=None,
     )
     parser.add_argument(
@@ -1216,7 +1231,9 @@ def main() -> None:
         session_id = state_mgr.start_session(str(args.target), cli_args)
         logger.info(f"New scan session: {session_id}")
 
-    stderr_log = str(Path(".counterscarp") / f"scan_stderr_{state_mgr._session_id}.log")
+    stderr_log = str(
+        state_mgr.storage_dir / f"scan_stderr_{state_mgr._session_id}.log"
+    )
 
     # --- Per-scan output directory (prevents overwriting previous reports) ---
     # Resolved after session is established so we have the session ID.
@@ -1281,12 +1298,16 @@ def main() -> None:
             logger.error("Config file not found: %s", args.config)
             logger.info("Continuing with default settings...")
         except PermissionError as e:
-            logger.error("Permission denied reading config '%s': %s", args.config or "counterscarp.toml", e)
+            logger.error(
+                "Permission denied reading config '%s': %s",
+                args.config or "scarpshield.toml/counterscarp.toml",
+                e,
+            )
             logger.info("Continuing with default settings...")
         except Exception as e:
             logger.error(
                 "Error loading config '%s' (%s): %s",
-                args.config or "counterscarp.toml",
+                args.config or "scarpshield.toml/counterscarp.toml",
                 type(e).__name__,
                 e,
             )

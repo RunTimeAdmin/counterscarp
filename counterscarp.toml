@@ -434,7 +434,7 @@ ollama_url = "http://localhost:11434"
 openai_model = "gpt-4-turbo-preview"
 
 # Path to the RAG vector index
-rag_index_path = ".counterscarp/rag_index.json"
+rag_index_path = ".scarpshield/rag_index.json"
 
 # Number of similar findings to retrieve for enrichment
 top_k = 5
@@ -456,7 +456,7 @@ llm_enrichment = false
 enabled = true
 
 # Directories to scan for plugin modules (relative to project root)
-dirs = [".counterscarp/plugins"]
+dirs = [".scarpshield/plugins"]
 
 
 # ============================================================================
@@ -464,7 +464,8 @@ dirs = [".counterscarp/plugins"]
 # ============================================================================
 
 [license]
-# Pro license key. Can also be set via COUNTERSCARP_PRO_LICENSE env var.
+# Pro license key. Prefer SCARPSHIELD_PRO_LICENSE env var
+# (COUNTERSCARP_PRO_LICENSE is still supported).
 # Get your key at https://counterscarp.io/pricing
 key = ""
 

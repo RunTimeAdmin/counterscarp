@@ -132,16 +132,17 @@ ENV PATH="/home/counterscarp/.foundry/bin:/home/counterscarp/.cargo/bin:/home/co
 USER counterscarp
 
 # ── 13. Docker HEALTHCHECK ───────────────────────────────────────────────────
-# Runs `counterscarp --doctor` — the built-in environment diagnostic command.
+# Runs `scarpshield --doctor` — the built-in environment diagnostic command.
 # exit 0 = all critical tools found; non-zero = something is missing.
 HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
-    CMD counterscarp --doctor
+    CMD scarpshield --doctor
 
 # ── 14. Entrypoint ───────────────────────────────────────────────────────────
-# counterscarp is the console_scripts entry point defined in pyproject.toml:
-#   counterscarp = "orchestrator:main"
+# scarpshield is the preferred console_scripts entry point:
+#   scarpshield = "orchestrator:main"
+# Legacy aliases (counterscarp, counterscarp-engine) remain supported.
 # Pass `--help` as the default CMD so a bare `docker run` prints usage.
-ENTRYPOINT ["counterscarp"]
+ENTRYPOINT ["scarpshield"]
 CMD ["--help"]
 
 # ==============================================================================

@@ -47,7 +47,7 @@ Attack graphs are generated when `[visualization].enabled = true` in your config
 counterscarp --target ./contracts --report
 ```
 
-Enable visualization in `counterscarp.toml` first:
+Enable visualization in `scarpshield.toml` first (legacy `counterscarp.toml` also works):
 
 ```toml
 [visualization]
@@ -153,7 +153,7 @@ The D3.js force-directed visualization supports the following interactions:
 
 ## Configuration
 
-Configure attack graph generation in the `[visualization]` section of `counterscarp.toml`:
+Configure attack graph generation in the `[visualization]` section of `scarpshield.toml` (legacy `counterscarp.toml` also works):
 
 ```toml
 [visualization]
@@ -299,7 +299,7 @@ The `export_graph_json` function returns a dictionary with `nodes`, `links`, and
 
 **Graph is empty (no nodes):**
 - Verify the scan produced findings — no findings means no vulnerability nodes, and the graph is skipped
-- Check that `[visualization].enabled = true` in `counterscarp.toml`
+- Check that `[visualization].enabled = true` in `scarpshield.toml` (or legacy `counterscarp.toml`)
 - Ensure you have an active Pro license (attack graphs require Pro tier or above)
 
 **Graph shows only vulnerability nodes, no contracts or functions:**
@@ -316,7 +316,7 @@ The `export_graph_json` function returns a dictionary with `nodes`, `links`, and
 - Increase `max_path_depth` if paths are being cut short in deeply nested call chains
 
 **Web UI shows "Pro license required" on the Attack Graph button:**
-- Activate a Pro license via `COUNTERSCARP_PRO_LICENSE` environment variable or `[license].key` in `counterscarp.toml`
+- Activate a Pro license via `SCARPSHIELD_PRO_LICENSE` (legacy `COUNTERSCARP_PRO_LICENSE`) or `[license].key` in `scarpshield.toml`
 - See the [Getting Started Guide](GETTING_STARTED.md#pro-license-activation) for license setup instructions
 
 ---

@@ -41,18 +41,22 @@ The key prefix determines which features unlock. A `SE-PRO-` key will not unlock
 
 ### Method 1: Environment Variable (Recommended for CI/CD)
 
-Set `COUNTERSCARP_PRO_LICENSE` before running the engine:
+Set `SCARPSHIELD_PRO_LICENSE` before running the engine
+(legacy `COUNTERSCARP_PRO_LICENSE` still works):
 
 ```bash
-export COUNTERSCARP_PRO_LICENSE=SE-PRO-your-key-here
-counterscarp --target ./contracts --report
+export SCARPSHIELD_PRO_LICENSE=SE-PRO-your-key-here
+scarpshield --target ./contracts --report
 ```
 
-The environment variable takes priority over all other sources.
+Environment variable priority order:
+1. `SCARPSHIELD_PRO_LICENSE`
+2. `COUNTERSCARP_PRO_LICENSE`
+3. `[license].key` in TOML config
 
 ### Method 2: Configuration File
 
-Add a `[license]` section to your `counterscarp.toml`:
+Add a `[license]` section to your `scarpshield.toml` (or legacy `counterscarp.toml`):
 
 ```toml
 [license]
@@ -67,7 +71,7 @@ If both a config file key and an environment variable are present, the environme
 2. Navigate to **Settings → License**
 3. Enter your license key and click **Save**
 
-The key is stored locally in `~/.counterscarp/settings.json` and loaded automatically on subsequent runs.
+The key is stored locally in `~/.scarpshield/settings.json` (legacy `~/.counterscarp/settings.json` may still exist) and loaded automatically on subsequent runs.
 
 ### Method 4: GitHub Actions
 
@@ -75,7 +79,7 @@ Store your key as a repository secret, then reference it in your workflow:
 
 ```yaml
 env:
-  COUNTERSCARP_PRO_LICENSE: ${{ secrets.COUNTERSCARP_LICENSE }}
+  SCARPSHIELD_PRO_LICENSE: ${{ secrets.SCARPSHIELD_PRO_LICENSE }}
 ```
 
 Never hardcode license keys in source files — GitHub Push Protection will block commits containing key patterns.
@@ -104,7 +108,7 @@ The fingerprint is a SHA-256 hash of these combined values. This means:
 1. The engine reads the license key from the environment variable, TOML config, or GUI settings (in that priority order)
 2. A validation request is sent to `https://api.counterscarp.io/license/validate`
 3. The server checks: key validity, tier, activation count against the machine fingerprint
-4. A successful response is cached locally at `~/.counterscarp/license_cache.json` with a 24-hour TTL
+4. A successful response is cached locally at `~/.scarpshield/license_cache.json` with a 24-hour TTL (legacy `~/.counterscarp/license_cache.json` is still read)
 5. If the server is unreachable, the cached validation is used as a grace period for up to **7 days**
 
 ### Rate Limiting on License Endpoints
@@ -203,8 +207,8 @@ Options:
 1. Verify the key prefix matches the intended tier:
    - Developer features require `SE-DEV-` or higher
    - Pro features require `SE-PRO-` or higher
-2. Confirm the variable is exported: `echo $COUNTERSCARP_PRO_LICENSE`
-3. Inspect the cached tier: open `~/.counterscarp/license_cache.json` and check `"tier"`
+2. Confirm the variable is exported: `echo $SCARPSHIELD_PRO_LICENSE` (or legacy `echo $COUNTERSCARP_PRO_LICENSE`)
+3. Inspect the cached tier: open `~/.scarpshield/license_cache.json` (or legacy `~/.counterscarp/license_cache.json`) and check `"tier"`
 4. Delete the cache file and re-run to force a fresh validation
 
 ### Cache Location
@@ -213,8 +217,8 @@ The local validation cache is stored at:
 
 | Platform | Path |
 |----------|------|
-| Linux / macOS | `~/.counterscarp/license_cache.json` |
-| Windows | `%USERPROFILE%\.counterscarp\license_cache.json` |
+| Linux / macOS | `~/.scarpshield/license_cache.json` (legacy `~/.counterscarp/license_cache.json`) |
+| Windows | `%USERPROFILE%\.scarpshield\license_cache.json` (legacy `%USERPROFILE%\.counterscarp\license_cache.json`) |
 
 To force re-validation, delete this file. The engine will contact the server on the next run.
 

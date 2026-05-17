@@ -369,7 +369,7 @@ counterscarp-engine --target ./contracts --config counterscarp-bounty.toml  # bu
 counterscarp-engine --resume <SESSION_ID>
 ```
 
-Session IDs are printed at scan start and stored in `.counterscarp/`.
+Session IDs are printed at scan start and stored in `.scarpshield/` (legacy `.counterscarp/` is still supported).
 
 ### Run preflight tool check
 
@@ -414,14 +414,14 @@ No external server required — everything runs on your machine.
 
 ### Auto-discovery
 
-Counterscarp Engine automatically searches for `counterscarp.toml` starting from the target directory, walking up to 5 parent directories. If no config is found, safe defaults are used.
+Counterscarp Engine automatically searches for `scarpshield.toml` first and then `counterscarp.toml`, starting from the target directory and walking up to 5 parent directories. If no config is found, safe defaults are used.
 
 ```bash
 # Explicit config path
-counterscarp-engine --target ./contracts --config /path/to/counterscarp.toml
+counterscarp-engine --target ./contracts --config /path/to/scarpshield.toml
 ```
 
-### counterscarp.toml Reference
+### Config Reference (`scarpshield.toml` preferred)
 
 Below are all supported sections. Copy and paste the sections you need.
 
@@ -568,7 +568,7 @@ llm_model = "gpt-4o-mini"
 # Ollama (local LLM)
 ollama_url = "http://localhost:11434"
 
-rag_index_path = ".counterscarp/rag_index.json"
+rag_index_path = ".scarpshield/rag_index.json"
 top_k = 5
 auto_enrich = false
 llm_enrichment = false
@@ -578,7 +578,8 @@ llm_enrichment = false
 
 ```toml
 [license]
-# Set here or via COUNTERSCARP_PRO_LICENSE environment variable
+# Set here or via SCARPSHIELD_PRO_LICENSE environment variable
+# (COUNTERSCARP_PRO_LICENSE remains supported)
 key = "your-license-key-here"
 ```
 
@@ -636,7 +637,7 @@ function relay() external {
 
 Format: `// counterscarp-suppress: RULE_ID [reason: explanation]`
 
-Inline suppressions apply only to the finding on the immediately following line. They do not require changes to `counterscarp.toml` and are useful for one-off accepted risks within the contract source.
+Inline suppressions apply only to the finding on the immediately following line. They do not require changes to `scarpshield.toml` and are useful for one-off accepted risks within the contract source.
 
 ### Common configuration scenarios
 
@@ -777,7 +778,7 @@ jobs:
       - name: Run Counterscarp PR Check
         run: counterscarp-engine --target ./contracts --config counterscarp-pr.toml
         env:
-          COUNTERSCARP_PRO_LICENSE: ${{ secrets.COUNTERSCARP_PRO_LICENSE }}
+          SCARPSHIELD_PRO_LICENSE: ${{ secrets.SCARPSHIELD_PRO_LICENSE }}
 ```
 
 ### GitHub Actions — with SARIF upload
@@ -786,7 +787,7 @@ jobs:
       - name: Run Counterscarp Scan (SARIF)
         run: counterscarp-engine --target ./contracts --report --format sarif
         env:
-          COUNTERSCARP_PRO_LICENSE: ${{ secrets.COUNTERSCARP_PRO_LICENSE }}
+          SCARPSHIELD_PRO_LICENSE: ${{ secrets.SCARPSHIELD_PRO_LICENSE }}
 
       - name: Upload SARIF to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
@@ -817,7 +818,7 @@ Or via the main CLI:
 counterscarp-engine --generate-pipeline github
 ```
 
-Configure the generator in `counterscarp.toml`:
+Configure the generator in `scarpshield.toml`:
 
 ```toml
 [ci.generator]
@@ -889,7 +890,7 @@ counterscarp-engine --target ./contracts --history --since 2025-01-01
 counterscarp-engine --target ./contracts --time-travel
 ```
 
-Configure in `counterscarp.toml`:
+Configure in `scarpshield.toml`:
 
 ```toml
 [history]
@@ -920,7 +921,7 @@ export OPENAI_API_KEY="sk-..."
 counterscarp-engine --target ./contracts --rag --llm
 ```
 
-**`--build-rag-index`** scans all `.sol` files in the project, computes local embeddings, and writes a vector index to `.counterscarp/rag_index.json`. Re-run this command whenever your codebase changes significantly. The index is used by `--rag` at scan time to find similar patterns.
+**`--build-rag-index`** scans all `.sol` files in the project, computes local embeddings, and writes a vector index to `.scarpshield/rag_index.json`. Re-run this command whenever your codebase changes significantly. The index is used by `--rag` at scan time to find similar patterns.
 
 **Model recommendations:**
 
@@ -929,7 +930,7 @@ counterscarp-engine --target ./contracts --rag --llm
 | **Local (recommended)** | Ollama + `deepseek-coder` | Free | Full — nothing leaves your machine | Air-gapped environments, confidential audits |
 | **Cloud** | OpenAI `gpt-4o-mini` | ~$0.15 / 1M tokens | Only finding summaries sent (never source code) | Better accuracy, faster setup |
 
-Configure in `counterscarp.toml`:
+Configure in `scarpshield.toml`:
 
 ```toml
 [ai]
@@ -949,7 +950,7 @@ counterscarp-engine --target ./contracts --fingerprint
 counterscarp-engine --target ./contracts --fingerprint --verbose
 ```
 
-Configure in `counterscarp.toml`:
+Configure in `scarpshield.toml`:
 
 ```toml
 [fingerprint]
@@ -967,7 +968,7 @@ Detects storage collisions and removed access control in proxy upgrades.
 counterscarp-engine --upgrade-old ./VaultV1.sol --upgrade-new ./VaultV2.sol
 ```
 
-Configure in `counterscarp.toml`:
+Configure in `scarpshield.toml`:
 
 ```toml
 [upgrade_diff]
@@ -1005,7 +1006,7 @@ forge test --match-path "exploits/*.t.sol" -vvv
 #                     access_control, integer_overflow, front_running
 ```
 
-**Enable in `counterscarp.toml`:**
+**Enable in `scarpshield.toml`:**
 
 ```toml
 [exploit_generation]
@@ -1025,7 +1026,7 @@ template_dir = "exploit_templates/"
 counterscarp-engine --solana-root ./programs
 ```
 
-Configure in `counterscarp.toml`:
+Configure in `scarpshield.toml`:
 
 ```toml
 [chains.solana]
@@ -1053,12 +1054,12 @@ max_path_depth = 10
 
 ### Plugin System
 
-Drop custom analyzer plugins into `.counterscarp/plugins/`:
+Drop custom analyzer plugins into `.scarpshield/plugins/`:
 
 ```toml
 [plugins]
 enabled = true
-dirs = [".counterscarp/plugins"]
+dirs = [".scarpshield/plugins"]
 ```
 
 ---
@@ -1102,7 +1103,7 @@ ollama_url = "http://localhost:11434"
    # or
    ollama pull codellama
    ```
-3. Update `counterscarp.toml`:
+3. Update `scarpshield.toml`:
    ```toml
    [ai]
    llm_backend = "ollama"
@@ -1149,11 +1150,11 @@ Get your license at **https://counterscarp.io/pricing**
 **Option A — environment variable (recommended for CI):**
 
 ```bash
-export COUNTERSCARP_PRO_LICENSE=your-license-key-here
+export SCARPSHIELD_PRO_LICENSE=your-license-key-here
 counterscarp-engine --target ./contracts --report --format html
 ```
 
-**Option B — `counterscarp.toml`:**
+**Option B — `scarpshield.toml` (legacy `counterscarp.toml` also works):**
 
 ```toml
 [license]
@@ -1164,7 +1165,7 @@ key = "your-license-key-here"
 
 ```yaml
 env:
-  COUNTERSCARP_PRO_LICENSE: ${{ secrets.COUNTERSCARP_PRO_LICENSE }}
+  SCARPSHIELD_PRO_LICENSE: ${{ secrets.SCARPSHIELD_PRO_LICENSE }}
 ```
 
 ---
@@ -1233,7 +1234,7 @@ SESSION_SECRET=<paste-generated-value-here>
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `COUNTERSCARP_PRO_LICENSE` | Pro license key | — |
+| `SCARPSHIELD_PRO_LICENSE` | Pro license key (legacy `COUNTERSCARP_PRO_LICENSE` also accepted) | — |
 | `COUNTERSCARP_LOG_LEVEL` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO` |
 | `COUNTERSCARP_LOG_FORMAT` | Output format: `text` or `json` | `text` |
 | `COUNTERSCARP_LOG_FILE` | File path for log output | — |
@@ -1358,10 +1359,10 @@ pip install "counterscarp-engine[web]"
 
 ### Config not found
 
-Counterscarp Engine searches up to 5 parent directories for `counterscarp.toml`. To specify an explicit path:
+Counterscarp Engine searches up to 5 parent directories for `scarpshield.toml` then `counterscarp.toml`. To specify an explicit path:
 
 ```bash
-counterscarp-engine --target ./contracts --config /path/to/counterscarp.toml
+counterscarp-engine --target ./contracts --config /path/to/scarpshield.toml
 ```
 
 ### Scan fails immediately with "target does not exist"
@@ -1409,7 +1410,7 @@ counterscarp-engine [OPTIONS]
 
 Scan options:
   --target PATH            Path to project root or .sol file (required for scanning)
-  --config PATH            Path to counterscarp.toml (auto-discovered if not set)
+  --config PATH            Path to config file (scarpshield.toml or counterscarp.toml)
   --report                 Generate audit report
   --format FORMAT          Report format: markdown, json, sarif, html, pdf
   --project-name NAME      Project name for report header
@@ -1451,7 +1452,7 @@ Operations:
 
 ## Further Reading
 
-- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — Complete `counterscarp.toml` reference
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — Complete config reference (`scarpshield.toml` preferred)
 - **[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)** — All flags with examples
 - **[docs/WEB_APP_GUIDE.md](docs/WEB_APP_GUIDE.md)** — Self-hosted web interface
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Production server setup

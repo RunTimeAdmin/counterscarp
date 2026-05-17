@@ -11,6 +11,7 @@ import sys
 import time
 import uuid
 import codecs
+from urllib.parse import urlparse
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,7 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     RedirectResponse,
+    Response,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -97,6 +99,11 @@ security_logger = logging.getLogger("counterscarp.security")
 
 _license = LicenseManager()
 
+_ALLOWED_EXTERNAL_REDIRECT_HOSTS = {
+    "checkout.stripe.com",
+    "pay.stripe.com",
+}
+
 
 from webapp.scan_utils import (
     heuristic_finding_to_finding,
@@ -131,6 +138,30 @@ def _resolve_audit_dir(base_dir: Path, audit_id: str) -> Path:
     if not resolved.is_relative_to(base_resolved):
         raise HTTPException(status_code=403, detail="Access denied")
     return resolved
+
+
+def _validated_external_redirect_url(url: str) -> str:
+    """Allow redirects only to trusted HTTPS checkout hosts."""
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or hostname not in _ALLOWED_EXTERNAL_REDIRECT_HOSTS:
+        raise HTTPException(
+            status_code=502,
+            detail="Unexpected checkout redirect target",
+        )
+    return url
+
+
+def _external_checkout_redirect_response(url: str) -> Response:
+    """Return a 303 redirect response for trusted checkout URLs."""
+    safe_url = _validated_external_redirect_url(url)
+    return Response(
+        status_code=303,
+        headers={
+            "Location": safe_url,
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 # Import Counterscarp Engine modules (scan_utils re-exports shared logic)
@@ -1270,7 +1301,7 @@ async def create_checkout(request: Request):
     session_url = create_checkout_session(
         product_key, success_url, cancel_url,
     )
-    return RedirectResponse(url=session_url, status_code=303)
+    return _external_checkout_redirect_response(session_url)
 
 @app.get("/checkout/success")
 async def checkout_success(request: Request):
@@ -1350,7 +1381,7 @@ async def payg_checkout(request: Request):
             success_url=success_url,
             cancel_url=cancel_url,
         )
-        return RedirectResponse(session.url, status_code=303)
+        return _external_checkout_redirect_response(session.url)
     except Exception:
         logger.exception("PAYG checkout failed")
         return templates.TemplateResponse(

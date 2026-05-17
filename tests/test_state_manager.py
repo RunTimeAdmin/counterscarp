@@ -308,6 +308,34 @@ class TestLoadSession:
         with pytest.raises(StateError):
             sm.load_session("corrupt_id")
 
+    def test_load_session_falls_back_to_legacy_default_dir(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        legacy_dir = tmp_path / ".counterscarp"
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        sid = "legacy_1234"
+        legacy_state = legacy_dir / f"scan_state_{sid}.json"
+        legacy_state.write_text(
+            json.dumps(
+                {
+                    "session_id": sid,
+                    "target": "/legacy.sol",
+                    "cli_args": {},
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "phases_completed": [],
+                    "status": "in_progress",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        sm = ScanStateManager()
+        state = sm.load_session(sid)
+
+        assert state["session_id"] == sid
+        assert sm.storage_dir.name == ".scarpshield"
+
 
 # ===========================================================================
 # TestCleanupOldSessions

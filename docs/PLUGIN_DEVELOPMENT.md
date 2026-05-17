@@ -30,7 +30,7 @@ Counterscarp Engine supports community-contributed analyzers and heuristic rules
 ### Directory Structure
 
 ```
-.counterscarp/
+.scarpshield/
 └── plugins/
     ├── my_analyzer.py      # Custom analyzer plugin
     ├── my_rules.py         # Custom rule plugin
@@ -126,12 +126,12 @@ Each `HeuristicRule` has:
 ### Step 1: Create the Plugin Directory
 
 ```bash
-mkdir -p .counterscarp/plugins
+mkdir -p .scarpshield/plugins
 ```
 
 ### Step 2: Write the Plugin Module
 
-Create `.counterscarp/plugins/my_first_plugin.py`:
+Create `.scarpshield/plugins/my_first_plugin.py`:
 
 ```python
 """My first Counterscarp Engine plugin."""
@@ -162,18 +162,18 @@ def register(manager):
 
 ### Step 3: Configure the Plugin Directory
 
-In `counterscarp.toml`:
+In `scarpshield.toml` (or legacy `counterscarp.toml`):
 
 ```toml
 [plugins]
 enabled = true
-dirs = [".counterscarp/plugins"]
+dirs = [".scarpshield/plugins"]
 ```
 
 ### Step 4: Run with Plugins
 
 ```bash
-counterscarp --target ./contracts --config counterscarp.toml
+counterscarp --target ./contracts --config scarpshield.toml
 ```
 
 The orchestrator will log plugin discovery:
@@ -265,7 +265,7 @@ from plugin_manager import PluginManager
 
 def test_plugin_discovery():
     manager = PluginManager()
-    count = manager.discover_plugins([".counterscarp/plugins"])
+    count = manager.discover_plugins([".scarpshield/plugins"])
     assert count > 0
     assert manager.get_analyzer_count() >= 1
 ```
@@ -309,7 +309,7 @@ def register(manager):
     manager.register_rules(GasGriefingRules())
 ```
 
-Save as `.counterscarp/plugins/gas_griefing_rules.py`.
+Save as `.scarpshield/plugins/gas_griefing_rules.py`.
 
 ---
 
@@ -399,7 +399,7 @@ def register(manager):
     manager.register_analyzer(SecurityTodoScanner())
 ```
 
-Save as `.counterscarp/plugins/security_todo_scanner.py`.
+Save as `.scarpshield/plugins/security_todo_scanner.py`.
 
 ---
 

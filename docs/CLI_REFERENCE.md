@@ -34,7 +34,7 @@ Counterscarp Engine provides three CLI commands:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--target` | PATH | **(required)** | Path to project root or `.sol` file |
-| `--config` | FILE | Auto-detect | Path to `counterscarp.toml` config file |
+| `--config` | FILE | Auto-detect | Path to config file (`scarpshield.toml` preferred, `counterscarp.toml` supported) |
 | `--report` | flag | `false` | Generate professional HTML/Markdown audit report |
 | `--project-name` | NAME | From path | Project name for report headers |
 
@@ -103,7 +103,7 @@ Counterscarp Engine ships with three pre-configured profiles via TOML config fil
 
 | Feature | PR Profile | Audit Profile | Bounty Profile |
 |---------|-----------|---------------|----------------|
-| Config file | `counterscarp-pr.toml` | `counterscarp.toml` | `counterscarp-bounty.toml` |
+| Config file | `counterscarp-pr.toml` | `scarpshield.toml` | `counterscarp-bounty.toml` |
 | Heuristic scan | Yes | Yes | Yes |
 | Slither | High/Medium | High/Medium | All impacts |
 | Aderyn | No | Optional | Yes |
@@ -128,7 +128,7 @@ counterscarp --target ./contracts --config counterscarp-pr.toml
 For professional security audits. Comprehensive analysis with professional reporting.
 
 ```bash
-counterscarp --target ./contracts --config counterscarp.toml --report --project-name "ProtocolName"
+counterscarp --target ./contracts --config scarpshield.toml --report --project-name "ProtocolName"
 ```
 
 ### Bounty Profile — Bug Bounty Mode
@@ -313,7 +313,7 @@ If you receive `HTTP 429 Too Many Requests`, wait for the 60-second window to ex
 | `slither: command not found` | Slither not installed | `pip install slither-analyzer` |
 | `aderyn: command not found` | Aderyn not installed | See [Aderyn install guide](https://github.com/Cyfrin/aderyn) |
 | `myth: command not found` | Mythril not installed | `pip install mythril` |
-| Exit code 2 with config error | Invalid TOML syntax | Validate with `python -c "import tomllib; tomllib.load(open('counterscarp.toml','rb'))"` |
+| Exit code 2 with config error | Invalid TOML syntax | Validate with `python -c "import tomllib; tomllib.load(open('scarpshield.toml','rb'))"` |
 | Empty `reports/` directory | `--report` flag not passed | Add `--report` to your command |
 | License validation fails offline | DNS for `api.counterscarp.io` unreachable | Engine falls back to 72-hour grace-period cache |
 

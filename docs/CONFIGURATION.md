@@ -34,7 +34,7 @@
 
 ## Overview
 
-Counterscarp Engine is configured via a `counterscarp.toml` file in TOML format. The configuration controls all aspects of the analysis pipeline: which rules are active, what severity thresholds apply, how reports are generated, and which external tools are used.
+Counterscarp Engine is configured via a TOML file (`scarpshield.toml` preferred, `counterscarp.toml` supported). The configuration controls all aspects of the analysis pipeline: which rules are active, what severity thresholds apply, how reports are generated, and which external tools are used.
 
 All settings have sensible defaults — a minimal config with zero customisation works out of the box.
 
@@ -42,7 +42,7 @@ All settings have sensible defaults — a minimal config with zero customisation
 
 ## Config File Discovery
 
-If `--config` is not specified, Counterscarp Engine searches for `counterscarp.toml` in the current directory and up to 5 parent directories. If no file is found, built-in defaults are used.
+If `--config` is not specified, Counterscarp Engine searches for `scarpshield.toml` first, then `counterscarp.toml`, in the current directory and up to 5 parent directories. If no file is found, built-in defaults are used.
 
 ---
 
@@ -151,9 +151,9 @@ Inline suppressions take precedence over TOML suppressions for the same file and
 ### Migrating from Garrison Engine (pre-v5.0.0)
 
 If upgrading from Garrison Engine, rename your config file and update references:
-1. Rename `garrison.toml` → `counterscarp.toml`
-2. Update environment variables: `GARRISON_*` → `COUNTERSCARP_*`
-3. Update data directory: `.garrison/` → `.counterscarp/`
+1. Rename `garrison.toml` -> `scarpshield.toml` (or `counterscarp.toml` for legacy compatibility)
+2. Update environment variables: `GARRISON_*` -> `SCARPSHIELD_*` (legacy `COUNTERSCARP_*` remains supported where applicable)
+3. Update data directory: `.garrison/` -> `.scarpshield/` (legacy `.counterscarp/` remains readable)
 
 ---
 
@@ -585,7 +585,7 @@ AI and RAG (Retrieval-Augmented Generation) configuration.
 | `embedding_backend` | string | `"local"` | Embedding backend: `local`, `openai`, `anthropic` |
 | `llm_backend` | string | `"none"` | LLM backend: `none`, `openai`, `anthropic` |
 | `openai_model` | string | `"gpt-4-turbo-preview"` | OpenAI model for LLM features |
-| `rag_index_path` | string | `".counterscarp/rag_index.json"` | Path to RAG vector index |
+| `rag_index_path` | string | `".scarpshield/rag_index.json"` | Path to RAG vector index (legacy `.counterscarp/rag_index.json` is readable) |
 | `top_k` | int | `5` | Number of similar findings to retrieve |
 | `auto_enrich` | bool | `false` | Automatically enrich findings with RAG |
 
@@ -608,12 +608,12 @@ Plugin system for community-contributed analyzers and rules.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Enable plugin system |
-| `dirs` | list | `[".counterscarp/plugins"]` | Directories to scan for plugin modules |
+| `dirs` | list | `[".scarpshield/plugins"]` | Directories to scan for plugin modules |
 
 ```toml
 [plugins]
 enabled = true
-dirs = [".counterscarp/plugins", "/opt/counterscarp-plugins"]
+dirs = [".scarpshield/plugins", "/opt/counterscarp-plugins"]
 ```
 
 See the [Plugin Development Guide](PLUGIN_DEVELOPMENT.md) for writing custom plugins.
@@ -669,11 +669,11 @@ Additional origins can be added by modifying `webapp/main.py`. Never add wildcar
 
 ### Cleanup Retention Periods
 
-The service automatically purges stale working data on startup. The following retention periods are currently hardcoded (configurable via `counterscarp.toml` is planned for a future release):
+The service automatically purges stale working data on startup. The following retention periods are currently hardcoded (configurable via project TOML config is planned for a future release):
 
 | Data Type | Location | Retention |
 |-----------|----------|-----------|
-| State / cache files | `.counterscarp/` | **30 days** |
+| State / cache files | `.scarpshield/` (legacy `.counterscarp/` supported) | **30 days** |
 | Report directories | `reports/` | **90 days** |
 | Upload directories | `uploads/` | **7 days** |
 

@@ -409,6 +409,19 @@ class TestProfileLoading:
         assert config.static_analysis.aderyn_enabled is True
         assert config.reporting.format == "sarif"
 
+    def test_profile_alias_falls_back_to_legacy_name(
+        self, tmp_path, pr_profile_toml
+    ):
+        """Test scarpshield profile alias falls back to legacy file name."""
+        legacy_file = tmp_path / "counterscarp-pr.toml"
+        preferred_name = tmp_path / "scarpshield-pr.toml"
+        legacy_file.write_text(pr_profile_toml)
+
+        config = load_config(str(preferred_name))
+
+        assert config.engine.fail_on_severity == "HIGH"
+        assert config.engine.max_findings == 50
+
 
 class TestInvalidTOMLSyntax:
     """Test config with invalid/missing TOML syntax."""
@@ -459,25 +472,45 @@ class TestFindConfigFile:
     """Test find_config_file() function."""
 
     def test_finds_config_in_current_dir(self, tmp_path, monkeypatch):
-        """Test finds counterscarp.toml in current directory."""
+        """Test finds scarpshield.toml in current directory."""
         monkeypatch.chdir(tmp_path)
-        config_file = tmp_path / "counterscarp.toml"
+        config_file = tmp_path / "scarpshield.toml"
         config_file.write_text("[engine]\nname = \"Test\"")
         
         found = find_config_file()
         assert found == str(config_file)
 
     def test_finds_config_in_parent_dir(self, tmp_path, monkeypatch):
-        """Test finds counterscarp.toml in parent directory."""
+        """Test finds scarpshield.toml in parent directory."""
         subdir = tmp_path / "subdir"
         subdir.mkdir()
         monkeypatch.chdir(subdir)
         
-        config_file = tmp_path / "counterscarp.toml"
+        config_file = tmp_path / "scarpshield.toml"
         config_file.write_text("[engine]\nname = \"Test\"")
         
         found = find_config_file()
         assert found == str(config_file)
+
+    def test_falls_back_to_legacy_counterscarp_name(self, tmp_path, monkeypatch):
+        """Test fallback to counterscarp.toml when preferred file missing."""
+        monkeypatch.chdir(tmp_path)
+        config_file = tmp_path / "counterscarp.toml"
+        config_file.write_text("[engine]\nname = \"Legacy\"")
+
+        found = find_config_file()
+        assert found == str(config_file)
+
+    def test_prefers_scarpshield_when_both_exist(self, tmp_path, monkeypatch):
+        """Test preferred name wins when both config files exist."""
+        monkeypatch.chdir(tmp_path)
+        preferred = tmp_path / "scarpshield.toml"
+        legacy = tmp_path / "counterscarp.toml"
+        preferred.write_text("[engine]\nname = \"Preferred\"")
+        legacy.write_text("[engine]\nname = \"Legacy\"")
+
+        found = find_config_file()
+        assert found == str(preferred)
 
     def test_returns_none_when_not_found(self, tmp_path, monkeypatch):
         """Test returns None when no config found."""

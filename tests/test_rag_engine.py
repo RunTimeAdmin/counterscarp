@@ -419,15 +419,38 @@ class TestAuditCopilot:
         """Test initialization with custom config."""
         config = {
             "embedding_backend": "openai",
-            "rag_index_path": ".counterscarp/custom_index.json",
+            "rag_index_path": ".scarpshield/custom_index.json",
             "top_k": 10,
             "auto_enrich": True
         }
         copilot = AuditCopilot(config)
         assert copilot.embedding_backend == "openai"
-        assert copilot.index_path == ".counterscarp/custom_index.json"
+        assert copilot.index_path == ".scarpshield/custom_index.json"
         assert copilot.top_k == 10
         assert copilot.auto_enrich is True
+
+    def test_load_index_falls_back_to_legacy_path(self, tmp_path):
+        """Test legacy .counterscarp index is used when preferred is absent."""
+        legacy_dir = tmp_path / ".counterscarp"
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        legacy_index = legacy_dir / "rag_index.json"
+        legacy_index.write_text(
+            json.dumps(
+                {
+                    "entries": [],
+                    "embedding_dim": 384,
+                    "saved_at": "2026-01-01T00:00:00",
+                    "version": "2.0",
+                }
+            ),
+            encoding="utf-8",
+        )
+        preferred_index = tmp_path / ".scarpshield" / "rag_index.json"
+
+        copilot = AuditCopilot(config={"rag_index_path": str(preferred_index)})
+        resolved = copilot._resolve_legacy_index_path(str(preferred_index))
+
+        assert resolved == str(legacy_index)
 
     def test_enrich_finding_no_index(self):
         """Test enriching finding when no index is loaded."""

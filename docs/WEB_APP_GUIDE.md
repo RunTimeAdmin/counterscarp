@@ -198,7 +198,7 @@ Access the attack graph at: `/results/{audit_id}/attack-graph`
 
 The attack graph is generated automatically when findings are detected. If no findings exist, the graph is skipped.
 
-**Configuration:** Attack graph behavior can be customized in `counterscarp.toml` under the `[visualization]` section. See the [Configuration Guide](CONFIGURATION.md#visualization) for details.
+**Configuration:** Attack graph behavior can be customized in `scarpshield.toml` (or legacy `counterscarp.toml`) under the `[visualization]` section. See the [Configuration Guide](CONFIGURATION.md#visualization) for details.
 
 ---
 

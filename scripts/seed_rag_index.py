@@ -8,7 +8,7 @@ Covers 12 categories:
 
 Usage:
     python scripts/seed_rag_index.py
-    python scripts/seed_rag_index.py --output .counterscarp/rag_index.json
+    python scripts/seed_rag_index.py --output .scarpshield/rag_index.json
     python scripts/seed_rag_index.py --append   # keep existing entries
 """
 
@@ -2247,7 +2247,7 @@ def _count_categories(data: list) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def seed(
-    output: str = ".counterscarp/rag_index.json",
+    output: str = ".scarpshield/rag_index.json",
     append: bool = False,
 ) -> int:
     """Populate (or append to) the RAG vector store with curated seed data.
@@ -2317,8 +2317,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        default=".counterscarp/rag_index.json",
-        help="Path to the RAG index JSON (default: .counterscarp/rag_index.json)",
+        default=".scarpshield/rag_index.json",
+        help="Path to the RAG index JSON (default: .scarpshield/rag_index.json)",
     )
     parser.add_argument(
         "--append",

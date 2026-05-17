@@ -90,6 +90,7 @@ class TestFreeTier:
     def setup_method(self):
         LicenseManager._instance = None
         # Ensure no license env var
+        os.environ.pop("SCARPSHIELD_PRO_LICENSE", None)
         os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
 
     def teardown_method(self):
@@ -143,6 +144,7 @@ class TestRequireProDecorator:
 
     def setup_method(self):
         LicenseManager._instance = None
+        os.environ.pop("SCARPSHIELD_PRO_LICENSE", None)
         os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
 
     def teardown_method(self):
@@ -275,6 +277,7 @@ class TestTierFromKeyPrefix:
 
     def setup_method(self):
         LicenseManager._instance = None
+        os.environ.pop("SCARPSHIELD_PRO_LICENSE", None)
         os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
 
     def teardown_method(self):
@@ -317,6 +320,41 @@ class TestTierFromKeyPrefix:
         LicenseManager._instance = None
         mgr = LicenseManager()
         assert mgr._tier_from_key_prefix() == COMMUNITY
+
+
+class TestPreferredEnvVar:
+    """Tests env var alias preference for license key loading."""
+
+    def setup_method(self):
+        LicenseManager._instance = None
+        os.environ.pop("SCARPSHIELD_PRO_LICENSE", None)
+        os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
+
+    def teardown_method(self):
+        LicenseManager._instance = None
+        os.environ.pop("SCARPSHIELD_PRO_LICENSE", None)
+        os.environ.pop("COUNTERSCARP_PRO_LICENSE", None)
+
+    def test_prefers_scarpshield_env_var_over_legacy(self):
+        os.environ["SCARPSHIELD_PRO_LICENSE"] = "SE-PRO-preferred"
+        os.environ["COUNTERSCARP_PRO_LICENSE"] = "SE-PRO-legacy"
+        mgr = LicenseManager()
+        assert mgr._license_key == "SE-PRO-preferred"
+
+    def test_uses_legacy_env_var_when_preferred_missing(self):
+        os.environ["COUNTERSCARP_PRO_LICENSE"] = "SE-PRO-legacy"
+        mgr = LicenseManager()
+        assert mgr._license_key == "SE-PRO-legacy"
+
+    def test_loads_license_key_from_scarpshield_toml(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        config_file = tmp_path / "scarpshield.toml"
+        config_file.write_text(
+            "[license]\nkey = \"SE-PRO-from-config\"\n",
+            encoding="utf-8",
+        )
+        mgr = LicenseManager()
+        assert mgr._license_key == "SE-PRO-from-config"
 
 
 class TestUpgradeMessageTiers:

@@ -151,22 +151,39 @@ def get_machine_fingerprint() -> str:
 
 
 def _get_cache_dir() -> Path:
-    """Get the cache directory path."""
-    cache_dir = Path.home() / ".counterscarp"
+    """Get preferred cache directory path for new writes."""
+    cache_dir = Path.home() / ".scarpshield"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
 
+def _get_legacy_cache_dir() -> Path:
+    """Get legacy cache directory path used by older installs."""
+    return Path.home() / ".counterscarp"
+
+
+def _get_cache_paths() -> list[Path]:
+    """Return preferred then legacy cache file paths."""
+    return [
+        _get_cache_dir() / "license_cache.json",
+        _get_legacy_cache_dir() / "license_cache.json",
+    ]
+
+
 def _get_cache_path() -> Path:
-    """Get the license cache file path."""
-    return _get_cache_dir() / "license_cache.json"
+    """Get preferred license cache file path."""
+    return _get_cache_paths()[0]
 
 
 def _load_toml_license_key() -> str:
-    """Load license key from counterscarp.toml config file."""
+    """Load license key from project TOML config files."""
     config_paths = [
+        Path.cwd() / "scarpshield.toml",
         Path.cwd() / "counterscarp.toml",
-        Path.home() / ".counterscarp" / "counterscarp.toml",
+        _get_cache_dir() / "scarpshield.toml",
+        _get_cache_dir() / "counterscarp.toml",
+        _get_legacy_cache_dir() / "scarpshield.toml",
+        _get_legacy_cache_dir() / "counterscarp.toml",
     ]
 
     for config_path in config_paths:
@@ -196,12 +213,17 @@ def _load_toml_license_key() -> str:
 
 def _get_license_key() -> str:
     """Get license key from environment or config file."""
-    # Priority 1: Environment variable
+    # Priority 1: Preferred environment variable
+    env_key = os.environ.get("SCARPSHIELD_PRO_LICENSE", "").strip()
+    if env_key:
+        return env_key
+
+    # Priority 2: Legacy environment variable
     env_key = os.environ.get("COUNTERSCARP_PRO_LICENSE", "").strip()
     if env_key:
         return env_key
 
-    # Priority 2: Config file
+    # Priority 3: Config file
     return _load_toml_license_key()
 
 
@@ -253,61 +275,60 @@ class LicenseManager:
         if not self._license_key:
             return None
 
-        cache_path = _get_cache_path()
-        if not cache_path.exists():
-            return None
+        for cache_path in _get_cache_paths():
+            if not cache_path.exists():
+                continue
+            try:
+                with open(cache_path, "r") as f:
+                    cache = json.load(f)
 
-        try:
-            with open(cache_path, "r") as f:
-                cache = json.load(f)
+                # Validate signature
+                stored_signature = cache.get("signature", "")
+                computed_signature = self._compute_cache_signature(
+                    cache.get("key_hash", ""),
+                    cache.get("machine_id", ""),
+                    cache.get("cached_at", ""),
+                )
 
-            # Validate signature
-            stored_signature = cache.get("signature", "")
-            computed_signature = self._compute_cache_signature(
-                cache.get("key_hash", ""),
-                cache.get("machine_id", ""),
-                cache.get("cached_at", ""),
-            )
+                if not hmac.compare_digest(stored_signature, computed_signature):
+                    _logger.warning("License cache signature mismatch")
+                    continue
 
-            if not hmac.compare_digest(stored_signature, computed_signature):
-                _logger.warning("License cache signature mismatch")
-                return None
+                # Check machine ID
+                if cache.get("machine_id") != self._machine_id:
+                    _logger.warning("License cache machine ID mismatch")
+                    continue
 
-            # Check machine ID
-            if cache.get("machine_id") != self._machine_id:
-                _logger.warning("License cache machine ID mismatch")
-                return None
+                # Check key hash
+                key_hash = hashlib.sha256(self._license_key.encode()).hexdigest()
+                if cache.get("key_hash") != key_hash:
+                    continue
 
-            # Check key hash
-            key_hash = hashlib.sha256(self._license_key.encode()).hexdigest()
-            if cache.get("key_hash") != key_hash:
-                return None
+                cached_at = datetime.fromisoformat(cache.get("cached_at", ""))
+                now = datetime.now(timezone.utc)
 
-            cached_at = datetime.fromisoformat(cache.get("cached_at", ""))
-            now = datetime.now(timezone.utc)
+                # Check if cache is still fresh (< 24 hours)
+                cache_age = now - cached_at
+                if cache_age > timedelta(hours=CACHE_TTL_HOURS):
+                    continue
 
-            # Check if cache is still fresh (< 24 hours)
-            cache_age = now - cached_at
-            if cache_age > timedelta(hours=CACHE_TTL_HOURS):
-                return None
+                result = cache.get("validation_result", {})
+                return LicenseInfo(
+                    valid=result.get("valid", False),
+                    tier=result.get("tier", "free"),
+                    expires_at=(
+                        datetime.fromisoformat(result.get("expires_at"))
+                        if result.get("expires_at")
+                        else None
+                    ),
+                    features=result.get("features", []),
+                    max_activations=result.get("max_activations", 0),
+                    current_activations=result.get("current_activations", 0),
+                )
+            except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
+                _logger.warning("Failed to load license cache: %s", e)
 
-            result = cache.get("validation_result", {})
-            return LicenseInfo(
-                valid=result.get("valid", False),
-                tier=result.get("tier", "free"),
-                expires_at=(
-                    datetime.fromisoformat(result.get("expires_at"))
-                    if result.get("expires_at")
-                    else None
-                ),
-                features=result.get("features", []),
-                max_activations=result.get("max_activations", 0),
-                current_activations=result.get("current_activations", 0),
-            )
-
-        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
-            _logger.warning("Failed to load license cache: %s", e)
-            return None
+        return None
 
     def _check_dns_resolves(self) -> bool:
         """Check if api.counterscarp.io resolves via DNS."""
@@ -319,67 +340,66 @@ class LicenseManager:
 
     def _load_grace_period_cache(self) -> Optional[LicenseInfo]:
         """Load cached result during grace period (network failure)."""
-        cache_path = _get_cache_path()
-        if not cache_path.exists():
-            return None
+        for cache_path in _get_cache_paths():
+            if not cache_path.exists():
+                continue
+            try:
+                with open(cache_path, "r") as f:
+                    cache = json.load(f)
 
-        try:
-            with open(cache_path, "r") as f:
-                cache = json.load(f)
-
-            # Validate signature
-            stored_signature = cache.get("signature", "")
-            computed_signature = self._compute_cache_signature(
-                cache.get("key_hash", ""),
-                cache.get("machine_id", ""),
-                cache.get("cached_at", ""),
-            )
-
-            if not hmac.compare_digest(stored_signature, computed_signature):
-                return None
-
-            # Check machine ID
-            if cache.get("machine_id") != self._machine_id:
-                return None
-
-            cached_at = datetime.fromisoformat(cache.get("cached_at", ""))
-            now = datetime.now(timezone.utc)
-
-            # DNS-aware grace period:
-            # - DNS resolves but HTTP fails  → full GRACE_PERIOD_DAYS (3 days)
-            # - DNS itself fails (no route)  → reduce to 1 day, warn user
-            cache_age = now - cached_at
-            dns_ok = self._check_dns_resolves()
-            if dns_ok:
-                effective_grace = GRACE_PERIOD_DAYS
-            else:
-                effective_grace = 1
-                _logger.warning(
-                    "DNS resolution for api.counterscarp.io failed — "
-                    "grace period reduced to 1 day (possible network or DNS misconfiguration)"
+                # Validate signature
+                stored_signature = cache.get("signature", "")
+                computed_signature = self._compute_cache_signature(
+                    cache.get("key_hash", ""),
+                    cache.get("machine_id", ""),
+                    cache.get("cached_at", ""),
                 )
-            if cache_age > timedelta(days=effective_grace):
-                return None
 
-            result = cache.get("validation_result", {})
-            days = cache_age.days
-            _logger.info("Using cached license (grace period: %d days)", days)
-            return LicenseInfo(
-                valid=result.get("valid", False),
-                tier=result.get("tier", "free"),
-                expires_at=(
-                    datetime.fromisoformat(result.get("expires_at"))
-                    if result.get("expires_at")
-                    else None
-                ),
-                features=result.get("features", []),
-                max_activations=result.get("max_activations", 0),
-                current_activations=result.get("current_activations", 0),
-            )
+                if not hmac.compare_digest(stored_signature, computed_signature):
+                    continue
 
-        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
-            _logger.warning("Failed to load grace period cache: %s", e)
-            return None
+                # Check machine ID
+                if cache.get("machine_id") != self._machine_id:
+                    continue
+
+                cached_at = datetime.fromisoformat(cache.get("cached_at", ""))
+                now = datetime.now(timezone.utc)
+
+                # DNS-aware grace period:
+                # - DNS resolves but HTTP fails  -> full GRACE_PERIOD_DAYS
+                # - DNS itself fails (no route)  -> reduce to 1 day
+                cache_age = now - cached_at
+                dns_ok = self._check_dns_resolves()
+                if dns_ok:
+                    effective_grace = GRACE_PERIOD_DAYS
+                else:
+                    effective_grace = 1
+                    _logger.warning(
+                        "DNS resolution for api.counterscarp.io failed — "
+                        "grace period reduced to 1 day (possible network or DNS misconfiguration)"
+                    )
+                if cache_age > timedelta(days=effective_grace):
+                    continue
+
+                result = cache.get("validation_result", {})
+                days = cache_age.days
+                _logger.info("Using cached license (grace period: %d days)", days)
+                return LicenseInfo(
+                    valid=result.get("valid", False),
+                    tier=result.get("tier", "free"),
+                    expires_at=(
+                        datetime.fromisoformat(result.get("expires_at"))
+                        if result.get("expires_at")
+                        else None
+                    ),
+                    features=result.get("features", []),
+                    max_activations=result.get("max_activations", 0),
+                    current_activations=result.get("current_activations", 0),
+                )
+            except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
+                _logger.warning("Failed to load grace period cache: %s", e)
+
+        return None
 
     def _save_cached_result(self, result: LicenseInfo):
         """Save license validation result to cache."""
@@ -421,12 +441,12 @@ class LicenseManager:
 
     def _clear_cache(self):
         """Clear the license cache."""
-        cache_path = _get_cache_path()
-        if cache_path.exists():
-            try:
-                cache_path.unlink()
-            except OSError as e:
-                _logger.warning("Could not delete license cache: %s", e)
+        for cache_path in _get_cache_paths():
+            if cache_path.exists():
+                try:
+                    cache_path.unlink()
+                except OSError as e:
+                    _logger.warning("Could not delete license cache: %s", e)
 
     def clear_cache(self):
         """Public method to clear the license cache and reload license key.
@@ -728,7 +748,8 @@ class LicenseManager:
             f"|  * {name}\n"
             f"|\n"
             f"|  -> https://app.counterscarp.io/pricing\n"
-            f"|  Set COUNTERSCARP_PRO_LICENSE=your-key to activate\n"
+            f"|  Set SCARPSHIELD_PRO_LICENSE=your-key to activate\n"
+            f"|  (legacy COUNTERSCARP_PRO_LICENSE is also supported)\n"
             f"+{line}+\n"
         )
 

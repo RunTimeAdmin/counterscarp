@@ -92,7 +92,7 @@ if NUMPY_AVAILABLE:
     np = _np
 
 # Default configuration
-DEFAULT_INDEX_PATH = ".counterscarp/rag_index.json"
+DEFAULT_INDEX_PATH = ".scarpshield/rag_index.json"
 DEFAULT_TOP_K = 5
 
 
@@ -842,9 +842,31 @@ class AuditCopilot:
     def _load_index(self) -> None:
         """Load existing RAG index if available."""
         try:
-            self.vector_store.load(self.index_path)
+            resolved_path = self._resolve_legacy_index_path(self.index_path)
+            self.vector_store.load(resolved_path)
+            if resolved_path != self.index_path:
+                logger.info(
+                    "Using legacy RAG index fallback: %s -> %s",
+                    self.index_path,
+                    resolved_path,
+                )
         except Exception as e:
             logger.warning(f"Could not load RAG index: {e}")
+
+    @staticmethod
+    def _resolve_legacy_index_path(index_path: str) -> str:
+        """Resolve preferred/legacy index path compatibility for reads."""
+        preferred = Path(index_path)
+        if preferred.exists():
+            return str(preferred)
+
+        parts = list(preferred.parts)
+        if ".scarpshield" in parts:
+            parts[parts.index(".scarpshield")] = ".counterscarp"
+            legacy = Path(*parts)
+            if legacy.exists():
+                return str(legacy)
+        return index_path
 
     def _is_offline(self) -> bool:
         """Return True if the copilot is in the offline backoff window."""

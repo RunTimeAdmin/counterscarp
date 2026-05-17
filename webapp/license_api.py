@@ -11,12 +11,18 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Annotated, Any, List, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, StringConstraints
 
+from counterscarp_core.schemas import (
+    DeactivateRequest,
+    DeactivateResponse,
+    LicenseInfoResponse,
+    ValidateRequest,
+    ValidateResponse,
+)
 from license_manager import ALL_PRO_FEATURES
 from webapp.rate_limiter import RateLimiter, add_rate_limit_headers
 
@@ -116,65 +122,6 @@ def consume_credit(user_id: str, audit_id: str, ip: str) -> bool:
         changes={"credits_before": current_credits, "credits_after": current_credits - 1, "audit_id": audit_id},
     )
     return True
-
-
-# ---------------------------------------------------------------------------
-# Pydantic schemas
-# ---------------------------------------------------------------------------
-
-
-class ValidateRequest(BaseModel):
-    license_key: Annotated[str, StringConstraints(
-        pattern=r'^SE-(DEV|PRO|TEAM|ENT)-[0-9a-f]{32}$'
-    )]
-    machine_id: Annotated[str, StringConstraints(
-        max_length=255,
-        pattern=r'^[a-zA-Z0-9\-_:.]{1,255}$'
-    )]
-    product_version: Annotated[str, StringConstraints(
-        pattern=r'^\d+\.\d+\.\d+.*$',
-        max_length=20
-    )]
-    timestamp: Annotated[str, StringConstraints(
-        pattern=r'^\d{4}-\d{2}-\d{2}T[\d:.]+[Z+\-\d:]*$',
-        max_length=40
-    )]
-
-
-class ValidateResponse(BaseModel):
-    valid: bool
-    error: Optional[str] = None
-    tier: Optional[str] = None
-    expires_at: Optional[str] = None
-    features: Optional[List[str]] = None
-    max_activations: Optional[int] = None
-    current_activations: Optional[int] = None
-
-
-class DeactivateRequest(BaseModel):
-    license_key: Annotated[str, StringConstraints(
-        pattern=r'^SE-(DEV|PRO|TEAM|ENT)-[0-9a-f]{32}$'
-    )]
-    machine_id: Annotated[str, StringConstraints(
-        max_length=255,
-        pattern=r'^[a-zA-Z0-9\-_:.]{1,255}$'
-    )]
-
-
-class DeactivateResponse(BaseModel):
-    success: bool
-    remaining_activations: int
-
-
-class LicenseInfoResponse(BaseModel):
-    key_masked: str
-    tier: str
-    customer_email: str
-    expires_at: str
-    max_activations: int
-    current_activations: int
-    revoked: bool
-    created_at: str
 
 
 # ---------------------------------------------------------------------------

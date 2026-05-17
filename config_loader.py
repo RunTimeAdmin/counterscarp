@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Configuration Loader for Counterscarp Engine
-Parses counterscarp.toml and provides typed config access
+Configuration Loader for Counterscarp Engine.
+
+Parses project TOML configuration and provides typed config access.
+Supports `scarpshield.toml` (preferred) and `counterscarp.toml` (legacy).
 """
 
 from __future__ import annotations
@@ -15,6 +17,15 @@ from pathlib import Path
 
 # Import exceptions (core module — must always be available)
 from exceptions import CounterscarpValidationError, CounterscarpConfigError
+
+
+CONFIG_FILE_CANDIDATES: tuple[str, ...] = (
+    "scarpshield.toml",
+    "counterscarp.toml",
+)
+
+LEGACY_PROFILE_PREFIX = "counterscarp-"
+PREFERRED_PROFILE_PREFIX = "scarpshield-"
 
 # Import logger with fallback
 get_logger: Optional[Callable[[str], Logger]] = None
@@ -618,7 +629,7 @@ class AIConfig:
     llm_model: str = "gpt-4o-mini"
     ollama_url: str = "http://localhost:11434"
     openai_model: str = "gpt-4-turbo-preview"  # kept for backward compat
-    rag_index_path: str = ".counterscarp/rag_index.json"
+    rag_index_path: str = ".scarpshield/rag_index.json"
     top_k: int = 5
     auto_enrich: bool = False
     llm_enrichment: bool = False
@@ -633,7 +644,7 @@ class PluginsConfig:
         dirs: List of directories to scan for plugins.
     """
     enabled: bool = True
-    dirs: List[str] = field(default_factory=lambda: [".counterscarp/plugins"])
+    dirs: List[str] = field(default_factory=lambda: [".scarpshield/plugins"])
 
 
 @dataclass
@@ -719,7 +730,7 @@ class CounterscarpConfig:
 
 def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
     """
-    Load configuration from counterscarp.toml.
+    Load configuration from project TOML config.
 
     Args:
         config_path: Path to config file. If None, searches current dir and
@@ -736,8 +747,17 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
     if config_path is None:
         config_path = find_config_file()
 
+    if config_path:
+        resolved = _resolve_legacy_config_alias(config_path)
+        if resolved:
+            config_path = resolved
+
     if not config_path or not Path(config_path).exists():
-        logger.info("No counterscarp.toml found, using default configuration")
+        names = ", ".join(CONFIG_FILE_CANDIDATES)
+        logger.info(
+            "No config file found (%s), using default configuration",
+            names,
+        )
         return CounterscarpConfig()
 
     logger.info(f"Loading configuration from: {config_path}")
@@ -1054,7 +1074,7 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
             ollama_url=ai.get('ollama_url', 'http://localhost:11434'),
             openai_model=ai.get('openai_model', 'gpt-4-turbo-preview'),
             rag_index_path=ai.get(
-                'rag_index_path', '.counterscarp/rag_index.json'
+                'rag_index_path', '.scarpshield/rag_index.json'
             ),
             top_k=ai.get('top_k', 5),
             auto_enrich=ai.get('auto_enrich', False),
@@ -1066,7 +1086,7 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
         plug = data['plugins']
         config.plugins = PluginsConfig(
             enabled=plug.get('enabled', True),
-            dirs=plug.get('dirs', ['.counterscarp/plugins'])
+            dirs=plug.get('dirs', ['.scarpshield/plugins'])
         )
 
     # Parse license config
@@ -1088,17 +1108,45 @@ def load_config(config_path: Optional[str] = None) -> CounterscarpConfig:
     return config
 
 
+def _resolve_legacy_config_alias(config_path: str) -> Optional[str]:
+    """Resolve preferred/legacy profile aliases when explicit path is missing."""
+    candidate = Path(config_path)
+    if candidate.exists():
+        return str(candidate)
+
+    name = candidate.name
+    alias_name: Optional[str] = None
+    if name.startswith(PREFERRED_PROFILE_PREFIX):
+        alias_name = LEGACY_PROFILE_PREFIX + name[len(PREFERRED_PROFILE_PREFIX):]
+    elif name.startswith(LEGACY_PROFILE_PREFIX):
+        alias_name = PREFERRED_PROFILE_PREFIX + name[len(LEGACY_PROFILE_PREFIX):]
+
+    if not alias_name:
+        return None
+
+    alias_path = candidate.with_name(alias_name)
+    if alias_path.exists():
+        logger.info("Config alias fallback: %s -> %s", candidate.name, alias_name)
+        return str(alias_path)
+    return None
+
+
 def find_config_file() -> Optional[str]:
     """
-    Search for counterscarp.toml in current directory and parent directories.
+    Search for config file in current directory and parent directories.
+
+    Preference order:
+      1) scarpshield.toml
+      2) counterscarp.toml (legacy fallback)
     """
     current_dir = Path.cwd()
 
     # Search up to 5 levels up
     for _ in range(5):
-        config_path = current_dir / "counterscarp.toml"
-        if config_path.exists():
-            return str(config_path)
+        for config_name in CONFIG_FILE_CANDIDATES:
+            config_path = current_dir / config_name
+            if config_path.exists():
+                return str(config_path)
         current_dir = current_dir.parent
         if current_dir == current_dir.parent:  # Reached filesystem root
             break

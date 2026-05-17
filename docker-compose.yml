@@ -8,7 +8,8 @@
 #   docker-compose run --rm counterscarp --target /scan --report --output-dir /output
 #
 # Environment variables (create a .env file or export before running):
-#   COUNTERSCARP_PRO_LICENSE   — Pro license key (leave empty for community tier)
+#   SCARPSHIELD_PRO_LICENSE   — Pro license key (preferred)
+#   COUNTERSCARP_PRO_LICENSE  — Legacy fallback key name
 #
 # Volume mounts:
 #   ./target  → /scan    — place your Solidity project here before running
@@ -37,8 +38,9 @@ services:
 
     # ── Environment ────────────────────────────────────────────────────────────
     environment:
-      # Pro license key — pass via .env or export COUNTERSCARP_PRO_LICENSE=<key>
-      - COUNTERSCARP_PRO_LICENSE=${COUNTERSCARP_PRO_LICENSE:-}
+      # Pro license key (preferred + legacy compatibility)
+      - SCARPSHIELD_PRO_LICENSE=${SCARPSHIELD_PRO_LICENSE:-${COUNTERSCARP_PRO_LICENSE:-}}
+      - COUNTERSCARP_PRO_LICENSE=${COUNTERSCARP_PRO_LICENSE:-${SCARPSHIELD_PRO_LICENSE:-}}
       - STRIPE_PAYG_STARTER_PRICE_ID=${STRIPE_PAYG_STARTER_PRICE_ID:-}
       - STRIPE_PAYG_STANDARD_PRICE_ID=${STRIPE_PAYG_STANDARD_PRICE_ID:-}
       - STRIPE_PAYG_PRO_PACK_PRICE_ID=${STRIPE_PAYG_PRO_PACK_PRICE_ID:-}
@@ -52,7 +54,7 @@ services:
 
     # ── Healthcheck ─────────────────────────────────────────────────────────────
     healthcheck:
-      test: ["CMD", "counterscarp", "--doctor"]
+      test: ["CMD", "scarpshield", "--doctor"]
       interval: 60s
       timeout: 30s
       retries: 3
@@ -122,7 +124,7 @@ volumes:
 #      docker-compose run --rm counterscarp
 #
 # 3. Full audit with Pro license:
-#      COUNTERSCARP_PRO_LICENSE=<key> docker-compose run --rm counterscarp
+#      SCARPSHIELD_PRO_LICENSE=<key> docker-compose run --rm counterscarp
 #
 # 4. Run environment diagnostics:
 #      docker-compose run --rm doctor

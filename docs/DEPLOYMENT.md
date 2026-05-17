@@ -129,15 +129,15 @@ Use `docker compose ps` to view current health status for each service.
 
 | Variable | Description |
 |----------|-------------|
-| `COUNTERSCARP_PRO_LICENSE` | Set your Pro license key to enable premium features |
+| `SCARPSHIELD_PRO_LICENSE` | Set your Pro license key to enable premium features (legacy `COUNTERSCARP_PRO_LICENSE` also supported) |
 
 ```bash
 docker compose run --rm \
-  -e COUNTERSCARP_PRO_LICENSE=your-key \
+  -e SCARPSHIELD_PRO_LICENSE=your-key \
   counterscarp scan /scan/MyContract.sol
 ```
 
-For persistent configuration, add `COUNTERSCARP_PRO_LICENSE` to a `.env` file in the project root — Docker Compose picks it up automatically.
+For persistent configuration, add `SCARPSHIELD_PRO_LICENSE` to a `.env` file in the project root (legacy `COUNTERSCARP_PRO_LICENSE` also works) — Docker Compose picks it up automatically.
 
 ### Production Considerations
 
@@ -624,11 +624,11 @@ On every service startup, the application automatically purges stale working dat
 
 | Data Type | Directory | Retention Period |
 |-----------|-----------|-----------------|
-| State / cache files | `.counterscarp/` | 30 days |
+| State / cache files | `.scarpshield/` (legacy `.counterscarp/` supported) | 30 days |
 | Report directories | `reports/` | 90 days |
 | Upload directories | `uploads/` | 7 days |
 
-> **Note:** These retention periods are currently hardcoded. Configurable retention via `counterscarp.toml` is planned for a future release.
+> **Note:** These retention periods are currently hardcoded. Configurable retention via `scarpshield.toml` (or legacy `counterscarp.toml`) is planned for a future release.
 
 No additional cron jobs are needed for routine cleanup; however, you can still manually purge data if needed:
 

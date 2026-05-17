@@ -10,7 +10,6 @@ completed analysis phase.
 import dataclasses
 import json
 import logging
-import os
 import secrets
 import time
 from datetime import datetime, timezone
@@ -68,22 +67,35 @@ class ScanStateManager:
     """Manages per-session scan state files for resume capability.
 
     State files are stored as JSON inside *counterscarp_dir* (default
-    ``.counterscarp/``).  Each session produces:
+    ``.scarpshield/``).  Each session produces:
 
     * ``scan_state_{session_id}.json``  — top-level session record
     * ``phase_{phase_name}_{session_id}.json``  — per-phase result blobs
 
     Args:
         counterscarp_dir: Directory path where state files are stored.
-            Created automatically if it does not exist.
+            If omitted, `.scarpshield` is used as the preferred
+            state directory.
+            Legacy `.counterscarp` state is still readable for resume.
     """
 
-    def __init__(self, counterscarp_dir: str = ".counterscarp") -> None:
-        self._dir = Path(counterscarp_dir)
+    def __init__(self, counterscarp_dir: Optional[str] = None) -> None:
+        if counterscarp_dir is None:
+            self._dir = Path(".scarpshield")
+            self._legacy_dir = Path(".counterscarp")
+        else:
+            self._dir = Path(counterscarp_dir)
+            self._legacy_dir = None
+
         self._dir.mkdir(parents=True, exist_ok=True)
         self._session_id: Optional[str] = None
         self._state_file: Optional[Path] = None
         logger.debug("ScanStateManager initialised with dir=%s", self._dir)
+
+    @property
+    def storage_dir(self) -> Path:
+        """Return the preferred directory used for new state writes."""
+        return self._dir
 
     # ------------------------------------------------------------------
     # Session lifecycle
@@ -100,7 +112,8 @@ class ScanStateManager:
             The generated session_id string.
         """
         session_id = (
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_"
+            f"{secrets.token_hex(4)}"
         )
         self._session_id = session_id
         self._state_file = self._dir / f"scan_state_{session_id}.json"
@@ -225,7 +238,8 @@ class ScanStateManager:
         """
         if self._session_id is None:
             raise StateError(
-                "No active session — call start_session() or load_session() first.",
+                "No active session — call start_session() or "
+                "load_session() first.",
                 details={"phase": phase_name},
             )
         result_file = self._dir / f"phase_{phase_name}_{self._session_id}.json"
@@ -252,10 +266,11 @@ class ScanStateManager:
             FileNotFoundError: If no state file exists for this session_id.
             StateError: If the state file cannot be parsed.
         """
-        state_file = self._dir / f"scan_state_{session_id}.json"
-        if not state_file.exists():
+        state_file = self._resolve_session_file(session_id)
+        if state_file is None:
             raise FileNotFoundError(
-                f"No state file found for session '{session_id}': {state_file}"
+                f"No state file found for session '{session_id}' "
+                f"in '{self._dir}' or legacy directory."
             )
         try:
             with state_file.open("r", encoding="utf-8") as fh:
@@ -317,7 +332,8 @@ class ScanStateManager:
         """
         if self._session_id is None or self._state_file is None:
             raise StateError(
-                "No active session — call start_session() or load_session() first."
+                "No active session — call start_session() or "
+                "load_session() first."
             )
         if not self._state_file.exists():
             raise StateError(
@@ -353,6 +369,18 @@ class ScanStateManager:
                 f"Failed to write state file: {path}",
                 details={"path": str(path)},
             ) from exc
+
+    def _resolve_session_file(self, session_id: str) -> Optional[Path]:
+        """Resolve a session state file path in preferred then legacy dirs."""
+        filename = f"scan_state_{session_id}.json"
+        preferred = self._dir / filename
+        if preferred.exists():
+            return preferred
+        if self._legacy_dir is not None:
+            legacy = self._legacy_dir / filename
+            if legacy.exists():
+                return legacy
+        return None
 
 
 # ---------------------------------------------------------------------------
