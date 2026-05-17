@@ -5,8 +5,10 @@ import sys
 import os
 import argparse
 import datetime
+import tempfile
 import types as _types
 from typing import List, Dict, Optional, Any, Type, cast
+from pathlib import Path
 
 from logger import get_logger, setup_logging
 
@@ -324,6 +326,31 @@ def _compute_risk_metrics(
         "status_icon": status_icon,
         "total_findings": _total_findings,
     }
+
+
+def _resolve_writable_log_dir() -> str:
+    """Pick a writable directory for runtime scan logs.
+
+    Package-install locations (for example site-packages in containers) can be
+    read-only for non-root users. This helper ensures logs are always written
+    to a writable location.
+    """
+    candidates = [
+        Path.cwd(),
+        Path.home() / ".scarpshield",
+        Path(tempfile.gettempdir()) / "scarpshield",
+    ]
+    for candidate in candidates:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            probe = candidate / ".log_write_probe"
+            with open(probe, "w", encoding="utf-8") as fh:
+                fh.write("ok")
+            probe.unlink(missing_ok=True)
+            return str(candidate)
+        except OSError:
+            continue
+    return tempfile.gettempdir()
 
 
 def _render_markdown_report(
@@ -1002,8 +1029,8 @@ def main() -> None:
     # This ensures scan metadata, errors, and summary stats are always
     # persisted to a log file regardless of shell piping or redirection.
     _log_file = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        f"counterscarp_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        _resolve_writable_log_dir(),
+        f"scarpshield_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
     )
     setup_logging(log_file=_log_file)
     logger.info("Counterscarp Engine scan initializing...")

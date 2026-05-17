@@ -39,7 +39,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Add all tool binary paths to PATH so they can be invoked by name anywhere
-# Note: paths use /root/ during build; overridden to /home/counterscarp/ after USER switch
+# Note: paths use /root/ during build; overridden to /home/scarpshield/ after USER switch
 ENV PATH="/root/.foundry/bin:/root/.cargo/bin:/root/.local/bin:/usr/local/go/bin:/root/go/bin:$PATH"
 
 # ── 1. System dependencies ────────────────────────────────────────────────────
@@ -118,18 +118,20 @@ RUN solc-select install 0.8.19 \
 WORKDIR /scan
 
 # ── 12. Create non-root user ─────────────────────────────────────────────────
-# Run as unprivileged user for defense-in-depth.  Copy Foundry/solc
+# Run as unprivileged user for defense-in-depth. Copy Foundry/solc
 # caches from root's home into the new user's home so tools still work.
-RUN useradd -m -u 1000 counterscarp \
+# Keep /home/counterscarp as a legacy compatibility symlink.
+RUN useradd -m -u 1000 scarpshield \
     && mkdir -p /output /scan \
-    && cp -r /root/.foundry /home/counterscarp/.foundry || true \
-    && cp -r /root/.solc-select /home/counterscarp/.solc-select || true \
-    && cp -r /root/.svm /home/counterscarp/.svm 2>/dev/null || true \
-    && chown -R counterscarp:counterscarp /app /scan /output /home/counterscarp
+    && cp -r /root/.foundry /home/scarpshield/.foundry || true \
+    && cp -r /root/.solc-select /home/scarpshield/.solc-select || true \
+    && cp -r /root/.svm /home/scarpshield/.svm 2>/dev/null || true \
+    && ln -s /home/scarpshield /home/counterscarp \
+    && chown -R scarpshield:scarpshield /app /scan /output /home/scarpshield
 
-ENV PATH="/home/counterscarp/.foundry/bin:/home/counterscarp/.cargo/bin:/home/counterscarp/.local/bin:/usr/local/go/bin:/home/counterscarp/go/bin:$PATH"
+ENV PATH="/home/scarpshield/.foundry/bin:/home/scarpshield/.cargo/bin:/home/scarpshield/.local/bin:/usr/local/go/bin:/home/scarpshield/go/bin:$PATH"
 
-USER counterscarp
+USER scarpshield
 
 # ── 13. Docker HEALTHCHECK ───────────────────────────────────────────────────
 # Runs `scarpshield --doctor` — the built-in environment diagnostic command.

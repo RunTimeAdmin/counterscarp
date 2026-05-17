@@ -34,7 +34,7 @@ services:
       # Mount a host directory to receive reports and PoC exploits
       - ./output:/output
       # Persist Foundry compilation cache across runs
-      - foundry-cache:/home/counterscarp/.foundry/cache
+      - foundry-cache:/home/scarpshield/.foundry/cache
 
     # ── Environment ────────────────────────────────────────────────────────────
     environment:
