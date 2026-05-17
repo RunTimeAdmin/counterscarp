@@ -11,6 +11,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from arq.connections import RedisSettings
 
@@ -52,24 +53,31 @@ import threading
 _user_audit_index_lock = threading.Lock()
 
 
+def _user_index_file(user_id: str) -> Path:
+    """Return a per-user audit index file path with sanitized filename."""
+    import re
+    safe_user = re.sub(r"[^a-zA-Z0-9_-]", "_", user_id)[:128]
+    return (_project_root / "data" / "user_audit_index") / f"{safe_user}.json"
+
+
 def _update_user_audit_index_worker(user_id: str, audit_summary: dict) -> None:
     """Append an audit summary to the per-user audit index (worker variant)."""
     if not user_id:
         return
-    index_path = _project_root / "data" / "user_audit_index.json"
+    index_path = _user_index_file(user_id)
     with _user_audit_index_lock:
-        data: dict = {}
+        user_audits: list = []
         if index_path.exists():
             try:
-                data = json.loads(index_path.read_text(encoding="utf-8"))
+                loaded = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    user_audits = loaded
             except (json.JSONDecodeError, OSError):
-                data = {}
-        user_audits = data.get(user_id, [])
+                user_audits = []
         user_audits.append(audit_summary)
-        data[user_id] = user_audits
         index_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = index_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.write_text(json.dumps(user_audits, indent=2), encoding="utf-8")
         tmp.replace(index_path)
 
 
@@ -120,32 +128,16 @@ def _send_scan_notification(email: str, audit_id: str, status: str, project_name
 
 def _write_scan_index_worker(results_dir: Path, audit_id: str, findings_data: list, scan_meta: dict) -> None:
     """Write a lightweight scan_index.json for fast dashboard reads."""
-    severity_weights = {
-        "CRITICAL": 10.0, "HIGH": 5.0,
-        "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
-    }
-    sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for fd in findings_data:
-        sev = fd.get("severity", "INFO").upper()
-        key = sev.lower()
-        if key in sev_counts:
-            sev_counts[key] += 1
-
-    total = len(findings_data)
-    if total:
-        total_w = sum(severity_weights.get(fd.get("severity", "INFO"), 0) for fd in findings_data)
-        max_w = total * severity_weights["CRITICAL"]
-        risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
-    else:
-        risk_score = 0.0
+    from webapp.scan_utils import summarize_findings_data
+    summary = summarize_findings_data(findings_data)
 
     index = {
         "audit_id": audit_id,
         "project_name": scan_meta.get("project_name", "Unknown"),
         "timestamp": scan_meta.get("timestamp", ""),
-        "severity_counts": sev_counts,
-        "risk_score": risk_score,
-        "total_findings": total,
+        "severity_counts": summary["severity_counts_lower"],
+        "risk_score": summary["risk_score"],
+        "total_findings": summary["total_findings"],
         "has_pdf": (results_dir / "report.pdf").exists(),
         "has_html": (results_dir / "report.html").exists(),
         "has_md": (results_dir / "report.md").exists(),
@@ -186,6 +178,7 @@ async def run_audit(
         generate_reports,
         generate_attack_graph,
         build_analyzers_list,
+        summarize_findings_data,
     )
     from heuristic_scanner import scan_target
     from report_generator import Finding, create_audit_report
@@ -213,14 +206,18 @@ async def run_audit(
         _write_status(results_dir, "running", "Running Slither analysis...", started_at)
         slither_findings: list[Finding] = []
         slither_status = "skipped"
-        for fp_str in uploaded_paths:
-            if fp_str.endswith(".sol"):
-                sf, status = run_slither_analysis(fp_str)
-                slither_findings.extend(sf)
-                if status != "completed" and slither_status == "skipped":
-                    slither_status = status
-                elif status == "completed":
-                    slither_status = "completed"
+        sol_paths = [fp for fp in uploaded_paths if fp.endswith(".sol")]
+        if sol_paths:
+            max_workers = min(4, len(sol_paths))
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = [pool.submit(run_slither_analysis, fp) for fp in sol_paths]
+                for future in as_completed(futures):
+                    sf, status = future.result()
+                    slither_findings.extend(sf)
+                    if status == "completed":
+                        slither_status = "completed"
+                    elif slither_status == "skipped":
+                        slither_status = status
         findings.extend(slither_findings)
 
         # 3. AI Copilot
@@ -257,6 +254,7 @@ async def run_audit(
 
         # Save findings JSON
         findings_data = serialize_findings(findings)
+        findings_summary = summarize_findings_data(findings_data)
         findings_path = results_dir / "findings.json"
         findings_path.write_text(json.dumps(findings_data, indent=2), encoding="utf-8")
 
@@ -316,16 +314,8 @@ async def run_audit(
             "audit_id": audit_id,
             "project_name": scan_meta.get("project_name", "Unknown"),
             "timestamp": scan_meta.get("timestamp", ""),
-            "severity_counts": {
-                "critical": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "CRITICAL"),
-                "high": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "HIGH"),
-                "medium": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "MEDIUM"),
-                "low": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "LOW"),
-            },
-            "risk_score": round(min(100.0, (sum(
-                {"CRITICAL": 10.0, "HIGH": 5.0, "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1}.get(fd.get("severity", "INFO"), 0)
-                for fd in findings_data
-            ) / max(len(findings_data) * 10.0, 1.0)) * 100), 1) if findings_data else 0.0,
+            "severity_counts": findings_summary["severity_counts_lower"],
+            "risk_score": findings_summary["risk_score"],
         })
 
         # Done!

@@ -10,6 +10,7 @@ import shutil
 import sys
 import time
 import uuid
+import codecs
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,7 +22,6 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     RedirectResponse,
-    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -100,26 +100,37 @@ _license = LicenseManager()
 
 from webapp.scan_utils import (
     heuristic_finding_to_finding,
-    count_lines as _count_lines,
     run_slither_analysis,
     run_ai_copilot,
     serialize_findings,
     generate_reports,
     generate_attack_graph,
     build_analyzers_list,
+    summarize_findings_data,
 )
 
 
 def validate_audit_id(audit_id: str) -> str:
     """Validate audit_id is a UUID and resolves inside RESULTS_DIR."""
+    return _normalize_audit_id(audit_id)
+
+
+def _normalize_audit_id(audit_id: str) -> str:
+    """Canonicalize and validate a UUID audit ID."""
     try:
-        uuid.UUID(audit_id)
+        return str(uuid.UUID(audit_id))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid audit ID format")
-    resolved = (RESULTS_DIR / audit_id).resolve()
-    if not str(resolved).startswith(str(RESULTS_DIR.resolve())):
+
+
+def _resolve_audit_dir(base_dir: Path, audit_id: str) -> Path:
+    """Resolve and constrain an audit directory to the provided base path."""
+    normalized_id = _normalize_audit_id(audit_id)
+    resolved = (base_dir / normalized_id).resolve()
+    base_resolved = base_dir.resolve()
+    if not resolved.is_relative_to(base_resolved):
         raise HTTPException(status_code=403, detail="Access denied")
-    return audit_id
+    return resolved
 
 
 # Import Counterscarp Engine modules (scan_utils re-exports shared logic)
@@ -273,6 +284,82 @@ async def async_run_slither_analysis(file_path: str) -> tuple[list[Finding], str
         return await loop.run_in_executor(
             None, run_slither_analysis, file_path, UPLOAD_DIR
         )
+
+
+async def run_slither_batch_async(file_paths: List[str], max_concurrency: int = 4) -> tuple[list[Finding], str]:
+    """Run Slither across files concurrently with bounded parallelism."""
+    import asyncio
+
+    if not file_paths:
+        return [], "skipped"
+
+    semaphore = asyncio.Semaphore(max(1, max_concurrency))
+
+    async def _run_one(path: str) -> tuple[list[Finding], str]:
+        async with semaphore:
+            return await async_run_slither_analysis(path)
+
+    results = await asyncio.gather(*(_run_one(path) for path in file_paths))
+
+    all_findings: list[Finding] = []
+    status = "skipped"
+    for finding_batch, batch_status in results:
+        all_findings.extend(finding_batch)
+        if batch_status == "completed":
+            status = "completed"
+        elif status == "skipped" and batch_status != "completed":
+            status = batch_status
+    return all_findings, status
+
+
+async def _save_upload_file_streaming(upload: UploadFile, destination: Path) -> int:
+    """Stream uploaded content to disk with size and UTF-8 validation.
+
+    Returns the number of source lines detected while streaming.
+    """
+    total_bytes = 0
+    line_count = 0
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
+    chunk_size = 1024 * 1024
+
+    try:
+        with open(destination, "wb") as fw:
+            while True:
+                chunk = await upload.read(chunk_size)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"File too large: {upload.filename} "
+                            f"(max {MAX_FILE_SIZE // 1024 // 1024}MB)"
+                        ),
+                    )
+                try:
+                    decoded = decoder.decode(chunk, final=False)
+                except UnicodeDecodeError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File {upload.filename} is not valid text",
+                    )
+                line_count += decoded.count("\n")
+                fw.write(chunk)
+
+            try:
+                decoded_tail = decoder.decode(b"", final=True)
+            except UnicodeDecodeError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {upload.filename} is not valid text",
+                )
+            line_count += decoded_tail.count("\n")
+            return line_count
+    except Exception:
+        if destination.exists():
+            destination.unlink(missing_ok=True)
+        raise
 
 
 # Load persisted API keys from data/.env.local
@@ -446,34 +533,16 @@ async def audit(
     upload_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save uploaded files
-    uploaded_paths = []
+    # Save uploaded files with streaming validation to reduce memory spikes.
+    uploaded_paths: list[str] = []
+    uploaded_total_source_lines = 0
     for file in valid_files:
-        content = await file.read()
-
-        # Check file size
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large: {file.filename} (max {MAX_FILE_SIZE // 1024 // 1024}MB)"
-            )
-
-        # Validate content is valid UTF-8 text (not binary)
-        try:
-            content.decode('utf-8', errors='strict')
-        except UnicodeDecodeError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File {file.filename} is not valid text"
-            )
-
         # Sanitize filename: strip path separators, allow only safe chars, limit length
         safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', Path(file.filename or "unnamed").name)[:100]
         file_path = upload_dir / safe_name
-
-        with open(file_path, "wb") as fw:
-            fw.write(content)
+        uploaded_total_source_lines += await _save_upload_file_streaming(file, file_path)
         uploaded_paths.append(str(file_path))
+        await file.close()
 
     # --- Async (arq) vs sync scan dispatch ---
     arq_pool = getattr(request.app.state, "arq_pool", None)
@@ -573,17 +642,9 @@ async def audit(
 
     heuristic_count = len(findings)
 
-    # Run Slither static analysis on Solidity files (async — non-blocking)
-    slither_findings: list[Finding] = []
-    slither_status = "skipped"
-    for fp_str in uploaded_paths:
-        if fp_str.endswith(".sol"):
-            slither_result, status = await async_run_slither_analysis(fp_str)
-            slither_findings.extend(slither_result)
-            if status != "completed" and slither_status == "skipped":
-                slither_status = status
-            elif status == "completed":
-                slither_status = "completed"
+    # Run Slither static analysis on Solidity files with bounded concurrency.
+    sol_paths = [path for path in uploaded_paths if path.endswith(".sol")]
+    slither_findings, slither_status = await run_slither_batch_async(sol_paths, max_concurrency=4)
     findings.extend(slither_findings)
 
     # Run AI Audit Copilot (PRO feature)
@@ -609,6 +670,7 @@ async def audit(
 
     # Save findings as JSON
     findings_data = serialize_findings(findings)
+    findings_summary = summarize_findings_data(findings_data)
 
     findings_path = results_dir / "findings.json"
     with open(findings_path, "w", encoding="utf-8") as f:
@@ -655,7 +717,7 @@ async def audit(
         "project_name": project_name,
         "timestamp": datetime.now().isoformat(),
         "files_scanned": len(uploaded_paths),
-        "total_source_lines": sum(_count_lines(fp) for fp in uploaded_paths),
+        "total_source_lines": uploaded_total_source_lines,
         "analyzers": analyzers_list,
         "rules_triggered": sorted(
             str(fd["rule_id"]) for fd in findings_data
@@ -674,18 +736,8 @@ async def audit(
         "audit_id": audit_id,
         "project_name": scan_meta.get("project_name", "Unknown"),
         "timestamp": scan_meta.get("timestamp", ""),
-        "severity_counts": {
-            k: v for k, v in {
-                "critical": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "CRITICAL"),
-                "high": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "HIGH"),
-                "medium": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "MEDIUM"),
-                "low": sum(1 for fd in findings_data if fd.get("severity", "").upper() == "LOW"),
-            }.items()
-        },
-        "risk_score": round(min(100.0, (sum(
-            {"CRITICAL": 10.0, "HIGH": 5.0, "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1}.get(fd.get("severity", "INFO"), 0)
-            for fd in findings_data
-        ) / max(len(findings_data) * 10.0, 1.0)) * 100), 1) if findings_data else 0.0,
+        "severity_counts": findings_summary["severity_counts_lower"],
+        "risk_score": findings_summary["risk_score"],
     })
 
     redirect = RedirectResponse(
@@ -698,7 +750,8 @@ async def audit(
 @app.get("/results/{audit_id}/pending", response_class=HTMLResponse)
 async def results_pending(request: Request, audit_id: str = Depends(validate_audit_id)):
     """Show the scan-in-progress page for an async audit."""
-    results_dir = RESULTS_DIR / audit_id
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
     if not results_dir.exists():
         raise HTTPException(status_code=404, detail="Audit not found")
     return templates.TemplateResponse(
@@ -714,7 +767,8 @@ async def results_pending(request: Request, audit_id: str = Depends(validate_aud
 @app.get("/api/audit/{audit_id}/status")
 async def audit_status_api(audit_id: str = Depends(validate_audit_id)):
     """Return the current scan status JSON for an async audit."""
-    results_dir = RESULTS_DIR / audit_id
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
     status_path = results_dir / "scan_status.json"
     if not status_path.exists():
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -730,20 +784,17 @@ async def delete_audit(request: Request, audit_id: str = Depends(validate_audit_
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    results_dir = RESULTS_DIR / audit_id
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
     if not results_dir.exists():
         raise HTTPException(status_code=404, detail="Audit not found")
 
     # Verify ownership via scan_meta.json
-    meta_path = results_dir / "scan_meta.json"
-    if meta_path.exists():
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-        owner = meta.get("owner_user_id")
-        if owner and owner != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
-    else:
+    owner = _get_audit_owner(results_dir)
+    if owner is None:
         raise HTTPException(status_code=404, detail="Audit metadata not found")
+    if owner != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     user_id = current_user["id"]
 
@@ -754,7 +805,7 @@ async def delete_audit(request: Request, audit_id: str = Depends(validate_audit_
     _remove_from_user_audit_index(user_id, audit_id)
 
     # Also clean up the upload directory if it exists
-    upload_dir = UPLOAD_DIR / audit_id
+    upload_dir = _resolve_audit_dir(UPLOAD_DIR, audit_id)
     if upload_dir.exists():
         shutil.rmtree(upload_dir, ignore_errors=True)
 
@@ -773,7 +824,8 @@ async def delete_audit(request: Request, audit_id: str = Depends(validate_audit_
 @app.get("/results/{audit_id}", response_class=HTMLResponse)
 async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
     """Display audit results."""
-    results_dir = RESULTS_DIR / audit_id
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
     findings_path = results_dir / "findings.json"
 
     if not findings_path.exists():
@@ -781,15 +833,12 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
 
     # Ownership check
     current_user = get_current_user(request)
-    meta_path_acl = results_dir / "scan_meta.json"
-    if meta_path_acl.exists():
-        with open(meta_path_acl) as _mf:
-            _acl_meta = json.load(_mf)
-        if _acl_meta.get("owner_user_id") and current_user:
-            if _acl_meta["owner_user_id"] != current_user["id"]:
-                raise HTTPException(status_code=403, detail="Access denied")
-        elif _acl_meta.get("owner_user_id") and not current_user:
-            return RedirectResponse(url="/auth/login")
+    owner_id = _get_audit_owner(results_dir)
+    if owner_id and current_user:
+        if owner_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif owner_id and not current_user:
+        return RedirectResponse(url="/auth/login")
 
     # Load findings
     with open(findings_path, "r", encoding="utf-8") as f:
@@ -902,32 +951,15 @@ async def terms_page(request: Request):
 
 def _write_scan_index(results_dir: Path, audit_id: str, findings_data: list, scan_meta: dict) -> None:
     """Write a lightweight scan_index.json for fast dashboard reads."""
-    severity_weights = {
-        "CRITICAL": 10.0, "HIGH": 5.0,
-        "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
-    }
-    sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for fd in findings_data:
-        sev = fd.get("severity", "INFO").upper()
-        key = sev.lower()
-        if key in sev_counts:
-            sev_counts[key] += 1
-
-    total = len(findings_data)
-    if total:
-        total_w = sum(severity_weights.get(fd.get("severity", "INFO"), 0) for fd in findings_data)
-        max_w = total * severity_weights["CRITICAL"]
-        risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
-    else:
-        risk_score = 0.0
+    summary = summarize_findings_data(findings_data)
 
     index = {
         "audit_id": audit_id,
         "project_name": scan_meta.get("project_name", "Unknown"),
         "timestamp": scan_meta.get("timestamp", ""),
-        "severity_counts": sev_counts,
-        "risk_score": risk_score,
-        "total_findings": total,
+        "severity_counts": summary["severity_counts_lower"],
+        "risk_score": summary["risk_score"],
+        "total_findings": summary["total_findings"],
         "has_pdf": (results_dir / "report.pdf").exists(),
         "has_html": (results_dir / "report.html").exists(),
         "has_md": (results_dir / "report.md").exists(),
@@ -937,7 +969,28 @@ def _write_scan_index(results_dir: Path, audit_id: str, findings_data: list, sca
 
 
 _USER_AUDIT_INDEX_PATH: Path = BASE_DIR / "data" / "user_audit_index.json"
+_USER_AUDIT_INDEX_DIR: Path = BASE_DIR / "data" / "user_audit_index"
 _user_audit_index_lock = __import__("threading").Lock()
+
+
+def _user_index_file(user_id: str) -> Path:
+    """Return a per-user audit index path constrained to safe filename chars."""
+    safe_user = re.sub(r"[^a-zA-Z0-9_-]", "_", user_id)[:128]
+    return _USER_AUDIT_INDEX_DIR / f"{safe_user}.json"
+
+
+def _get_audit_owner(results_dir: Path) -> Optional[str]:
+    """Read owner_user_id from scan metadata if available."""
+    meta_path = results_dir / "scan_meta.json"
+    if not meta_path.exists():
+        return None
+    try:
+        with open(meta_path, "r", encoding="utf-8") as meta_file:
+            meta = json.load(meta_file)
+    except (json.JSONDecodeError, OSError):
+        return None
+    owner = meta.get("owner_user_id")
+    return str(owner) if owner else None
 
 
 def _update_user_audit_index(user_id: str, audit_summary: dict) -> None:
@@ -945,19 +998,20 @@ def _update_user_audit_index(user_id: str, audit_summary: dict) -> None:
     if not user_id:
         return
     with _user_audit_index_lock:
-        data: Dict[str, list] = {}
-        if _USER_AUDIT_INDEX_PATH.exists():
+        index_path = _user_index_file(user_id)
+        user_audits: List[Dict[str, Any]] = []
+        if index_path.exists():
             try:
-                data = json.loads(_USER_AUDIT_INDEX_PATH.read_text(encoding="utf-8"))
+                loaded = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    user_audits = loaded
             except (json.JSONDecodeError, OSError):
-                data = {}
-        user_audits = data.get(user_id, [])
+                user_audits = []
         user_audits.append(audit_summary)
-        data[user_id] = user_audits
-        _USER_AUDIT_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _USER_AUDIT_INDEX_PATH.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        tmp.replace(_USER_AUDIT_INDEX_PATH)
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = index_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(user_audits, indent=2), encoding="utf-8")
+        tmp.replace(index_path)
 
 
 def _remove_from_user_audit_index(user_id: str, audit_id: str) -> None:
@@ -965,17 +1019,19 @@ def _remove_from_user_audit_index(user_id: str, audit_id: str) -> None:
     if not user_id:
         return
     with _user_audit_index_lock:
-        data: Dict[str, list] = {}
-        if _USER_AUDIT_INDEX_PATH.exists():
+        index_path = _user_index_file(user_id)
+        user_audits: List[Dict[str, Any]] = []
+        if index_path.exists():
             try:
-                data = json.loads(_USER_AUDIT_INDEX_PATH.read_text(encoding="utf-8"))
+                loaded = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    user_audits = loaded
             except (json.JSONDecodeError, OSError):
-                data = {}
-        user_audits = data.get(user_id, [])
-        data[user_id] = [a for a in user_audits if a.get("audit_id") != audit_id]
-        tmp = _USER_AUDIT_INDEX_PATH.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        tmp.replace(_USER_AUDIT_INDEX_PATH)
+                user_audits = []
+        updated = [entry for entry in user_audits if entry.get("audit_id") != audit_id]
+        tmp = index_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+        tmp.replace(index_path)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -990,7 +1046,38 @@ async def dashboard_page(request: Request):
 
     # --- Fast path: read from per-user audit index ---
     _used_user_index = False
-    if _USER_AUDIT_INDEX_PATH.exists():
+    per_user_index = _user_index_file(str(user_id))
+    if per_user_index.exists():
+        try:
+            _user_entries = json.loads(per_user_index.read_text(encoding="utf-8"))
+            if isinstance(_user_entries, list):
+                for entry in _user_entries:
+                    ts = None
+                    ts_raw = entry.get("timestamp", "")
+                    try:
+                        ts = datetime.fromisoformat(ts_raw)
+                    except (ValueError, TypeError):
+                        pass
+                    raw_sev = entry.get("severity_counts", {})
+                    audits.append({
+                        "audit_id": entry.get("audit_id", ""),
+                        "project_name": entry.get("project_name", "Unknown"),
+                        "timestamp": ts,
+                        "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
+                        "severity_counts": {
+                            "CRITICAL": raw_sev.get("critical", 0),
+                            "HIGH": raw_sev.get("high", 0),
+                            "MEDIUM": raw_sev.get("medium", 0),
+                            "LOW": raw_sev.get("low", 0),
+                        },
+                        "risk_score": entry.get("risk_score", 0.0),
+                        "has_report": True,
+                    })
+                _used_user_index = True
+        except (json.JSONDecodeError, OSError):
+            pass
+    elif _USER_AUDIT_INDEX_PATH.exists():
+        # Backward-compatible fallback for legacy global index format.
         try:
             _idx_data = json.loads(_USER_AUDIT_INDEX_PATH.read_text(encoding="utf-8"))
             _user_entries = _idx_data.get(user_id, [])
@@ -1943,9 +2030,14 @@ async def get_license_status(request: Request):
 
 
 @app.get("/results/{audit_id}/report/{format}")
-async def download_report(audit_id: str = Depends(validate_audit_id), format: str = ""):
+async def download_report(
+    request: Request,
+    audit_id: str = Depends(validate_audit_id),
+    format: str = "",
+):
     """Download a report file."""
-    results_dir = RESULTS_DIR / audit_id
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
 
     format_map = {
         "html": ("report.html", "text/html"),
@@ -1957,6 +2049,13 @@ async def download_report(audit_id: str = Depends(validate_audit_id), format: st
 
     if format not in format_map:
         raise HTTPException(status_code=400, detail=f"Invalid format: {format}")
+
+    current_user = get_current_user(request)
+    owner_id = _get_audit_owner(results_dir)
+    if owner_id and current_user and owner_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if owner_id and not current_user:
+        return RedirectResponse(url="/auth/login")
 
     filename, content_type = format_map[format]
     file_path = results_dir / filename
@@ -1974,7 +2073,8 @@ async def download_report(audit_id: str = Depends(validate_audit_id), format: st
 @app.get("/results/{audit_id}/attack-graph", response_class=HTMLResponse)
 async def attack_graph(request: Request, audit_id: str = Depends(validate_audit_id)):
     """View the attack graph."""
-    results_dir = RESULTS_DIR / audit_id
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
     graph_path = results_dir / "attack_graph.html"
 
     if not graph_path.exists():
@@ -1982,17 +2082,10 @@ async def attack_graph(request: Request, audit_id: str = Depends(validate_audit_
 
     # Ownership check
     current_user = get_current_user(request)
-    meta_path_acl = results_dir / "scan_meta.json"
-    if meta_path_acl.exists():
-        with open(meta_path_acl) as _mf:
-            _acl_meta = json.load(_mf)
-        if _acl_meta.get("owner_user_id") and current_user:
-            if _acl_meta["owner_user_id"] != current_user["id"]:
-                raise HTTPException(status_code=403, detail="Access denied")
-        elif _acl_meta.get("owner_user_id") and not current_user:
-            return RedirectResponse(url="/auth/login")
+    owner_id = _get_audit_owner(results_dir)
+    if owner_id and current_user and owner_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if owner_id and not current_user:
+        return RedirectResponse(url="/auth/login")
 
-    with open(graph_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    return HTMLResponse(content=content)
+    return FileResponse(path=str(graph_path), media_type="text/html")

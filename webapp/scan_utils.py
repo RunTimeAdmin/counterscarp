@@ -13,18 +13,15 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
 from heuristic_scanner import (
     HeuristicFinding,
     RULE_CATEGORIES,
     HEURISTIC_RULES,
-    scan_target,
 )
 from report_generator import (
     AuditReport,
     Finding,
-    create_audit_report,
     generate_html_report,
     generate_markdown_report,
     save_sarif_report,
@@ -50,6 +47,14 @@ from visualizer import generate_attack_graph_html
 from logger import get_logger
 
 logger = get_logger(__name__)
+
+SEVERITY_WEIGHTS: dict[str, float] = {
+    "CRITICAL": 10.0,
+    "HIGH": 5.0,
+    "MEDIUM": 2.0,
+    "LOW": 0.5,
+    "INFO": 0.1,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +82,31 @@ def count_lines(path: str) -> int:
     """Count lines in a file."""
     with open(path, encoding="utf-8", errors="ignore") as f:
         return sum(1 for _ in f)
+
+
+def summarize_findings_data(findings_data: list[dict]) -> dict:
+    """Compute severity counts and normalized risk score in one pass."""
+    severity_counts_lower = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    total_weight = 0.0
+    for finding in findings_data:
+        sev = str(finding.get("severity", "INFO")).upper()
+        total_weight += SEVERITY_WEIGHTS.get(sev, 0.0)
+        sev_key = sev.lower()
+        if sev_key in severity_counts_lower:
+            severity_counts_lower[sev_key] += 1
+
+    total = len(findings_data)
+    if total > 0:
+        max_weight = total * SEVERITY_WEIGHTS["CRITICAL"]
+        risk_score = round(min(100.0, (total_weight / max(max_weight, 1.0)) * 100), 1)
+    else:
+        risk_score = 0.0
+
+    return {
+        "severity_counts_lower": severity_counts_lower,
+        "risk_score": risk_score,
+        "total_findings": total,
+    }
 
 
 # ---------------------------------------------------------------------------

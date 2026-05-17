@@ -290,11 +290,13 @@ def _compute_risk_metrics(
     Returns:
         Dict with severity_counts, critical_count, status_icon, total_findings.
     """
-    critical_count = (
-        len(fuzz_results)
-        + len([x for x in static_results if x.get("impact", "").lower() in ("high", "critical")])
-        + len([x for x in heuristic_results if x.get("severity", "").upper() == "CRITICAL"])
-    )
+    critical_count = len(fuzz_results)
+    for result in static_results:
+        if result.get("impact", "").lower() in ("high", "critical"):
+            critical_count += 1
+    for result in heuristic_results:
+        if result.get("severity", "").upper() == "CRITICAL":
+            critical_count += 1
     status_icon = "[CRITICAL]" if critical_count > 0 else "[STABLE]"
 
     _severity_counts: Dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}

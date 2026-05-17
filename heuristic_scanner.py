@@ -744,18 +744,18 @@ def is_in_multiline_comment(
 
 def _check_safe_patterns(
     finding: "HeuristicFinding",
-    file_lines: List[str],
+    header_text: str,
     safe_patterns: Optional[List[Any]] = None,
 ) -> None:
     """Check if a finding matches a known-safe library pattern and downgrade severity.
 
-    Scans the first 100 lines of the file for known import/inheritance patterns
+    Scans the precomputed file header text for known import/inheritance patterns
     (e.g., OpenZeppelin, Uniswap). When a match is found, the finding's severity
     is downgraded and an explanatory note is appended to the message.
 
     Args:
         finding: The HeuristicFinding to (potentially) modify in-place.
-        file_lines: All source lines of the scanned file.
+        header_text: Precomputed source header text (typically first 100 lines).
         safe_patterns: Override list of SafePattern objects. Defaults to
             DEFAULT_SAFE_PATTERNS from config_loader.
     """
@@ -763,9 +763,6 @@ def _check_safe_patterns(
         patterns = safe_patterns if safe_patterns is not None else _get_safe_patterns()
     else:
         return
-
-    # Build context from imports and inheritance (first 100 lines typically enough)
-    header_text = "".join(file_lines[:min(100, len(file_lines))])
 
     for sp in patterns:
         if sp.rule_id != finding.rule_id:
@@ -886,20 +883,33 @@ def _scan_lines_for_rules(
         List of HeuristicFinding objects (not yet deduplicated).
     """
     findings: List[HeuristicFinding] = []
-    comment_map: Optional[List[bool]] = None  # Built lazily on first need
+    comment_map = _build_comment_map(lines)
+    header_text = "".join(lines[:min(100, len(lines))])
+
+    active_rules: List[Tuple["HeuristicRule", str]] = []
+    if config and config.heuristics:
+        for rule in all_rules:
+            if not config.heuristics.is_rule_enabled(rule.id):
+                continue
+            effective_severity = config.heuristics.get_rule_severity(rule.id, rule.severity)
+            active_rules.append((rule, effective_severity))
+    else:
+        active_rules = [(rule, rule.severity) for rule in all_rules]
+
+    safe_patterns_by_rule: Dict[str, List[Any]] = {}
+    if CONFIG_AVAILABLE:
+        safe_patterns = _get_safe_patterns()
+        for pattern in safe_patterns:
+            safe_patterns_by_rule.setdefault(pattern.rule_id, []).append(pattern)
 
     for i, line in enumerate(lines, start=1):
         stripped = line.strip()
         if stripped.startswith("//"):
             continue  # Skip comment-only lines early
 
-        for rule in all_rules:
-            if config and config.heuristics and not config.heuristics.is_rule_enabled(rule.id):
+        for rule, effective_severity in active_rules:
+            if not rule.pattern.search(line):
                 continue
-
-            effective_severity = rule.severity
-            if config and config.heuristics:
-                effective_severity = config.heuristics.get_rule_severity(rule.id, rule.severity)
 
             for match in rule.pattern.finditer(line):
                 match_start = match.start()
@@ -911,8 +921,6 @@ def _scan_lines_for_rules(
                     )
                     continue
 
-                if comment_map is None:
-                    comment_map = _build_comment_map(lines)
                 if comment_map[i - 1]:
                     logger.debug(
                         "Skipping match for %s in multi-line comment at %s:%d:%d",
@@ -926,7 +934,11 @@ def _scan_lines_for_rules(
                 if rule.refine and not rule.refine(finding, lines, i - 1):
                     continue
 
-                _check_safe_patterns(finding, lines)
+                _check_safe_patterns(
+                    finding,
+                    header_text=header_text,
+                    safe_patterns=safe_patterns_by_rule.get(finding.rule_id),
+                )
                 findings.append(finding)
                 break  # One finding per rule per line
 
