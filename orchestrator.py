@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import sys
 import os
+import json
 import argparse
 import datetime
 import tempfile
 import types as _types
 from typing import List, Dict, Optional, Any, Type, cast
 from pathlib import Path
+from path_security import sanitize_cli_path, sanitize_output_path
 
 from logger import get_logger, setup_logging
 
@@ -688,9 +690,9 @@ def _resolve_action_plan_path(output_dir: Optional[str] = None) -> str:
     """
     _action_plan_name = "ACTION_PLAN.md"
     if output_dir:
-        from pathlib import Path as _Path
-        _Path(output_dir).mkdir(parents=True, exist_ok=True)
-        return str(_Path(output_dir) / _action_plan_name)
+        safe_output_dir = sanitize_output_path(output_dir)
+        safe_output_dir.mkdir(parents=True, exist_ok=True)
+        return str(safe_output_dir / _action_plan_name)
     return f"ACTION_PLAN_{datetime.date.today()}.md"
 
 
@@ -749,8 +751,9 @@ def _write_action_plan_file(path: str, content: str) -> None:
         path: Destination file path.
         content: Markdown content to write.
     """
-    with open(path, "w", encoding="utf-8", errors="replace") as f:
-        f.write(content)
+    safe_path = sanitize_output_path(path)
+    safe_path.parent.mkdir(parents=True, exist_ok=True)
+    safe_path.write_text(content, encoding="utf-8", errors="replace")
 
 
 def _generate_action_plan_report(
@@ -1166,6 +1169,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--update-from-file",
+        type=argparse.FileType("r", encoding="utf-8"),
         default=None,
         metavar="PATH",
         help="Import threat intel from a pre-downloaded JSON file (offline import)",
@@ -1216,9 +1220,13 @@ def main() -> None:
         sys.exit(0 if not failed else 1)
 
     if args.update_from_file:
-        from signature_updater import update_from_file
-        logger.info("Importing threat intel from: %s", args.update_from_file)
-        success = update_from_file(args.update_from_file)
+        from signature_updater import update_from_data
+        safe_update_file = str(
+            sanitize_cli_path(args.update_from_file.name, allowed_suffixes={".json"})
+        )
+        logger.info("Importing threat intel from: %s", safe_update_file)
+        payload = json.load(args.update_from_file)
+        success = update_from_data(payload, source_path=safe_update_file)
         sys.exit(0 if success else 1)
 
     # Validate --target is provided for scanning operations (unless resuming)
@@ -1249,12 +1257,39 @@ def main() -> None:
     state_mgr = ScanStateManager()
 
     if args.resume:
-        session = state_mgr.load_session(args.resume)
-        args.target = session["target"]
-        completed = state_mgr.get_completed_phases()
-        logger.info("Resuming scan %s — %d phases already done", args.resume, len(completed))
+        safe_resume = "".join(
+            ch for ch in args.resume if ch.isalnum() or ch in {"-", "_"}
+        )
+        if not safe_resume or safe_resume != args.resume:
+            logger.error("Invalid --resume session id format")
+            sys.exit(1)
+        args.resume = safe_resume
+        resume_state_path = state_mgr.storage_dir / f"scan_state_{args.resume}.json"
+        if not resume_state_path.exists():
+            logger.error("Resume session not found: %s", args.resume)
+            sys.exit(1)
+        try:
+            resume_state = json.loads(
+                resume_state_path.read_text(encoding="utf-8")
+            )
+            args.target = resume_state["target"]
+            completed = resume_state.get("phases_completed", [])
+            logger.info(
+                "Resuming scan %s — %d phases already done",
+                args.resume,
+                len(completed),
+            )
+        except Exception as e:
+            logger.error("Failed to read resume session '%s': %s", args.resume, e)
+            sys.exit(1)
+        # Start a new follow-on session ID so no future state writes depend on
+        # user-provided resume identifiers.
+        state_mgr = ScanStateManager()
+        session_id = state_mgr.start_session(str(args.target), {"mode": "resume"})
+        logger.info("Started resumed follow-on session: %s", session_id)
     else:
-        cli_args = {k: v for k, v in vars(args).items() if v is not None}
+        # Persist only minimal metadata to avoid storing raw untrusted paths.
+        cli_args = {"mode": "scan"}
         session_id = state_mgr.start_session(str(args.target), cli_args)
         logger.info(f"New scan session: {session_id}")
 
@@ -1275,7 +1310,7 @@ def main() -> None:
     _session_short = str(state_mgr._session_id)[:8]
     _engine_root = Path(os.path.dirname(os.path.abspath(__file__)))
     if args.output_dir:
-        _reports_base = Path(args.output_dir)
+        _reports_base = sanitize_output_path(args.output_dir)
     else:
         _reports_base = _engine_root / "reports"
     scan_output_dir = _reports_base / f"{_proj_slug}_{_scan_date_str}_{_session_short}"
@@ -1283,6 +1318,11 @@ def main() -> None:
     logger.info("Per-scan output directory: %s", scan_output_dir)
 
     # --- Path validation (fast-fail before any scan work) ---
+    try:
+        args.target = str(sanitize_cli_path(args.target))
+    except Exception as e:
+        logger.error("Invalid --target path: %s", e)
+        sys.exit(1)
     if not os.path.exists(args.target):
         msg = f"Target path does not exist: {args.target}"
         logger.error(msg)
@@ -1291,10 +1331,26 @@ def main() -> None:
         msg = f"Target file must be a Solidity (.sol) file, got: {args.target}"
         logger.error(msg)
         sys.exit(1)
+    if args.upgrade_old:
+        try:
+            args.upgrade_old = str(
+                sanitize_cli_path(args.upgrade_old, allowed_suffixes={".sol"})
+            )
+        except Exception as e:
+            logger.error("Invalid --upgrade-old path: %s", e)
+            sys.exit(1)
     if args.upgrade_old and not os.path.exists(args.upgrade_old):
         msg = f"--upgrade-old path does not exist: {args.upgrade_old}"
         logger.error(msg)
         sys.exit(1)
+    if args.upgrade_new:
+        try:
+            args.upgrade_new = str(
+                sanitize_cli_path(args.upgrade_new, allowed_suffixes={".sol"})
+            )
+        except Exception as e:
+            logger.error("Invalid --upgrade-new path: %s", e)
+            sys.exit(1)
     if args.upgrade_new and not os.path.exists(args.upgrade_new):
         msg = f"--upgrade-new path does not exist: {args.upgrade_new}"
         logger.error(msg)
@@ -1601,14 +1657,6 @@ def main() -> None:
     state_mgr.mark_session_complete()
     logger.info(f"Scan session complete: {state_mgr._session_id}")
 
-    # Copy scan log into the per-scan output directory
-    _scan_log_dest = str(scan_output_dir / "scan.log")
-    try:
-        import shutil as _shutil
-        _shutil.copy2(_log_file, _scan_log_dest)
-    except Exception:
-        pass  # Non-fatal — original log is still accessible
-
     # Final summary — always printed so users know where to find results
     logger.info("Scan complete. Log file: %s", _log_file)
     print(f"\n{'=' * 60}")
@@ -1619,10 +1667,18 @@ def main() -> None:
     # Add log file reference to the ACTION_PLAN and audit_report files
     _audit_md_in_dir = str(scan_output_dir / "audit_report.md")
     for _report_path in [report_file, _audit_md_in_dir]:
-        if os.path.exists(_report_path):
+        _safe_report_path = sanitize_output_path(_report_path)
+        if _safe_report_path.exists():
             try:
-                with open(_report_path, "a", encoding="utf-8", errors="replace") as _rf:
-                    _rf.write(f"\n---\n\n**Scan Log File:** `{_log_file}`\n")
+                _existing = _safe_report_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+                _safe_report_path.write_text(
+                    _existing + f"\n---\n\n**Scan Log File:** `{_log_file}`\n",
+                    encoding="utf-8",
+                    errors="replace",
+                )
             except Exception:
                 pass
 

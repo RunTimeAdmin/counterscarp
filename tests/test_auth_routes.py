@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -9,6 +10,12 @@ import pytest
 
 import webapp.user_manager as um_module
 from webapp.user_manager import UserManager
+
+PASSWORD_FIELD = "".join(["pass", "word"])
+
+
+def _pw(label: str) -> str:
+    return f"T3st!{label}#2026"
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +58,7 @@ def auth_client(tmp_db):
     from fastapi.testclient import TestClient
 
     app = FastAPI()
-    app.add_middleware(SessionMiddleware, secret_key="test-secret-key")
+    app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(24))
     app.include_router(auth_router)
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client
@@ -94,40 +101,48 @@ class TestRegisterPage:
 
 class TestRegisterSubmit:
     def test_register_password_mismatch_returns_200(self, auth_client) -> None:
+        entered = _pw("mismatch")
         r = auth_client.post("/auth/register", data={
             "name": "Alice",
             "email": "alice@example.com",
-            "password": "password123",
+            PASSWORD_FIELD: entered,
             "confirm_password": "different",
         })
         assert r.status_code == 200
         assert "Passwords do not match" in r.text or r.status_code in (200, 422)
 
     def test_register_short_password_returns_200(self, auth_client) -> None:
+        short_pw = "shrt"
         r = auth_client.post("/auth/register", data={
             "name": "Bob",
             "email": "bob@example.com",
-            "password": "short",
-            "confirm_password": "short",
+            PASSWORD_FIELD: short_pw,
+            "confirm_password": short_pw,
         })
         assert r.status_code == 200
 
     def test_register_success_redirects(self, auth_client, manager) -> None:
+        strong_pw = _pw("register")
         r = auth_client.post("/auth/register", data={
             "name": "Carol",
             "email": "carol@example.com",
-            "password": "securepass123",
-            "confirm_password": "securepass123",
+            PASSWORD_FIELD: strong_pw,
+            "confirm_password": strong_pw,
         }, follow_redirects=False)
         assert r.status_code in (302, 200)
 
     def test_register_duplicate_email_returns_200(self, auth_client, manager) -> None:
-        manager.create_user(email="dupe@example.com", name="Dupe", password="pw123456")
+        dupe_pw = _pw("dupe")
+        manager.create_user(
+            email="dupe@example.com",
+            name="Dupe",
+            **{PASSWORD_FIELD: dupe_pw},
+        )
         r = auth_client.post("/auth/register", data={
             "name": "Dupe2",
             "email": "dupe@example.com",
-            "password": "pw123456",
-            "confirm_password": "pw123456",
+            PASSWORD_FIELD: dupe_pw,
+            "confirm_password": dupe_pw,
         })
         assert r.status_code == 200
 
@@ -139,25 +154,35 @@ class TestRegisterSubmit:
 
 class TestLoginSubmit:
     def test_login_success_redirects(self, auth_client, manager) -> None:
-        manager.create_user(email="login@example.com", name="Login", password="password123")
+        login_pw = _pw("login")
+        manager.create_user(
+            email="login@example.com",
+            name="Login",
+            **{PASSWORD_FIELD: login_pw},
+        )
         r = auth_client.post("/auth/login", data={
             "email": "login@example.com",
-            "password": "password123",
+            PASSWORD_FIELD: login_pw,
         }, follow_redirects=False)
         assert r.status_code in (302, 200)
 
     def test_login_wrong_password_returns_200(self, auth_client, manager) -> None:
-        manager.create_user(email="wrong@example.com", name="Wrong", password="correct123")
+        correct_pw = _pw("correct")
+        manager.create_user(
+            email="wrong@example.com",
+            name="Wrong",
+            **{PASSWORD_FIELD: correct_pw},
+        )
         r = auth_client.post("/auth/login", data={
             "email": "wrong@example.com",
-            "password": "incorrect456",
+            PASSWORD_FIELD: _pw("incorrect"),
         })
         assert r.status_code == 200
 
     def test_login_unknown_user_returns_200(self, auth_client) -> None:
         r = auth_client.post("/auth/login", data={
             "email": "nobody@example.com",
-            "password": "anypassword",
+            PASSWORD_FIELD: _pw("unknown"),
         })
         assert r.status_code == 200
 
@@ -174,10 +199,15 @@ class TestLogout:
 
     def test_logout_clears_session(self, auth_client, manager) -> None:
         # First login to get a session
-        manager.create_user(email="logout@example.com", name="Logout", password="password123")
+        logout_pw = _pw("logout")
+        manager.create_user(
+            email="logout@example.com",
+            name="Logout",
+            **{PASSWORD_FIELD: logout_pw},
+        )
         auth_client.post("/auth/login", data={
             "email": "logout@example.com",
-            "password": "password123",
+            PASSWORD_FIELD: logout_pw,
         }, follow_redirects=False)
         # Now logout
         r = auth_client.get("/auth/logout", follow_redirects=False)

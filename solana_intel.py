@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from logger import get_logger
 from http_utils import resilient_get, RateLimiter
+from path_security import sanitize_cli_path
 
 # Import config loader
 try:
@@ -73,6 +74,19 @@ CONTEXT_KEYWORDS = {
     "discriminator": ["account_discriminator", "unsafe"]
 }
 
+def detect_program_context_from_source(content: str) -> List[str]:
+    """Infer Solana program context tags from source text."""
+    detected_tags = set()
+    if "anchor_lang" in content:
+        detected_tags.add("Anchor Framework")
+    for tag, patterns in CONTEXT_KEYWORDS.items():
+        if any(p in content for p in patterns):
+            detected_tags.add(tag)
+    if not detected_tags:
+        detected_tags.add("Solana Program")
+    return list(detected_tags)
+
+
 def detect_program_context(filepath: str) -> List[str]:
     """Scans a Rust (.rs) file to guess the program type (Anchor, Native, SPL).
 
@@ -84,18 +98,9 @@ def detect_program_context(filepath: str) -> List[str]:
     """
     detected_tags = set()
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
-            
-            # Check for Anchor Framework
-            if "anchor_lang" in content: 
-                detected_tags.add("Anchor Framework")
-            
-            # Check for specific patterns
-            for tag, patterns in CONTEXT_KEYWORDS.items():
-                if any(p in content for p in patterns):
-                    detected_tags.add(tag)
-                    
+        safe_path = sanitize_cli_path(filepath, allowed_suffixes={".rs"})
+        with open(safe_path, 'r', encoding='utf-8') as f:
+            return detect_program_context_from_source(f.read())
     except (IOError, OSError, UnicodeDecodeError) as e:
         logger.warning(f"Could not read Solana program file: {e}")
     except Exception as e:
@@ -208,6 +213,60 @@ def generate_solana_report(filepath: str) -> Dict[str, Any]:
         "solodit_links": solodit_links
     }
 
+
+def generate_solana_report_from_source(
+    source: str,
+    source_name: str = "<memory>",
+) -> Dict[str, Any]:
+    """Generate Solana report using preloaded source content."""
+    logger.info(f"Generating Solana intelligence report for: {source_name}")
+    print("\n" + "="*70)
+    print(f" 🦀 SOLANA INTELLIGENCE ENGINE (Sec3 / Neodyme / OtterSec)")
+    print("="*70)
+    tags = detect_program_context_from_source(source)
+    print(f"[*] Program Context: {', '.join(tags)}")
+    search_term = "solana"
+    if "Anchor Framework" in tags:
+        search_term += "+anchor"
+    if "spl-token" in tags:
+        search_term += "+spl"
+    print("-" * 70)
+    print(f"[*] Searching Neodyme Public Disclosures...")
+    neodyme_url = f"https://api.github.com/search/issues?q=org:neodyme+{search_term}+is:issue"
+    neodyme_data = fetch_github_issues(neodyme_url)
+    if neodyme_data:
+        for item in neodyme_data[:3]:
+            print(f"  • [Neodyme] {item['title']}")
+            print(f"    Url: {item['html_url']}")
+    else:
+        print("  • No direct matches in public repo.")
+    print(f"\n[*] Searching Solana Labs Security Issues...")
+    solana_data = fetch_github_issues(SOURCES["Solana-Labs"])
+    if solana_data:
+        for item in solana_data[:2]:
+            print(f"  • [Core] {item['title']}")
+            print(f"    Url: {item['html_url']}")
+    else:
+        print("  • No direct matches in core security issues.")
+    print(f"\n[*] Solodit Research Links (Solana Filtered):")
+    solodit_links = []
+    for tag in tags:
+        clean_tag = tag.split(" ")[0]
+        link = SOURCES["Solodit_DeepLink"].format(KEYWORD=clean_tag)
+        print(f"  • Search Solodit for '{clean_tag}' bugs")
+        print(f"    Url: {link}")
+        solodit_links.append({"tag": clean_tag, "url": link})
+    print(f"\n[*] Manual Reference Libraries (Bookmark These):")
+    print(f"  • OtterSec Reports: https://github.com/ottersec/audits")
+    print(f"  • Sec3 Vulnerability Db: https://github.com/sec3-service/vulnerability-list")
+    print("\n" + "="*70)
+    return {
+        "context": tags,
+        "neodyme": neodyme_data[:3],
+        "solana_core": solana_data[:2] if solana_data else [],
+        "solodit_links": solodit_links,
+    }
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Solana Security Intelligence Fetcher"
@@ -216,7 +275,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        generate_solana_report(args.file)
+        safe_file = sanitize_cli_path(args.file, allowed_suffixes={".rs"})
+        generate_solana_report_from_source(
+            safe_file.read_text(encoding="utf-8"),
+            source_name=str(safe_file),
+        )
     except Exception as e:
         logger.error(f"Solana report generation failed: {e}")
         raise

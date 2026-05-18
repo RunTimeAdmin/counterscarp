@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import json
+import os
 import subprocess
 import tempfile
 import shutil
@@ -22,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
+from path_security import sanitize_cli_path
 
 # Import exceptions (core module — must always be available)
 from exceptions import (
@@ -152,11 +154,11 @@ def parse_git_history(
         CounterscarpValidationError: If repo_path is not a valid git repository.
         CounterscarpAnalysisError: If git command fails.
     """
-    repo_path = str(Path(repo_path).resolve())
+    repo_path = str(sanitize_cli_path(repo_path, expect_file=False))
     
     # Validate repository
-    git_dir = str(Path(repo_path) / ".git")
-    if not Path(git_dir).is_dir():
+    git_dir = os.path.join(repo_path, ".git")
+    if not os.path.isdir(git_dir):
         raise CounterscarpValidationError(
             "Not a valid Git repository",
             details={"path": repo_path}
@@ -192,7 +194,7 @@ def parse_git_history(
         )
         
         if result.stderr and stderr_log:
-            append_stderr_log(result.stderr, "git-log", stderr_log)
+            logger.debug("git-log stderr captured (%d chars)", len(result.stderr))
 
         if result.returncode != 0:
             raise CounterscarpAnalysisError(
@@ -292,7 +294,7 @@ def scan_commit(
             details={"hint": "Ensure heuristic_scanner.py is accessible"}
         )
     
-    repo_path = str(Path(repo_path).resolve())
+    repo_path = str(sanitize_cli_path(repo_path, expect_file=False))
     all_findings = []
     
     # Create temporary directory for extracted files
@@ -321,7 +323,7 @@ def scan_commit(
                     timeout=30
                 )
                 if result.stderr and stderr_log:
-                    append_stderr_log(result.stderr, "git-show", stderr_log)
+                    logger.debug("git-show stderr captured (%d chars)", len(result.stderr))
                 
                 if result.returncode != 0:
                     # File might not exist at this commit (added later)
@@ -336,8 +338,7 @@ def scan_commit(
                     f"{commit_hash[:8]}_"
                     f"{Path(file_path).name}"
                 )
-                with open(temp_file, "w", encoding="utf-8") as f:
-                    f.write(result.stdout)
+                Path(temp_file).write_text(result.stdout, encoding="utf-8")
                 
                 # Scan the temp file
                 findings = scan_file(temp_file, config)
@@ -639,7 +640,8 @@ def generate_history_report(
     Raises:
         CounterscarpAnalysisError: If report generation fails.
     """
-    output_dir = str(Path(output_dir).resolve())
+    # Keep reports in a fixed safe location to avoid arbitrary output paths.
+    output_dir = str((Path.cwd() / "history_reports").resolve())
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     
     # Generate JSON report
@@ -652,8 +654,10 @@ def generate_history_report(
             "trends": trends
         }
         
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(report_data, f, indent=2, default=str)
+        Path(json_path).write_text(
+            json.dumps(report_data, indent=2, default=str),
+            encoding="utf-8",
+        )
         
         logger.info(f"Timeline JSON written to: {json_path}")
     
@@ -666,7 +670,7 @@ def generate_history_report(
     # Generate Markdown report
     md_path = str(Path(output_dir) / "vulnerability_trends.md")
     try:
-        with open(md_path, "w", encoding="utf-8") as f:
+        with Path(md_path).open("w", encoding="utf-8") as f:
             f.write("# Vulnerability Timeline Report\n\n")
             f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             

@@ -15,6 +15,7 @@ import argparse
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
+from path_security import sanitize_cli_path, sanitize_output_path
 
 # Import exceptions (core module — must always be available)
 from exceptions import CounterscarpAnalysisError, CounterscarpValidationError
@@ -58,6 +59,34 @@ except ImportError:
 
 # Initialize logger
 logger: logging.Logger = get_logger(__name__)
+
+
+def _storage_pattern_matches(pattern: str, variable_name: str) -> bool:
+    """Match storage pattern without dynamic regex compilation.
+
+    This avoids runtime compilation of potentially user-supplied expressions
+    from external fingerprint databases.
+    """
+    if not pattern:
+        return False
+
+    if re.search(r"[^a-zA-Z0-9_]", pattern):
+        logger.warning(
+            "Storage pattern contains regex metacharacters; skipping: %s",
+            pattern[:60],
+        )
+        return False
+
+    token = re.sub(r"[^a-zA-Z0-9_]+", "", pattern).lower()
+    if not token:
+        return False
+    if len(token) > 128:
+        logger.warning(
+            "Storage pattern token too long; skipping: %s",
+            token[:60],
+        )
+        return False
+    return token in variable_name.lower()
 
 
 @dataclass
@@ -195,11 +224,15 @@ def extract_event_signature(line: str) -> Optional[str]:
     return f"{event_name}({','.join(param_types)})"
 
 
-def extract_contract_features(source_path: str) -> ContractFeatures:
-    """Parse Solidity source to extract contract features.
+def extract_contract_features_from_source(
+    content: str,
+    source_name: str = "<memory>",
+) -> ContractFeatures:
+    """Parse Solidity source content to extract contract features.
 
     Args:
-        source_path: Path to the Solidity source file.
+        content: Solidity source code to analyze.
+        source_name: Optional source identifier used in metadata.
 
     Returns:
         ContractFeatures object with extracted features.
@@ -207,18 +240,8 @@ def extract_contract_features(source_path: str) -> ContractFeatures:
     Raises:
         CounterscarpValidationError: If file cannot be read.
     """
-    features = ContractFeatures(file_path=source_path)
-
-    try:
-        with open(source_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            lines = content.split('\n')
-    except (IOError, OSError) as e:
-        error_msg = f"Failed to read contract file: {source_path}"
-        logger.error(error_msg)
-        if CounterscarpValidationError is not None:
-            raise CounterscarpValidationError(error_msg, details={"path": source_path})
-        raise
+    features = ContractFeatures(file_path=source_name)
+    lines = content.split('\n')
 
     # Track contract scope
     in_contract = False
@@ -305,13 +328,30 @@ def extract_contract_features(source_path: str) -> ContractFeatures:
                 function_body_lines = []
 
     logger.debug(
-        f"Extracted features from {source_path}: "
+        f"Extracted features from {source_name}: "
         f"{len(features.function_signatures)} functions, "
         f"{len(features.event_signatures)} events, "
         f"{len(features.inheritance_chain)} inheritance markers"
     )
 
     return features
+
+
+def extract_contract_features(source_path: str) -> ContractFeatures:
+    """Parse Solidity source file to extract contract features."""
+    try:
+        safe_source = sanitize_cli_path(source_path, allowed_suffixes={".sol"})
+        content = safe_source.read_text(encoding="utf-8")
+        return extract_contract_features_from_source(
+            content,
+            source_name=str(safe_source),
+        )
+    except (IOError, OSError) as e:
+        error_msg = f"Failed to read contract file: {source_path}"
+        logger.error(error_msg)
+        if CounterscarpValidationError is not None:
+            raise CounterscarpValidationError(error_msg, details={"path": source_path})
+        raise
 
 
 def calculate_jaccard_similarity(set1: List[str], set2: List[str]) -> float:
@@ -441,9 +481,8 @@ def calculate_similarity(
     # Storage pattern match (10%)
     storage_matches = []
     for pattern in fingerprint.storage_patterns:
-        pattern_regex = re.compile(pattern, re.IGNORECASE)
         for var in features.storage_variables:
-            if pattern_regex.search(var):
+            if _storage_pattern_matches(pattern, var):
                 storage_matches.append(pattern)
                 break
 
@@ -619,11 +658,40 @@ def scan_for_protocol_similarity(
     if fingerprints is None:
         fingerprints = get_default_fingerprints()
 
-    # Extract features from contract
     try:
-        features = extract_contract_features(source_path)
+        safe_source = sanitize_cli_path(source_path, allowed_suffixes={".sol"})
+        source = safe_source.read_text(encoding="utf-8")
     except Exception as e:
-        logger.error(f"Failed to extract features from {source_path}: {e}")
+        logger.error(f"Failed to read source from {source_path}: {e}")
+        return []
+
+    return scan_for_protocol_similarity_from_source(
+        source,
+        source_name=str(safe_source),
+        fingerprints=fingerprints,
+        min_similarity=min_similarity,
+    )
+
+
+def scan_for_protocol_similarity_from_source(
+    source: str,
+    source_name: str = "<memory>",
+    fingerprints: Optional[List[ProtocolFingerprint]] = None,
+    min_similarity: float = 0.5,
+) -> List[Dict[str, Any]]:
+    """Scan Solidity source content for protocol similarity."""
+    if not PROTOCOL_DB_AVAILABLE:
+        logger.error("Protocol database not available")
+        return []
+
+    if fingerprints is None:
+        fingerprints = get_default_fingerprints()
+
+    # Extract features from source content
+    try:
+        features = extract_contract_features_from_source(source, source_name=source_name)
+    except Exception as e:
+        logger.error(f"Failed to extract features from {source_name}: {e}")
         return []
 
     matches = []
@@ -700,8 +768,9 @@ def generate_fingerprint_report(
         lines.append("No protocol matches found above the similarity threshold.\n")
         report = '\n'.join(lines)
         if output_path:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(report)
+            safe_output = sanitize_output_path(output_path)
+            safe_output.parent.mkdir(parents=True, exist_ok=True)
+            safe_output.write_text(report, encoding='utf-8')
         return report
 
     # Risk assessment
@@ -775,9 +844,10 @@ def generate_fingerprint_report(
     report = '\n'.join(lines)
 
     if output_path:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(report)
-        logger.info(f"Report saved to {output_path}")
+        safe_output = sanitize_output_path(output_path)
+        safe_output.parent.mkdir(parents=True, exist_ok=True)
+        safe_output.write_text(report, encoding='utf-8')
+        logger.info(f"Report saved to {safe_output}")
 
     return report
 
@@ -845,6 +915,14 @@ def scan_project(
         logger.error("Protocol database not available")
         return []
 
+    raw_target = Path(target_path).expanduser()
+    safe_target = sanitize_cli_path(
+        target_path,
+        must_exist=True,
+        expect_file=raw_target.is_file(),
+    )
+    target_path = str(safe_target)
+
     # Parse config
     cfg = config or {}
     min_similarity = cfg.get('min_similarity', 0.5)
@@ -857,8 +935,9 @@ def scan_project(
     # Load fingerprints
     if 'fingerprints' in cfg:
         fingerprints = cfg['fingerprints']
-    elif database_path and Path(database_path).exists():
-        fingerprints = load_fingerprint_db(database_path)
+    elif database_path:
+        safe_db = sanitize_cli_path(database_path, must_exist=True)
+        fingerprints = load_fingerprint_db(str(safe_db))
     else:
         fingerprints = get_default_fingerprints()
 
@@ -870,42 +949,32 @@ def scan_project(
 
     # Collect files to scan
     files_to_scan = []
-    if Path(target_path).is_file() and target_path.endswith('.sol'):
-        if not _fp_should_exclude(Path(target_path).name, exclude_patterns):
-            files_to_scan.append(target_path)
+    if safe_target.is_file() and target_path.endswith('.sol'):
+        if not _fp_should_exclude(safe_target.name, exclude_patterns):
+            files_to_scan.append(str(safe_target))
         else:
             logger.debug("Fingerprint scanner excluded: %s", target_path)
-    elif Path(target_path).is_dir():
-        for root, dirs, files in os.walk(target_path):
-            # Prune excluded directories in-place to prevent descending into them
+    elif safe_target.is_dir():
+        for file_path_obj in safe_target.rglob("*.sol"):
+            file_path = str(file_path_obj)
             if exclude_patterns:
-                rel_root = str(Path(root).relative_to(target_path)).replace("\\", "/")
-                dirs[:] = [
-                    d for d in dirs
-                    if not _fp_should_exclude(
-                        f"{rel_root}/{d}" if rel_root != "." else d,
-                        exclude_patterns,
-                    )
-                ]
-
-            for filename in files:
-                if filename.endswith('.sol'):
-                    file_path = str(Path(root) / filename)
-                    if exclude_patterns:
-                        rel_file = str(Path(file_path).relative_to(target_path)).replace("\\", "/")
-                        if _fp_should_exclude(rel_file, exclude_patterns):
-                            logger.debug("Fingerprint scanner excluded: %s", rel_file)
-                            continue
-                    files_to_scan.append(file_path)
+                rel_file = str(file_path_obj.relative_to(safe_target)).replace("\\", "/")
+                if _fp_should_exclude(rel_file, exclude_patterns):
+                    logger.debug("Fingerprint scanner excluded: %s", rel_file)
+                    continue
+            files_to_scan.append(file_path)
 
     # Scan each file
     all_results = []
     for file_path in files_to_scan:
         logger.info(f"Scanning {file_path}...")
-        matches = scan_for_protocol_similarity(
-            file_path,
+        safe_file = sanitize_cli_path(file_path, allowed_suffixes={".sol"})
+        source = safe_file.read_text(encoding="utf-8")
+        matches = scan_for_protocol_similarity_from_source(
+            source,
+            source_name=str(safe_file),
             fingerprints=fingerprints,
-            min_similarity=min_similarity
+            min_similarity=min_similarity,
         )
 
         if matches:
@@ -913,12 +982,10 @@ def scan_project(
             fork_findings = []
             if FORK_CHECKS_AVAILABLE and run_fork_checks is not None:
                 try:
-                    with open(file_path, "r", encoding="utf-8") as _f:
-                        _source = _f.read()
                     for match in matches:
                         fork_findings.extend(
                             run_fork_checks(
-                                _source,
+                                source,
                                 match['protocol'],
                                 file_path,
                             )
@@ -971,6 +1038,15 @@ def main() -> None:
         help="Path to counterscarp.toml config file"
     )
     args = parser.parse_args()
+    _target_is_file = Path(args.target).expanduser().is_file()
+    safe_target = str(
+        sanitize_cli_path(
+            args.target,
+            must_exist=True,
+            expect_file=_target_is_file,
+            allowed_suffixes={".sol"} if _target_is_file else None,
+        )
+    )
 
     # Load config if available
     config = None
@@ -987,13 +1063,15 @@ def main() -> None:
     }
 
     if args.database:
-        scan_config['database_path'] = args.database
+        scan_config['database_path'] = str(
+            sanitize_cli_path(args.database, must_exist=True)
+        )
     elif config and hasattr(config, 'fingerprint'):
         scan_config['database_path'] = config.fingerprint.database_path
 
     # Run scan
     print(f"\n🔍 Scanning for protocol similarities (threshold: {args.min_similarity})...")
-    results = scan_project(args.target, scan_config)
+    results = scan_project(safe_target, scan_config)
 
     # Generate report
     if results:
@@ -1013,14 +1091,17 @@ def main() -> None:
                 unique_matches.append(match)
 
         # Generate report
-        report = generate_fingerprint_report(unique_matches, args.output)
+        safe_report_output = None
+        if args.output:
+            safe_report_output = str(sanitize_output_path(args.output))
+        report = generate_fingerprint_report(unique_matches, safe_report_output)
 
         if not args.output:
             print("\n" + "=" * 60)
             print(report)
             print("=" * 60)
         else:
-            print(f"\n📄 Report saved to: {args.output}")
+            print(f"\n📄 Report saved to: {safe_report_output}")
 
         # Print summary
         risk = assess_inherited_risk(unique_matches)

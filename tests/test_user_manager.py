@@ -13,6 +13,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import secrets
 import tempfile
 import threading
 from pathlib import Path
@@ -67,7 +68,7 @@ def manager(tmp_db: Path) -> UserManager:
 
 
 def _make_email_user(mgr: UserManager, email: str = "alice@example.com") -> dict:
-    return mgr.create_user(email=email, name="Alice", password="secret123")
+    return mgr.create_user(email=email, name="Alice", password=f"U!{secrets.token_hex(5)}")
 
 
 def _make_oauth_user(mgr: UserManager, email: str = "bob@example.com") -> dict:
@@ -105,7 +106,11 @@ class TestUserManagerCreation:
     def test_duplicate_email_raises(self, manager: UserManager) -> None:
         _make_email_user(manager, "dup@example.com")
         with pytest.raises(ValueError, match="already registered"):
-            manager.create_user(email="dup@example.com", name="Dup2", password="pw")
+            manager.create_user(
+                email="dup@example.com",
+                name="Dup2",
+                password=f"U!{secrets.token_hex(5)}",
+            )
 
     def test_email_stored_as_lowercase(self, manager: UserManager) -> None:
         user = manager.create_user(email="  UPPER@EXAMPLE.COM  ", name="Upper")
@@ -228,13 +233,15 @@ class TestUserManagerRetrieval:
 
 class TestUserManagerAuthentication:
     def test_verify_password_success(self, manager: UserManager) -> None:
-        _make_email_user(manager)
-        result = manager.verify_password("alice@example.com", "secret123")
+        pw = f"U!{secrets.token_hex(5)}"
+        manager.create_user(email="alice@example.com", name="Alice", password=pw)
+        result = manager.verify_password("alice@example.com", pw)
         assert result is not None
         assert result["email"] == "alice@example.com"
 
     def test_verify_password_wrong_password(self, manager: UserManager) -> None:
-        _make_email_user(manager)
+        pw = f"U!{secrets.token_hex(5)}"
+        manager.create_user(email="alice@example.com", name="Alice", password=pw)
         assert manager.verify_password("alice@example.com", "wrongpass") is None
 
     def test_verify_password_nonexistent_email(self, manager: UserManager) -> None:
@@ -246,13 +253,15 @@ class TestUserManagerAuthentication:
         assert manager.verify_password("bob@example.com", "any") is None
 
     def test_verify_password_case_insensitive_email(self, manager: UserManager) -> None:
-        _make_email_user(manager)
-        result = manager.verify_password("ALICE@EXAMPLE.COM", "secret123")
+        pw = f"U!{secrets.token_hex(5)}"
+        manager.create_user(email="alice@example.com", name="Alice", password=pw)
+        result = manager.verify_password("ALICE@EXAMPLE.COM", pw)
         assert result is not None
 
     def test_verify_password_returns_user_dict(self, manager: UserManager) -> None:
-        _make_email_user(manager)
-        result = manager.verify_password("alice@example.com", "secret123")
+        pw = f"U!{secrets.token_hex(5)}"
+        manager.create_user(email="alice@example.com", name="Alice", password=pw)
+        result = manager.verify_password("alice@example.com", pw)
         assert isinstance(result, dict)
         assert "id" in result
         assert "email" in result
@@ -473,7 +482,11 @@ class TestUserManagerPersistence:
     def test_data_persists_across_singleton_reset(self, tmp_db: Path) -> None:
         """After resetting the singleton the data on disk is still readable."""
         mgr1 = UserManager()
-        mgr1.create_user(email="persist@example.com", name="Persist", password="pw")
+        mgr1.create_user(
+            email="persist@example.com",
+            name="Persist",
+            password=f"U!{secrets.token_hex(5)}",
+        )
 
         # Reset singleton to simulate a new process startup
         _reset_singleton()

@@ -18,6 +18,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from path_security import sanitize_output_path
 
 # ── Ensure sentinel-engine root is on sys.path when run from any CWD ──────────
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -2259,10 +2260,19 @@ def seed(
     Returns:
         Total number of entries in the index after seeding.
     """
+    requested_output = output
+    fixed_output = ".scarpshield/rag_index.json"
+    safe_output = sanitize_output_path(fixed_output)
+    output = str(safe_output)
+    if requested_output != fixed_output:
+        print(
+            f"[seed] Output path '{requested_output}' ignored; "
+            f"using fixed safe path '{output}'."
+        )
     store = VectorStore()
 
     # Optionally preserve existing entries
-    if append and Path(output).exists():
+    if append and safe_output.exists():
         try:
             store.load(output)
             print(f"[seed] Loaded {len(store.entries)} existing entries from {output}")
@@ -2285,7 +2295,7 @@ def seed(
 
     # Save index
     store.save(output)
-    index_size = Path(output).stat().st_size
+    index_size = safe_output.stat().st_size
     print(f"[seed] Index saved → {output}  ({index_size:,} bytes)")
 
     # ── Summary ──────────────────────────────────────────────────────────────

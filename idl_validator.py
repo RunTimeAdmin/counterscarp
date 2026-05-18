@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from logger import get_logger
 from exceptions import CounterscarpValidationError, CounterscarpAnalysisError
+from path_security import sanitize_cli_path
 
 logger = get_logger(__name__)
 
@@ -109,17 +110,18 @@ class IDLParser:
             CounterscarpValidationError: If the IDL file is invalid or cannot
                 be parsed.
         """
+        safe_idl_path = sanitize_cli_path(idl_path, allowed_suffixes={".json"})
+        idl_path = str(safe_idl_path)
         logger.debug(f"Parsing IDL file: {idl_path}")
 
-        if not os.path.exists(idl_path):
+        if not safe_idl_path.exists():
             raise CounterscarpValidationError(
                 f"IDL file not found: {idl_path}",
                 details={"path": idl_path}
             )
 
         try:
-            with open(idl_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            data = json.loads(safe_idl_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
             raise CounterscarpValidationError(
                 f"Invalid JSON in IDL file: {e}",
@@ -927,32 +929,32 @@ def _cross_reference_source(
     Returns:
         List of additional findings from source cross-reference.
     """
+    safe_source_dir = sanitize_cli_path(
+        source_dir,
+        must_exist=True,
+        expect_file=False,
+    )
     findings = []
 
     # Find all Rust files
-    rust_files = []
-    for root, dirs, files in os.walk(source_dir):
-        # Skip target directory
-        if 'target' in root.split(os.sep):
-            continue
-
-        for file in files:
-            if file.endswith('.rs'):
-                rust_files.append(os.path.join(root, file))
+    rust_files = [
+        p for p in safe_source_dir.rglob("*.rs")
+        if "target" not in p.parts
+    ]
 
     # Build a map of instruction handlers
     instruction_handlers: Dict[str, str] = {}
 
     for rs_file in rust_files:
         try:
-            with open(rs_file, 'r', encoding='utf-8') as f:
-                content = f.read()
+            safe_rs_file = sanitize_cli_path(str(rs_file), allowed_suffixes={".rs"})
+            content = safe_rs_file.read_text(encoding="utf-8")
 
             # Look for instruction handlers (pub fn <instruction_name>)
             for instruction in program.instructions:
                 pattern = rf'pub\s+fn\s+{re.escape(instruction.name)}\s*\('
                 if re.search(pattern, content):
-                    instruction_handlers[instruction.name] = rs_file
+                    instruction_handlers[instruction.name] = str(rs_file)
 
         except IOError:
             continue
@@ -999,32 +1001,30 @@ def find_idl_files(project_root: str) -> List[str]:
     Returns:
         List of paths to IDL files.
     """
+    safe_root = sanitize_cli_path(project_root, must_exist=True, expect_file=False)
     idl_paths = []
 
     search_paths = [
-        os.path.join(project_root, 'target', 'idl'),
-        os.path.join(project_root, 'idl'),
-        project_root
+        safe_root / "target" / "idl",
+        safe_root / "idl",
+        safe_root,
     ]
 
     for search_path in search_paths:
-        if not os.path.exists(search_path):
+        if not search_path.exists():
             continue
 
-        if os.path.isdir(search_path):
-            for file in os.listdir(search_path):
-                if file.endswith('.json'):
-                    full_path = os.path.join(search_path, file)
-                    # Validate it's an Anchor IDL by checking structure
-                    try:
-                        with open(full_path, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                        # Check for required Anchor IDL fields
-                        if 'instructions' in data and 'name' in data:
-                            idl_paths.append(full_path)
-                            logger.debug(f"Found valid IDL: {full_path}")
-                    except (json.JSONDecodeError, IOError):
-                        continue
+        if search_path.is_dir():
+            for full_path in search_path.glob("*.json"):
+                # Validate it's an Anchor IDL by checking structure
+                try:
+                    data = json.loads(full_path.read_text(encoding="utf-8"))
+                    # Check for required Anchor IDL fields
+                    if 'instructions' in data and 'name' in data:
+                        idl_paths.append(str(full_path))
+                        logger.debug(f"Found valid IDL: {full_path}")
+                except (json.JSONDecodeError, IOError):
+                    continue
 
     return idl_paths
 
@@ -1154,10 +1154,16 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    safe_idl_path = str(sanitize_cli_path(args.idl_path, allowed_suffixes={".json"}))
+    safe_source_dir = (
+        str(sanitize_cli_path(args.source_dir, must_exist=True, expect_file=False))
+        if args.source_dir
+        else None
+    )
 
     findings = validate_idl(
-        idl_path=args.idl_path,
-        program_source_dir=args.source_dir,
+        idl_path=safe_idl_path,
+        program_source_dir=safe_source_dir,
         validate_constraints=not args.no_constraints,
         trace_cpi=not args.no_cpi
     )
@@ -1167,7 +1173,7 @@ if __name__ == "__main__":
         print(json_mod.dumps(findings, indent=2))
     else:
         report = generate_idl_report(
-            args.idl_path,
+            safe_idl_path,
             findings,
             include_matrix=args.matrix
         )

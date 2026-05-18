@@ -241,11 +241,29 @@ def update_from_file(source_path: str, data_dir: str = "data") -> bool:
     try:
         with open(source_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        return update_from_data(data, source_path=source_path, data_dir=data_dir)
+    except Exception as e:
+        print(f"Import failed: {e}")
+        return False
 
+
+def update_from_data(
+    data: Any,
+    *,
+    source_path: str = "<memory>",
+    data_dir: str = "data",
+) -> bool:
+    """Import threat intelligence from already loaded JSON data."""
+    try:
         # Determine target based on top-level keys
-        if "entries" in data or "vulnerabilities" in data:
+        if isinstance(data, dict) and (
+            "entries" in data or "vulnerabilities" in data
+        ):
             target = os.path.join(data_dir, "threat_intel_db.json")
-        elif "protocols" in data or "fingerprints" in data or isinstance(data, list):
+        elif (
+            isinstance(data, dict)
+            and ("protocols" in data or "fingerprints" in data)
+        ) or isinstance(data, list):
             target = os.path.join(data_dir, "protocol_fingerprints.json")
         else:
             # Default to threat intel

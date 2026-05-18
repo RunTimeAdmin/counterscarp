@@ -22,6 +22,7 @@ import solana_intel       # Solana intelligence
 
 from logger import get_logger
 from exceptions import CounterscarpAPIError, CounterscarpValidationError
+from path_security import sanitize_cli_path
 
 logger = get_logger(__name__)
 
@@ -63,26 +64,14 @@ def detect_chain_type(filepath: str) -> str:
     Returns:
         Chain type string: "EVM", "SOLANA", or "UNKNOWN".
     """
-    extension = Path(filepath).suffix.lower()
+    safe_file = sanitize_cli_path(filepath)
+    extension = Path(safe_file).suffix.lower()
     
     if extension == ".sol":
         return "EVM"
     elif extension == ".rs":
         return "SOLANA"
-    else:
-        # Try to guess from content
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read(500)  # First 500 chars
-                if "pragma solidity" in content or "contract " in content:
-                    return "EVM"
-                elif "use anchor_lang" in content or "#[program]" in content:
-                    return "SOLANA"
-        except (IOError, OSError, UnicodeDecodeError) as e:
-            logger.warning(f"Could not read file for chain detection: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error during chain detection: {e}")
-    
+
     return "UNKNOWN"
 
 
@@ -99,6 +88,7 @@ Examples:
     )
     parser.add_argument(
         "file",
+        type=argparse.FileType("r", encoding="utf-8"),
         help="Path to smart contract file (.sol for EVM, .rs for Solana)"
     )
     parser.add_argument(
@@ -108,6 +98,13 @@ Examples:
     )
     
     args = parser.parse_args()
+    safe_file = str(
+        sanitize_cli_path(
+            args.file.name,
+            allowed_suffixes={".sol", ".rs"},
+        )
+    )
+    source = args.file.read()
     
     # Detect chain type
     if args.force_chain:
@@ -115,7 +112,7 @@ Examples:
         logger.info(f"Chain type FORCED to: {chain_type}")
         print(f"[*] Chain type FORCED to: {chain_type}")
     else:
-        chain_type = detect_chain_type(args.file)
+        chain_type = detect_chain_type(safe_file)
         logger.info(f"Auto-detected chain type: {chain_type}")
         print(f"[*] Auto-detected chain type: {chain_type}")
     
@@ -125,12 +122,15 @@ Examples:
         print("[*] Launching EVM Intelligence Engine "
               "(Code4rena + Immunefi + Solodit)...")
         try:
-            knowledge_fetcher.generate_comprehensive_report(args.file)
+            knowledge_fetcher.generate_comprehensive_report_from_source(
+                source,
+                source_name=safe_file,
+            )
         except Exception as e:
             logger.error(f"EVM intelligence engine failed: {e}")
             raise CounterscarpAPIError(
                 "EVM intelligence engine failed",
-                details={"file": args.file, "error": str(e)}
+                details={"file": safe_file, "error": str(e)}
             ) from e
 
     elif chain_type == "SOLANA":
@@ -138,22 +138,25 @@ Examples:
         print("[*] Launching Solana Intelligence Engine "
               "(Neodyme + Sec3 + OtterSec)...")
         try:
-            solana_intel.generate_solana_report(args.file)
+            solana_intel.generate_solana_report_from_source(
+                source,
+                source_name=safe_file,
+            )
         except Exception as e:
             logger.error(f"Solana intelligence engine failed: {e}")
             raise CounterscarpAPIError(
                 "Solana intelligence engine failed",
-                details={"file": args.file, "error": str(e)}
+                details={"file": safe_file, "error": str(e)}
             ) from e
 
     else:
-        logger.error(f"Could not detect chain type for: {args.file}")
-        print(f"[!] ERROR: Could not detect chain type for '{args.file}'")
+        logger.error(f"Could not detect chain type for: {safe_file}")
+        print(f"[!] ERROR: Could not detect chain type for '{safe_file}'")
         print("[!] Supported: .sol (Solidity/EVM), .rs (Rust/Solana)")
         print("[!] Use --force-chain to override auto-detection")
         raise CounterscarpValidationError(
             "Could not detect chain type",
-            details={"file": args.file, "supported_types": [".sol", ".rs"]}
+            details={"file": safe_file, "supported_types": [".sol", ".rs"]}
         )
 
 

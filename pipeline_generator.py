@@ -30,6 +30,7 @@ from exceptions import (
     CounterscarpConfigError,
     CounterscarpValidationError,
 )
+from path_security import sanitize_output_path
 
 # Import logger with fallback
 try:
@@ -747,13 +748,11 @@ def generate_pipeline(
     # Write to file if output path provided
     if output_path:
         try:
-            output_dir = str(Path(output_path).parent)
-            if output_dir and not Path(output_dir).exists():
-                Path(output_dir).mkdir(parents=True, exist_ok=True)
-            
-            with open(output_path, 'w', encoding='utf-8') as f:
+            safe_output = sanitize_output_path(output_path)
+            safe_output.parent.mkdir(parents=True, exist_ok=True)
+            with open(safe_output, 'w', encoding='utf-8') as f:
                 f.write(content)
-            logger.info(f"Pipeline written to: {output_path}")
+            logger.info(f"Pipeline written to: {safe_output}")
         except IOError as e:
             raise CounterscarpConfigError(
                 "Failed to write pipeline file",
@@ -808,14 +807,17 @@ Examples:
         content = generate_pipeline(
             config_path=args.config,
             platform=args.platform,
-            output_path=args.output,
+            output_path=None,
             target_path=args.target,
         )
         
         if not args.output:
             print(content)
         else:
-            print(f"✅ Generated {args.platform} pipeline: {args.output}")
+            safe_output = sanitize_output_path(args.output)
+            safe_output.parent.mkdir(parents=True, exist_ok=True)
+            safe_output.write_text(content, encoding="utf-8")
+            print(f"✅ Generated {args.platform} pipeline: {safe_output}")
             
     except CounterscarpValidationError as e:
         logger.error(f"Validation error: {e}")

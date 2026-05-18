@@ -23,6 +23,7 @@ from typing import List, Dict, Optional, Set, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from path_security import sanitize_cli_path
 
 # Import project logging and exceptions
 try:
@@ -709,20 +710,16 @@ class NatSpecAnalyzer:
         self, filepath: str
     ) -> List[IntentFinding]:
         """Analyze a Solidity file for intent/implementation mismatches."""
-        path = Path(filepath)
-        if not path.exists():
-            raise CounterscarpValidationError(
-                f"File not found: {filepath}",
-                details={"path": filepath}
-            )
+        safe_path = sanitize_cli_path(filepath, allowed_suffixes={".sol"})
+        safe_filepath = str(safe_path)
         
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+            content = safe_path.read_text(encoding="utf-8")
+            lines = content.splitlines(keepends=True)
         except Exception as e:
             raise CounterscarpAnalysisError(
-                f"Failed to read file: {filepath}",
-                details={"path": filepath, "error": str(e)}
+                f"Failed to read file: {safe_filepath}",
+                details={"path": safe_filepath, "error": str(e)}
             ) from e
         
         self.findings = []
@@ -755,7 +752,7 @@ class NatSpecAnalyzer:
                 if func:
                     self.functions.append(func)
                     # Compare and generate findings
-                    findings = IntentComparator.compare(func, filepath)
+                    findings = IntentComparator.compare(func, safe_filepath)
                     self.findings.extend(findings)
                 current_natspec = None
             
@@ -776,15 +773,15 @@ class NatSpecAnalyzer:
     
     def analyze_directory(self, dirpath: str) -> List[IntentFinding]:
         """Analyze all .sol files in a directory."""
-        path = Path(dirpath)
-        if not path.is_dir():
+        safe_dir = sanitize_cli_path(dirpath, must_exist=True, expect_file=False)
+        if not safe_dir.is_dir():
             raise CounterscarpValidationError(
-                f"Not a directory: {dirpath}",
-                details={"path": dirpath}
+                f"Not a directory: {safe_dir}",
+                details={"path": str(safe_dir)}
             )
         
         all_findings = []
-        for sol_file in path.rglob("*.sol"):
+        for sol_file in safe_dir.rglob("*.sol"):
             try:
                 findings = self.analyze_file(str(sol_file))
                 all_findings.extend(findings)
@@ -834,15 +831,23 @@ def analyze_intent(filepath: str, verbose: bool = True) -> List[Dict[str, Any]]:
         List of finding dictionaries (backward compatible format)
     """
     analyzer = NatSpecAnalyzer()
-    
-    path = Path(filepath)
+    is_file = Path(filepath).expanduser().is_file()
+    safe_path = str(
+        sanitize_cli_path(
+            filepath,
+            must_exist=True,
+            expect_file=is_file,
+            allowed_suffixes={".sol"} if is_file else None,
+        )
+    )
+    path = Path(safe_path)
     if path.is_dir():
-        findings = analyzer.analyze_directory(filepath)
+        findings = analyzer.analyze_directory(safe_path)
     else:
-        findings = analyzer.analyze_file(filepath)
+        findings = analyzer.analyze_file(safe_path)
     
     if verbose:
-        _print_findings(findings, filepath)
+        _print_findings(findings, safe_path)
     
     # Convert to backward-compatible format
     return [f.to_dict() for f in findings]
@@ -957,7 +962,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     try:
-        findings = analyze_intent(args.file, verbose=not args.json)
+        cli_target_is_file = Path(args.file).expanduser().is_file()
+        safe_cli_target = str(
+            sanitize_cli_path(
+                args.file,
+                must_exist=True,
+                expect_file=cli_target_is_file,
+                allowed_suffixes={".sol"} if cli_target_is_file else None,
+            )
+        )
+        findings = analyze_intent(safe_cli_target, verbose=not args.json)
         
         if args.json:
             import json

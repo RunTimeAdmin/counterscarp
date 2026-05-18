@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import secrets
 from pathlib import Path
 from unittest.mock import patch
 
@@ -36,6 +38,11 @@ def tmp_license_db(tmp_path: Path):
 def _write_db(db_path: Path, data: dict) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     db_path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _derived_license(seed: str) -> str:
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
+    return f"SE-PRO-{digest}"
 
 
 # ---------------------------------------------------------------------------
@@ -179,8 +186,7 @@ def license_client(tmp_path: Path):
     db_path = tmp_path / "data" / "licenses.json"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    import hashlib, uuid
-    key = "SE-PRO-" + hashlib.md5(b"test").hexdigest()
+    key = _derived_license("test")
     db = {
         "licenses": [
             {
@@ -210,7 +216,6 @@ def license_client(tmp_path: Path):
 def fresh_license_client(tmp_path: Path):
     """License client with a fresh rate limiter and proper expires_at field."""
     import json as _json
-    import hashlib
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from starlette.middleware.sessions import SessionMiddleware
@@ -221,9 +226,9 @@ def fresh_license_client(tmp_path: Path):
     db_path = tmp_path / "data" / "licenses.json"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    key = "SE-PRO-" + hashlib.md5(b"fresh").hexdigest()
-    revoked_key = "SE-PRO-" + hashlib.md5(b"revoked").hexdigest()
-    expired_key = "SE-PRO-" + hashlib.md5(b"expired").hexdigest()
+    key = _derived_license("fresh")
+    revoked_key = _derived_license("revoked")
+    expired_key = _derived_license("expired")
 
     db = {
         "licenses": [
@@ -263,7 +268,7 @@ def fresh_license_client(tmp_path: Path):
     db_path.write_text(_json.dumps(db), encoding="utf-8")
 
     app = FastAPI()
-    app.add_middleware(SessionMiddleware, secret_key="test-secret")
+    app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(24))
     app.include_router(license_router)
 
     fresh_limiter = RateLimiter(max_requests=1000, window_seconds=60)
@@ -347,9 +352,8 @@ class TestLicenseRoutesFull:
         assert r.status_code == 422
 
     def test_validate_nonexistent_key(self, fresh_license_client) -> None:
-        import hashlib
         client, _, _, _ = fresh_license_client
-        nonexist = "SE-PRO-" + hashlib.md5(b"nonexistent-xyz").hexdigest()
+        nonexist = _derived_license("nonexistent-xyz")
         r = client.post("/api/license/validate", json={
             "license_key": nonexist,
             "machine_id": "machine-001",
@@ -481,9 +485,8 @@ class TestLicenseRoutesFull:
         assert data["success"] is True
 
     def test_deactivate_nonexistent_key(self, fresh_license_client) -> None:
-        import hashlib
         client, _, _, _ = fresh_license_client
-        bad_key = "SE-PRO-" + hashlib.md5(b"no-such-key").hexdigest()
+        bad_key = _derived_license("no-such-key")
         r = client.post("/api/license/deactivate", json={
             "license_key": bad_key,
             "machine_id": "machine-001",
@@ -497,7 +500,6 @@ class TestLicenseRoutesFull:
 
     def test_info_with_admin_session(self, fresh_license_client, tmp_path) -> None:
         """Test info endpoint with a properly authenticated admin session."""
-        import hashlib
         import webapp.license_api as la
         import webapp.user_manager as um_module
         from webapp.user_manager import UserManager
@@ -517,7 +519,11 @@ class TestLicenseRoutesFull:
 
         with patch.object(um_module, "_USERS_DB_PATH", um_db):
             um = UserManager()
-            user = um.create_user(email="admin@example.com", password="Admin1234!", name="Admin")
+            user = um.create_user(
+                email="admin@example.com",
+                password=f"Adm!{secrets.token_hex(6)}",
+                name="Admin",
+            )
             admin_id = user["id"]
 
         UserManager._instance = None

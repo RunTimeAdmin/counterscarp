@@ -12,6 +12,7 @@ sys.path.insert(
 
 from fingerprint_scanner import (
     ContractFeatures,
+    _storage_pattern_matches,
     extract_function_signature,
     extract_param_type,
     extract_event_signature,
@@ -334,6 +335,11 @@ class TestCalculateSimilarity:
         
         assert score > 0.0
         assert "matched_functions" in details
+
+    def test_storage_pattern_match_uses_safe_token_logic(self):
+        """Storage patterns are tokenized and matched without regex compile."""
+        assert _storage_pattern_matches(r"reserve0", "reserve0")
+        assert not _storage_pattern_matches(r"(a+)+$", "aaaaaaaaaaaa")
 
 
 # =============================================================================

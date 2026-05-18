@@ -12,7 +12,9 @@ import re
 import os
 import sys
 import argparse
+from pathlib import Path
 from typing import Dict, List, Any, Optional, cast
+from path_security import sanitize_cli_path
 
 from dataclasses import dataclass
 
@@ -550,10 +552,10 @@ def scan_anchor_patterns(file_path: str) -> List[SolanaFinding]:
         List of security findings.
     """
     findings = []
-    
-    with open(file_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-        content = ''.join(lines)
+
+    safe_file = sanitize_cli_path(file_path, allowed_suffixes={".rs"})
+    content = safe_file.read_text(encoding="utf-8")
+    lines = content.splitlines(keepends=True)
     
     for pattern_def in ANCHOR_PATTERNS:
         for match in pattern_def["pattern"].finditer(content):
@@ -589,9 +591,9 @@ def detect_anchor_accounts(file_path: str) -> List[Dict[str, Any]]:
         List of account configuration dictionaries.
     """
     accounts = []
-    
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+
+    safe_file = sanitize_cli_path(file_path, allowed_suffixes={".rs"})
+    content = safe_file.read_text(encoding="utf-8")
     
     # Find #[account] structs
     account_pattern = re.compile(
@@ -672,7 +674,9 @@ class SolanaAnalyzer:
         config: Optional[Any] = None,
         idl_path_override: Optional[str] = None,
     ) -> None:
-        self.project_root = project_root
+        self.project_root = str(
+            sanitize_cli_path(project_root, must_exist=True, expect_file=False)
+        )
         self._config = config
         self._idl_path_override = idl_path_override
 
@@ -692,14 +696,12 @@ class SolanaAnalyzer:
 
     def find_rust_files(self) -> List[str]:
         """Find all .rs files under project_root, skipping target/."""
-        rust_files: List[str] = []
-        for root, _dirs, files in os.walk(self.project_root):
-            if "target" in root.split(os.sep):
-                continue
-            for fname in files:
-                if fname.endswith(".rs"):
-                    rust_files.append(os.path.join(root, fname))
-        return rust_files
+        root = Path(self.project_root)
+        return [
+            str(p)
+            for p in root.rglob("*.rs")
+            if "target" not in p.parts
+        ]
 
     def find_idl_files(self) -> List[str]:
         """Find Anchor IDL JSON files.
@@ -727,11 +729,20 @@ class SolanaAnalyzer:
     @staticmethod
     def _resolve_idl_path(path: str) -> List[str]:
         """Resolve an IDL path (file or directory) to a list of files."""
-        if os.path.isfile(path):
-            return [path]
-        if os.path.isdir(path):
+        raw_path = Path(path).expanduser()
+        if not raw_path.exists():
+            return []
+        safe_path = sanitize_cli_path(
+            str(raw_path),
+            must_exist=True,
+            expect_file=raw_path.is_file(),
+            allowed_suffixes={".json"} if raw_path.is_file() else None,
+        )
+        if safe_path.is_file():
+            return [str(safe_path)]
+        if safe_path.is_dir():
             result: List[str] = []
-            for root, _dirs, files in os.walk(path):
+            for root, _dirs, files in os.walk(str(safe_path)):
                 for fname in files:
                     if fname.endswith(".json"):
                         result.append(os.path.join(root, fname))
@@ -1004,13 +1015,16 @@ def main() -> None:
     args = parser.parse_args()
 
     # Validate project root
-    if not os.path.exists(os.path.join(args.project_root, "Cargo.toml")):
-        print(f"[!] Not a valid Rust project: {args.project_root}")
+    safe_project_root = str(
+        sanitize_cli_path(args.project_root, must_exist=True, expect_file=False)
+    )
+    if not os.path.exists(os.path.join(safe_project_root, "Cargo.toml")):
+        print(f"[!] Not a valid Rust project: {safe_project_root}")
         print("    Missing Cargo.toml")
         sys.exit(1)
 
     results = analyze_solana_program(
-        args.project_root,
+        safe_project_root,
         idl_path=args.idl_path,
         validate_idl_constraints=not args.no_idl_constraints,
         trace_cpi=not args.no_cpi_trace

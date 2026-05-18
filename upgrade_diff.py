@@ -10,9 +10,11 @@ from __future__ import annotations
 import re
 import argparse
 import sys
+import json
 from typing import Dict, List, Any, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
+from path_security import sanitize_cli_path
 
 # Import logger and exceptions
 try:
@@ -92,6 +94,43 @@ class UpgradeIssue:
     line_no: Optional[int] = None
 
 
+def parse_storage_layout_from_lines(lines: List[str]) -> List[StorageVariable]:
+    """Parse storage variables from Solidity source lines."""
+    storage_vars = []
+    current_slot = 0
+    in_contract = False
+    in_function = False
+    brace_depth = 0
+
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if re.match(r'contract\s+\w+', stripped):
+            in_contract = True
+            continue
+        if in_contract:
+            brace_depth += stripped.count('{') - stripped.count('}')
+            if 'function ' in stripped:
+                in_function = True
+            if not in_function and brace_depth == 1:
+                var_match = re.match(
+                    r'(uint\d*|int\d*|address|bool|bytes\d*|string|mapping\(.+\)|.+\[\])\s+(public|private|internal)?\s*(\w+)\s*;',
+                    stripped
+                )
+                if var_match:
+                    var_type = var_match.group(1)
+                    var_name = var_match.group(3)
+                    storage_vars.append(StorageVariable(
+                        name=var_name,
+                        type=var_type,
+                        slot=current_slot,
+                        line_no=i
+                    ))
+                    current_slot += 1
+            if in_function and brace_depth == 1:
+                in_function = False
+    return storage_vars
+
+
 def parse_storage_layout(contract_path: str) -> List[StorageVariable]:
     """Parse storage variables from Solidity contract.
 
@@ -106,58 +145,9 @@ def parse_storage_layout(contract_path: str) -> List[StorageVariable]:
     Returns:
         List of storage variable definitions.
     """
-    storage_vars = []
-    current_slot = 0
-    
-    with open(contract_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-    
-    in_contract = False
-    in_function = False
-    brace_depth = 0
-    
-    for i, line in enumerate(lines, 1):
-        stripped = line.strip()
-        
-        # Track contract scope
-        if re.match(r'contract\s+\w+', stripped):
-            in_contract = True
-            continue
-        
-        if in_contract:
-            # Track brace depth to know when we're inside functions
-            brace_depth += stripped.count('{') - stripped.count('}')
-            
-            # Detect function start
-            if 'function ' in stripped:
-                in_function = True
-            
-            # Only parse storage variables (contract-level, outside functions)
-            if not in_function and brace_depth == 1:
-                # Match storage variable declarations
-                # Format: type visibility name;
-                var_match = re.match(
-                    r'(uint\d*|int\d*|address|bool|bytes\d*|string|mapping\(.+\)|.+\[\])\s+(public|private|internal)?\s*(\w+)\s*;',
-                    stripped
-                )
-                
-                if var_match:
-                    var_type = var_match.group(1)
-                    var_name = var_match.group(3)
-                    
-                    storage_vars.append(StorageVariable(
-                        name=var_name,
-                        type=var_type,
-                        slot=current_slot,
-                        line_no=i
-                    ))
-                    current_slot += 1
-            
-            # Function ends when braces balance
-            if in_function and brace_depth == 1:
-                in_function = False
-    
-    return storage_vars
+    safe_path = sanitize_cli_path(contract_path, allowed_suffixes={".sol"})
+    lines = safe_path.read_text(encoding='utf-8').splitlines()
+    return parse_storage_layout_from_lines(lines)
 
 
 def validate_storage_layout(layout: List[StorageVariable]) -> List[str]:
@@ -250,40 +240,21 @@ def validate_storage_layout(layout: List[StorageVariable]) -> List[str]:
     return errors
 
 
-def parse_functions(contract_path: str) -> List[Function]:
-    """Extract all functions with their visibility and modifiers.
-
-    Args:
-        contract_path: Path to the Solidity contract.
-
-    Returns:
-        List of function definitions.
-    """
+def parse_functions_from_content(content: str) -> List[Function]:
+    """Extract all functions from Solidity source text."""
     functions = []
-    
-    with open(contract_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-        lines = content.split('\n')
-    
-    # Find all function declarations
     function_pattern = re.compile(
         r'function\s+(\w+)\s*\([^)]*\)\s*(public|external|internal|private)?\s*(view|pure|payable)?\s*(.*?)\s*(?:returns|{)',
         re.MULTILINE
     )
-    
     for match in function_pattern.finditer(content):
         func_name = match.group(1)
-        visibility = match.group(2) or 'public'  # Default visibility
+        visibility = match.group(2) or 'public'
         mutability = match.group(3) or 'nonpayable'
         modifiers_str = match.group(4) or ''
-        
-        # Extract modifiers (onlyOwner, nonReentrant, etc.)
         modifiers = re.findall(r'\b(\w+)\b', modifiers_str)
         modifiers = [m for m in modifiers if m not in ['returns', 'return', 'memory', 'calldata', 'storage']]
-        
-        # Find line number
         line_no = content[:match.start()].count('\n') + 1
-        
         functions.append(Function(
             name=func_name,
             visibility=visibility,
@@ -293,8 +264,21 @@ def parse_functions(contract_path: str) -> List[Function]:
             line_no=line_no,
             signature=match.group(0)
         ))
-    
     return functions
+
+
+def parse_functions(contract_path: str) -> List[Function]:
+    """Extract all functions with their visibility and modifiers.
+
+    Args:
+        contract_path: Path to the Solidity contract.
+
+    Returns:
+        List of function definitions.
+    """
+    safe_path = sanitize_cli_path(contract_path, allowed_suffixes={".sol"})
+    content = safe_path.read_text(encoding='utf-8')
+    return parse_functions_from_content(content)
 
 
 def compare_storage_layouts(
@@ -462,7 +446,10 @@ def compare_access_control(
     return issues
 
 
-def detect_new_external_calls(old_path: str, new_path: str) -> List[UpgradeIssue]:
+def detect_new_external_calls_from_content(
+    old_content: str,
+    new_content: str,
+) -> List[UpgradeIssue]:
     """Detect new external calls in upgraded contract (increased attack surface).
 
     Args:
@@ -473,12 +460,6 @@ def detect_new_external_calls(old_path: str, new_path: str) -> List[UpgradeIssue
         List of upgrade issues for new external calls.
     """
     issues = []
-    
-    with open(old_path, 'r') as f:
-        old_content = f.read()
-    
-    with open(new_path, 'r') as f:
-        new_content = f.read()
     
     # Find external calls (address.call, IERC20.transfer, etc.)
     call_pattern = re.compile(r'(\w+)\.(call|delegatecall|staticcall|transfer|transferFrom|approve)')
@@ -502,6 +483,57 @@ def detect_new_external_calls(old_path: str, new_path: str) -> List[UpgradeIssue
     return issues
 
 
+def detect_new_external_calls(old_path: str, new_path: str) -> List[UpgradeIssue]:
+    safe_old = sanitize_cli_path(old_path, allowed_suffixes={".sol"})
+    safe_new = sanitize_cli_path(new_path, allowed_suffixes={".sol"})
+    return detect_new_external_calls_from_content(
+        safe_old.read_text(encoding='utf-8'),
+        safe_new.read_text(encoding='utf-8'),
+    )
+
+
+def analyze_upgrade_from_content(
+    old_contract_name: str,
+    new_contract_name: str,
+    old_content: str,
+    new_content: str,
+) -> Dict[str, Any]:
+    """Analyze upgrade using preloaded source content."""
+    print("\n" + "="*60)
+    print(" UPGRADE DIFF ANALYZER")
+    print("="*60)
+    print(f"\n[*] Analyzing upgrade:")
+    print(f"    Old: {old_contract_name}")
+    print(f"    New: {new_contract_name}")
+    all_issues = []
+    print("\n[*] Checking storage layout...")
+    old_storage = parse_storage_layout_from_lines(old_content.splitlines())
+    new_storage = parse_storage_layout_from_lines(new_content.splitlines())
+    all_issues.extend(compare_storage_layouts(old_storage, new_storage))
+    print("[*] Checking access control...")
+    old_functions = parse_functions_from_content(old_content)
+    new_functions = parse_functions_from_content(new_content)
+    all_issues.extend(compare_access_control(old_functions, new_functions))
+    print("[*] Checking for new external calls...")
+    all_issues.extend(detect_new_external_calls_from_content(old_content, new_content))
+    summary = {
+        "CRITICAL": len([i for i in all_issues if i.severity == "CRITICAL"]),
+        "HIGH": len([i for i in all_issues if i.severity == "HIGH"]),
+        "MEDIUM": len([i for i in all_issues if i.severity == "MEDIUM"]),
+        "LOW": len([i for i in all_issues if i.severity == "LOW"])
+    }
+    safe = summary["CRITICAL"] == 0 and summary["HIGH"] == 0
+    return {
+        "issues": all_issues,
+        "summary": summary,
+        "safe": safe,
+        "old_storage_count": len(old_storage),
+        "new_storage_count": len(new_storage),
+        "old_function_count": len(old_functions),
+        "new_function_count": len(new_functions)
+    }
+
+
 def analyze_upgrade(old_contract: str, new_contract: str) -> Dict[str, Any]:
     """Main upgrade analysis function.
 
@@ -512,53 +544,14 @@ def analyze_upgrade(old_contract: str, new_contract: str) -> Dict[str, Any]:
     Returns:
         Dict with issues, summary counts, and safety status.
     """
-    print("\n" + "="*60)
-    print(" UPGRADE DIFF ANALYZER")
-    print("="*60)
-    print(f"\n[*] Analyzing upgrade:")
-    print(f"    Old: {old_contract}")
-    print(f"    New: {new_contract}")
-    
-    all_issues = []
-    
-    # 1. Storage layout comparison
-    print("\n[*] Checking storage layout...")
-    old_storage = parse_storage_layout(old_contract)
-    new_storage = parse_storage_layout(new_contract)
-    storage_issues = compare_storage_layouts(old_storage, new_storage)
-    all_issues.extend(storage_issues)
-    
-    # 2. Access control comparison
-    print("[*] Checking access control...")
-    old_functions = parse_functions(old_contract)
-    new_functions = parse_functions(new_contract)
-    auth_issues = compare_access_control(old_functions, new_functions)
-    all_issues.extend(auth_issues)
-    
-    # 3. New external calls
-    print("[*] Checking for new external calls...")
-    call_issues = detect_new_external_calls(old_contract, new_contract)
-    all_issues.extend(call_issues)
-    
-    # Summarize by severity
-    summary = {
-        "CRITICAL": len([i for i in all_issues if i.severity == "CRITICAL"]),
-        "HIGH": len([i for i in all_issues if i.severity == "HIGH"]),
-        "MEDIUM": len([i for i in all_issues if i.severity == "MEDIUM"]),
-        "LOW": len([i for i in all_issues if i.severity == "LOW"])
-    }
-    
-    safe = summary["CRITICAL"] == 0 and summary["HIGH"] == 0
-    
-    return {
-        "issues": all_issues,
-        "summary": summary,
-        "safe": safe,
-        "old_storage_count": len(old_storage),
-        "new_storage_count": len(new_storage),
-        "old_function_count": len(old_functions),
-        "new_function_count": len(new_functions)
-    }
+    safe_old = sanitize_cli_path(old_contract, allowed_suffixes={".sol"})
+    safe_new = sanitize_cli_path(new_contract, allowed_suffixes={".sol"})
+    return analyze_upgrade_from_content(
+        str(safe_old),
+        str(safe_new),
+        safe_old.read_text(encoding='utf-8'),
+        safe_new.read_text(encoding='utf-8'),
+    )
 
 
 def print_report(results: Dict[str, Any]) -> None:
@@ -617,25 +610,30 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="🔍 Upgrade Diff Analyzer - Detect dangerous changes in contract upgrades"
     )
-    parser.add_argument("old_contract", help="Path to old contract version")
-    parser.add_argument("new_contract", help="Path to new contract version")
+    parser.add_argument(
+        "old_contract",
+        type=argparse.FileType("r", encoding="utf-8"),
+        help="Path to old contract version",
+    )
+    parser.add_argument(
+        "new_contract",
+        type=argparse.FileType("r", encoding="utf-8"),
+        help="Path to new contract version",
+    )
     parser.add_argument("--json", action="store_true", help="Output JSON format")
     
     args = parser.parse_args()
     
-    # Validate files exist
-    if not Path(args.old_contract).exists():
-        print(f"[!] Old contract not found: {args.old_contract}")
-        sys.exit(1)
-    
-    if not Path(args.new_contract).exists():
-        print(f"[!] New contract not found: {args.new_contract}")
-        sys.exit(1)
-    
-    results = analyze_upgrade(args.old_contract, args.new_contract)
+    safe_old = sanitize_cli_path(args.old_contract.name, allowed_suffixes={".sol"})
+    safe_new = sanitize_cli_path(args.new_contract.name, allowed_suffixes={".sol"})
+    results = analyze_upgrade_from_content(
+        str(safe_old),
+        str(safe_new),
+        args.old_contract.read(),
+        args.new_contract.read(),
+    )
     
     if args.json:
-        import json
         # Convert dataclasses to dicts
         json_issues = [
             {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import argparse
-from textwrap import dedent
+from path_security import sanitize_cli_path, sanitize_output_path
 
 
 TEMPLATE = """// SPDX-License-Identifier: MIT
@@ -96,14 +96,16 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    project_root = os.path.abspath(args.project_root)
+    project_root = str(
+        sanitize_cli_path(args.project_root, must_exist=True, expect_file=False)
+    )
     vault_contract = args.vault_contract
 
-    target_dir = os.path.join(project_root, "test", "invariant")
-    os.makedirs(target_dir, exist_ok=True)
+    target_dir = sanitize_output_path(os.path.join(project_root, "test", "invariant"))
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"{vault_contract}Inflation.t.sol"
-    target_path = os.path.join(target_dir, filename)
+    target_path = str(target_dir / filename)
 
     if os.path.exists(target_path):
         print(f"[!] File already exists: {target_path}")
@@ -111,8 +113,7 @@ def main() -> None:
 
     content = TEMPLATE.format(vault_contract=vault_contract)
 
-    with open(target_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    sanitize_output_path(target_path).write_text(content, encoding="utf-8")
 
     print("[+] Inflation invariant scaffold created:")
     print(f"    {target_path}")

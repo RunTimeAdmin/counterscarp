@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import argparse
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as SafeET
 from typing import Any, Dict, List
 from urllib.parse import quote
 
 from logger import get_logger
 from http_utils import resilient_get, RateLimiter
+from path_security import sanitize_cli_path
 
 # Import config loader
 try:
@@ -75,6 +76,26 @@ IMMUNEFI_RSS = "https://medium.com/feed/immunefi"
 # Solodit URL constructor
 SOLODIT_BASE = "https://solodit.xyz/search"
 
+def get_contract_context_from_source(content: str) -> List[str]:
+    """Infer context tags from Solidity source text."""
+    tags = set()
+    lower = content.lower()
+    if "erc20" in lower: tags.add("ERC20")
+    if "erc721" in lower or "nft" in lower: tags.add("NFT")
+    if "lending" in lower or "collateral" in lower: tags.add("Lending")
+    if "staking" in lower or "reward" in lower: tags.add("Staking")
+    if "vault" in lower or "erc4626" in lower: tags.add("ERC4626")
+    if "oracle" in lower or "chainlink" in lower: tags.add("Oracle")
+    if "swap" in lower or "amm" in lower: tags.add("AMM")
+    if "bridge" in lower: tags.add("Bridge")
+    if "governance" in lower or "voting" in lower: tags.add("Governance")
+    if "flash" in lower: tags.add("FlashLoan")
+    if "proxy" in lower or "upgradeable" in lower: tags.add("Upgradeable")
+    if not tags:
+        tags.add("Smart Contract")
+    return list(tags)
+
+
 def get_contract_context(filepath: str) -> List[str]:
     """Scans the file to determine specific tags (e.g., "ERC4626", "Oracle").
 
@@ -86,28 +107,15 @@ def get_contract_context(filepath: str) -> List[str]:
     """
     tags = set()
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read().lower()
-            if "erc20" in content: tags.add("ERC20")
-            if "erc721" in content or "nft" in content: tags.add("NFT")
-            if "lending" in content or "collateral" in content: tags.add("Lending")
-            if "staking" in content or "reward" in content: tags.add("Staking")
-            if "vault" in content or "erc4626" in content: tags.add("ERC4626")
-            if "oracle" in content or "chainlink" in content: tags.add("Oracle")
-            if "swap" in content or "amm" in content: tags.add("AMM")
-            if "bridge" in content: tags.add("Bridge")
-            if "governance" in content or "voting" in content: tags.add("Governance")
-            if "flash" in content: tags.add("FlashLoan")
-            if "proxy" in content or "upgradeable" in content: tags.add("Upgradeable")
+        safe_file = sanitize_cli_path(filepath, allowed_suffixes={".sol"})
+        with open(safe_file, 'r', encoding='utf-8') as f:
+            return get_contract_context_from_source(f.read())
     except (IOError, OSError, UnicodeDecodeError) as e:
         logger.warning(f"Could not read contract file for context: {e}")
     except Exception as e:
         logger.error(f"Unexpected error scanning contract context: {e}")
 
-    # Default to generic if nothing found
-    if not tags:
-        tags.add("Smart Contract")
-    return list(tags)
+    return list(tags) if tags else ["Smart Contract"]
 
 # Backwards compatibility alias
 scan_file_for_context = get_contract_context
@@ -238,7 +246,7 @@ def fetch_immunefi_reports(keywords: List[str]) -> List[Dict[str, Any]]:
         )
 
         # Parse XML Feed
-        root = ET.fromstring(resp.content)
+        root = SafeET.fromstring(resp.content)
 
         # Iterate channel items
         for item in root.findall("./channel/item"):
@@ -260,7 +268,7 @@ def fetch_immunefi_reports(keywords: List[str]) -> List[Dict[str, Any]]:
             if len(reports) >= 3:
                 break
 
-    except ET.ParseError as e:
+    except SafeET.ParseError as e:
         logger.warning(f"Failed to parse Immunefi RSS XML: {e}")
     except Exception as e:
         logger.warning(
@@ -376,6 +384,49 @@ def generate_comprehensive_report(filepath: str) -> Dict[str, Any]:
         "solodit": solodit_data
     }
 
+
+def generate_comprehensive_report_from_source(
+    source: str,
+    source_name: str = "<memory>",
+) -> Dict[str, Any]:
+    """Generate report using preloaded contract source."""
+    tags = get_contract_context_from_source(source)
+    logger.info(f"Generating comprehensive report for: {source_name}")
+    print("\n" + "="*70)
+    print(f" 🧠 KNOWLEDGE ENGINE (C4 + Immunefi + Solodit)")
+    print("="*70)
+    print(f"[*] Detected Context: {', '.join(tags)}")
+    print("-" * 70)
+    c4_data = fetch_c4_findings(tags)
+    immunefi_data = fetch_immunefi_reports(tags)
+    solodit_data = generate_solodit_links(tags)
+    if c4_data:
+        print(f"\n[CODE4RENA] Relevant High-Severity Findings:")
+        for item in c4_data:
+            print(f"  • {item['title']}")
+            print(f"    Url: {item['html_url']}")
+    else:
+        print("\n[CODE4RENA] No direct matches found recently.")
+    if immunefi_data:
+        print(f"\n[IMMUNEFI] Related Post-Mortems:")
+        for item in immunefi_data:
+            print(f"  • {item['title']}")
+            print(f"    Url: {item['url']}")
+    else:
+        print("\n[IMMUNEFI] No recent RSS matches (Check DeFiHackLabs manually).")
+    if solodit_data:
+        print(f"\n[SOLODIT] Manual Research Links (Deep Search):")
+        for item in solodit_data:
+            print(f"  • {item['title']}")
+            print(f"    Url: {item['url']}")
+    print("\n" + "="*70)
+    return {
+        "context": tags,
+        "code4rena": c4_data,
+        "immunefi": immunefi_data,
+        "solodit": solodit_data,
+    }
+
 # Backwards compatibility wrapper
 def generate_reference_report(filepath):
     """Legacy function name for GUI compatibility"""
@@ -387,12 +438,17 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "file",
+        type=argparse.FileType("r", encoding="utf-8"),
         help="The solidity file to analyze context for"
     )
     args = parser.parse_args()
 
     try:
-        generate_comprehensive_report(args.file)
+        sanitize_cli_path(args.file.name, allowed_suffixes={".sol"})
+        generate_comprehensive_report_from_source(
+            args.file.read(),
+            source_name=args.file.name,
+        )
     except Exception as e:
         logger.error(f"Report generation failed: {e}")
         raise

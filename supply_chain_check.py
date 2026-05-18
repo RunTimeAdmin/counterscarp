@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
-import os
 import argparse
-import sys
 import re
 from typing import Dict, List, Any
 
 from logger import get_logger
 from exceptions import CounterscarpAPIError, CounterscarpValidationError
 from http_utils import resilient_post, RateLimiter
+from path_security import sanitize_cli_path
 
 # Import config loader
 try:
@@ -141,51 +140,16 @@ def check_osv_api(package_name: str, version: str) -> List[Dict[str, Any]]:
         return []
 
 
-def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
-    """Parses a package.json file and queries the OSV API for each dependency.
+def scan_dependency_manifest(all_deps: Dict[str, str]) -> List[Dict[str, Any]]:
+    """Scan an already-loaded dependency manifest against OSV.
 
     Args:
-        file_path: Path to the package.json file.
+        all_deps: Mapping of dependency name to version string.
 
     Returns:
         List of vulnerability findings for dependencies.
 
-    Raises:
-        CounterscarpValidationError: If the file cannot be read.
     """
-    print(f"[*] Parsing manifest: {file_path}")
-    print(f"[*] Querying OSV.dev database (Live)...")
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in {file_path}: {e}")
-        # Partial recovery: try to extract dependency names even if JSON is malformed
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            # Try to extract package names using regex as fallback
-            deps_pattern = r'"([^"]+)"\s*:\s*"[^"]+"'
-            found_deps = re.findall(deps_pattern, content)
-            if found_deps:
-                logger.info(f"Partial recovery: extracted {len(found_deps)} "
-                           f"potential dependencies from malformed JSON")
-            print(f"[!] ERROR: Could not parse {file_path}. Invalid JSON.")
-        except Exception as recovery_e:
-            logger.error(f"Partial recovery failed: {recovery_e}")
-        return []
-    except (IOError, OSError) as e:
-        logger.error(f"Could not read package.json: {e}")
-        raise CounterscarpValidationError(
-            "Failed to read package.json",
-            details={"path": file_path, "error": str(e)}
-        ) from e
-
-    # Combine dependencies and devDependencies
-    deps = data.get("dependencies", {})
-    dev_deps = data.get("devDependencies", {})
-    all_deps: Dict[str, str] = {**deps, **dev_deps}
 
     found_vulns: List[Dict[str, Any]] = []
 
@@ -244,6 +208,33 @@ def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
     return found_vulns
 
 
+def scan_package_json(file_path: str) -> List[Dict[str, Any]]:
+    """Parse package.json then scan dependencies via OSV."""
+    safe_path = sanitize_cli_path(file_path, allowed_suffixes={".json"})
+    file_path = str(safe_path)
+
+    print(f"[*] Parsing manifest: {file_path}")
+    print(f"[*] Querying OSV.dev database (Live)...")
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in {file_path}: {e}")
+        print(f"[!] ERROR: Could not parse {file_path}. Invalid JSON.")
+        return []
+    except (IOError, OSError) as e:
+        logger.error(f"Could not read package.json: {e}")
+        raise CounterscarpValidationError(
+            "Failed to read package.json",
+            details={"path": file_path, "error": str(e)}
+        ) from e
+
+    deps = data.get("dependencies", {})
+    dev_deps = data.get("devDependencies", {})
+    return scan_dependency_manifest({**deps, **dev_deps})
+
+
 def print_report(vulnerabilities: List[Dict[str, Any]]) -> None:
     """Print a formatted report of supply chain vulnerabilities.
 
@@ -278,23 +269,20 @@ if __name__ == "__main__":
         description="Live Supply Chain Scanner using OSV.dev",
     )
     parser.add_argument(
-        "path",
-        help="Path to project root or package.json file",
-        default=".",
+        "manifest",
+        type=argparse.FileType("r", encoding="utf-8"),
+        help="Path to package.json file",
     )
     args = parser.parse_args()
 
-    target_path = args.path
-    if os.path.isdir(target_path):
-        target_path = os.path.join(target_path, "package.json")
-
-    if not os.path.exists(target_path):
-        logger.error(f"Target path not found: {target_path}")
-        print(f"[!] Error: {target_path} not found.")
-        sys.exit(1)
-
     try:
-        results = scan_package_json(target_path)
+        sanitize_cli_path(args.manifest.name, allowed_suffixes={".json"})
+        data = json.load(args.manifest)
+        deps = data.get("dependencies", {})
+        dev_deps = data.get("devDependencies", {})
+        print(f"[*] Parsing manifest: {args.manifest.name}")
+        print(f"[*] Querying OSV.dev database (Live)...")
+        results = scan_dependency_manifest({**deps, **dev_deps})
         print_report(results)
     except Exception as e:
         logger.error(f"Supply chain scan failed: {e}")

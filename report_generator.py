@@ -315,12 +315,14 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
             logo_html = ""
     
     # Determine status badge color
-    status_colors = {
-        "PASS": "#28a745",
-        "WARNING": "#ffc107", 
-        "FAIL": "#dc3545"
-    }
-    status_color = status_colors.get(report.pass_fail, "#6c757d")
+    if report.pass_fail == "PASS":
+        status_color = "#28a745"
+    elif report.pass_fail == "WARNING":
+        status_color = "#ffc107"
+    elif report.pass_fail == "FAIL":
+        status_color = "#dc3545"
+    else:
+        status_color = "#6c757d"
     
     # Build HTML
     html = f"""<!DOCTYPE html>

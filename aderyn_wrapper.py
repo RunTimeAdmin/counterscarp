@@ -10,10 +10,8 @@ from __future__ import annotations
 import subprocess
 import json
 import sys
-import os
 import argparse
 from typing import Dict, Any, List, Optional
-from pathlib import Path
 
 from logger import get_logger, append_stderr_log
 from exceptions import (
@@ -21,6 +19,7 @@ from exceptions import (
     CounterscarpToolNotFoundError,
     CounterscarpTimeoutError,
 )
+from path_security import sanitize_cli_path
 
 # Import config loader
 try:
@@ -103,6 +102,9 @@ def run_aderyn(
         CounterscarpTimeoutError: If analysis times out.
         CounterscarpAnalysisError: If analysis fails.
     """
+    safe_root = sanitize_cli_path(project_root, expect_file=False)
+    project_root = str(safe_root)
+
     if not check_aderyn_installed():
         logger.error("Aderyn not installed")
         print("[!] Aderyn not installed.")
@@ -122,7 +124,8 @@ def run_aderyn(
     
     # Add output format
     if output_format == "json":
-        cmd.extend(["--output", "aderyn-report.json"])
+        # Keep JSON on stdout to avoid unsafe file path handling.
+        pass
     elif output_format == "markdown":
         cmd.extend(["--output", "aderyn-report.md"])
     elif output_format == "sarif":
@@ -148,16 +151,7 @@ def run_aderyn(
         )
         if result.stderr:
             append_stderr_log(result.stderr, "aderyn", stderr_log or "")
-        # Aderyn writes to file, read it back
-        output_file = os.path.join(project_root, f"aderyn-report.{output_format}")
-        
-        if output_format == "json" and os.path.exists(output_file):
-            with open(output_file, 'r') as f:
-                result_data: Dict[str, Any] = json.load(f)
-                return result_data
-        else:
-            # Parse stdout if file not found
-            return parse_aderyn_output(result.stdout, result.stderr)
+        return parse_aderyn_output(result.stdout, result.stderr)
         
     except subprocess.TimeoutExpired as e:
         logger.error(f"Aderyn timed out after {timeout}s")
@@ -384,7 +378,7 @@ def main() -> None:
     args = parser.parse_args()
     
     results = run_aderyn(
-        args.project_root,
+        str(sanitize_cli_path(args.project_root, expect_file=False)),
         output_format=args.format,
         scope=args.scope
     )

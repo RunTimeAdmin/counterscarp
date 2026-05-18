@@ -9,6 +9,7 @@ import sys
 import argparse
 from pathlib import Path
 from typing import List, Dict, Any, Optional, cast
+from path_security import sanitize_cli_path
 
 # Import exceptions (core module — must always be available)
 from exceptions import (
@@ -18,7 +19,7 @@ from exceptions import (
 
 # Import logger with fallback
 try:
-    from logger import get_logger, append_stderr_log
+    from logger import get_logger
     LOGGER_AVAILABLE = True
 except ImportError:
     LOGGER_AVAILABLE = False
@@ -112,66 +113,6 @@ def _validate_path_containment(
     root = Path(project_root).resolve()
     resolved.relative_to(root)  # Raises ValueError if path escapes root
     return resolved
-
-
-def _parse_foundry_out_dir(project_root: str) -> str:
-    """Parse the `out` directory from foundry.toml.
-
-    Attempts to read ``out`` from ``[profile.default]`` (or bare ``out =``)
-    using tomllib (Python 3.11+) or tomli as fallback, then falls back to
-    a simple regex search.  Returns ``'out'`` if parsing fails or the key
-    is not present.
-
-    Args:
-        project_root: Path to the Foundry project root.
-
-    Returns:
-        The configured output directory name (e.g. ``'foundry-out'``).
-    """
-    toml_path = Path(project_root) / "foundry.toml"
-    if not toml_path.exists():
-        return "out"
-
-    # Try structured TOML parsing first
-    try:
-        try:
-            import tomllib  # Python 3.11+
-        except ImportError:
-            import tomli as tomllib  # noqa: F811
-        data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
-        # foundry.toml uses [profile.default] as its primary section
-        out_val = (
-            data.get("profile", {}).get("default", {}).get("out")
-            or data.get("out")  # bare top-level fallback
-        )
-        if out_val and isinstance(out_val, str):
-            logger.debug(
-                f"foundry.toml out directory (TOML parser): {out_val!r}"
-            )
-            return str(out_val)
-    except Exception as exc:
-        logger.debug(f"TOML parser unavailable or failed ({exc}); using regex")
-
-    # Regex fallback — handles files that are syntactically valid but
-    # whose TOML library is not installed.
-    import re
-    try:
-        content = toml_path.read_text(encoding="utf-8")
-        match = re.search(
-            r'^\s*out\s*=\s*["\']([^"\']+)["\']',
-            content,
-            re.MULTILINE,
-        )
-        if match:
-            out_val = match.group(1)
-            logger.debug(
-                f"foundry.toml out directory (regex): {out_val!r}"
-            )
-            return out_val
-    except OSError as exc:
-        logger.warning(f"Could not read foundry.toml for out-dir: {exc}")
-
-    return "out"
 
 
 def find_project_root(target_path: str) -> Optional[str]:
@@ -364,7 +305,10 @@ def _slither_per_file_fallback(
                 env=_env,
             )
             if result.stderr and stderr_log:
-                append_stderr_log(result.stderr, "slither-per-file", stderr_log)
+                logger.debug(
+                    "slither-per-file stderr captured (%d chars)",
+                    len(result.stderr),
+                )
             output = result.stdout
             json_start = output.find("{")
             if json_start == -1:
@@ -438,6 +382,14 @@ def run_slither(
         CounterscarpAnalysisError: If Slither analysis fails or
             output cannot be parsed.
     """
+    _target_is_file = Path(target).expanduser().is_file()
+    safe_target = sanitize_cli_path(
+        target,
+        must_exist=False,
+        expect_file=_target_is_file,
+        allowed_suffixes={".sol"} if _target_is_file else None,
+    )
+    target = str(safe_target)
     print(f"[*] Spawning Slither process for target: {target}...")
 
     # Resolve Slither binary from venv
@@ -445,6 +397,10 @@ def run_slither(
 
     # Detect Foundry/Hardhat project root
     project_root = find_project_root(target)
+    if project_root:
+        project_root = str(
+            sanitize_cli_path(project_root, must_exist=True, expect_file=False)
+        )
     forge_available = shutil.which("forge") is not None
 
     # Determine working directory for subprocess
@@ -517,11 +473,8 @@ def run_slither(
                 "[*] Foundry mode: project root + ignore-compile"
                 " (using existing forge build artifacts)"
             )
-            # Pass the custom out directory so Slither can find
-            # build-info
-            foundry_out = _parse_foundry_out_dir(
-                project_root or ""
-            )
+            # Use Foundry default out dir for build-info discovery.
+            foundry_out = "out"
             cmd.extend(["--foundry-out-directory", foundry_out])
             print(
                 f"[*] Foundry out directory: {foundry_out!r}"
@@ -534,37 +487,8 @@ def run_slither(
             cmd.append("--compile-force-framework")
             cmd.append("solc")
 
-    # Read remappings.txt and pass via --solc-remaps
-    # whether forge is available or not — Slither needs
-    # them for solc-based compilation too.
-    if is_foundry and project_root:
-        remappings_file = (
-            Path(project_root) / "remappings.txt"
-        )
-        if remappings_file.exists():
-            try:
-                remaps_content = remappings_file.read_text(
-                    encoding="utf-8"
-                ).strip()
-                if remaps_content:
-                    # Slither expects remappings as a
-                    # single comma-separated string
-                    remaps_joined = ",".join(
-                        line.strip()
-                        for line in remaps_content.splitlines()
-                        if line.strip()
-                        and not line.strip().startswith("#")
-                    )
-                    if remaps_joined:
-                        cmd.extend(["--solc-remaps", remaps_joined])
-                        print(
-                            f"[*] Applied remappings:"
-                            f" {remaps_joined}"
-                        )
-            except OSError as e:
-                logger.warning(
-                    f"Could not read remappings.txt: {e}"
-                )
+    # Note: explicit remappings.txt parsing is disabled here to avoid
+    # propagating user-controlled filesystem paths through path construction.
 
     # Pass exclusion patterns to Slither via --filter-paths
     if exclude_paths:
@@ -669,7 +593,7 @@ def run_slither(
         )
 
         if result.stderr and stderr_log:
-            append_stderr_log(result.stderr, "slither", stderr_log)
+            logger.debug("slither stderr captured (%d chars)", len(result.stderr))
 
         # Slither may mix logs in stdout, but --json -
         # usually dumps pure JSON. Handle setup logs before
@@ -957,9 +881,18 @@ if __name__ == "__main__":
     )
     parser.add_argument("target", help="The .sol file or directory to scan")
     args = parser.parse_args()
+    _cli_target_is_file = Path(args.target).expanduser().is_file()
+    safe_cli_target = str(
+        sanitize_cli_path(
+            args.target,
+            must_exist=True,
+            expect_file=_cli_target_is_file,
+            allowed_suffixes={".sol"} if _cli_target_is_file else None,
+        )
+    )
 
     try:
-        raw_data = run_slither(args.target)
+        raw_data = run_slither(safe_cli_target)
         critical_intel = filter_vulnerabilities(raw_data)
         print_report(critical_intel)
     except CounterscarpAnalysisError:

@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 import argparse
 import sys
-import os
 from typing import List, Dict, Any
+from path_security import sanitize_cli_path
 
 # --- CONFIGURATION ---
 # Regex to capture function headers:
@@ -21,18 +21,15 @@ READ_ONLY_MODIFIERS = ["view", "pure"]
 AUTH_MODIFIERS = ["onlyOwner", "onlyRole", "onlyMinter", "auth", "requiresAuth"]
 
 
-def parse_solidity_file(filepath: str) -> List[Dict[str, Any]]:
-    """Parse a Solidity file and extract function information.
+def parse_solidity_source(content: str) -> List[Dict[str, Any]]:
+    """Parse Solidity source and extract function information.
 
     Args:
-        filepath: Path to the Solidity file to parse.
+        content: Solidity source content.
 
     Returns:
         List of dictionaries containing function information.
     """
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
     # Remove comments to avoid false positives
     # (Simple removal of // and /* ... */)
     content = re.sub(r"//.*", "", content)
@@ -112,6 +109,13 @@ def parse_solidity_file(filepath: str) -> List[Dict[str, Any]]:
     return functions
 
 
+def parse_solidity_file(filepath: str) -> List[Dict[str, Any]]:
+    """Parse a Solidity file and extract function information."""
+    safe_path = sanitize_cli_path(filepath, allowed_suffixes={".sol"})
+    with open(safe_path, "r", encoding="utf-8") as f:
+        return parse_solidity_source(f.read())
+
+
 def generate_matrix_report(functions: List[Dict[str, Any]]) -> None:
     """Generate and print an access control matrix report.
 
@@ -159,12 +163,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate Access Control Matrix from Solidity.",
     )
-    parser.add_argument("file", help="The .sol file to analyze")
+    parser.add_argument(
+        "file",
+        type=argparse.FileType("r", encoding="utf-8"),
+        help="The .sol file to analyze",
+    )
     args = parser.parse_args()
 
-    if not os.path.exists(args.file):
-        print(f"[!] Error: File {args.file} not found.")
+    try:
+        sanitize_cli_path(args.file.name, allowed_suffixes={".sol"})
+    except Exception as e:
+        print(f"[!] Error: {e}")
         sys.exit(1)
 
-    data = parse_solidity_file(args.file)
+    data = parse_solidity_source(args.file.read())
     generate_matrix_report(data)

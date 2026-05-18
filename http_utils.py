@@ -19,6 +19,8 @@ Example:
 import time
 import random
 import functools
+import ipaddress
+from urllib.parse import urlparse
 from typing import Optional, Callable, Any
 from dataclasses import dataclass, field
 
@@ -103,6 +105,48 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_BASE_DELAY = 1.0
 DEFAULT_MAX_DELAY = 30.0
 DEFAULT_BACKOFF_FACTOR = 2.0
+
+
+def _validate_outbound_url(url: str) -> None:
+    """Validate outbound URL to reduce SSRF risk."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise CounterscarpAPIError(
+            f"Blocked outbound URL with unsupported scheme: {url}",
+            details={"url": url, "reason": "unsupported_scheme"},
+        )
+
+    host = parsed.hostname
+    if not host:
+        raise CounterscarpAPIError(
+            f"Blocked outbound URL with missing hostname: {url}",
+            details={"url": url, "reason": "missing_hostname"},
+        )
+
+    host_lower = host.lower()
+    if host_lower in {"localhost", "127.0.0.1", "::1"}:
+        raise CounterscarpAPIError(
+            f"Blocked outbound URL targeting loopback host: {url}",
+            details={"url": url, "reason": "loopback_hostname"},
+        )
+
+    try:
+        addr = ipaddress.ip_address(host)
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_reserved
+            or addr.is_multicast
+            or addr.is_unspecified
+        ):
+            raise CounterscarpAPIError(
+                f"Blocked outbound URL targeting local/reserved IP: {url}",
+                details={"url": url, "reason": "local_or_reserved_ip"},
+            )
+    except ValueError:
+        # Hostname is not a direct IP literal; allow DNS-resolved hosts.
+        pass
 
 
 def calculate_backoff(
@@ -330,6 +374,8 @@ def resilient_request(
         >>> response = resilient_request('GET', 'https://api.example.com/data')
         >>> data = response.json()
     """
+    _validate_outbound_url(url)
+
     if rate_limiter:
         rate_limiter.acquire()
     

@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import subprocess
 import json
-import sys
-import os
 import argparse
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Dict, Any, Optional
 
 from logger import get_logger, append_stderr_log
 from exceptions import (
@@ -20,6 +19,7 @@ from exceptions import (
     CounterscarpToolNotFoundError,
     CounterscarpTimeoutError,
 )
+from path_security import sanitize_cli_path, sanitize_output_path
 
 # Import config loader
 try:
@@ -115,6 +115,10 @@ def run_medusa_fuzz(
         CounterscarpTimeoutError: If fuzzing times out.
         CounterscarpAnalysisError: If fuzzing fails.
     """
+    safe_project_root = str(
+        sanitize_cli_path(project_root, must_exist=True, expect_file=False)
+    )
+
     # Use config values if not provided
     if test_limit is None:
         test_limit = get_medusa_test_limit()
@@ -136,7 +140,7 @@ def run_medusa_fuzz(
     cmd = [
         "medusa",
         "fuzz",
-        "--target", project_root,
+        "--target", safe_project_root,
         "--test-limit", str(test_limit),
         "--timeout", str(timeout),
         "--deployment-order", "ContractName",  # Auto-detect
@@ -147,15 +151,15 @@ def run_medusa_fuzz(
     if target_contract:
         cmd.extend(["--contract-name", target_contract])
     
-    logger.info(f"Running Medusa fuzzer on {project_root}")
+    logger.info(f"Running Medusa fuzzer on {safe_project_root}")
     logger.debug(f"Test limit: {test_limit}, Timeout: {timeout}s")
-    print(f"[*] Running Medusa fuzzer on {project_root}")
+    print(f"[*] Running Medusa fuzzer on {safe_project_root}")
     print(f"[*] Test limit: {test_limit} sequences, Timeout: {timeout}s")
     
     try:
         result = subprocess.run(
             cmd,
-            cwd=project_root,
+            cwd=safe_project_root,
             capture_output=True,
             text=True,
             timeout=timeout + 30
@@ -305,11 +309,12 @@ def generate_medusa_config(project_root: str, target_contract: str) -> str:
         }
     }
     
-    config_path = os.path.join(project_root, "medusa.json")
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
-    
-    return config_path
+    safe_project_root = sanitize_cli_path(
+        project_root, must_exist=True, expect_file=False
+    )
+    config_path = sanitize_output_path(str(Path(safe_project_root) / "medusa.json"))
+    config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return str(config_path)
 
 
 def print_results(results: Dict[str, Any]) -> None:
@@ -390,15 +395,18 @@ def main() -> None:
     )
     
     args = parser.parse_args()
+    safe_project_root = str(
+        sanitize_cli_path(args.project_root, must_exist=True, expect_file=False)
+    )
     
     if args.generate_config:
-        config_path = generate_medusa_config(args.project_root, args.contract)
+        config_path = generate_medusa_config(safe_project_root, args.contract)
         print(f"[+] Generated Medusa config: {config_path}")
         print("[*] Edit the config, then run: medusa fuzz")
         return
     
     results = run_medusa_fuzz(
-        args.project_root,
+        safe_project_root,
         target_contract=args.contract,
         test_limit=args.test_limit,
         timeout=args.timeout

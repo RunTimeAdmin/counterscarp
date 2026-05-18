@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from path_security import sanitize_cli_path
 
 # Import logger
 try:
@@ -785,11 +786,15 @@ def _read_source_file(path: str) -> Optional[Tuple[List[str], str]]:
         the file cannot be read.
     """
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-            content = "".join(lines)
+        safe_path = sanitize_cli_path(
+            path,
+            allowed_suffixes={".sol"},
+            must_exist=False,
+        )
+        content = safe_path.read_text(encoding="utf-8", errors="replace")
+        lines = content.splitlines(keepends=True)
         return lines, content
-    except OSError as e:
+    except (OSError, ValueError) as e:
         logger.warning("Failed to read file %s: %s", path, e)
         return None
 
@@ -1110,6 +1115,17 @@ def scan_target(
     Returns:
         List of all heuristic findings.
     """
+    target_is_file = Path(target).expanduser().is_file()
+    safe_target = sanitize_cli_path(
+        target,
+        must_exist=False,
+        expect_file=target_is_file,
+        allowed_suffixes={".sol"} if target_is_file else None,
+    )
+    if not safe_target.exists():
+        return []
+    target = str(safe_target)
+
     exclude_patterns: List[str] = exclude_paths or []
 
     if exclude_patterns:
@@ -1117,36 +1133,20 @@ def scan_target(
 
     all_findings: List[HeuristicFinding] = []
 
-    if Path(target).is_file() and target.endswith(".sol"):
+    if safe_target.is_file() and target.endswith(".sol"):
         # Single-file scan: check whether the file itself is excluded
-        rel_single = Path(target).name
+        rel_single = safe_target.name
         if exclude_patterns and should_exclude(rel_single, exclude_patterns, ""):
             logger.debug("Excluded: %s", target)
         else:
             all_findings.extend(scan_file(target, config, plugin_mgr))
-    elif Path(target).is_dir():
-        for root, dirs, files in os.walk(target):
-            # Prune excluded directories in-place to avoid descending into them
-            if exclude_patterns:
-                rel_root = str(Path(root).relative_to(target)).replace("\\", "/")
-                dirs[:] = [
-                    d for d in dirs
-                    if not should_exclude(
-                        f"{rel_root}/{d}" if rel_root != "." else d,
-                        exclude_patterns,
-                        "",
-                    )
-                ]
-
-            for name in files:
-                if name.endswith(".sol"):
-                    path = str(Path(root) / name)
-                    if exclude_patterns:
-                        rel_path = str(Path(path).relative_to(target)).replace("\\", "/")
-                        if should_exclude(rel_path, exclude_patterns, ""):
-                            logger.debug("Excluded: %s", rel_path)
-                            continue
-                    all_findings.extend(scan_file(path, config, plugin_mgr))
+    elif safe_target.is_dir():
+        for file_path in safe_target.rglob("*.sol"):
+            rel_path = str(file_path.relative_to(safe_target)).replace("\\", "/")
+            if exclude_patterns and should_exclude(rel_path, exclude_patterns, ""):
+                logger.debug("Excluded: %s", rel_path)
+                continue
+            all_findings.extend(scan_file(str(file_path), config, plugin_mgr))
     else:
         # Not a file or directory; nothing to do
         return []
@@ -1232,7 +1232,14 @@ def main() -> None:
             print(f"[!] Error loading config: {e}")
             print("[*] Continuing with default settings...\n")
 
-    findings = scan_target(args.target, config)
+    target_is_file = Path(args.target).expanduser().is_file()
+    safe_target = sanitize_cli_path(
+        args.target,
+        must_exist=False,
+        expect_file=target_is_file,
+        allowed_suffixes={".sol"} if target_is_file else None,
+    )
+    findings = scan_target(str(safe_target), config)
     print_report(findings, show_suppressed=args.show_suppressed)
 
 

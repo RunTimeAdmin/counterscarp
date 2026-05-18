@@ -104,6 +104,22 @@ services:
       - ./output:/output
     command: ["--target", "/scan", "--symbolic"]
 
+  # ── Snyk Code scan (containerized) ──────────────────────────────────────────
+  # Usage:
+  #   SNYK_TOKEN=<token> docker-compose run --rm snyk-code
+  # Optional:
+  #   SNYK_ORG=<org-id-or-slug> docker-compose run --rm snyk-code
+  snyk-code:
+    image: snyk/snyk:docker
+    entrypoint: ["snyk"]
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    environment:
+      - SNYK_TOKEN=${SNYK_TOKEN:-}
+      - SNYK_ORG=${SNYK_ORG:-}
+    command: ["code", "test", "/workspace"]
+
 # ==============================================================================
 # NAMED VOLUMES
 # ==============================================================================
@@ -137,4 +153,7 @@ volumes:
 #
 # 7. Interactive shell for debugging:
 #      docker-compose run --rm --entrypoint /bin/bash counterscarp
+#
+# 8. Run Snyk Code scan in Docker:
+#      SNYK_TOKEN=<token> docker-compose run --rm snyk-code
 # ==============================================================================
