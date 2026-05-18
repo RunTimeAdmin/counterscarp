@@ -7,6 +7,7 @@ import json
 import argparse
 import datetime
 import tempfile
+import shutil
 import types as _types
 from typing import List, Dict, Optional, Any, Type, cast
 from pathlib import Path
@@ -353,6 +354,37 @@ def _resolve_writable_log_dir() -> str:
         except OSError:
             continue
     return tempfile.gettempdir()
+
+
+def _is_container_runtime() -> bool:
+    """Best-effort detection for Docker/containerized execution."""
+    if Path("/.dockerenv").exists():
+        return True
+    try:
+        cgroup = Path("/proc/1/cgroup")
+        if cgroup.exists():
+            content = cgroup.read_text(encoding="utf-8", errors="ignore")
+            markers = ("docker", "containerd", "kubepods", "podman")
+            return any(marker in content for marker in markers)
+    except OSError:
+        pass
+    return False
+
+
+def _disable_unavailable_medusa_in_container(args: argparse.Namespace) -> Optional[str]:
+    """Disable --medusa in containers when the Medusa CLI is unavailable."""
+    if not getattr(args, "medusa", False):
+        return None
+    if not _is_container_runtime():
+        return None
+    if shutil.which("medusa"):
+        return None
+
+    args.medusa = False
+    return (
+        "--medusa requested, but Medusa CLI is unavailable in this container runtime. "
+        "Skipping Medusa fuzzing for this scan."
+    )
 
 
 def _render_markdown_report(
@@ -1228,6 +1260,10 @@ def main() -> None:
         payload = json.load(args.update_from_file)
         success = update_from_data(payload, source_path=safe_update_file)
         sys.exit(0 if success else 1)
+
+    _medusa_notice = _disable_unavailable_medusa_in_container(args)
+    if _medusa_notice:
+        logger.warning(_medusa_notice)
 
     # Validate --target is provided for scanning operations (unless resuming)
     if not args.target and not args.resume:

@@ -5,6 +5,7 @@ Tests for the orchestrator module.
 import pytest
 import sys
 import os
+import argparse
 from unittest.mock import Mock, patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from orchestrator import (
     get_remediation,
     _generate_action_plan_report,
+    _disable_unavailable_medusa_in_container,
     REMEDIATION_DB,
 )
 
@@ -65,6 +67,27 @@ class TestModuleImportFallbacks:
     def test_solana_analyzer_fallback(self):
         """Test graceful fallback when solana_analyzer not available."""
         pass  # Import already succeeded, fallback tested in integration
+
+
+class TestMedusaContainerGuard:
+    """Test container-specific Medusa guard behavior."""
+
+    @patch("orchestrator._is_container_runtime", return_value=True)
+    @patch("orchestrator.shutil.which", return_value=None)
+    def test_disables_medusa_when_missing_in_container(self, _mock_which, _mock_container):
+        args = argparse.Namespace(medusa=True)
+        msg = _disable_unavailable_medusa_in_container(args)
+        assert args.medusa is False
+        assert msg is not None
+        assert "Skipping Medusa fuzzing" in msg
+
+    @patch("orchestrator._is_container_runtime", return_value=False)
+    @patch("orchestrator.shutil.which", return_value=None)
+    def test_keeps_medusa_enabled_outside_container(self, _mock_which, _mock_container):
+        args = argparse.Namespace(medusa=True)
+        msg = _disable_unavailable_medusa_in_container(args)
+        assert args.medusa is True
+        assert msg is None
 
 
 class TestGenerateMarkdownReport:
