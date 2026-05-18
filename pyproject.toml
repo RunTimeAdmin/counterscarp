@@ -154,6 +154,7 @@ py-modules = [
     "fingerprint_scanner",
     "protocol_db",
     "plugin_manager",
+    "path_security",
     "license_manager",
     "doctor",
     "state_manager",
