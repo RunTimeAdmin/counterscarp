@@ -14,6 +14,18 @@
 
 ---
 
+## Current Status (May 2026)
+
+- Runtime image hardening is complete with a multi-stage Docker build and reduced runtime surface.
+- Container security guardrails are in place: CI blocks non-base `critical`/`high` image findings.
+- Base-image CVEs are tracked through a documented allowlist and periodic review policy.
+- Medusa is currently optional and auto-skipped in containers if unavailable, with a clear runtime warning.
+- Remaining operational follow-up: ensure GitHub Actions billing is active and set `SNYK_TOKEN` / `SNYK_ORG` secrets for CI execution.
+
+See `docs/CURRENT_STATUS.md` for operational details and next actions.
+
+---
+
 ## Installation
 
 ```bash
@@ -213,6 +225,8 @@ Create an account at [app.counterscarp.io](https://app.counterscarp.io) using Go
 | **[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)** | All CLI flags and examples |
 | **[docs/WEB_APP_GUIDE.md](docs/WEB_APP_GUIDE.md)** | Self-hosted web interface |
 | **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** | Production server setup |
+| **[docs/SECURITY_CONTAINER_ALLOWLIST.md](docs/SECURITY_CONTAINER_ALLOWLIST.md)** | Container CVE allowlist scope and guardrail policy |
+| **[docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md)** | Current hardening status, known blockers, and immediate next steps |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Adding rules and integrations |
 
 ---
