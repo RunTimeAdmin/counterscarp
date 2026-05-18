@@ -107,6 +107,69 @@ jobs:
           mypy *.py webapp/*.py --ignore-missing-imports
 
   # ========================================
+  # CONTAINER SECURITY GUARDRAIL
+  # ========================================
+  container-security-guardrail:
+    runs-on: ubuntu-latest
+    needs: [test, lint-and-typecheck]
+    name: Container Security Guardrail
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SNYK_ORG: ${{ secrets.SNYK_ORG }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Validate Snyk auth configuration
+        run: |
+          if [ -z "${SNYK_TOKEN}" ]; then
+            echo "SNYK_TOKEN is required for container security guardrail"
+            exit 1
+          fi
+          snyk auth "${SNYK_TOKEN}"
+
+      - name: Build container image for scan
+        run: |
+          docker build -t counterscarp-engine:ci -f Dockerfile .
+
+      - name: Enforce actionable critical/high policy (non-base)
+        run: |
+          snyk container test counterscarp-engine:ci \
+            --file=Dockerfile \
+            --severity-threshold=high \
+            --exclude-base-image-vulns \
+            --org="${SNYK_ORG:-runtimeadmin}"
+
+      - name: Advisory container report with allowlist context
+        if: always()
+        run: |
+          snyk container test counterscarp-engine:ci \
+            --file=Dockerfile \
+            --severity-threshold=low \
+            --org="${SNYK_ORG:-runtimeadmin}" \
+            > snyk-container-report.txt || true
+          {
+            echo ""
+            echo "Allowlist reference:"
+            echo "  docs/SECURITY_CONTAINER_ALLOWLIST.md"
+          } >> snyk-container-report.txt
+
+      - name: Upload container scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-container-report
+          path: snyk-container-report.txt
+
+  # ========================================
   # BLOCKER CHECKS (Fail PR on issues)
   # ========================================
   blocker-checks:
