@@ -79,9 +79,16 @@ def heuristic_finding_to_finding(hf: HeuristicFinding) -> Finding:
 
 
 def count_lines(path: str) -> int:
-    """Count lines in a file."""
-    with open(path, encoding="utf-8", errors="ignore") as f:
-        return sum(1 for _ in f)
+    """Count lines in a file using binary chunks."""
+    chunk_size = 1024 * 1024
+    total_newlines = 0
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            total_newlines += chunk.count(b"\n")
+    return total_newlines
 
 
 def summarize_findings_data(findings_data: list[dict]) -> dict:

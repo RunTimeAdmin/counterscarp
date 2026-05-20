@@ -159,16 +159,18 @@ class SimpleBagOfWords:
             tokens = self._tokenize(text)
             token_counts = Counter(tokens)
 
-            # Create frequency vector using feature hashing
-            vector = [0.0] * self.max_features
+            # Sparse bucket accumulation avoids repeated writes over dense arrays.
+            sparse_buckets: dict[int, float] = {}
             for token, count in token_counts.items():
                 idx = self._hash_token(token)
-                vector[idx] += float(count)
+                sparse_buckets[idx] = sparse_buckets.get(idx, 0.0) + float(count)
 
-            # Normalize to unit length (L2 norm)
-            norm = math.sqrt(sum(x * x for x in vector))
-            if norm > 0:
-                vector = [x / norm for x in vector]
+            norm = math.sqrt(sum(v * v for v in sparse_buckets.values()))
+            vector = [0.0] * self.max_features
+            if norm > 0.0:
+                inv_norm = 1.0 / norm
+                for idx, value in sparse_buckets.items():
+                    vector[idx] = value * inv_norm
 
             vectors.append(vector)
 
@@ -496,17 +498,20 @@ def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
             f"Vectors must have same dimension: {len(vec_a)} vs {len(vec_b)}"
         )
     
-    # Calculate dot product
+    if NUMPY_AVAILABLE and np is not None:
+        arr_a = np.asarray(vec_a, dtype=float)
+        arr_b = np.asarray(vec_b, dtype=float)
+        mag_a = float(np.linalg.norm(arr_a))
+        mag_b = float(np.linalg.norm(arr_b))
+        if mag_a == 0.0 or mag_b == 0.0:
+            return 0.0
+        return float(np.dot(arr_a, arr_b) / (mag_a * mag_b))
+
     dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
-    
-    # Calculate magnitudes
     mag_a = math.sqrt(sum(a * a for a in vec_a))
     mag_b = math.sqrt(sum(b * b for b in vec_b))
-    
-    # Handle zero vectors
     if mag_a == 0 or mag_b == 0:
         return 0.0
-    
     return dot_product / (mag_a * mag_b)
 
 
@@ -523,6 +528,19 @@ def batch_cosine_similarity(
     Returns:
         List of similarity scores.
     """
+    if not vectors:
+        return []
+    if NUMPY_AVAILABLE and np is not None:
+        query = np.asarray(query_vec, dtype=float)
+        matrix = np.asarray(vectors, dtype=float)
+        query_norm = float(np.linalg.norm(query))
+        if query_norm == 0.0:
+            return [0.0] * len(vectors)
+        row_norms = np.linalg.norm(matrix, axis=1)
+        dots = matrix @ query
+        denom = row_norms * query_norm
+        scores = np.where(denom > 0.0, dots / denom, 0.0)
+        return [float(s) for s in scores]
     return [cosine_similarity(query_vec, vec) for vec in vectors]
 
 

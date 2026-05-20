@@ -50,6 +50,12 @@ except ImportError:
 #          /* counterscarp-suppress: RULE_ID */
 #          // counterscarp-suppress: ALL
 SUPPRESS_PATTERN = re.compile(r'counterscarp-suppress:\s*(\w+)(?:\s+(.*))?')
+_FUNC_HEADER_RE = re.compile(
+    r"^(\w+)\s*\((.*?)\).*?(public|external)",
+    re.DOTALL,
+)
+_ACCESS_CONTROL_RE = re.compile(r"(onlyOwner|auth|onlyRole)")
+_LOW_LEVEL_CALL_RE = re.compile(r"(\w+)\.call\s*\{.*\}\s*\(\s*(\w+)\s*\)")
 
 # Module-level cache for DEFAULT_SAFE_PATTERNS (Task M5)
 _DEFAULT_SAFE_PATTERNS_CACHE: Optional[List] = None
@@ -640,6 +646,54 @@ def is_in_code_context(line: str, match_start: int) -> bool:
     return True
 
 
+def _build_code_context_mask(line: str) -> List[bool]:
+    """Build a per-character mask marking code (not comments/strings).
+
+    The returned list has one boolean per character in *line*. A True value
+    means a match starting at that character is considered code context.
+    """
+    mask = [True] * len(line)
+    in_double_quote = False
+    in_single_quote = False
+    escape_next = False
+    i = 0
+
+    while i < len(line):
+        if escape_next:
+            mask[i] = not (in_double_quote or in_single_quote)
+            escape_next = False
+            i += 1
+            continue
+
+        char = line[i]
+        if char == '\\':
+            mask[i] = not (in_double_quote or in_single_quote)
+            escape_next = True
+            i += 1
+            continue
+
+        if not in_double_quote and not in_single_quote and line.startswith("//", i):
+            for j in range(i, len(line)):
+                mask[j] = False
+            break
+
+        if char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+            mask[i] = False
+            i += 1
+            continue
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+            mask[i] = False
+            i += 1
+            continue
+
+        mask[i] = not (in_double_quote or in_single_quote)
+        i += 1
+
+    return mask
+
+
 def _build_comment_map(lines: List[str]) -> List[bool]:
     """Build a per-line boolean map indicating multi-line comment state (Task H6).
 
@@ -792,7 +846,7 @@ def _read_source_file(path: str) -> Optional[Tuple[List[str], str]]:
             must_exist=False,
         )
         content = safe_path.read_text(encoding="utf-8", errors="replace")
-        lines = content.splitlines(keepends=True)
+        lines = content.splitlines()
         return lines, content
     except (OSError, ValueError) as e:
         logger.warning("Failed to read file %s: %s", path, e)
@@ -889,7 +943,7 @@ def _scan_lines_for_rules(
     """
     findings: List[HeuristicFinding] = []
     comment_map = _build_comment_map(lines)
-    header_text = "".join(lines[:min(100, len(lines))])
+    header_text = "\n".join(lines[:min(100, len(lines))])
 
     active_rules: List[Tuple["HeuristicRule", str]] = []
     if config and config.heuristics:
@@ -912,14 +966,15 @@ def _scan_lines_for_rules(
         if stripped.startswith("//"):
             continue  # Skip comment-only lines early
 
+        code_context_mask = _build_code_context_mask(line)
         for rule, effective_severity in active_rules:
-            if not rule.pattern.search(line):
-                continue
-
             for match in rule.pattern.finditer(line):
                 match_start = match.start()
 
-                if not is_in_code_context(line, match_start):
+                if (
+                    match_start >= len(code_context_mask)
+                    or not code_context_mask[match_start]
+                ):
                     logger.debug(
                         "Skipping match for %s in comment/string at %s:%d:%d",
                         rule.id, path, i, match_start,
@@ -973,9 +1028,7 @@ def _scan_arbitrary_external_calls(
     functions = content.split("function ")
 
     for func_block in functions[1:]:  # Skip preamble before first 'function'
-        header_match = re.search(
-            r"^(\w+)\s*\((.*?)\).*?(public|external)", func_block, re.DOTALL
-        )
+        header_match = _FUNC_HEADER_RE.search(func_block)
         if not header_match:
             continue
 
@@ -986,10 +1039,10 @@ def _scan_arbitrary_external_calls(
         if "address" not in params or ("bytes" not in params and "calldata" not in params):
             continue
 
-        if re.search(r"(onlyOwner|auth|onlyRole)", header):
+        if _ACCESS_CONTROL_RE.search(header):
             continue
 
-        call_match = re.search(r"(\w+)\.call\s*\{.*\}\s*\(\s*(\w+)\s*\)", func_block)
+        call_match = _LOW_LEVEL_CALL_RE.search(func_block)
         if not call_match:
             continue
 

@@ -134,7 +134,7 @@ class VectorStore:
         """
         self.entries: List[IndexEntry] = []
         self.embedding_dim = embedding_dim
-        self._embeddings_cache: Optional[List[List[float]]] = None
+        self._embeddings_cache: Optional[Any] = None
         logger.debug(
             f"VectorStore initialized with dim={embedding_dim}"
         )
@@ -204,6 +204,20 @@ class VectorStore:
             
         except Exception as e:
             raise RAGError(f"Failed to add batch: {e}") from e
+
+    def _build_embeddings_cache(self) -> Optional[Any]:
+        """Build a normalized embeddings matrix cache for fast queries."""
+        if not NUMPY_AVAILABLE or np is None or not self.entries:
+            return None
+        matrix = np.asarray(
+            [entry.embedding for entry in self.entries],
+            dtype=float,
+        )
+        if matrix.ndim != 2:
+            return None
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        safe_norms = np.where(norms > 0.0, norms, 1.0)
+        return matrix / safe_norms
     
     def query(
         self,
@@ -236,17 +250,48 @@ class VectorStore:
             if not query_embeddings:
                 raise RAGError("Failed to generate query embedding")
             query_vec = query_embeddings[0]
-            
-            # Calculate similarities
+
             results = []
-            for entry in self.entries:
-                sim = cosine_similarity(query_vec, entry.embedding)
-                results.append({
-                    "text": entry.text,
-                    "metadata": entry.metadata,
-                    "similarity": sim
-                })
-            
+            if NUMPY_AVAILABLE and np is not None:
+                if self._embeddings_cache is None:
+                    self._embeddings_cache = self._build_embeddings_cache()
+                if self._embeddings_cache is not None:
+                    query_arr = np.asarray(query_vec, dtype=float)
+                    query_norm = float(np.linalg.norm(query_arr))
+                    if query_norm > 0.0:
+                        query_arr = query_arr / query_norm
+                        sims = self._embeddings_cache @ query_arr
+                    else:
+                        sims = np.zeros(len(self.entries), dtype=float)
+                    for idx, entry in enumerate(self.entries):
+                        results.append(
+                            {
+                                "text": entry.text,
+                                "metadata": entry.metadata,
+                                "similarity": float(sims[idx]),
+                            }
+                        )
+                else:
+                    for entry in self.entries:
+                        sim = cosine_similarity(query_vec, entry.embedding)
+                        results.append(
+                            {
+                                "text": entry.text,
+                                "metadata": entry.metadata,
+                                "similarity": sim,
+                            }
+                        )
+            else:
+                for entry in self.entries:
+                    sim = cosine_similarity(query_vec, entry.embedding)
+                    results.append(
+                        {
+                            "text": entry.text,
+                            "metadata": entry.metadata,
+                            "similarity": sim,
+                        }
+                    )
+
             # Sort by similarity (descending)
             results.sort(key=lambda x: float(cast(Any, x["similarity"])), reverse=True)
             
