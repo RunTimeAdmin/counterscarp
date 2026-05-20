@@ -10,18 +10,21 @@
 
     .upload-hero {
         text-align: center;
-        padding: 1rem 0 0.5rem;
+        padding: 1.25rem 0 0.65rem;
     }
     .upload-hero h1 {
-        font-size: 2.25rem;
+        font-size: 2.35rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
         color: #fff;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.55rem;
     }
     .upload-hero .subtitle {
         color: #a0a0b0;
-        font-size: 1.1rem;
-        max-width: 560px;
-        margin: 0 auto 1.5rem;
+        font-size: 1.02rem;
+        max-width: 600px;
+        margin: 0 auto 1.35rem;
+        line-height: 1.55;
     }
 
     /* Features preview tags (enhanced) */
@@ -36,16 +39,18 @@
         display: inline-flex;
         align-items: center;
         gap: 0.3rem;
-        background: #0f1629;
-        border: 1px solid #2a2a4e;
-        border-radius: 6px;
-        padding: 0.3rem 0.7rem;
-        font-size: 0.8rem;
-        color: #a0a0b0;
-        transition: border-color 0.2s;
+        background: rgba(15, 22, 41, 0.78);
+        border: 1px solid #2f3f66;
+        border-radius: 999px;
+        padding: 0.3rem 0.72rem;
+        font-size: 0.76rem;
+        color: #b8c1d9;
+        font-weight: 600;
+        transition: border-color 0.2s, transform 0.2s;
     }
     .feature-tag:hover {
-        border-color: #667eea;
+        border-color: #8da0e9;
+        transform: translateY(-1px);
     }
     .feature-tag .pro-badge {
         margin-left: 2px;
@@ -56,25 +61,55 @@
         max-width: 680px;
         margin: 0 auto 1.5rem;
         text-align: center;
+        border: 1px solid #2f3f66;
+        background: linear-gradient(180deg, #16213e 0%, #121a31 100%);
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
     }
     .upload-card h1 { display: none; } /* hero replaces it */
+    .upload-icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 0.55rem;
+        border-radius: 12px;
+        border: 1px solid #324878;
+        background: rgba(102, 126, 234, 0.11);
+        color: #a7b5ff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
 
     /* Privacy trust banner */
     .trust-banner {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        padding: 0.85rem 1.25rem;
-        background: rgba(102, 126, 234, 0.06);
-        border: 1px solid rgba(102, 126, 234, 0.18);
+        padding: 0.9rem 1.15rem;
+        background: rgba(102, 126, 234, 0.08);
+        border: 1px solid rgba(118, 140, 240, 0.24);
         border-radius: 10px;
         margin-bottom: 1.5rem;
         text-align: left;
     }
     .trust-banner .trust-icon {
-        font-size: 1.3rem;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid rgba(102, 126, 234, 0.28);
+        background: rgba(102, 126, 234, 0.12);
+        color: #9fb0ff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         flex-shrink: 0;
-        line-height: 1;
     }
     .trust-banner .trust-text {
         color: #a0a0b0;
@@ -97,16 +132,18 @@
        ============================================ */
     .section-heading {
         text-align: center;
-        margin-bottom: 1.75rem;
+        margin-bottom: 1.6rem;
     }
     .section-heading h2 {
-        font-size: 1.6rem;
+        font-size: 1.55rem;
+        font-weight: 700;
+        letter-spacing: -0.015em;
         color: #fff;
         margin-bottom: 0.35rem;
     }
     .section-heading p {
-        color: #888;
-        font-size: 0.95rem;
+        color: #8f95ab;
+        font-size: 0.92rem;
     }
 
     .what-you-get-grid {
@@ -117,24 +154,38 @@
         margin: 0 auto 2.5rem;
     }
     .wyg-card {
-        background: #16213e;
-        border: 1px solid #2a2a4e;
+        background: linear-gradient(180deg, #172341 0%, #141d36 100%);
+        border: 1px solid #2f3f66;
         border-radius: 14px;
         padding: 1.5rem;
-        transition: border-color 0.3s, transform 0.2s;
+        transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
         position: relative;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
     }
     .wyg-card:hover {
-        border-color: #667eea;
+        border-color: #8da0e9;
         transform: translateY(-3px);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
     }
     .wyg-card .wyg-icon {
-        font-size: 1.75rem;
+        width: 42px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #324878;
+        background: rgba(102, 126, 234, 0.11);
+        color: #a7b5ff;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         margin-bottom: 0.75rem;
-        display: block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
     .wyg-card h3 {
-        font-size: 1.05rem;
+        font-size: 1rem;
+        font-weight: 700;
         color: #fff;
         margin-bottom: 0.4rem;
     }
@@ -157,18 +208,19 @@
         margin: 0 auto 2.5rem;
     }
     .sample-preview-card {
-        background: #16213e;
-        border: 1px solid #2a2a4e;
+        background: #151f3b;
+        border: 1px solid #2f3f66;
         border-radius: 14px;
         overflow: hidden;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.27);
     }
     .sample-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid #2a2a4e;
-        background: #0f1629;
+        border-bottom: 1px solid #2f3f66;
+        background: #10182e;
     }
     .sample-header-left {
         display: flex;
@@ -187,9 +239,9 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        background: rgba(220, 53, 69, 0.15);
-        color: #dc3545;
-        border: 1px solid rgba(220, 53, 69, 0.3);
+        background: rgba(220, 53, 69, 0.12);
+        color: #ff7b88;
+        border: 1px solid rgba(220, 53, 69, 0.35);
     }
     .sample-body {
         padding: 1.5rem;
@@ -313,17 +365,19 @@
         gap: 1.25rem;
     }
     .pro-cta-card {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 1px solid rgba(233, 69, 96, 0.35);
+        background: linear-gradient(180deg, #182441 0%, #141d36 100%);
+        border: 1px solid #31436f;
         border-radius: 14px;
         padding: 1.5rem;
         display: flex;
         flex-direction: column;
-        transition: border-color 0.3s, transform 0.2s;
+        transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
     }
     .pro-cta-card:hover {
-        border-color: #e94560;
+        border-color: #8da0e9;
         transform: translateY(-3px);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
     }
     .pro-cta-top {
         display: flex;
@@ -332,11 +386,25 @@
         margin-bottom: 0.6rem;
     }
     .pro-cta-icon {
-        font-size: 1.5rem;
+        width: 44px;
+        height: 30px;
+        border-radius: 8px;
+        border: 1px solid rgba(233, 69, 96, 0.45);
+        background: rgba(233, 69, 96, 0.14);
+        color: #ff8aa0;
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
     }
     .pro-cta-top h3 {
         color: #e0e0e0;
-        font-size: 1rem;
+        font-size: 0.98rem;
+        font-weight: 700;
         margin: 0;
     }
     .pro-cta-desc {
@@ -351,19 +419,21 @@
         align-items: center;
         justify-content: center;
         gap: 0.4rem;
-        background: linear-gradient(135deg, #e94560, #c23152);
+        background: linear-gradient(135deg, #738ceb, #5f7fe6);
         color: white;
         padding: 0.6rem 1.25rem;
         border-radius: 8px;
         text-decoration: none;
         font-weight: 600;
         font-size: 0.88rem;
-        transition: transform 0.2s, opacity 0.2s;
+        transition: transform 0.2s, opacity 0.2s, box-shadow 0.2s;
         text-align: center;
+        box-shadow: 0 8px 18px rgba(95, 127, 230, 0.24);
     }
     .btn-unlock-pro:hover {
         transform: translateY(-2px);
-        opacity: 0.92;
+        opacity: 0.95;
+        box-shadow: 0 10px 22px rgba(95, 127, 230, 0.32);
     }
     .compare-plans-link {
         display: block;
@@ -473,7 +543,7 @@
             <div class="form-group">
                 <label>Upload Files</label>
                 <div class="upload-zone" id="uploadZone">
-                    <div class="upload-icon">&#128194;</div>
+                    <div class="upload-icon" aria-hidden="true">FILE</div>
                     <p class="upload-text">Drag and drop your files here</p>
                     <p class="upload-hint">or click to browse</p>
                     <p class="upload-formats">Supports: .sol, .rs files</p>
@@ -485,7 +555,7 @@
 
             <!-- Privacy / Data Handling Trust Banner -->
             <div class="trust-banner">
-                <span class="trust-icon">&#128274;</span>
+                <span class="trust-icon" aria-hidden="true">SSL</span>
                 <span class="trust-text">
                     <strong>Your code is analyzed on our secure server and never stored or shared beyond your scan session.</strong>
                     <a href="/privacy">See our Privacy Policy</a>
@@ -508,32 +578,32 @@
 
     <div class="what-you-get-grid">
         <div class="wyg-card">
-            <span class="wyg-icon">&#128220;</span>
+            <span class="wyg-icon" aria-hidden="true">AUD</span>
             <h3>Vulnerability Report</h3>
             <p>Severity-ranked findings with detailed descriptions, code locations, and impact analysis for every detected issue.</p>
         </div>
         <div class="wyg-card">
-            <span class="wyg-icon">&#127919;</span>
+            <span class="wyg-icon" aria-hidden="true">RISK</span>
             <h3>Risk Score</h3>
             <p>Overall contract risk assessment rated Critical, High, Medium, or Low — giving you an instant summary of your security posture.</p>
         </div>
         <div class="wyg-card">
-            <span class="wyg-icon">&#9881;</span>
+            <span class="wyg-icon" aria-hidden="true">ENG</span>
             <h3>Multi-Engine Analysis</h3>
             <p>Results from 6+ security engines including Heuristic Scanner, Slither, Aderyn, Mythril, Medusa, and Foundry — cross-verified for accuracy.</p>
         </div>
         <div class="wyg-card">
-            <span class="wyg-icon">&#128736;</span>
+            <span class="wyg-icon" aria-hidden="true">FIX</span>
             <h3>Actionable Remediation</h3>
             <p>Specific fix suggestions for each finding, including code examples and best-practice references so you can patch issues fast.</p>
         </div>
         <div class="wyg-card">
-            <span class="wyg-icon">&#128196;</span>
+            <span class="wyg-icon" aria-hidden="true">MD</span>
             <h3>Export — Markdown &amp; JSON</h3>
             <p>Download reports in Markdown and JSON formats — free for every user. Easy to integrate into CI pipelines and documentation.</p>
         </div>
         <div class="wyg-card">
-            <span class="wyg-icon">&#127775;</span>
+            <span class="wyg-icon" aria-hidden="true">WEB</span>
             <h3>Export — HTML &amp; SARIF</h3>
             <p>Professional branded HTML reports and SARIF output for GitHub Advanced Security integration.</p>
             <span class="pro-badge wyg-pro-tag">DEV</span>
@@ -624,7 +694,7 @@
         <div class="pro-cta-grid">
             <div class="pro-cta-card">
                 <div class="pro-cta-top">
-                    <span class="pro-cta-icon">&#129302;</span>
+                    <span class="pro-cta-icon" aria-hidden="true">AI</span>
                     <h3>AI Audit Copilot</h3>
                     <span class="pro-badge">PRO</span>
                 </div>
@@ -637,7 +707,7 @@
 
             <div class="pro-cta-card">
                 <div class="pro-cta-top">
-                    <span class="pro-cta-icon">&#128202;</span>
+                    <span class="pro-cta-icon" aria-hidden="true">GRAPH</span>
                     <h3>Attack Graph Visualization</h3>
                     <span class="pro-badge">PRO</span>
                 </div>
@@ -650,7 +720,7 @@
 
             <div class="pro-cta-card">
                 <div class="pro-cta-top">
-                    <span class="pro-cta-icon">&#127775;</span>
+                    <span class="pro-cta-icon" aria-hidden="true">RPT</span>
                     <h3>HTML &amp; SARIF Reports</h3>
                     <span class="pro-badge">DEV</span>
                 </div>
