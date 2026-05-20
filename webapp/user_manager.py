@@ -34,6 +34,17 @@ _USERS_DB_PATH: Path = BASE_DIR / "data" / "users.json"
 _KNOWN_INSECURE_DEFAULT = "counterscarp-dev-session-secret-INSECURE-DEFAULT"
 
 
+def _prepare_password_for_bcrypt(password: str) -> bytes:
+    """Pre-hash password into a fixed-length bcrypt-safe byte string.
+
+    bcrypt silently truncates inputs beyond 72 bytes. To preserve full password
+    entropy for any input length, hash with SHA-256 and base64-encode
+    the digest before bcrypt processing.
+    """
+    digest = hashlib.sha256(password.encode("utf-8")).digest()
+    return base64.b64encode(digest)
+
+
 def _derive_fernet_key() -> bytes:
     """Derive a Fernet-compatible key for TOTP encryption.
 
@@ -183,12 +194,20 @@ class UserManager:
                     raise ValueError(f"Email already registered: {email}")
 
             now = datetime.now(timezone.utc).isoformat()
+            password_hash = (
+                _bcrypt.hashpw(
+                    _prepare_password_for_bcrypt(password),
+                    _bcrypt.gensalt(),
+                ).decode("utf-8")
+                if password
+                else None
+            )
             user: Dict[str, Any] = {
                 "id": str(uuid.uuid4()),
                 "email": email,
                 "name": name,
                 "google_id": google_id,
-                "password_hash": _bcrypt.hashpw(password.encode("utf-8")[:72], _bcrypt.gensalt()).decode("utf-8") if password else None,
+                "password_hash": password_hash,
                 "created_at": now,
                 "last_login": now,
                 "auth_method": auth_method,
@@ -267,7 +286,10 @@ class UserManager:
         if not stored_hash:
             return None
         try:
-            valid = _bcrypt.checkpw(password.encode("utf-8")[:72], stored_hash.encode("utf-8"))
+            valid = _bcrypt.checkpw(
+                _prepare_password_for_bcrypt(password),
+                stored_hash.encode("utf-8"),
+            )
         except Exception:
             return None
         return user if valid else None

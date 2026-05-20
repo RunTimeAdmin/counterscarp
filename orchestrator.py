@@ -1065,7 +1065,7 @@ def main() -> None:
     # persisted to a log file regardless of shell piping or redirection.
     _log_file = os.path.join(
         _resolve_writable_log_dir(),
-        f"scarpshield_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
+        f"counterscarp_scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
     )
     setup_logging(log_file=_log_file)
     logger.info("Counterscarp Engine scan initializing...")

@@ -266,6 +266,23 @@ class TestUserManagerAuthentication:
         assert "id" in result
         assert "email" in result
 
+    def test_verify_password_supports_long_password(
+        self, manager: UserManager
+    ) -> None:
+        long_pw = "A" * 120
+        manager.create_user(email="alice@example.com", name="Alice", password=long_pw)
+        result = manager.verify_password("alice@example.com", long_pw)
+        assert result is not None
+
+    def test_verify_password_different_suffix_after_72_bytes_fails(
+        self, manager: UserManager
+    ) -> None:
+        base = "A" * 72
+        pw1 = base + "X" * 20
+        pw2 = base + "Y" * 20
+        manager.create_user(email="alice@example.com", name="Alice", password=pw1)
+        assert manager.verify_password("alice@example.com", pw2) is None
+
 
 # ===========================================================================
 # TestUserManagerUpdates
