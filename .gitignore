@@ -46,6 +46,7 @@ reports/
 # Runtime data
 .sentinel/
 .counterscarp/
+.garrison/
 .scarpshield/
 vulnerability_timeline.json
 vulnerability_trends.md
@@ -87,6 +88,8 @@ run_tests.py
 # Runtime data
 data/licenses.json
 data/users.json
+data/audit_log.jsonl
+data/session_license_map.json
 
 # Scan results
 results/

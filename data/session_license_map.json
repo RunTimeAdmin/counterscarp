@@ -1,8 +1,0 @@
-{
-  "cs_test_payg_123": {
-    "purchase_type": "payg",
-    "pack_key": "payg_standard",
-    "user_id": "u1",
-    "credits": 5
-  }
-}
