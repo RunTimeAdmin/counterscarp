@@ -560,6 +560,39 @@ def mark_event_processed(event_id: str) -> None:
     _file_mark_event(event_id)
 
 
+def unmark_event_processed(event_id: str) -> None:
+    """Remove event mark so Stripe retries can be processed after failures."""
+    try:
+        client = _get_redis_client()
+        if client is not None:
+            client.delete(f"{_REDIS_KEY_PREFIX}:{event_id}")
+    except Exception:
+        logger.debug("Redis unavailable while unmarking event: %s", event_id)
+
+    try:
+        with _events_file_lock:
+            if not _PROCESSED_EVENTS_PATH.exists():
+                return
+            try:
+                data = json.loads(_PROCESSED_EVENTS_PATH.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                return
+            if event_id not in data:
+                return
+            data = [eid for eid in data if eid != event_id]
+            tmp = _PROCESSED_EVENTS_PATH.with_suffix(".tmp")
+            try:
+                tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                tmp.replace(_PROCESSED_EVENTS_PATH)
+            except OSError:
+                _PROCESSED_EVENTS_PATH.write_text(
+                    json.dumps(data, indent=2),
+                    encoding="utf-8",
+                )
+    except Exception:
+        logger.warning("Failed to unmark processed event: %s", event_id)
+
+
 def _file_mark_event(event_id: str) -> None:
     """Persist event_id to the file fallback (caller may or may not hold lock)."""
     try:

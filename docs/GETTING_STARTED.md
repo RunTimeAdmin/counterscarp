@@ -20,6 +20,8 @@
 
 Counterscarp Engine is a production-ready smart contract security auditing platform that combines static analysis, heuristic pattern scanning, fuzzing, symbolic execution, and AI-powered RAG enrichment into a single pipeline. It supports both EVM (Solidity) and Solana (Rust/Anchor) smart contracts, providing 31 EVM heuristic rules, 35 Solana vulnerability patterns, and integration with industry-standard tools like Slither, Aderyn, Medusa, and Mythril.
 
+Use findings as prioritized security signals, not as a guarantee of complete bug coverage. Automated scanners can produce both false positives and false negatives; validate critical issues with manual review and testing.
+
 Whether you're running a quick PR check, a full audit, or a bug bounty sweep, Counterscarp Engine adapts to your workflow through configurable execution profiles and a composable analysis pipeline.
 
 ---

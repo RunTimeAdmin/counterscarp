@@ -173,14 +173,20 @@ Static regex-based pattern matching against Rust source files. Scans all `.rs` f
 
 ---
 
+## Realistic Expectations
+
+Counterscarp improves review speed and coverage, but no static or hybrid analyzer can guarantee zero missed vulnerabilities or zero false positives. Treat results as a prioritized security triage queue and follow with manual review, tests, and (for high-risk systems) independent audit.
+
+---
+
 ## Security & Privacy (Data Sovereignty)
 
 Counterscarp Engine is built for environments where source-code confidentiality is non-negotiable — bank compliance teams, Web3 audit firms, and air-gapped infrastructure.
 
-- **Zero code exfiltration** — No source code, bytecode, or contract artifacts ever leave the host machine during a scan. All analysis is performed locally.
-- **Local-first AI inference** — The AI Copilot defaults to local inference via [Ollama](https://ollama.com) when configured (`scarpshield.toml` or `counterscarp.toml` -> `[ai] provider = "ollama"`). If OpenAI is selected, only a one-paragraph natural-language summary of each finding is sent to the OpenAI API — never raw source code.
+- **Local-first analysis** — Source code analysis runs on the host machine by default.
+- **Local-first AI inference** — The AI Copilot defaults to local inference via [Ollama](https://ollama.com) when configured (`scarpshield.toml` or `counterscarp.toml` -> `[ai] provider = "ollama"`). If OpenAI is selected, the integration is designed to send finding summaries rather than raw source code.
 - **Bundled threat intelligence** — Vulnerability databases and protocol signatures ship with the package and are queried locally. Network access only occurs if you explicitly run `counterscarp --update-signatures`. For fully air-gapped environments, use `counterscarp --update-from-file <path>` to import pre-downloaded signature packs.
-- **No telemetry** — The CLI contains zero usage telemetry, analytics callbacks, tracking pixels, or phone-home behavior. Period.
+- **No usage analytics** — The CLI is designed without usage telemetry or analytics callbacks.
 - **API security hardening** — The web API enforces rate limiting (10 req/min on license validation, 5 req/min on deactivation, 30 req/min on webhooks), Pydantic input validation on all request fields, mandatory Stripe webhook signature verification, admin endpoint authentication, CORS restricted to known origins, and a dedicated `counterscarp.security` logger for all auth and validation events.
 
 ---

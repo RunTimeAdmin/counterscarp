@@ -288,6 +288,8 @@ reports/
 
 **Note:** The exit code is determined by the `engine.fail_on_severity` config setting. With the default of `HIGH`, any HIGH or CRITICAL finding causes exit code 1.
 
+**Result interpretation:** Exit status and findings provide risk signals for triage, not a guarantee of complete vulnerability detection. For production decisions, combine automated output with manual analysis and tests.
+
 ---
 
 ## Troubleshooting

@@ -329,6 +329,8 @@ Both commands report which tools are found, their detected versions, and whether
 
 ## Quick Scan
 
+Use scan output as prioritized triage, not a proof of safety. No automated scanner can guarantee zero false positives or zero missed vulnerabilities, so high-severity findings should be confirmed with manual review and targeted tests.
+
 ### CLI — scan a contracts directory
 
 ```bash
@@ -928,7 +930,7 @@ counterscarp-engine --target ./contracts --rag --llm
 | Option | Model | Cost | Privacy | Best For |
 |--------|-------|------|---------|----------|
 | **Local (recommended)** | Ollama + `deepseek-coder` | Free | Full — nothing leaves your machine | Air-gapped environments, confidential audits |
-| **Cloud** | OpenAI `gpt-4o-mini` | ~$0.15 / 1M tokens | Only finding summaries sent (never source code) | Better accuracy, faster setup |
+| **Cloud** | OpenAI `gpt-4o-mini` | ~$0.15 / 1M tokens | Integration is designed to send finding summaries instead of raw source code | Better accuracy, faster setup |
 
 Configure in `scarpshield.toml`:
 

@@ -96,7 +96,8 @@ def consume_credit(user_id: str, audit_id: str, ip: str) -> bool:
     Returns True if a credit was successfully consumed, False if no credits remain.
     Thread-safe: holds user_manager's file lock for the entire read-check-write cycle.
     """
-    from webapp.user_manager import user_manager as _um
+    from webapp.user_manager import UserManager
+    _um = UserManager()
 
     # Use user_manager's internal lock for atomic read-check-write
     with _um._file_lock:

@@ -63,6 +63,7 @@ from webapp.stripe_integration import (
     get_session_license_key,
     update_license_in_db,
     check_and_mark_event,
+    unmark_event_processed,
     PAYG_PACKS,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET,
@@ -1270,151 +1271,188 @@ async def stripe_webhook(request: Request):
         logger.warning("Invalid Stripe webhook signature: %s", e)
         return JSONResponse({"error": "Invalid signature"}, status_code=400)
 
+    event_id = str(event.get("id", ""))
     # Atomic idempotency check-and-mark — eliminates TOCTOU race in file fallback
-    if check_and_mark_event(event["id"]):
+    if event_id and check_and_mark_event(event_id):
         return JSONResponse({"status": "already_processed"})
 
     event_type = event.get("type")
 
-    if event_type == "checkout.session.completed":
-        session = event["data"]["object"]
-        handle_checkout_completed(session)
+    def _is_yearly_interval(interval: str) -> bool:
+        normalized = str(interval or "").strip().lower()
+        return normalized in {"year", "annual", "yearly"}
 
-    elif event_type == "invoice.paid":
-        # Subscription renewal — extend license expiry
-        invoice = event["data"]["object"]
-        subscription_id = invoice.get("subscription", "")
-        if subscription_id:
-            license_entry = find_license_by_subscription(subscription_id)
-            if license_entry:
-                # Determine extension period from billing_interval
-                interval = license_entry.get("billing_interval", "month")
-                now = datetime.now(timezone.utc)
-                if interval == "year":
-                    new_expiry = now + timedelta(days=365)
-                else:
-                    new_expiry = now + timedelta(days=30)
+    try:
+        if event_type == "checkout.session.completed":
+            session = event["data"]["object"]
+            handle_checkout_completed(session)
 
-                update_license_in_db(license_entry["key"], {
-                    "expires_at": new_expiry.strftime("%Y-%m-%d"),
-                    "payment_failed_at": None,  # Clear any failed payment flag
-                })
-                logger.info(
-                    f"License renewed: {license_entry['key'][:12]}... extended to {new_expiry.strftime('%Y-%m-%d')}"
-                )
-                append_audit_log(
-                    "subscription_renewed",
-                    license_entry["key"], "stripe_webhook", ip,
-                    {"new_expiry": new_expiry.strftime("%Y-%m-%d")},
-                )
+        elif event_type == "invoice.paid":
+            # Subscription renewal — extend license expiry
+            invoice = event["data"]["object"]
+            subscription_id = invoice.get("subscription", "")
+            if subscription_id:
+                license_entry = find_license_by_subscription(subscription_id)
+                if license_entry:
+                    interval = license_entry.get("billing_interval", "month")
+                    now = datetime.now(timezone.utc)
+                    if _is_yearly_interval(interval):
+                        new_expiry = now + timedelta(days=365)
+                    else:
+                        new_expiry = now + timedelta(days=30)
 
-    elif event_type == "customer.subscription.deleted":
-        # Subscription cancelled — revoke license
-        subscription = event["data"]["object"]
-        subscription_id = subscription.get("id", "")
-        if subscription_id:
-            license_entry = find_license_by_subscription(subscription_id)
-            if license_entry:
-                update_license_in_db(license_entry["key"], {
-                    "revoked": True,
-                    "revoked_at": datetime.now(timezone.utc).isoformat(),
-                    "revoke_reason": "subscription_cancelled",
-                })
-                logger.info(
-                    f"License revoked (subscription cancelled): {license_entry['key'][:12]}..."
-                )
-                append_audit_log(
-                    "subscription_cancelled",
-                    license_entry["key"], "stripe_webhook", ip,
-                    {"reason": "subscription_cancelled"},
-                )
+                    update_license_in_db(
+                        license_entry["key"],
+                        {
+                            "expires_at": new_expiry.strftime("%Y-%m-%d"),
+                            "payment_failed_at": None,
+                        },
+                    )
+                    logger.info(
+                        f"License renewed: {license_entry['key'][:12]}... extended to {new_expiry.strftime('%Y-%m-%d')}"
+                    )
+                    append_audit_log(
+                        "subscription_renewed",
+                        license_entry["key"],
+                        "stripe_webhook",
+                        ip,
+                        {"new_expiry": new_expiry.strftime("%Y-%m-%d")},
+                    )
 
-    elif event_type == "invoice.payment_failed":
-        # Payment failed — flag but don't revoke immediately (grace period)
-        invoice = event["data"]["object"]
-        subscription_id = invoice.get("subscription", "")
-        if subscription_id:
-            license_entry = find_license_by_subscription(subscription_id)
-            if license_entry:
-                update_license_in_db(license_entry["key"], {
-                    "payment_failed_at": datetime.now(timezone.utc).isoformat(),
-                })
-                logger.info(
-                    f"Payment failed for license: {license_entry['key'][:12]}... (grace period active)"
-                )
-                append_audit_log(
-                    "payment_failed",
-                    license_entry["key"], "stripe_webhook", ip,
-                    {"subscription_id": subscription_id},
-                )
+        elif event_type == "customer.subscription.deleted":
+            subscription = event["data"]["object"]
+            subscription_id = subscription.get("id", "")
+            if subscription_id:
+                license_entry = find_license_by_subscription(subscription_id)
+                if license_entry:
+                    update_license_in_db(
+                        license_entry["key"],
+                        {
+                            "revoked": True,
+                            "revoked_at": datetime.now(timezone.utc).isoformat(),
+                            "revoke_reason": "subscription_cancelled",
+                        },
+                    )
+                    logger.info(
+                        f"License revoked (subscription cancelled): {license_entry['key'][:12]}..."
+                    )
+                    append_audit_log(
+                        "subscription_cancelled",
+                        license_entry["key"],
+                        "stripe_webhook",
+                        ip,
+                        {"reason": "subscription_cancelled"},
+                    )
 
-    elif event_type == "customer.subscription.created":
-        # New subscription created — log for audit; license already generated by checkout.session.completed
-        subscription = event["data"]["object"]
-        subscription_id = subscription.get("id", "")
-        customer_email = subscription.get("customer_email") or subscription.get("customer", "")
-        logger.info(f"Subscription created: {subscription_id} for {customer_email}")
+        elif event_type == "invoice.payment_failed":
+            invoice = event["data"]["object"]
+            subscription_id = invoice.get("subscription", "")
+            if subscription_id:
+                license_entry = find_license_by_subscription(subscription_id)
+                if license_entry:
+                    update_license_in_db(
+                        license_entry["key"],
+                        {"payment_failed_at": datetime.now(timezone.utc).isoformat()},
+                    )
+                    logger.info(
+                        f"Payment failed for license: {license_entry['key'][:12]}... (grace period active)"
+                    )
+                    append_audit_log(
+                        "payment_failed",
+                        license_entry["key"],
+                        "stripe_webhook",
+                        ip,
+                        {"subscription_id": subscription_id},
+                    )
 
-    elif event_type == "customer.subscription.updated":
-        # Subscription changed (tier upgrade/downgrade, billing interval change)
-        subscription = event["data"]["object"]
-        subscription_id = subscription.get("id", "")
-        if subscription_id:
-            license_entry = find_license_by_subscription(subscription_id)
-            if license_entry:
-                # Determine new tier from product_key metadata on the price
-                product_key = (
-                    subscription.get("items", {})
-                    .get("data", [{}])[0]
-                    .get("price", {})
-                    .get("metadata", {})
-                    .get("product_key", "")
-                )
-                tier_map = {
-                    "dev_monthly": "developer", "dev_annual": "developer",
-                    "pro_monthly": "pro", "pro_annual": "pro",
-                    "team_monthly": "team", "team_annual": "team",
-                }
-                max_activations_map = {
-                    "developer": 1, "pro": 3, "team": 10,
-                }
-                new_tier = tier_map.get(product_key, license_entry.get("tier", "developer"))
-                new_max_activations = max_activations_map.get(new_tier, 1)
-                new_billing_interval = "annual" if product_key.endswith("_annual") else "monthly"
+        elif event_type == "customer.subscription.created":
+            subscription = event["data"]["object"]
+            subscription_id = subscription.get("id", "")
+            customer_email = subscription.get("customer_email") or subscription.get(
+                "customer", ""
+            )
+            logger.info(
+                "Subscription created: %s for %s",
+                subscription_id,
+                customer_email,
+            )
 
-                license_key = license_entry["key"]
-                update_license_in_db(license_key, {
-                    "tier": new_tier,
-                    "max_activations": new_max_activations,
-                    "billing_interval": new_billing_interval,
-                })
-                logger.info(
-                    f"Subscription updated: {license_key[:12]}... tier changed to {new_tier}"
-                )
+        elif event_type == "customer.subscription.updated":
+            subscription = event["data"]["object"]
+            subscription_id = subscription.get("id", "")
+            if subscription_id:
+                license_entry = find_license_by_subscription(subscription_id)
+                if license_entry:
+                    product_key = (
+                        subscription.get("items", {})
+                        .get("data", [{}])[0]
+                        .get("price", {})
+                        .get("metadata", {})
+                        .get("product_key", "")
+                    )
+                    tier_map = {
+                        "dev_monthly": "developer",
+                        "dev_annual": "developer",
+                        "pro_monthly": "pro",
+                        "pro_annual": "pro",
+                        "team_monthly": "team",
+                        "team_annual": "team",
+                    }
+                    max_activations_map = {
+                        "developer": 1,
+                        "pro": 3,
+                        "team": 5,
+                    }
+                    new_tier = tier_map.get(
+                        product_key,
+                        license_entry.get("tier", "developer"),
+                    )
+                    new_max_activations = max_activations_map.get(new_tier, 1)
+                    new_billing_interval = (
+                        "year" if product_key.endswith("_annual") else "month"
+                    )
 
-    elif event_type == "customer.subscription.resumed":
-        # Paused subscription resumed — un-revoke license and extend expiry
-        subscription = event["data"]["object"]
-        subscription_id = subscription.get("id", "")
-        if subscription_id:
-            license_entry = find_license_by_subscription(subscription_id)
-            if license_entry:
-                license_key = license_entry["key"]
-                # Extend expiry based on billing interval
-                interval = license_entry.get("billing_interval", "monthly")
-                now = datetime.now(timezone.utc)
-                if interval == "annual":
-                    new_expiry = now + timedelta(days=365)
-                else:
-                    new_expiry = now + timedelta(days=30)
+                    license_key = license_entry["key"]
+                    update_license_in_db(
+                        license_key,
+                        {
+                            "tier": new_tier,
+                            "max_activations": new_max_activations,
+                            "billing_interval": new_billing_interval,
+                        },
+                    )
+                    logger.info(
+                        f"Subscription updated: {license_key[:12]}... tier changed to {new_tier}"
+                    )
 
-                update_license_in_db(license_key, {
-                    "revoked": False,
-                    "revoked_at": None,
-                    "revoke_reason": None,
-                    "expires_at": new_expiry.strftime("%Y-%m-%d"),
-                })
-                logger.info(f"Subscription resumed: {license_key[:12]}...")
+        elif event_type == "customer.subscription.resumed":
+            subscription = event["data"]["object"]
+            subscription_id = subscription.get("id", "")
+            if subscription_id:
+                license_entry = find_license_by_subscription(subscription_id)
+                if license_entry:
+                    license_key = license_entry["key"]
+                    interval = license_entry.get("billing_interval", "month")
+                    now = datetime.now(timezone.utc)
+                    if _is_yearly_interval(interval):
+                        new_expiry = now + timedelta(days=365)
+                    else:
+                        new_expiry = now + timedelta(days=30)
+
+                    update_license_in_db(
+                        license_key,
+                        {
+                            "revoked": False,
+                            "revoked_at": None,
+                            "revoke_reason": None,
+                            "expires_at": new_expiry.strftime("%Y-%m-%d"),
+                        },
+                    )
+                    logger.info("Subscription resumed: %s...", license_key[:12])
+    except Exception:
+        if event_id:
+            unmark_event_processed(event_id)
+        raise
 
     resp_ok = JSONResponse({"status": "ok"})
     add_rate_limit_headers(resp_ok, _stripe_webhook_limiter, ip)
