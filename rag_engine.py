@@ -135,9 +135,17 @@ class VectorStore:
         self.entries: List[IndexEntry] = []
         self.embedding_dim = embedding_dim
         self._embeddings_cache: Optional[Any] = None
+        self._embedding_norms: Optional[Any] = None
+        self._cache_dirty = True
         logger.debug(
             f"VectorStore initialized with dim={embedding_dim}"
         )
+
+    def _invalidate_cache(self) -> None:
+        """Mark matrix cache dirty and drop cached arrays."""
+        self._embeddings_cache = None
+        self._embedding_norms = None
+        self._cache_dirty = True
     
     def add(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Add a single entry to the store.
@@ -164,7 +172,7 @@ class VectorStore:
                 metadata=metadata or {}
             )
             self.entries.append(entry)
-            self._embeddings_cache = None  # Invalidate cache
+            self._cache_dirty = True
             
             logger.debug(f"Added entry to VectorStore: {text[:50]}...")
             
@@ -198,26 +206,41 @@ class VectorStore:
                     metadata=item.get("metadata", {})
                 )
                 self.entries.append(entry)
-            
-            self._embeddings_cache = None  # Invalidate cache
+
+            self._cache_dirty = True
             logger.debug(f"Added {len(items)} entries to VectorStore")
             
         except Exception as e:
             raise RAGError(f"Failed to add batch: {e}") from e
 
-    def _build_embeddings_cache(self) -> Optional[Any]:
-        """Build a normalized embeddings matrix cache for fast queries."""
-        if not NUMPY_AVAILABLE or np is None or not self.entries:
-            return None
+    def _ensure_embeddings_cache(self) -> None:
+        """Lazily build normalized matrix cache for NumPy query path."""
+        if not self._cache_dirty and self._embeddings_cache is not None:
+            return
+        if not NUMPY_AVAILABLE or np is None:
+            self._invalidate_cache()
+            self._cache_dirty = False
+            return
+        if not self.entries:
+            self._embeddings_cache = np.zeros((0, self.embedding_dim), dtype=np.float32)
+            self._embedding_norms = np.zeros((0,), dtype=np.float32)
+            self._cache_dirty = False
+            return
+
         matrix = np.asarray(
             [entry.embedding for entry in self.entries],
-            dtype=float,
+            dtype=np.float32,
         )
         if matrix.ndim != 2:
-            return None
-        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-        safe_norms = np.where(norms > 0.0, norms, 1.0)
-        return matrix / safe_norms
+            self._invalidate_cache()
+            self._cache_dirty = False
+            return
+        norms = np.linalg.norm(matrix, axis=1)
+        safe_norms = norms.copy()
+        safe_norms[safe_norms == 0.0] = 1.0
+        self._embeddings_cache = matrix / safe_norms[:, None]
+        self._embedding_norms = norms
+        self._cache_dirty = False
     
     def query(
         self,
@@ -251,55 +274,52 @@ class VectorStore:
                 raise RAGError("Failed to generate query embedding")
             query_vec = query_embeddings[0]
 
-            results = []
             if NUMPY_AVAILABLE and np is not None:
-                if self._embeddings_cache is None:
-                    self._embeddings_cache = self._build_embeddings_cache()
-                if self._embeddings_cache is not None:
-                    query_arr = np.asarray(query_vec, dtype=float)
+                self._ensure_embeddings_cache()
+                if self._embeddings_cache is not None and self._embeddings_cache.size:
+                    query_arr = np.asarray(query_vec, dtype=np.float32)
                     query_norm = float(np.linalg.norm(query_arr))
-                    if query_norm > 0.0:
-                        query_arr = query_arr / query_norm
-                        sims = self._embeddings_cache @ query_arr
+                    if query_norm == 0.0:
+                        return []
+
+                    sims = self._embeddings_cache @ (query_arr / query_norm)
+                    if self._embedding_norms is not None:
+                        sims = np.where(self._embedding_norms > 0.0, sims, 0.0)
+
+                    limit = min(max(1, top_k), len(sims))
+                    if limit >= len(sims):
+                        order = np.argsort(-sims)
                     else:
-                        sims = np.zeros(len(self.entries), dtype=float)
-                    for idx, entry in enumerate(self.entries):
-                        results.append(
-                            {
-                                "text": entry.text,
-                                "metadata": entry.metadata,
-                                "similarity": float(sims[idx]),
-                            }
-                        )
-                else:
-                    for entry in self.entries:
-                        sim = cosine_similarity(query_vec, entry.embedding)
-                        results.append(
-                            {
-                                "text": entry.text,
-                                "metadata": entry.metadata,
-                                "similarity": sim,
-                            }
-                        )
-            else:
-                for entry in self.entries:
-                    sim = cosine_similarity(query_vec, entry.embedding)
-                    results.append(
+                        partition = np.argpartition(-sims, limit - 1)[:limit]
+                        order = partition[np.argsort(-sims[partition])]
+                    return [
                         {
-                            "text": entry.text,
-                            "metadata": entry.metadata,
-                            "similarity": sim,
+                            "text": self.entries[int(idx)].text,
+                            "metadata": self.entries[int(idx)].metadata,
+                            "similarity": float(sims[int(idx)]),
                         }
-                    )
+                        for idx in order
+                    ]
+
+            results = []
+            for entry in self.entries:
+                sim = cosine_similarity(query_vec, entry.embedding)
+                results.append(
+                    {
+                        "text": entry.text,
+                        "metadata": entry.metadata,
+                        "similarity": sim,
+                    }
+                )
 
             # Sort by similarity (descending)
             results.sort(key=lambda x: float(cast(Any, x["similarity"])), reverse=True)
-            
+
             return results[:top_k]
-            
+
         except Exception as e:
             raise RAGError(f"Query failed: {e}") from e
-    
+
     def save(self, path: str) -> None:
         """Serialize the index to a JSON file.
 
@@ -364,7 +384,7 @@ class VectorStore:
                 for e in data["entries"]
             ]
             self.embedding_dim = data.get("embedding_dim", self.embedding_dim)
-            self._embeddings_cache = None
+            self._invalidate_cache()
 
             saved_at = data.get("saved_at", "unknown")
             logger.info(
@@ -403,7 +423,7 @@ class VectorStore:
     def clear(self) -> None:
         """Clear all entries from the store."""
         self.entries = []
-        self._embeddings_cache = None
+        self._invalidate_cache()
         logger.debug("VectorStore cleared")
 
 

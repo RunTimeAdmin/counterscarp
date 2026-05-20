@@ -734,6 +734,7 @@ def _write_scan_index(results_dir: Path, audit_id: str, findings_data: list, sca
 _USER_AUDIT_INDEX_PATH: Path = BASE_DIR / "data" / "user_audit_index.json"
 _USER_AUDIT_INDEX_DIR: Path = BASE_DIR / "data" / "user_audit_index"
 _user_audit_index_lock = __import__("threading").Lock()
+_LEGACY_FALLBACK_HITS = 0
 
 
 def _user_index_file(user_id: str) -> Path:
@@ -771,6 +772,18 @@ def _update_user_audit_index(user_id: str, audit_summary: dict) -> None:
             except (json.JSONDecodeError, OSError):
                 user_audits = []
         user_audits.append(audit_summary)
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = index_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(user_audits, indent=2), encoding="utf-8")
+        tmp.replace(index_path)
+
+
+def _write_user_audit_index(user_id: str, user_audits: List[Dict[str, Any]]) -> None:
+    """Replace per-user audit index atomically with provided list."""
+    if not user_id:
+        return
+    with _user_audit_index_lock:
+        index_path = _user_index_file(user_id)
         index_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = index_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(user_audits, indent=2), encoding="utf-8")
@@ -905,6 +918,31 @@ def _load_audits_from_results_dir(
             "has_report": has_report,
         })
 
+    # Self-heal migration: persist discovered audits into per-user index so
+    # subsequent dashboard requests stay on the fast index-read path.
+    try:
+        persisted: List[Dict[str, Any]] = []
+        for entry in loaded:
+            ts = entry.get("timestamp")
+            persisted.append(
+                {
+                    "audit_id": entry.get("audit_id", ""),
+                    "project_name": entry.get("project_name", "Unknown"),
+                    "timestamp": ts.isoformat() if ts else "",
+                    "severity_counts": {
+                        "critical": entry.get("severity_counts", {}).get("CRITICAL", 0),
+                        "high": entry.get("severity_counts", {}).get("HIGH", 0),
+                        "medium": entry.get("severity_counts", {}).get("MEDIUM", 0),
+                        "low": entry.get("severity_counts", {}).get("LOW", 0),
+                    },
+                    "risk_score": entry.get("risk_score", 0.0),
+                }
+            )
+        persisted.sort(key=lambda item: item.get("timestamp", ""))
+        _write_user_audit_index(user_id, persisted)
+    except OSError as exc:
+        logger.warning("Could not write per-user index for %s: %s", user_id, exc)
+
     return loaded
 
 
@@ -988,6 +1026,14 @@ async def dashboard_page(request: Request):
     }
 
     if not _used_user_index:
+        global _LEGACY_FALLBACK_HITS
+        _LEGACY_FALLBACK_HITS += 1
+        logger.warning(
+            "Dashboard slow-path hit for user %s (total fallbacks: %d). "
+            "Run scripts/backfill_user_index.py to eliminate.",
+            user_id,
+            _LEGACY_FALLBACK_HITS,
+        )
         audits.extend(
             await run_in_threadpool(
                 _load_audits_from_results_dir,

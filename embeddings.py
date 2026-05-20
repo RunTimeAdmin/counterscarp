@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Multi-backend embedding engine.
+"""Optimized multi-backend embedding engine.
 
 Provides unified interface for generating text embeddings.
 Backends:
@@ -9,391 +9,277 @@ Backends:
 
 Graceful fallback ensures the module works even when optional dependencies
 are not installed.
-
-Example:
-    >>> from embeddings import get_embeddings, cosine_similarity
-    >>> texts = ["reentrancy vulnerability", "access control issue"]
-    >>> embeddings = get_embeddings(texts, backend="local")
-    >>> similarity = cosine_similarity(embeddings[0], embeddings[1])
 """
 
 from __future__ import annotations
 
-import os
+import importlib.util as _ilu
 import math
+import os
 import re
-from typing import List, Optional, Any
 from collections import Counter
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any, List, Optional
 
-# Import exceptions (core module — must always be available)
-from exceptions import CounterscarpError, CounterscarpConfigError
+from exceptions import CounterscarpError
 
-# Import logger with fallback
+if TYPE_CHECKING:
+    import numpy as _np_typing  # noqa: F401
+
 try:
     from logger import get_logger
-    LOGGER_AVAILABLE = True
-except ImportError:
-    LOGGER_AVAILABLE = False
-    get_logger = None  # type: ignore[assignment]
-
-# Initialize logger
-if LOGGER_AVAILABLE and get_logger is not None:
     logger = get_logger(__name__)
-else:
+except ImportError:
     import logging
     logger = logging.getLogger(__name__)
 
-# Optional dependency flags
-SENTENCE_TRANSFORMERS_AVAILABLE = False
-SKLEARN_AVAILABLE = False
-NUMPY_AVAILABLE = False
-OPENAI_AVAILABLE = False
 
-# Try importing optional dependencies with graceful fallback
-import types as _types
-np: Optional[_types.ModuleType] = None
-try:
-    import numpy as _np
-    np = _np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    pass
+def _module_available(name: str) -> bool:
+    """Return True if module spec is resolvable without import side effects."""
+    try:
+        return _ilu.find_spec(name) is not None
+    except (ValueError, ModuleNotFoundError):
+        return False
 
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SentenceTransformer = None
 
-try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    TfidfVectorizer = None
+NUMPY_AVAILABLE = _module_available("numpy")
+SENTENCE_TRANSFORMERS_AVAILABLE = _module_available("sentence_transformers")
+SKLEARN_AVAILABLE = _module_available("sklearn")
+OPENAI_AVAILABLE = _module_available("openai")
+VOYAGE_AVAILABLE = _module_available("voyageai")
 
-try:
-    import openai
-    OPENAI_AVAILABLE = True
-except ImportError:
-    openai = None
+# Keep module-level names for test monkeypatch compatibility.
+openai: Any = None
+voyageai: Any = None
+SentenceTransformer: Any = None
+TfidfVectorizer: Any = None
 
-# Default model configurations
 DEFAULT_LOCAL_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_OPENAI_MODEL = "text-embedding-3-small"
 DEFAULT_VOYAGE_MODEL = "voyage-3-lite"
-
-# Embedding dimensions
-EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 dimension
+EMBEDDING_DIM = 384
+_TOKEN_RX = re.compile(r"\b[a-z0-9]+\b")
 
 
 class EmbeddingError(CounterscarpError):
     """Raised when embedding generation fails."""
-    pass
 
 
 class SimpleBagOfWords:
-    """Pure Python bag-of-words vectorizer as ultimate fallback.
+    """Pure Python bag-of-words vectorizer as final fallback."""
 
-    Creates simple frequency-based embeddings when no ML libraries available.
-    Uses feature hashing to produce fixed-dimension embeddings regardless
-    of input text, ensuring consistent dimensions for indexing and querying.
-    """
-
-    def __init__(self, max_features: int = 384):
-        """Initialize the bag-of-words vectorizer.
-
-        Args:
-            max_features: Fixed dimension of output vectors (default: 384).
-        """
+    def __init__(self, max_features: int = EMBEDDING_DIM):
         self.max_features = max_features
 
     def _tokenize(self, text: str) -> List[str]:
-        """Simple tokenization - lowercase and extract words.
-
-        Args:
-            text: Input text to tokenize.
-
-        Returns:
-            List of tokens.
-        """
-        # Lowercase and extract alphanumeric sequences
-        return re.findall(r'\b[a-z0-9]+\b', text.lower())
+        return _TOKEN_RX.findall(text.lower())
 
     def _hash_token(self, token: str) -> int:
-        """Hash a token to a fixed bucket index.
-
-        Args:
-            token: The token to hash.
-
-        Returns:
-            Bucket index in range [0, max_features).
-        """
-        # Use Python's built-in hash with a fixed seed approach
-        # Combine with a simple string hash for consistency
-        hash_val = hash(token) % self.max_features
-        return hash_val
+        return hash(token) % self.max_features
 
     def fit_transform(self, texts: List[str]) -> List[List[float]]:
-        """Transform texts to fixed-dimension vectors.
-
-        Args:
-            texts: List of texts to vectorize.
-
-        Returns:
-            List of vector representations with fixed dimension.
-        """
         return self.transform(texts)
 
     def transform(self, texts: List[str]) -> List[List[float]]:
-        """Transform texts to fixed-dimension vectors using feature hashing.
+        dim = self.max_features
 
-        Args:
-            texts: List of texts to vectorize.
+        if NUMPY_AVAILABLE:
+            import numpy as np
 
-        Returns:
-            List of vector representations with fixed dimension.
-        """
-        vectors = []
+            output: List[List[float]] = []
+            for text in texts:
+                tokens = self._tokenize(text)
+                if not tokens:
+                    output.append([0.0] * dim)
+                    continue
+                vec = np.zeros(dim, dtype=np.float64)
+                for token, count in Counter(tokens).items():
+                    vec[self._hash_token(token)] += count
+                norm = float(np.linalg.norm(vec))
+                if norm > 0.0:
+                    vec /= norm
+                output.append(vec.tolist())
+            return output
 
+        output = []
         for text in texts:
             tokens = self._tokenize(text)
-            token_counts = Counter(tokens)
+            if not tokens:
+                output.append([0.0] * dim)
+                continue
 
-            # Sparse bucket accumulation avoids repeated writes over dense arrays.
-            sparse_buckets: dict[int, float] = {}
-            for token, count in token_counts.items():
+            sparse: dict[int, float] = {}
+            for token, count in Counter(tokens).items():
                 idx = self._hash_token(token)
-                sparse_buckets[idx] = sparse_buckets.get(idx, 0.0) + float(count)
+                sparse[idx] = sparse.get(idx, 0.0) + float(count)
 
-            norm = math.sqrt(sum(v * v for v in sparse_buckets.values()))
-            vector = [0.0] * self.max_features
-            if norm > 0.0:
-                inv_norm = 1.0 / norm
-                for idx, value in sparse_buckets.items():
-                    vector[idx] = value * inv_norm
+            norm_sq = 0.0
+            for value in sparse.values():
+                norm_sq += value * value
+            if norm_sq > 0.0:
+                inv = 1.0 / math.sqrt(norm_sq)
+                for idx in sparse:
+                    sparse[idx] *= inv
 
-            vectors.append(vector)
-
-        return vectors
-
-
-# Global cache for models
-_local_model_cache: Optional[Any] = None
+            vec = [0.0] * dim
+            for idx, value in sparse.items():
+                vec[idx] = value
+            output.append(vec)
+        return output
 
 
+@lru_cache(maxsize=1)
 def _get_local_model() -> Optional[Any]:
-    """Get or load the local sentence-transformers model.
-    
-    Returns:
-        Loaded SentenceTransformer model or None if not available.
-    """
-    global _local_model_cache
-    
+    """Get or load sentence-transformers model lazily."""
     if not SENTENCE_TRANSFORMERS_AVAILABLE:
         return None
-    
-    if _local_model_cache is None:
-        try:
-            logger.info(
-                f"Loading local embedding model: {DEFAULT_LOCAL_MODEL}"
+    try:
+        logger.info("Loading local embedding model: %s", DEFAULT_LOCAL_MODEL)
+        global SentenceTransformer
+        if SentenceTransformer is None:
+            from sentence_transformers import (
+                SentenceTransformer as _SentenceTransformer,
             )
-            _local_model_cache = SentenceTransformer(DEFAULT_LOCAL_MODEL)
-            logger.debug("Local embedding model loaded successfully")
-        except Exception as e:
-            logger.warning(f"Failed to load sentence-transformers model: {e}")
-            return None
-    
-    return _local_model_cache
+
+            SentenceTransformer = _SentenceTransformer
+        model = SentenceTransformer(DEFAULT_LOCAL_MODEL)
+        logger.debug("Local embedding model loaded successfully")
+        return model
+    except Exception as exc:
+        logger.warning("Failed to load sentence-transformers model: %s", exc)
+        return None
 
 
 def embed_local(texts: List[str]) -> List[List[float]]:
-    """Generate embeddings using local sentence-transformers model.
-    
-    Falls back to TF-IDF if sentence-transformers not available,
-    then to pure Python bag-of-words if sklearn not available.
-    
-    Args:
-        texts: List of texts to embed.
-        
-    Returns:
-        List of embedding vectors.
-        
-    Raises:
-        EmbeddingError: If embedding generation fails.
-    """
+    """Generate embeddings locally with graceful degradation."""
     if not texts:
         return []
-    
-    # Try sentence-transformers first
+
     if SENTENCE_TRANSFORMERS_AVAILABLE:
         model = _get_local_model()
         if model is not None:
             try:
-                logger.debug(
-                    f"Generating embeddings for {len(texts)} texts"
-                )
+                logger.debug("Generating embeddings for %d texts", len(texts))
                 embeddings = model.encode(
-                    texts, convert_to_numpy=True, show_progress_bar=False
+                    texts,
+                    convert_to_numpy=True,
+                    show_progress_bar=False,
                 )
-                
-                # Convert numpy arrays to Python lists
-                if NUMPY_AVAILABLE:
-                    return [emb.tolist() for emb in embeddings]
-                else:
-                    return [list(emb) for emb in embeddings]
-                    
-            except Exception as e:
+                return [emb.tolist() for emb in embeddings]
+            except Exception as exc:
                 logger.warning(
-                    f"sentence-transformers failed: {e}, trying fallback"
+                    "sentence-transformers failed: %s, trying fallback",
+                    exc,
                 )
-    
-    # Fall back to TF-IDF
+
     if SKLEARN_AVAILABLE:
         try:
+            global TfidfVectorizer
+            if TfidfVectorizer is None:
+                from sklearn.feature_extraction.text import (
+                    TfidfVectorizer as _TfidfVectorizer,
+                )
+
+                TfidfVectorizer = _TfidfVectorizer
             logger.debug(
-                f"Generating embeddings for {len(texts)} texts using TF-IDF"
+                "Generating embeddings for %d texts using TF-IDF",
+                len(texts),
             )
             vectorizer = TfidfVectorizer(
-                max_features=EMBEDDING_DIM, stop_words='english'
+                max_features=EMBEDDING_DIM,
+                stop_words="english",
             )
-            tfidf_matrix = vectorizer.fit_transform(texts)
-            
-            # Convert to dense list format
-            if NUMPY_AVAILABLE:
-                dense = tfidf_matrix.toarray()
-                return [row.tolist() for row in dense]
-            else:
-                # Manual conversion if numpy not available
-                dense = tfidf_matrix.toarray()
-                return [list(row) for row in dense]
-                
-        except Exception as e:
-            logger.warning(f"TF-IDF failed: {e}, trying bag-of-words")
-    
-    # Ultimate fallback: pure Python bag-of-words
-    logger.debug(f"Generating embeddings for {len(texts)} texts")
-    bow = SimpleBagOfWords(max_features=EMBEDDING_DIM)
-    return bow.fit_transform(texts)
+            dense = vectorizer.fit_transform(texts).toarray()
+            return [row.tolist() for row in dense]
+        except Exception as exc:
+            logger.warning("TF-IDF failed: %s, trying bag-of-words", exc)
+
+    logger.debug("Generating embeddings for %d texts", len(texts))
+    return SimpleBagOfWords(max_features=EMBEDDING_DIM).fit_transform(texts)
 
 
 def embed_openai(
-    texts: List[str], api_key: Optional[str] = None
+    texts: List[str],
+    api_key: Optional[str] = None,
 ) -> List[List[float]]:
-    """Generate embeddings using OpenAI API.
-    
-    Args:
-        texts: List of texts to embed.
-        api_key: OpenAI API key. If not provided, reads from OPENAI_API_KEY
-            environment variable.
-        
-    Returns:
-        List of embedding vectors.
-        
-    Raises:
-        EmbeddingError: If embedding generation fails or API key is missing.
-    """
+    """Generate embeddings using OpenAI API."""
     if not texts:
         return []
-    
     if not OPENAI_AVAILABLE:
         raise EmbeddingError(
-            "OpenAI library not installed. Install with: pip install openai"
+            "OpenAI library not installed. Install with: pip install openai",
         )
-    
-    # Get API key
+
     key = api_key or os.getenv("OPENAI_API_KEY")
     if not key:
         raise EmbeddingError(
             "OpenAI API key not provided. Set OPENAI_API_KEY "
-            "environment variable or pass api_key parameter."
+            "environment variable or pass api_key parameter.",
         )
-    
+
     try:
-        logger.debug(f"Generating embeddings for {len(texts)} texts")
+        global openai
+        if openai is None:
+            import openai as _openai_real
+
+            openai = _openai_real
+        logger.debug("Generating embeddings for %d texts", len(texts))
         client = openai.OpenAI(api_key=key)
-        
-        # OpenAI has a limit of 2048 texts per request
-        all_embeddings = []
-        batch_size = 100  # Conservative batch size
-        
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+
+        all_embeddings: List[List[float]] = []
+        batch_size = 100
+        for idx in range(0, len(texts), batch_size):
+            batch = texts[idx:idx + batch_size]
             response = client.embeddings.create(
                 model=DEFAULT_OPENAI_MODEL,
-                input=batch
+                input=batch,
             )
-            batch_embeddings = [item.embedding for item in response.data]
-            all_embeddings.extend(batch_embeddings)
-        
+            all_embeddings.extend(item.embedding for item in response.data)
         return all_embeddings
-        
-    except Exception as e:
-        logger.error(f"OpenAI embedding failed: {e}")
-        raise EmbeddingError(f"OpenAI embedding failed: {e}") from e
+    except Exception as exc:
+        logger.error("OpenAI embedding failed: %s", exc)
+        raise EmbeddingError(f"OpenAI embedding failed: {exc}") from exc
 
 
 def embed_anthropic(
-    texts: List[str], api_key: Optional[str] = None
+    texts: List[str],
+    api_key: Optional[str] = None,
 ) -> List[List[float]]:
-    """Generate embeddings using Anthropic/Voyage AI.
-    
-    Note: Anthropic doesn't have a native embedding API, so this uses
-    Voyage AI embeddings which is the recommended provider for Anthropic users.
-    Falls back to local embeddings if Voyage AI is not available.
-    
-    Args:
-        texts: List of texts to embed.
-        api_key: Voyage AI API key. If not provided, reads from VOYAGE_API_KEY
-            environment variable.
-        
-    Returns:
-        List of embedding vectors.
-        
-    Raises:
-        EmbeddingError: If embedding generation fails.
-    """
+    """Generate embeddings using Voyage AI (Anthropic-compatible path)."""
     if not texts:
         return []
-    
-    # Try Voyage AI first
-    key = api_key or os.getenv("VOYAGE_API_KEY") or \
-        os.getenv("ANTHROPIC_API_KEY")
-    
-    if key:
+
+    key = (
+        api_key
+        or os.getenv("VOYAGE_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+    )
+    if key and VOYAGE_AVAILABLE:
         try:
-            # Try importing voyageai
-            try:
-                import voyageai
-                VOYAGE_AVAILABLE = True
-            except ImportError:
-                VOYAGE_AVAILABLE = False
-            
-            if VOYAGE_AVAILABLE:
-                logger.debug(
-                    f"Generating embeddings for {len(texts)} texts"
+            global voyageai
+            if voyageai is None:
+                import voyageai as _voyageai_real
+
+                voyageai = _voyageai_real
+            logger.debug("Generating embeddings for %d texts", len(texts))
+            client = voyageai.Client(api_key=key)
+
+            all_embeddings: List[List[float]] = []
+            batch_size = 72
+            for idx in range(0, len(texts), batch_size):
+                batch = texts[idx:idx + batch_size]
+                result = client.embed(
+                    batch,
+                    model=DEFAULT_VOYAGE_MODEL,
+                    input_type="document",
                 )
-                client = voyageai.Client(api_key=key)
-                
-                all_embeddings = []
-                batch_size = 72  # Voyage AI batch limit
-                
-                for i in range(0, len(texts), batch_size):
-                    batch = texts[i:i + batch_size]
-                    result = client.embed(
-                        batch,
-                        model=DEFAULT_VOYAGE_MODEL,
-                        input_type="document"
-                    )
-                    all_embeddings.extend(result.embeddings)
-                
-                return all_embeddings
-                
-        except Exception as e:
-            logger.warning(f"Voyage AI failed: {e}, falling back to local")
+                all_embeddings.extend(result.embeddings)
+            return all_embeddings
+        except Exception as exc:
+            logger.warning("Voyage AI failed: %s, falling back to local", exc)
     else:
         logger.debug("No Voyage AI API key found, using local")
-    
-    # Fall back to local embeddings
+
     logger.info("Falling back to local embeddings for Anthropic backend")
     return embed_local(texts)
 
@@ -401,153 +287,115 @@ def embed_anthropic(
 def get_embeddings(
     texts: List[str],
     backend: str = "local",
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
 ) -> List[List[float]]:
-    """Unified interface for generating text embeddings.
-    
-    Routes to the appropriate backend based on the backend parameter.
-    Falls back gracefully if the preferred backend is unavailable.
-    
-    Args:
-        texts: List of texts to embed.
-        backend: Backend to use ("local", "openai", "anthropic").
-        api_key: Optional API key for cloud backends.
-        
-    Returns:
-        List of embedding vectors.
-        
-    Raises:
-        EmbeddingError: If all backends fail.
-        
-    Example:
-        >>> texts = ["reentrancy attack", "access control vulnerability"]
-        >>> embeddings = get_embeddings(texts, backend="local")
-        >>> len(embeddings)
-        2
-    """
+    """Unified interface for generating text embeddings."""
     if not texts:
         return []
-    
+
     backend = backend.lower()
-    errors = []
-    
-    # Try requested backend first
+    errors: List[str] = []
+
     if backend == "local":
         try:
             return embed_local(texts)
-        except Exception as e:
-            errors.append(f"Local backend failed: {e}")
-            logger.warning(f"Local embedding failed: {e}")
-    
+        except Exception as exc:
+            errors.append(f"Local backend failed: {exc}")
+            logger.warning("Local embedding failed: %s", exc)
     elif backend == "openai":
         try:
             return embed_openai(texts, api_key)
-        except Exception as e:
-            errors.append(f"OpenAI backend failed: {e}")
-            logger.warning(f"OpenAI failed: {e}, trying local fallback")
+        except Exception as exc:
+            errors.append(f"OpenAI backend failed: {exc}")
+            logger.warning("OpenAI failed: %s, trying local fallback", exc)
             try:
                 return embed_local(texts)
-            except Exception as e2:
-                errors.append(f"Local fallback failed: {e2}")
-    
+            except Exception as fallback_exc:
+                errors.append(f"Local fallback failed: {fallback_exc}")
     elif backend == "anthropic":
         try:
             return embed_anthropic(texts, api_key)
-        except Exception as e:
-            errors.append(f"Anthropic backend failed: {e}")
-            logger.warning(f"Anthropic failed: {e}, trying local fallback")
+        except Exception as exc:
+            errors.append(f"Anthropic backend failed: {exc}")
+            logger.warning("Anthropic failed: %s, trying local fallback", exc)
             try:
                 return embed_local(texts)
-            except Exception as e2:
-                errors.append(f"Local fallback failed: {e2}")
-    
+            except Exception as fallback_exc:
+                errors.append(f"Local fallback failed: {fallback_exc}")
     else:
         raise EmbeddingError(
             f"Unknown backend: {backend}. "
-            f"Use 'local', 'openai', or 'anthropic'."
+            "Use 'local', 'openai', or 'anthropic'.",
         )
-    
-    # If we get here, all backends failed
+
     raise EmbeddingError(
         f"All embedding backends failed for backend '{backend}'",
-        details={"errors": errors, "backend": backend}
+        details={"errors": errors, "backend": backend},
     )
 
 
 def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
-    """Calculate cosine similarity between two vectors.
-    
-    Args:
-        vec_a: First vector.
-        vec_b: Second vector.
-        
-    Returns:
-        Cosine similarity score between -1 and 1.
-        
-    Example:
-        >>> a = [1.0, 0.0, 0.0]
-        >>> b = [1.0, 0.0, 0.0]
-        >>> cosine_similarity(a, b)
-        1.0
-    """
+    """Calculate cosine similarity between two vectors."""
     if not vec_a or not vec_b:
         return 0.0
-    
     if len(vec_a) != len(vec_b):
         raise ValueError(
-            f"Vectors must have same dimension: {len(vec_a)} vs {len(vec_b)}"
+            f"Vectors must have same dimension: {len(vec_a)} vs {len(vec_b)}",
         )
-    
-    if NUMPY_AVAILABLE and np is not None:
-        arr_a = np.asarray(vec_a, dtype=float)
-        arr_b = np.asarray(vec_b, dtype=float)
+
+    if NUMPY_AVAILABLE:
+        import numpy as np
+
+        arr_a = np.asarray(vec_a, dtype=np.float64)
+        arr_b = np.asarray(vec_b, dtype=np.float64)
         mag_a = float(np.linalg.norm(arr_a))
         mag_b = float(np.linalg.norm(arr_b))
         if mag_a == 0.0 or mag_b == 0.0:
             return 0.0
         return float(np.dot(arr_a, arr_b) / (mag_a * mag_b))
 
-    dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
-    mag_a = math.sqrt(sum(a * a for a in vec_a))
-    mag_b = math.sqrt(sum(b * b for b in vec_b))
-    if mag_a == 0 or mag_b == 0:
+    dot_product = 0.0
+    mag_a_sq = 0.0
+    mag_b_sq = 0.0
+    for aval, bval in zip(vec_a, vec_b):
+        dot_product += aval * bval
+        mag_a_sq += aval * aval
+        mag_b_sq += bval * bval
+    if mag_a_sq == 0.0 or mag_b_sq == 0.0:
         return 0.0
-    return dot_product / (mag_a * mag_b)
+    return dot_product / (math.sqrt(mag_a_sq) * math.sqrt(mag_b_sq))
 
 
 def batch_cosine_similarity(
     query_vec: List[float],
-    vectors: List[List[float]]
+    vectors: List[List[float]],
 ) -> List[float]:
-    """Calculate cosine similarity between a query and multiple vectors.
-    
-    Args:
-        query_vec: The query vector.
-        vectors: List of vectors to compare against.
-        
-    Returns:
-        List of similarity scores.
-    """
+    """Calculate cosine similarity between a query and multiple vectors."""
     if not vectors:
         return []
-    if NUMPY_AVAILABLE and np is not None:
-        query = np.asarray(query_vec, dtype=float)
-        matrix = np.asarray(vectors, dtype=float)
+
+    if NUMPY_AVAILABLE:
+        import numpy as np
+
+        query = np.asarray(query_vec, dtype=np.float64)
+        matrix = np.asarray(vectors, dtype=np.float64)
         query_norm = float(np.linalg.norm(query))
         if query_norm == 0.0:
             return [0.0] * len(vectors)
+
         row_norms = np.linalg.norm(matrix, axis=1)
-        dots = matrix @ query
-        denom = row_norms * query_norm
-        scores = np.where(denom > 0.0, dots / denom, 0.0)
-        return [float(s) for s in scores]
+        safe_norms = row_norms.copy()
+        safe_norms[safe_norms == 0.0] = 1.0
+        scores = (matrix @ query) / (safe_norms * query_norm)
+        scores[row_norms == 0.0] = 0.0
+        return scores.tolist()
+
     return [cosine_similarity(query_vec, vec) for vec in vectors]
 
 
 if __name__ == "__main__":
-    # Demo/test code
     print("Testing Embedding Engine\n")
-    
+
     test_texts = [
         "Reentrancy vulnerability in withdraw function",
         "Access control missing on critical function",
@@ -555,44 +403,39 @@ if __name__ == "__main__":
         "Oracle price manipulation vulnerability",
         "Reentrant call pattern detected in contract",
     ]
-    
-    # Test local embeddings
+
     print("1. Testing local embeddings:")
     try:
         embeddings = embed_local(test_texts)
         print(f"   Generated {len(embeddings)} embeddings")
         print(f"   Dimension: {len(embeddings[0])}")
-        
-        # Test similarity
+
         sim = cosine_similarity(embeddings[0], embeddings[4])
         print(f"   Similarity (reentrancy vs reentrancy): {sim:.4f}")
-        
+
         sim2 = cosine_similarity(embeddings[0], embeddings[1])
         print(f"   Similarity (reentrancy vs access control): {sim2:.4f}")
-        
-    except Exception as e:
-        print(f"   Error: {e}")
-    
-    # Test unified interface
+    except Exception as exc:
+        print(f"   Error: {exc}")
+
     print("\n2. Testing unified interface (local backend):")
     try:
         embeddings = get_embeddings(test_texts, backend="local")
         print(f"   Generated {len(embeddings)} embeddings")
-    except Exception as e:
-        print(f"   Error: {e}")
-    
-    # Test OpenAI (if key available)
+    except Exception as exc:
+        print(f"   Error: {exc}")
+
     if os.getenv("OPENAI_API_KEY"):
         print("\n3. Testing OpenAI backend:")
         try:
             embeddings = embed_openai(test_texts[:2])
             print(f"   Generated {len(embeddings)} embeddings")
             print(f"   Dimension: {len(embeddings[0])}")
-        except Exception as e:
-            print(f"   Error: {e}")
+        except Exception as exc:
+            print(f"   Error: {exc}")
     else:
         print("\n3. Skipping OpenAI test (no API key)")
-    
+
     print("\n4. Testing bag-of-words fallback:")
     bow = SimpleBagOfWords(max_features=100)
     vectors = bow.fit_transform(test_texts)

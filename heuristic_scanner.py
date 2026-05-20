@@ -599,202 +599,116 @@ def _check_inline_suppression(
     return False, ""
 
 
-def is_in_code_context(line: str, match_start: int) -> bool:
-    """Check if a regex match is in actual code vs. a comment or string literal.
-
-    Args:
-        line: The line of code being analyzed.
-        match_start: The starting position of the match in the line.
+def _build_line_code_masks(
+    lines: List[str],
+) -> Tuple[List[Optional[bytearray]], List[bool]]:
+    """Build per-line code masks and multiline-comment start states.
 
     Returns:
-        True if the match is in actual code (not comment/string), False otherwise.
+        A tuple of ``(masks, line_starts_in_comment)``.
+        - ``masks[i] is None`` means line ``i`` is all code (fast path).
+        - Otherwise ``masks[i][j] == 1`` means position ``j`` is code context.
     """
-    # Check for single-line comments (//)
-    # If match is after //, it's in a comment
-    comment_pos = line.find('//')
-    if comment_pos != -1 and match_start > comment_pos:
+    masks: List[Optional[bytearray]] = []
+    line_starts_in_comment: List[bool] = []
+    in_block_comment = False
+
+    for line in lines:
+        line_starts_in_comment.append(in_block_comment)
+        if not in_block_comment and ("/" not in line and '"' not in line and "'" not in line):
+            masks.append(None)
+            continue
+
+        line_len = len(line)
+        mask = bytearray(line_len)
+        in_double_quote = False
+        in_single_quote = False
+        escape_next = False
+        idx = 0
+
+        while idx < line_len:
+            char = line[idx]
+
+            if in_block_comment:
+                if char == "*" and idx + 1 < line_len and line[idx + 1] == "/":
+                    in_block_comment = False
+                    idx += 2
+                    continue
+                idx += 1
+                continue
+
+            if escape_next:
+                escape_next = False
+                idx += 1
+                continue
+
+            if char == "\\" and (in_double_quote or in_single_quote):
+                escape_next = True
+                idx += 1
+                continue
+
+            if not in_double_quote and not in_single_quote:
+                if char == "/" and idx + 1 < line_len:
+                    next_char = line[idx + 1]
+                    if next_char == "/":
+                        break
+                    if next_char == "*":
+                        in_block_comment = True
+                        idx += 2
+                        continue
+                if char == '"':
+                    in_double_quote = True
+                    idx += 1
+                    continue
+                if char == "'":
+                    in_single_quote = True
+                    idx += 1
+                    continue
+                mask[idx] = 1
+                idx += 1
+                continue
+
+            if in_double_quote and char == '"':
+                in_double_quote = False
+            elif in_single_quote and char == "'":
+                in_single_quote = False
+            idx += 1
+
+        masks.append(mask)
+
+    return masks, line_starts_in_comment
+
+
+def is_in_code_context(line: str, match_start: int) -> bool:
+    """Backward-compatible single-line code-context check."""
+    masks, _ = _build_line_code_masks([line])
+    if not masks:
         return False
-
-    # Check for string literals
-    # We need to track whether match_start is inside "..." or '...'
-    in_double_quote = False
-    in_single_quote = False
-    escape_next = False
-
-    for i, char in enumerate(line):
-        if i >= match_start:
-            # We've reached the match position, check state
-            break
-
-        if escape_next:
-            escape_next = False
-            continue
-
-        if char == '\\':
-            escape_next = True
-            continue
-
-        if char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-        elif char == "'" and not in_double_quote:
-            in_single_quote = not in_single_quote
-
-    # If we're inside a string literal, the match is not in code context
-    if in_double_quote or in_single_quote:
-        return False
-
-    return True
-
-
-def _build_code_context_mask(line: str) -> List[bool]:
-    """Build a per-character mask marking code (not comments/strings).
-
-    The returned list has one boolean per character in *line*. A True value
-    means a match starting at that character is considered code context.
-    """
-    mask = [True] * len(line)
-    in_double_quote = False
-    in_single_quote = False
-    escape_next = False
-    i = 0
-
-    while i < len(line):
-        if escape_next:
-            mask[i] = not (in_double_quote or in_single_quote)
-            escape_next = False
-            i += 1
-            continue
-
-        char = line[i]
-        if char == '\\':
-            mask[i] = not (in_double_quote or in_single_quote)
-            escape_next = True
-            i += 1
-            continue
-
-        if not in_double_quote and not in_single_quote and line.startswith("//", i):
-            for j in range(i, len(line)):
-                mask[j] = False
-            break
-
-        if char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-            mask[i] = False
-            i += 1
-            continue
-        if char == "'" and not in_double_quote:
-            in_single_quote = not in_single_quote
-            mask[i] = False
-            i += 1
-            continue
-
-        mask[i] = not (in_double_quote or in_single_quote)
-        i += 1
-
-    return mask
+    mask = masks[0]
+    if mask is None:
+        return 0 <= match_start < len(line)
+    return 0 <= match_start < len(mask) and mask[match_start] == 1
 
 
 def _build_comment_map(lines: List[str]) -> List[bool]:
-    """Build a per-line boolean map indicating multi-line comment state (Task H6).
-
-    Makes a single O(n) pass through all lines and returns a list of booleans
-    where ``True`` at index ``i`` means line ``i`` begins while the parser is
-    already inside a ``/* ... */`` block (i.e. the first character of that line
-    is inside a comment).
-
-    Handles multiple ``/*`` and ``*/`` tokens on the same line correctly, which
-    mirrors the logic used by :func:`is_in_multiline_comment`.
-
-    Args:
-        lines: All lines of the file (as returned by ``f.readlines()``).
-
-    Returns:
-        A ``List[bool]`` of the same length as *lines*.
-    """
-    result: List[bool] = []
-    in_comment = False
-
-    for line in lines:
-        # Record whether this line *starts* inside a comment
-        result.append(in_comment)
-
-        # Walk the whole line to update the comment state for the next line
-        pos = 0
-        while pos < len(line):
-            if not in_comment:
-                open_pos = line.find('/*', pos)
-                if open_pos == -1:
-                    break
-                in_comment = True
-                pos = open_pos + 2
-            else:
-                close_pos = line.find('*/', pos)
-                if close_pos == -1:
-                    break
-                in_comment = False
-                pos = close_pos + 2
-
-    return result
+    """Build a per-line boolean map indicating multiline comment state."""
+    _, line_starts_in_comment = _build_line_code_masks(lines)
+    return line_starts_in_comment
 
 
-# DEPRECATED: use _build_comment_map() + comment_map[line_idx] instead.
-# Kept for backward compatibility with any external callers.
-def is_in_multiline_comment(
-    lines: List[str], line_idx: int, match_start: int
-) -> bool:
-    """Check if a position is inside a multi-line comment (/* */).
-
-    .. deprecated::
-        Build a comment map once with :func:`_build_comment_map` and index it
-        instead of calling this function per-match (O(n²) → O(n)).
-
-    Args:
-        lines: All lines of the file.
-        line_idx: Index of the current line (0-based).
-        match_start: Starting position in the current line.
-
-    Returns:
-        True if the position is inside a multi-line comment.
-    """
-    in_multiline_comment = False
-
-    for i in range(line_idx + 1):
-        line = lines[i]
-
-        if i < line_idx:
-            # For previous lines, just track comment state
-            pos = 0
-            while pos < len(line):
-                if not in_multiline_comment:
-                    comment_start = line.find('/*', pos)
-                    if comment_start == -1:
-                        break
-                    in_multiline_comment = True
-                    pos = comment_start + 2
-                else:
-                    comment_end = line.find('*/', pos)
-                    if comment_end == -1:
-                        break
-                    in_multiline_comment = False
-                    pos = comment_end + 2
-        else:
-            # For current line, check up to match_start
-            pos = 0
-            while pos < match_start:
-                if not in_multiline_comment:
-                    comment_start = line.find('/*', pos)
-                    if comment_start == -1 or comment_start >= match_start:
-                        break
-                    in_multiline_comment = True
-                    pos = comment_start + 2
-                else:
-                    comment_end = line.find('*/', pos)
-                    if comment_end == -1:
-                        break
-                    in_multiline_comment = False
-                    pos = comment_end + 2
-
-    return in_multiline_comment
+def is_in_multiline_comment(lines: List[str], line_idx: int, match_start: int) -> bool:
+    """Deprecated API shim for multiline comment checks."""
+    masks, line_starts_in_comment = _build_line_code_masks(lines[: line_idx + 1])
+    if line_idx >= len(masks):
+        return False
+    mask = masks[line_idx]
+    if mask is None:
+        return False
+    if line_starts_in_comment[line_idx]:
+        return True
+    if match_start >= len(mask):
+        return True
+    return mask[match_start] == 0
 
 
 def _check_safe_patterns(
@@ -941,8 +855,11 @@ def _scan_lines_for_rules(
     Returns:
         List of HeuristicFinding objects (not yet deduplicated).
     """
+    if not lines:
+        return []
+
     findings: List[HeuristicFinding] = []
-    comment_map = _build_comment_map(lines)
+    line_masks, line_starts_in_comment = _build_line_code_masks(lines)
     header_text = "\n".join(lines[:min(100, len(lines))])
 
     active_rules: List[Tuple["HeuristicRule", str]] = []
@@ -961,37 +878,35 @@ def _scan_lines_for_rules(
         for pattern in safe_patterns:
             safe_patterns_by_rule.setdefault(pattern.rule_id, []).append(pattern)
 
-    for i, line in enumerate(lines, start=1):
-        stripped = line.strip()
-        if stripped.startswith("//"):
-            continue  # Skip comment-only lines early
+    for idx, line in enumerate(lines):
+        if not line:
+            continue
+        if line_starts_in_comment[idx]:
+            continue
 
-        code_context_mask = _build_code_context_mask(line)
+        stripped = line.lstrip()
+        if stripped.startswith("//") or not stripped:
+            continue
+
+        line_no = idx + 1
+        mask = line_masks[idx]
         for rule, effective_severity in active_rules:
+            if not rule.pattern.search(line):
+                continue
             for match in rule.pattern.finditer(line):
                 match_start = match.start()
+                if mask is not None:
+                    if match_start >= len(mask) or not mask[match_start]:
+                        logger.debug(
+                            "Skipping match for %s in comment/string at %s:%d:%d",
+                            rule.id, path, line_no, match_start,
+                        )
+                        continue
 
-                if (
-                    match_start >= len(code_context_mask)
-                    or not code_context_mask[match_start]
-                ):
-                    logger.debug(
-                        "Skipping match for %s in comment/string at %s:%d:%d",
-                        rule.id, path, i, match_start,
-                    )
-                    continue
+                finding = _create_finding(rule, effective_severity, path, line_no, line)
+                _apply_suppressions(finding, lines, idx, config, path)
 
-                if comment_map[i - 1]:
-                    logger.debug(
-                        "Skipping match for %s in multi-line comment at %s:%d:%d",
-                        rule.id, path, i, match_start,
-                    )
-                    continue
-
-                finding = _create_finding(rule, effective_severity, path, i, line)
-                _apply_suppressions(finding, lines, i - 1, config, path)
-
-                if rule.refine and not rule.refine(finding, lines, i - 1):
+                if rule.refine and not rule.refine(finding, lines, idx):
                     continue
 
                 _check_safe_patterns(
