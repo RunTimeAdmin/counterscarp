@@ -4,7 +4,7 @@
 
 > Scarpshield is the unified product brand; `counterscarp-engine` is the package/CLI distribution.
 
-> One command. Zero false positives. Client-ready deliverables.
+> One command. Client-ready deliverables.
 
 [![PyPI](https://img.shields.io/pypi/v/counterscarp-engine)](https://pypi.org/project/counterscarp-engine/)
 [![Python](https://img.shields.io/pypi/pyversions/counterscarp-engine)](https://pypi.org/project/counterscarp-engine/)
