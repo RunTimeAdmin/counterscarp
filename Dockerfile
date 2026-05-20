@@ -30,7 +30,7 @@ RUN ls /go/bin/medusa
 FROM python:3.12-slim AS tools-builder
 
 # ── Metadata ──────────────────────────────────────────────────────────────────
-ARG APP_VERSION=5.1.0
+ARG APP_VERSION=5.1.1
 LABEL maintainer="Counterscarp Engine Team"
 LABEL description="Smart contract security auditing platform — 21-analyzer stack"
 LABEL version="${APP_VERSION}"
@@ -127,7 +127,7 @@ WORKDIR /scan
 # ------------------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
 
-ARG APP_VERSION=5.1.0
+ARG APP_VERSION=5.1.1
 LABEL maintainer="Counterscarp Engine Team"
 LABEL description="Smart contract security auditing platform — 21-analyzer stack"
 LABEL version="${APP_VERSION}"

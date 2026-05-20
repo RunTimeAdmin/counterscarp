@@ -157,7 +157,7 @@ from report_generator import (
 app = FastAPI(
     title="Counterscarp Engine",
     description="Smart Contract Security Audit Platform",
-    version="5.1.0",
+    version="5.1.1",
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)

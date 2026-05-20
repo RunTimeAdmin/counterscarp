@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v5.1.1 — 2026-05-20
+
+### Changed
+- Patch release for launch readiness and deployment consistency.
+- Bumped package/app/runtime version references to `5.1.1` in packaging metadata, webapp version reporting, doctor output, and container manifests.
+
 ## v5.1.0 — 2026-04-29
 
 ### Solana/Anchor Analyzer — Complete Implementation
