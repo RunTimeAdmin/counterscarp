@@ -33,9 +33,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from webapp.auth import auth_router, admin_router, get_current_user, get_license_key_for_request, generate_csrf_token, validate_csrf_token
 from webapp.user_manager import user_manager
 from webapp.config import (
-    ALLOWED_EXTENSIONS,
     BASE_DIR,
-    LOGO_PATH,
     MAX_FILE_SIZE,
     RESULTS_DIR,
     TEMPLATES_DIR,
@@ -46,23 +44,17 @@ from webapp.config import (
 
 from license_manager import (
     LicenseManager,
-    AI_COPILOT,
-    ATTACK_GRAPH,
-    BRANDED_REPORTS,
-    DEVELOPER,
     FEATURE_TIERS,
     FEATURE_NAMES,
     GRACE_PERIOD_DAYS,
     LICENSE_PREFIXES,
     PAYG,
     TIER_HIERARCHY,
-    TIER_PREFIXES,
 )
 
 from webapp.license_api import license_router
 from webapp.license_api import append_audit_log
-from webapp.license_api import consume_credit
-from webapp.rate_limiter import RateLimiter, RedisRateLimiter, get_client_ip, add_rate_limit_headers
+from webapp.rate_limiter import RateLimiter, RedisRateLimiter, add_rate_limit_headers
 from webapp.stripe_integration import (
     create_checkout_session,
     create_payg_checkout,
@@ -71,8 +63,6 @@ from webapp.stripe_integration import (
     get_session_license_key,
     update_license_in_db,
     check_and_mark_event,
-    is_event_processed,
-    mark_event_processed,
     PAYG_PACKS,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET,
@@ -106,13 +96,7 @@ _ALLOWED_EXTERNAL_REDIRECT_HOSTS = {
 
 
 from webapp.scan_utils import (
-    heuristic_finding_to_finding,
     run_slither_analysis,
-    run_ai_copilot,
-    serialize_findings,
-    generate_reports,
-    generate_attack_graph,
-    build_analyzers_list,
     summarize_findings_data,
 )
 
@@ -165,16 +149,8 @@ def _external_checkout_redirect_response(url: str) -> Response:
 
 
 # Import Counterscarp Engine modules (scan_utils re-exports shared logic)
-from heuristic_scanner import (
-    HeuristicFinding,
-    RULE_CATEGORIES,
-    HEURISTIC_RULES,
-    scan_target,
-)
 from report_generator import (
-    AuditReport,
     Finding,
-    create_audit_report,
 )
 
 app = FastAPI(
@@ -517,265 +493,21 @@ async def audit(
     files: List[UploadFile] = File(...),
 ):
     """Run security audit on uploaded files."""
-    # CSRF validation — skip if no token was ever generated
-    form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    from webapp.routes.audit import handle_audit_request
 
-    # Enforce per-IP audit rate limit
-    client_ip = get_client_ip(request)
-    if not _audit_limiter.is_allowed(client_ip):
-        resp_429 = JSONResponse(
-            {"detail": "Rate limit exceeded. Try again later."},
-            status_code=429,
-        )
-        add_rate_limit_headers(resp_429, _audit_limiter, client_ip)
-        resp_429.headers["Retry-After"] = str(
-            _audit_limiter.get_reset_time(client_ip)
-        )
-        return resp_429
-
-    # Validate files
-    if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded")
-
-    valid_files = []
-    for file in files:
-        # Check file extension
-        ext = Path(file.filename or "").suffix.lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid file type: {file.filename}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-            )
-        valid_files.append(file)
-
-    if not valid_files:
-        raise HTTPException(status_code=400, detail="No valid files to process")
-
-    # Generate audit ID
-    audit_id = str(uuid.uuid4())
-    upload_dir = UPLOAD_DIR / audit_id
-    results_dir = RESULTS_DIR / audit_id
-
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save uploaded files with streaming validation to reduce memory spikes.
-    uploaded_paths: list[str] = []
-    uploaded_total_source_lines = 0
-    for file in valid_files:
-        # Sanitize filename: strip path separators, allow only safe chars, limit length
-        safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', Path(file.filename or "unnamed").name)[:100]
-        file_path = upload_dir / safe_name
-        uploaded_total_source_lines += await _save_upload_file_streaming(file, file_path)
-        uploaded_paths.append(str(file_path))
-        await file.close()
-
-    # --- Async (arq) vs sync scan dispatch ---
-    arq_pool = getattr(request.app.state, "arq_pool", None)
-    current_user = get_current_user(request)
-    user_id = current_user["id"] if current_user else ""
-    license_key = get_license_key_for_request(request, current_user) or ""
-
-    # --- PAYG Credit Gate ---
-    # Determine user's effective tier
-    user_tier = "community"  # default
-    if license_key:
-        for _tier, _prefix in TIER_PREFIXES.items():
-            if license_key.startswith(_prefix):
-                user_tier = _tier
-                break
-
-    # Check if user needs credits (below DEVELOPER tier)
-    tier_index = TIER_HIERARCHY.index(user_tier) if user_tier in TIER_HIERARCHY else 0
-    developer_index = TIER_HIERARCHY.index(DEVELOPER)
-
-    if tier_index < developer_index:
-        if current_user:
-            from webapp.user_manager import user_manager as _um
-            credits = _um.get_scan_credits(current_user["id"])
-            # HF-V4-01: PAYG users MUST have credits — no credits means blocked
-            if user_tier == PAYG:
-                if credits <= 0:
-                    return templates.TemplateResponse(
-                        request, "payg_no_credits.html",
-                        context={
-                            "current_user": current_user,
-                            "scan_credits": 0,
-                            **_get_grace_period_context(request),
-                        },
-                        status_code=402,
-                    )
-            if credits > 0:
-                # Consume a credit
-                success = consume_credit(current_user["id"], audit_id, request.client.host if request.client else "")
-                if not success:
-                    return templates.TemplateResponse(
-                        request, "payg_no_credits.html",
-                        context={
-                            "current_user": current_user,
-                            "scan_credits": 0,
-                            **_get_grace_period_context(request),
-                        },
-                        status_code=402,
-                    )
-            # Community tier with no credits — allowed via rate limiter (existing behavior)
-        else:
-            # HF-V4-02: Unauthenticated users below DEVELOPER tier
-            # must have a valid license key to scan
-            if not license_key:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Authentication or a valid license key is required to run scans.",
-                )
-    # DEVELOPER+ tiers bypass credit gate entirely (unlimited scans via subscription)
-    # --- End Credit Gate ---
-
-    if arq_pool is not None:
-        # Write initial pending status
-        status_payload = {
-            "status": "pending",
-            "progress": "Queued...",
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        }
-        status_path = results_dir / "scan_status.json"
-        with open(status_path, "w", encoding="utf-8") as sf:
-            json.dump(status_payload, sf, indent=2)
-
-        # Pre-seed scan_meta so the worker can read project_name
-        pre_meta = {"project_name": project_name, "owner_user_id": user_id or None}
-        pre_meta_path = results_dir / "scan_meta.json"
-        with open(pre_meta_path, "w", encoding="utf-8") as mf:
-            json.dump(pre_meta, mf, indent=2)
-
-        await arq_pool.enqueue_job(
-            "run_audit", audit_id, uploaded_paths, license_key, user_id,
-        )
-
-        redirect = RedirectResponse(
-            url=f"/results/{audit_id}/pending", status_code=303,
-        )
-        add_rate_limit_headers(redirect, _audit_limiter, client_ip)
-        return redirect
-
-    # --- Synchronous fallback (no Redis) ---
-
-    # Run heuristic scanner
-    findings: List[Finding] = []
-    for fp_str in uploaded_paths:
-        heuristic_findings = scan_target(fp_str)
-        for hf in heuristic_findings:
-            findings.append(heuristic_finding_to_finding(hf))
-
-    heuristic_count = len(findings)
-
-    # Run Slither static analysis on Solidity files with bounded concurrency.
-    sol_paths = [path for path in uploaded_paths if path.endswith(".sol")]
-    slither_findings, slither_status = await run_slither_batch_async(sol_paths, max_concurrency=4)
-    findings.extend(slither_findings)
-
-    # Run AI Audit Copilot (PRO feature)
-    ai_summary = ""
-    ai_status = "skipped"
-    if findings and _license.check_pro_feature(AI_COPILOT):
-        ai_summary, ai_status = run_ai_copilot(findings, "")
-    elif findings:
-        ai_status = "pro_required"
-
-    # Save AI summary to results
-    if ai_summary:
-        ai_path = results_dir / "ai_summary.txt"
-        with open(ai_path, "w", encoding="utf-8") as f:
-            f.write(ai_summary)
-
-    # Create audit report
-    report = create_audit_report(
+    return await handle_audit_request(
+        request=request,
         project_name=project_name,
-        target_path=str(upload_dir),
-        findings=findings,
+        files=files,
+        audit_limiter=_audit_limiter,
+        license_manager=_license,
+        get_grace_period_context=_get_grace_period_context,
+        templates=templates,
+        write_scan_index=_write_scan_index,
+        update_user_audit_index=_update_user_audit_index,
+        run_slither_batch_async=run_slither_batch_async,
+        save_upload_file_streaming=_save_upload_file_streaming,
     )
-
-    # Save findings as JSON
-    findings_data = serialize_findings(findings)
-    findings_summary = summarize_findings_data(findings_data)
-
-    findings_path = results_dir / "findings.json"
-    with open(findings_path, "w", encoding="utf-8") as f:
-        json.dump(findings_data, f, indent=2)
-
-    # Generate all report formats
-    generate_reports(
-        report=report,
-        findings=findings,
-        findings_data=findings_data,
-        results_dir=results_dir,
-        logo_path=LOGO_PATH,
-        branded=_license.check_pro_feature(BRANDED_REPORTS),
-        project_name=project_name,
-        upload_dir=upload_dir,
-    )
-
-    # Generate attack graph (PRO feature)
-    attack_graph_generated = False
-    if findings and _license.check_pro_feature(ATTACK_GRAPH):
-        attack_graph_generated = generate_attack_graph(
-            findings=findings,
-            uploaded_paths=uploaded_paths,
-            results_dir=results_dir,
-            project_name=project_name,
-            logo_path=LOGO_PATH,
-        )
-
-    # Save scan metadata (coverage / what was checked)
-    analyzers_list = build_analyzers_list(
-        heuristic_count=heuristic_count,
-        slither_findings_count=len(slither_findings),
-        slither_status=slither_status,
-        ai_status=ai_status,
-        attack_graph_generated=attack_graph_generated,
-        has_findings=bool(findings),
-        has_attack_graph_feature=_license.check_pro_feature(ATTACK_GRAPH),
-        findings_data=findings_data,
-    )
-
-    current_user = get_current_user(request)
-    scan_meta = {
-        "owner_user_id": current_user["id"] if current_user else None,
-        "project_name": project_name,
-        "timestamp": datetime.now().isoformat(),
-        "files_scanned": len(uploaded_paths),
-        "total_source_lines": uploaded_total_source_lines,
-        "analyzers": analyzers_list,
-        "rules_triggered": sorted(
-            str(fd["rule_id"]) for fd in findings_data
-        ),
-    }
-
-    meta_path = results_dir / "scan_meta.json"
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(scan_meta, f, indent=2)
-
-    # Write lightweight scan index for fast dashboard reads
-    _write_scan_index(results_dir, audit_id, findings_data, scan_meta)
-
-    # Update per-user audit index for O(1) dashboard performance
-    _update_user_audit_index(user_id, {
-        "audit_id": audit_id,
-        "project_name": scan_meta.get("project_name", "Unknown"),
-        "timestamp": scan_meta.get("timestamp", ""),
-        "severity_counts": findings_summary["severity_counts_lower"],
-        "risk_score": findings_summary["risk_score"],
-    })
-
-    redirect = RedirectResponse(
-        url=f"/results/{audit_id}", status_code=303,
-    )
-    add_rate_limit_headers(redirect, _audit_limiter, client_ip)
-    return redirect
 
 
 @app.get("/results/{audit_id}/pending", response_class=HTMLResponse)
