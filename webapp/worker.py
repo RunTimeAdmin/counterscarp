@@ -25,6 +25,22 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 
+def _merge_slither_status(current: str, new_status: str) -> str:
+    """Merge slither run statuses with deterministic precedence."""
+    if current == "completed" or new_status == "completed":
+        return "completed"
+    precedence = {
+        "error": 3,
+        "not_installed": 2,
+        "skipped": 1,
+    }
+    return (
+        new_status
+        if precedence.get(new_status, 0) >= precedence.get(current, 0)
+        else current
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -208,16 +224,22 @@ async def run_audit(
         slither_status = "skipped"
         sol_paths = [fp for fp in uploaded_paths if fp.endswith(".sol")]
         if sol_paths:
-            max_workers = min(4, len(sol_paths))
-            with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                futures = [pool.submit(run_slither_analysis, fp) for fp in sol_paths]
-                for future in as_completed(futures):
-                    sf, status = future.result()
-                    slither_findings.extend(sf)
-                    if status == "completed":
-                        slither_status = "completed"
-                    elif slither_status == "skipped":
-                        slither_status = status
+            slither_project_mode = (
+                os.environ.get("SLITHER_PROJECT_MODE", "1").lower()
+                in {"1", "true", "yes", "on"}
+            )
+            if slither_project_mode:
+                sf, status = run_slither_analysis(str(upload_dir), UPLOAD_DIR)
+                slither_findings.extend(sf)
+                slither_status = _merge_slither_status(slither_status, status)
+            else:
+                max_workers = min(4, len(sol_paths))
+                with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                    futures = [pool.submit(run_slither_analysis, fp) for fp in sol_paths]
+                    for future in as_completed(futures):
+                        sf, status = future.result()
+                        slither_findings.extend(sf)
+                        slither_status = _merge_slither_status(slither_status, status)
         findings.extend(slither_findings)
 
         # 3. AI Copilot

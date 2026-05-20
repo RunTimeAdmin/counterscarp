@@ -30,6 +30,7 @@ from fastapi.templating import Jinja2Templates
 
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.concurrency import run_in_threadpool
 from webapp.auth import auth_router, admin_router, get_current_user, get_license_key_for_request, generate_csrf_token, validate_csrf_token
 from webapp.user_manager import user_manager
 from webapp.config import (
@@ -48,7 +49,6 @@ from license_manager import (
     FEATURE_NAMES,
     GRACE_PERIOD_DAYS,
     LICENSE_PREFIXES,
-    PAYG,
     TIER_HIERARCHY,
 )
 
@@ -797,6 +797,117 @@ def _remove_from_user_audit_index(user_id: str, audit_id: str) -> None:
         tmp.replace(index_path)
 
 
+def _load_audits_from_results_dir(
+    user_id: str,
+    severity_weights: Dict[str, float],
+) -> List[Dict[str, Any]]:
+    """Load legacy dashboard audits by walking RESULTS_DIR on disk."""
+    loaded: List[Dict[str, Any]] = []
+    if not RESULTS_DIR.exists():
+        return loaded
+
+    for entry in RESULTS_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        meta_path = entry / "scan_meta.json"
+        if not meta_path.exists():
+            continue
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        if meta.get("owner_user_id") != user_id:
+            continue
+
+        audit_id = entry.name
+        index_path = entry / "scan_index.json"
+        if index_path.exists():
+            try:
+                with open(index_path, "r", encoding="utf-8") as f:
+                    idx = json.load(f)
+                project_name = idx.get("project_name", "Unknown")
+                timestamp_raw = idx.get("timestamp", "")
+                try:
+                    ts = datetime.fromisoformat(timestamp_raw)
+                except (ValueError, TypeError):
+                    ts = None
+                raw_sev = idx.get("severity_counts", {})
+                sev_counts = {
+                    "CRITICAL": raw_sev.get("critical", 0),
+                    "HIGH": raw_sev.get("high", 0),
+                    "MEDIUM": raw_sev.get("medium", 0),
+                    "LOW": raw_sev.get("low", 0),
+                }
+                has_report = (
+                    idx.get("has_pdf", False)
+                    or idx.get("has_html", False)
+                    or idx.get("has_md", False)
+                )
+                loaded.append({
+                    "audit_id": audit_id,
+                    "project_name": project_name,
+                    "timestamp": ts,
+                    "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
+                    "severity_counts": sev_counts,
+                    "risk_score": idx.get("risk_score", 0.0),
+                    "has_report": has_report,
+                })
+                continue
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        project_name = meta.get("project_name", "Unknown")
+        timestamp_raw = meta.get("timestamp", "")
+        try:
+            ts = datetime.fromisoformat(timestamp_raw)
+        except (ValueError, TypeError):
+            ts = None
+
+        sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+        findings_path = entry / "findings.json"
+        findings_data: list = []
+        if findings_path.exists():
+            try:
+                with open(findings_path, "r", encoding="utf-8") as f:
+                    findings_data = json.load(f)
+                if isinstance(findings_data, list):
+                    for fd in findings_data:
+                        sev = fd.get("severity", "INFO")
+                        if sev in sev_counts:
+                            sev_counts[sev] += 1
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if findings_data:
+            total_w = sum(
+                severity_weights.get(fd.get("severity", "INFO"), 0)
+                for fd in findings_data
+            )
+            max_w = len(findings_data) * severity_weights["CRITICAL"]
+            risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
+        else:
+            risk_score = 0.0
+
+        has_report = (
+            (entry / "report.pdf").exists()
+            or (entry / "report.html").exists()
+            or (entry / "report.md").exists()
+        )
+        loaded.append({
+            "audit_id": audit_id,
+            "project_name": project_name,
+            "timestamp": ts,
+            "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
+            "severity_counts": sev_counts,
+            "risk_score": risk_score,
+            "has_report": has_report,
+        })
+
+    return loaded
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     """Per-user audit history dashboard with pagination."""
@@ -876,107 +987,14 @@ async def dashboard_page(request: Request):
         "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
     }
 
-    if not _used_user_index and RESULTS_DIR.exists():
-        for entry in RESULTS_DIR.iterdir():
-            if not entry.is_dir():
-                continue
-            meta_path = entry / "scan_meta.json"
-            if not meta_path.exists():
-                continue
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                continue
-
-            if meta.get("owner_user_id") != user_id:
-                continue
-
-            audit_id = entry.name
-
-            # Try lightweight scan_index.json first (fast path)
-            index_path = entry / "scan_index.json"
-            if index_path.exists():
-                try:
-                    with open(index_path, "r", encoding="utf-8") as f:
-                        idx = json.load(f)
-                    project_name = idx.get("project_name", "Unknown")
-                    timestamp_raw = idx.get("timestamp", "")
-                    try:
-                        ts = datetime.fromisoformat(timestamp_raw)
-                    except (ValueError, TypeError):
-                        ts = None
-                    # scan_index stores lowercase keys
-                    raw_sev = idx.get("severity_counts", {})
-                    sev_counts = {
-                        "CRITICAL": raw_sev.get("critical", 0),
-                        "HIGH": raw_sev.get("high", 0),
-                        "MEDIUM": raw_sev.get("medium", 0),
-                        "LOW": raw_sev.get("low", 0),
-                    }
-                    risk_score = idx.get("risk_score", 0.0)
-                    has_report = idx.get("has_pdf", False) or idx.get("has_html", False) or idx.get("has_md", False)
-                    audits.append({
-                        "audit_id": audit_id,
-                        "project_name": project_name,
-                        "timestamp": ts,
-                        "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
-                        "severity_counts": sev_counts,
-                        "risk_score": risk_score,
-                        "has_report": has_report,
-                    })
-                    continue
-                except (json.JSONDecodeError, OSError):
-                    pass  # Fall through to legacy path
-
-            # Legacy fallback: read findings.json for old audits without scan_index
-            project_name = meta.get("project_name", "Unknown")
-            timestamp_raw = meta.get("timestamp", "")
-            try:
-                ts = datetime.fromisoformat(timestamp_raw)
-            except (ValueError, TypeError):
-                ts = None
-
-            sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-            findings_path = entry / "findings.json"
-            findings_data: list = []
-            if findings_path.exists():
-                try:
-                    with open(findings_path, "r", encoding="utf-8") as f:
-                        findings_data = json.load(f)
-                    if isinstance(findings_data, list):
-                        for fd in findings_data:
-                            sev = fd.get("severity", "INFO")
-                            if sev in sev_counts:
-                                sev_counts[sev] += 1
-                except (json.JSONDecodeError, OSError):
-                    pass
-
-            if findings_data:
-                total_w = sum(
-                    severity_weights.get(fd.get("severity", "INFO"), 0)
-                    for fd in findings_data
-                )
-                max_w = len(findings_data) * severity_weights["CRITICAL"]
-                risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
-            else:
-                risk_score = 0.0
-
-            has_report = (
-                (entry / "report.pdf").exists()
-                or (entry / "report.html").exists()
-                or (entry / "report.md").exists()
+    if not _used_user_index:
+        audits.extend(
+            await run_in_threadpool(
+                _load_audits_from_results_dir,
+                str(user_id),
+                severity_weights,
             )
-
-            audits.append({
-                "audit_id": audit_id,
-                "project_name": project_name,
-                "timestamp": ts,
-                "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
-                "severity_counts": sev_counts,
-                "risk_score": risk_score,
-                "has_report": has_report,
-            })
+        )
 
     # Sort by timestamp descending (None last)
     audits.sort(key=lambda a: a["timestamp"] or datetime.min, reverse=True)

@@ -19,6 +19,7 @@ Example:
 import time
 import random
 import functools
+import asyncio
 import ipaddress
 from urllib.parse import urlparse
 from typing import Optional, Callable, Any
@@ -618,6 +619,66 @@ def resilient_post(
         max_retries=max_retries,
         rate_limiter=rate_limiter,
         **kwargs
+    )
+
+
+async def async_resilient_request(
+    method: str,
+    url: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    rate_limiter: Optional[RateLimiter] = None,
+    **kwargs
+) -> requests.Response:
+    """Async wrapper around resilient_request.
+
+    Runs blocking requests logic in a worker thread so async FastAPI routes
+    don't block the event loop.
+    """
+    return await asyncio.to_thread(
+        resilient_request,
+        method,
+        url,
+        timeout,
+        max_retries,
+        rate_limiter,
+        **kwargs,
+    )
+
+
+async def async_resilient_get(
+    url: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    rate_limiter: Optional[RateLimiter] = None,
+    **kwargs
+) -> requests.Response:
+    """Async wrapper around resilient_get."""
+    return await async_resilient_request(
+        method="GET",
+        url=url,
+        timeout=timeout,
+        max_retries=max_retries,
+        rate_limiter=rate_limiter,
+        **kwargs,
+    )
+
+
+async def async_resilient_post(
+    url: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    rate_limiter: Optional[RateLimiter] = None,
+    **kwargs
+) -> requests.Response:
+    """Async wrapper around resilient_post."""
+    return await async_resilient_request(
+        method="POST",
+        url=url,
+        timeout=timeout,
+        max_retries=max_retries,
+        rate_limiter=rate_limiter,
+        **kwargs,
     )
 
 
