@@ -18,10 +18,15 @@ permissions:
   id-token: write  # Required for OIDC trusted publishing
   contents: read
 
+concurrency:
+  group: publish-counterscarp-${{ github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +56,7 @@ jobs:
     name: Test built package
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -76,6 +82,7 @@ jobs:
     name: Publish to PyPI
     needs: [build, test]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
     environment:
       name: pypi
@@ -93,6 +100,7 @@ jobs:
     name: Publish to TestPyPI
     needs: [build, test]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
     environment:
       name: testpypi
