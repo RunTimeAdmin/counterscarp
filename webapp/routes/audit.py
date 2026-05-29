@@ -13,15 +13,6 @@ from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from heuristic_scanner import scan_target
-from license_manager import (
-    AI_COPILOT,
-    ATTACK_GRAPH,
-    BRANDED_REPORTS,
-    DEVELOPER,
-    PAYG,
-    TIER_HIERARCHY,
-    TIER_PREFIXES,
-)
 from report_generator import Finding, create_audit_report
 from webapp.auth import (
     get_current_user,
@@ -29,7 +20,6 @@ from webapp.auth import (
     validate_csrf_token,
 )
 from webapp.config import ALLOWED_EXTENSIONS, LOGO_PATH, RESULTS_DIR, UPLOAD_DIR
-from webapp.license_api import consume_credit
 from webapp.rate_limiter import add_rate_limit_headers, get_client_ip
 from webapp.scan_utils import (
     build_analyzers_list,
@@ -132,55 +122,6 @@ async def handle_audit_request(
     user_id = current_user["id"] if current_user else ""
     license_key = get_license_key_for_request(request, current_user) or ""
 
-    user_tier = "community"
-    if license_key:
-        for tier_name, tier_prefix in TIER_PREFIXES.items():
-            if license_key.startswith(tier_prefix):
-                user_tier = tier_name
-                break
-
-    tier_index = (
-        TIER_HIERARCHY.index(user_tier)
-        if user_tier in TIER_HIERARCHY
-        else 0
-    )
-    developer_index = TIER_HIERARCHY.index(DEVELOPER)
-
-    if tier_index < developer_index:
-        if current_user:
-            from webapp.user_manager import user_manager as _um
-
-            credits = _um.get_scan_credits(current_user["id"])
-            if user_tier == PAYG and credits <= 0:
-                return templates_no_credits(
-                    request=request,
-                    current_user=current_user,
-                    get_grace_period_context=get_grace_period_context,
-                    templates=templates,
-                )
-
-            if credits > 0:
-                success = consume_credit(
-                    current_user["id"],
-                    audit_id,
-                    request.client.host if request.client else "",
-                )
-                if not success:
-                    return templates_no_credits(
-                        request=request,
-                        current_user=current_user,
-                        get_grace_period_context=get_grace_period_context,
-                        templates=templates,
-                    )
-        elif not license_key:
-            raise HTTPException(
-                status_code=401,
-                detail=(
-                    "Authentication or a valid license key is required "
-                    "to run scans."
-                ),
-            )
-
     if arq_pool is not None:
         status_payload = {
             "status": "pending",
@@ -231,10 +172,8 @@ async def handle_audit_request(
 
     ai_summary = ""
     ai_status = "skipped"
-    if findings and license_manager.check_pro_feature(AI_COPILOT):
+    if findings:
         ai_summary, ai_status = run_ai_copilot(findings, "")
-    elif findings:
-        ai_status = "pro_required"
 
     if ai_summary:
         ai_path = results_dir / "ai_summary.txt"
@@ -260,13 +199,13 @@ async def handle_audit_request(
         findings_data=findings_data,
         results_dir=results_dir,
         logo_path=LOGO_PATH,
-        branded=license_manager.check_pro_feature(BRANDED_REPORTS),
+        branded=True,
         project_name=project_name,
         upload_dir=upload_dir,
     )
 
     attack_graph_generated = False
-    if findings and license_manager.check_pro_feature(ATTACK_GRAPH):
+    if findings:
         attack_graph_generated = generate_attack_graph(
             findings=findings,
             uploaded_paths=uploaded_paths,
@@ -282,7 +221,7 @@ async def handle_audit_request(
         ai_status=ai_status,
         attack_graph_generated=attack_graph_generated,
         has_findings=bool(findings),
-        has_attack_graph_feature=license_manager.check_pro_feature(ATTACK_GRAPH),
+        has_attack_graph_feature=True,
         findings_data=findings_data,
     )
 
@@ -318,21 +257,3 @@ async def handle_audit_request(
     return redirect
 
 
-def templates_no_credits(
-    *,
-    request: Request,
-    current_user: Dict[str, Any],
-    get_grace_period_context: GracePeriodContextFn,
-    templates: Any,
-) -> Response:
-    """Return the PAYG no-credits template response."""
-    return templates.TemplateResponse(
-        request,
-        "payg_no_credits.html",
-        context={
-            "current_user": current_user,
-            "scan_credits": 0,
-            **get_grace_period_context(request),
-        },
-        status_code=402,
-    )

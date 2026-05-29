@@ -35,6 +35,7 @@ from webapp.auth import auth_router, admin_router, get_current_user, get_license
 from webapp.user_manager import user_manager
 from webapp.config import (
     BASE_DIR,
+    FREE_TOOL_MODE,
     MAX_FILE_SIZE,
     RESULTS_DIR,
     TEMPLATES_DIR,
@@ -209,6 +210,17 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 
 # Templates
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates.env.globals["app_version"] = app.version
+templates.env.globals["free_tool_mode"] = FREE_TOOL_MODE
+templates.env.globals[
+    "bug_report_url"
+] = "https://github.com/RunTimeAdmin/counterscarp/issues/new?template=bug_report.md"
+
+
+@app.get("/version")
+async def version() -> JSONResponse:
+    """Return the running app version for deploy verification."""
+    return JSONResponse({"app": app.title, "version": app.version})
 
 
 def ensure_directories():
@@ -683,21 +695,12 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
 
 @app.get("/pricing")
 async def pricing_page(request: Request):
-    """Render the pricing / upgrade page."""
-    current_user = get_current_user(request)
-    scan_credits = 0
-    if current_user:
-        from webapp.user_manager import user_manager as _um
-        scan_credits = _um.get_scan_credits(current_user["id"])
+    """Render free-mode access information."""
     return templates.TemplateResponse(
-        request, "pricing.html",
+        request, "free.html",
         context={
-            "current_user": current_user,
-            "stripe_key": STRIPE_PUBLISHABLE_KEY,
-            "products": PRODUCTS,
-            "payg_packs": PAYG_PACKS,
-            "scan_credits": scan_credits,
-            "csrf_token": generate_csrf_token(request),
+            "current_user": get_current_user(request),
+            "free_tool_mode": FREE_TOOL_MODE,
             **_get_grace_period_context(request),
         },
     )
@@ -1081,6 +1084,8 @@ async def dashboard_page(request: Request):
 @app.post("/checkout/create-session")
 async def create_checkout(request: Request):
     """Create a Stripe Checkout Session and redirect."""
+    if FREE_TOOL_MODE:
+        return RedirectResponse(url="/pricing", status_code=303)
     form = await request.form()
     session_token = request.session.get("_csrf_token")
     if session_token:
@@ -1103,6 +1108,8 @@ async def create_checkout(request: Request):
 @app.get("/checkout/success")
 async def checkout_success(request: Request):
     """Show the checkout success page with the license key."""
+    if FREE_TOOL_MODE:
+        return RedirectResponse(url="/pricing", status_code=303)
     session_id = request.query_params.get("session_id", "")
     license_info = get_session_license_key(session_id)
 
@@ -1151,6 +1158,8 @@ async def checkout_success(request: Request):
 @app.post("/payg/checkout")
 async def payg_checkout(request: Request):
     """Initiate Stripe checkout for a PAYG credit pack."""
+    if FREE_TOOL_MODE:
+        return RedirectResponse(url="/pricing", status_code=303)
     form = await request.form()
     session_token = request.session.get("_csrf_token")
     if session_token:
@@ -1198,6 +1207,8 @@ async def payg_checkout(request: Request):
 @app.get("/payg/success")
 async def payg_success(request: Request):
     """Post-purchase confirmation page for PAYG credit packs."""
+    if FREE_TOOL_MODE:
+        return RedirectResponse(url="/pricing", status_code=303)
     current_user = get_current_user(request)
     if not current_user:
         return RedirectResponse("/auth/login", status_code=303)
@@ -1237,6 +1248,9 @@ async def stripe_webhook(request: Request):
     # - customer.subscription.updated: Tier/interval change, updates license
     # - customer.subscription.resumed: Paused subscription resumed, un-revokes license
     """
+    if FREE_TOOL_MODE:
+        return JSONResponse({"status": "ignored", "reason": "free_mode"})
+
     ip = request.client.host if request.client else "unknown"
 
     if not _stripe_webhook_limiter.is_allowed(ip):

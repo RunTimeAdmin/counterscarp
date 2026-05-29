@@ -179,12 +179,6 @@ async def run_audit(
     ``main.py`` but writes progress to ``scan_status.json`` at each phase.
     """
     from webapp.config import RESULTS_DIR, UPLOAD_DIR, LOGO_PATH
-    from license_manager import (
-        LicenseManager,
-        AI_COPILOT,
-        ATTACK_GRAPH,
-        BRANDED_REPORTS,
-    )
     from webapp.scan_utils import (
         heuristic_finding_to_finding,
         count_lines,
@@ -205,8 +199,6 @@ async def run_audit(
 
     started_at = _iso_now()
     _write_status(results_dir, "running", "Starting scan...", started_at)
-
-    _license = LicenseManager()
 
     try:
         # 1. Heuristic scan
@@ -246,10 +238,8 @@ async def run_audit(
         _write_status(results_dir, "running", "Running AI Copilot analysis...", started_at)
         ai_summary = ""
         ai_status = "skipped"
-        if findings and _license.check_pro_feature(AI_COPILOT):
+        if findings:
             ai_summary, ai_status = run_ai_copilot(findings, "")
-        elif findings:
-            ai_status = "pro_required"
 
         if ai_summary:
             ai_path = results_dir / "ai_summary.txt"
@@ -287,7 +277,7 @@ async def run_audit(
             findings_data=findings_data,
             results_dir=results_dir,
             logo_path=LOGO_PATH,
-            branded=_license.check_pro_feature(BRANDED_REPORTS),
+            branded=True,
             project_name=project_name,
             upload_dir=upload_dir,
         )
@@ -295,7 +285,7 @@ async def run_audit(
         # 5. Attack graph
         _write_status(results_dir, "running", "Generating attack graph...", started_at)
         attack_graph_generated = False
-        if findings and _license.check_pro_feature(ATTACK_GRAPH):
+        if findings:
             attack_graph_generated = generate_attack_graph(
                 findings=findings,
                 uploaded_paths=uploaded_paths,
@@ -312,7 +302,7 @@ async def run_audit(
             ai_status=ai_status,
             attack_graph_generated=attack_graph_generated,
             has_findings=bool(findings),
-            has_attack_graph_feature=_license.check_pro_feature(ATTACK_GRAPH),
+            has_attack_graph_feature=True,
             findings_data=findings_data,
         )
 

@@ -145,16 +145,6 @@
     <h1>My Audits</h1>
     <p class="dashboard-subtitle">{{ total }} audit{{ "s" if total != 1 else "" }} completed</p>
 
-    {% if scan_credits is defined and scan_credits > 0 %}
-    <div style="display:inline-block; background:var(--accent-cyan,#00d4ff); color:#000; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:600; margin-bottom:12px;">
-        {{ scan_credits }} scan{{ 's' if scan_credits != 1 else '' }} remaining
-    </div>
-    {% elif scan_credits is defined and scan_credits == 0 %}
-    <div style="display:inline-block; background:#ff6b35; color:#fff; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:600; margin-bottom:12px;">
-        No scans remaining — <a href="/pricing" style="color:#fff; text-decoration:underline;">Buy more</a>
-    </div>
-    {% endif %}
-
     {% if audits %}
     <table class="audit-table">
         <thead>

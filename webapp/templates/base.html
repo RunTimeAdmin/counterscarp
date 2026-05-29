@@ -16,7 +16,7 @@
             <nav>
                 <a href="https://counterscarp.io" class="nav-main-site">Main Site</a>
                 <a href="/">Dashboard</a>
-                <a href="/pricing">Pricing</a>
+                <a href="/pricing">Free Tool</a>
                 {% if current_user %}
                 <a href="/dashboard">My Audits</a>
                 <a href="/settings">Settings</a>
@@ -32,7 +32,7 @@
             </nav>
         </div>
     </header>
-    {% if grace_period_active %}
+    {% if grace_period_active and not free_tool_mode %}
     <div class="grace-period-banner" style="background:#f59e0b;color:#000;text-align:center;padding:0.75rem;font-weight:500;">
         &#9888; Your license expires in {{ grace_days_remaining }} day(s).
         <a href="/pricing" style="color:#000;text-decoration:underline;font-weight:700;">Renew now</a> to avoid interruption.
@@ -43,7 +43,14 @@
         {% block content %}{% endblock %}
     </main>
     <footer>
-        <p>Scarpshield (Counterscarp Engine) &bull; <a href="https://counterscarp.io">counterscarp.io</a> &bull; <a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a> | <a href="mailto:contact@counterscarp.io">contact@counterscarp.io</a></p>
+        <p>
+            Scarpshield (Counterscarp&#8482; Engine) v{{ app_version }}
+            &bull; <a href="https://counterscarp.io">counterscarp.io</a>
+            &bull; <a href="/privacy">Privacy Policy</a> |
+            <a href="/terms">Terms of Service</a> |
+            <a href="{{ bug_report_url }}" target="_blank" rel="noopener noreferrer">Report a bug</a> |
+            <a href="mailto:contact@counterscarp.io">contact@counterscarp.io</a>
+        </p>
     </footer>
 </body>
 </html>

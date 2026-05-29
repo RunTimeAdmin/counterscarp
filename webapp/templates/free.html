@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Free Tool - Counterscarp Engine{% endblock %}
+
+{% block content %}
+<style>
+    .free-container {
+        max-width: 860px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .free-card {
+        background: #16213e;
+        border: 1px solid #2a2a4e;
+        border-radius: 14px;
+        padding: 2rem;
+    }
+    .free-card h1 {
+        color: #fff;
+        font-size: 2rem;
+        margin-bottom: 0.75rem;
+    }
+    .free-card p {
+        color: #a0a0b0;
+        line-height: 1.6;
+    }
+    .free-list {
+        margin: 1.25rem 0 1.5rem;
+        padding-left: 1.2rem;
+        color: #d0d0e0;
+    }
+    .free-list li {
+        margin: 0.4rem 0;
+    }
+    .free-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    .free-btn {
+        display: inline-block;
+        padding: 0.65rem 1rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .free-btn.primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+    }
+    .free-btn.secondary {
+        border: 1px solid #3a4a76;
+        color: #bcd0ff;
+        background: #111a33;
+    }
+</style>
+
+<div class="free-container">
+    <div class="free-card">
+        <h1>Counterscarp Is Free</h1>
+        <p>
+            The hosted scanner is now free to use while we grow the platform and open-source more of the stack.
+            No checkout is required.
+        </p>
+        <ul class="free-list">
+            <li>Unlimited web audits (subject to abuse protections)</li>
+            <li>AI Copilot summaries and attack-graph output enabled</li>
+            <li>Report exports remain available</li>
+        </ul>
+        <div class="free-actions">
+            <a href="/" class="free-btn primary">Run A Free Scan</a>
+            <a href="https://github.com/RunTimeAdmin/counterscarp" class="free-btn secondary" target="_blank" rel="noopener noreferrer">View GitHub</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

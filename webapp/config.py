@@ -14,6 +14,7 @@ ALLOWED_EXTENSIONS = {".sol", ".rs"}
 
 # Deployment environment — set to "production" to enforce strict secret validation
 COUNTERSCARP_ENV = os.environ.get("COUNTERSCARP_ENV", "development")
+FREE_TOOL_MODE = os.environ.get("FREE_TOOL_MODE", "1").lower() in ("1", "true", "yes", "on")
 
 # Authentication
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
@@ -52,14 +53,15 @@ def validate_production_config() -> None:
     missing = []
     if not SESSION_SECRET or SESSION_SECRET == "counterscarp-dev-session-secret-INSECURE-DEFAULT":
         missing.append("SESSION_SECRET")
-    if not os.environ.get("STRIPE_SECRET_KEY"):
-        missing.append("STRIPE_SECRET_KEY")
-    if not os.environ.get("STRIPE_WEBHOOK_SECRET"):
-        missing.append("STRIPE_WEBHOOK_SECRET")
+    if not FREE_TOOL_MODE:
+        if not os.environ.get("STRIPE_SECRET_KEY"):
+            missing.append("STRIPE_SECRET_KEY")
+        if not os.environ.get("STRIPE_WEBHOOK_SECRET"):
+            missing.append("STRIPE_WEBHOOK_SECRET")
     if not os.environ.get("GOOGLE_CLIENT_ID"):
         missing.append("GOOGLE_CLIENT_ID")
     # If Stripe is configured, warn about missing PAYG price IDs (non-fatal)
-    if os.environ.get("STRIPE_SECRET_KEY"):
+    if (not FREE_TOOL_MODE) and os.environ.get("STRIPE_SECRET_KEY"):
         payg_missing = []
         for payg_var in (
             "STRIPE_PAYG_STARTER_PRICE_ID",
