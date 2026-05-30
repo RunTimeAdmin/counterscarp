@@ -67,7 +67,35 @@ def test_format_complete_scan_with_high_finding() -> None:
     assert "Not included in this scan:" in text
     assert "Risk score:" in text
     assert "[HIGH] Reentrancy Eth" in text
+    assert "Disclaimer:" in text
+    assert "not a formal audit" in text
     assert "/report/html" in text
+
+
+def test_build_acp_deliverable_valid() -> None:
+    from webapp.scan_utils import build_acp_deliverable
+
+    findings = [
+        {
+            "rule_id": "SLITHER-REENTRANCY-ETH",
+            "severity": "HIGH",
+            "title": "Reentrancy Eth",
+            "description": "External call before state update",
+            "line_no": 12,
+        },
+    ]
+    payload = build_acp_deliverable(
+        "abc-123",
+        project_name="Vulnerable.sol",
+        status="complete",
+        findings_data=findings,
+    )
+    assert payload["deliverable_valid"] is True
+    assert payload["audit_id"] == "abc-123"
+    assert payload["risk_score"] > 0
+    assert payload["findings_count"] == 1
+    assert "summary_text" in payload
+    assert payload["disclaimer"]
 
 
 def test_format_zero_findings() -> None:
@@ -78,3 +106,4 @@ def test_format_zero_findings() -> None:
         findings_data=[],
     )
     assert "No issues detected" in text
+    assert "Disclaimer:" in text

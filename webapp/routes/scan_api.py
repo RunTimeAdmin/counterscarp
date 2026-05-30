@@ -176,22 +176,12 @@ def _build_scan_response(
     return payload
 
 
-@router.get("/scan/{audit_id}/summary")
-async def get_scan_summary(
-    request: Request,
+def _load_scan_context(
+    results_dir: Path,
     audit_id: str,
-    client: ApiClient = Depends(require_api_client),
-):
-    """Plain-text scan summary for agents — paste curl output directly into chat."""
-    from webapp.scan_utils import format_agent_scan_summary, summarize_findings_data
-
-    audit_id = _normalize_audit_id(audit_id)
-    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
-    if not results_dir.exists():
-        raise HTTPException(status_code=404, detail="Scan not found")
-
-    _assert_api_access(results_dir, client)
-    base = str(request.base_url).rstrip("/")
+) -> dict[str, Any]:
+    """Load scan status, meta, findings for summary/deliverable endpoints."""
+    from webapp.scan_utils import summarize_findings_data
 
     status_path = results_dir / "scan_status.json"
     meta_path = results_dir / "scan_meta.json"
@@ -218,19 +208,84 @@ async def get_scan_summary(
             findings_data = raw
             summary = summarize_findings_data(findings_data)
 
+    return {
+        "audit_id": audit_id,
+        "status": status,
+        "project_name": project_name,
+        "analyzers": analyzers,
+        "findings_data": findings_data,
+        "summary": summary,
+    }
+
+
+@router.get("/scan/{audit_id}/summary")
+async def get_scan_summary(
+    request: Request,
+    audit_id: str,
+    client: ApiClient = Depends(require_api_client),
+):
+    """Plain-text scan summary for agents — paste curl output directly into chat."""
+    from webapp.scan_utils import format_agent_scan_summary
+
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
+    if not results_dir.exists():
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    _assert_api_access(results_dir, client)
+    base = str(request.base_url).rstrip("/")
+    ctx = _load_scan_context(results_dir, audit_id)
+
     text = format_agent_scan_summary(
-        audit_id,
-        project_name=project_name,
-        status=status,
-        findings_data=findings_data,
-        summary=summary,
-        analyzers=analyzers,
+        ctx["audit_id"],
+        project_name=ctx["project_name"],
+        status=ctx["status"],
+        findings_data=ctx["findings_data"],
+        summary=ctx["summary"],
+        analyzers=ctx["analyzers"],
         base_url=base,
     )
 
-    if status in {"pending", "running", "queued"}:
+    if ctx["status"] in {"pending", "running", "queued"}:
         return PlainTextResponse(text, status_code=202)
+    if ctx["status"] == "failed":
+        return PlainTextResponse(text, status_code=422)
     return PlainTextResponse(text, status_code=200)
+
+
+@router.get("/scan/{audit_id}/deliverable")
+async def get_scan_deliverable(
+    request: Request,
+    audit_id: str,
+    client: ApiClient = Depends(require_api_client),
+):
+    """Structured JSON deliverable for ACP payment evaluation."""
+    from webapp.scan_utils import build_acp_deliverable
+
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
+    if not results_dir.exists():
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    _assert_api_access(results_dir, client)
+    base = str(request.base_url).rstrip("/")
+    ctx = _load_scan_context(results_dir, audit_id)
+
+    payload = build_acp_deliverable(
+        ctx["audit_id"],
+        project_name=ctx["project_name"],
+        status=ctx["status"],
+        findings_data=ctx["findings_data"],
+        summary=ctx["summary"],
+        analyzers=ctx["analyzers"],
+        base_url=base,
+    )
+
+    if ctx["status"] in {"pending", "running", "queued"}:
+        return JSONResponse(payload, status_code=202)
+    if ctx["status"] == "failed" or not payload["deliverable_valid"]:
+        return JSONResponse(payload, status_code=422)
+    return payload
 
 
 @router.post("/scan")
@@ -317,6 +372,7 @@ async def create_scan(
             "status": "pending",
             "status_url": f"{base}/api/v1/scan/{audit_id}",
             "summary_url": f"{base}/api/v1/scan/{audit_id}/summary",
+            "deliverable_url": f"{base}/api/v1/scan/{audit_id}/deliverable",
             "poll_interval_seconds": 5,
         },
         status_code=202,

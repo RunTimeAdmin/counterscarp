@@ -127,6 +127,27 @@ _SEVERITY_ORDER = {
     "INFO": 4,
 }
 
+SCAN_DISCLAIMER = (
+    "Disclaimer: Automated scan only — not a formal audit or investment advice. "
+    "Results may include false positives or false negatives; verify before mainnet."
+)
+
+
+def _format_scan_footer(
+    lines: list[str],
+    audit_id: str,
+    base_url: str,
+) -> None:
+    lines.extend(
+        [
+            "",
+            SCAN_DISCLAIMER,
+            "",
+            f"Full report: {base_url}/api/v1/scan/{audit_id}/report/html",
+            "Run your own scan: https://app.counterscarp.io",
+        ]
+    )
+
 
 def format_agent_scan_summary(
     audit_id: str,
@@ -148,8 +169,9 @@ def format_agent_scan_summary(
     if status == "failed":
         return (
             f"ScarpShield scan failed — {project_name}\n"
-            f"Audit ID: {audit_id}\n"
-            "The scan did not complete. Retry or use https://app.counterscarp.io"
+            f"Audit ID: {audit_id}\n\n"
+            "The scan did not complete. Do not treat this as a valid deliverable.\n"
+            "Retry the scan or use https://app.counterscarp.io"
         )
 
     stats = summary or summarize_findings_data(findings_data)
@@ -174,12 +196,10 @@ def format_agent_scan_summary(
     if total == 0:
         lines.extend(
             [
-                f"Risk score: 0/100 | No issues detected by Counterscarp at scan time.",
-                "",
-                f"Full report: {base_url}/api/v1/scan/{audit_id}/report/html",
-                "Run your own scan: https://app.counterscarp.io",
+                "Risk score: 0/100 | No issues detected by Counterscarp at scan time.",
             ]
         )
+        _format_scan_footer(lines, audit_id, base_url)
         return "\n".join(lines)
 
     count_tail = f"({crit} critical, {high} high, {med} medium, {low} low"
@@ -212,14 +232,52 @@ def format_agent_scan_summary(
         detail = desc or title
         lines.append(f"{idx}. [{sev}] {title} — {detail} (line {line_no})")
 
-    lines.extend(
-        [
-            "",
-            f"Full report: {base_url}/api/v1/scan/{audit_id}/report/html",
-            "Run your own scan: https://app.counterscarp.io",
-        ]
-    )
+    _format_scan_footer(lines, audit_id, base_url)
     return "\n".join(lines)
+
+
+def build_acp_deliverable(
+    audit_id: str,
+    *,
+    project_name: str,
+    status: str,
+    findings_data: list[dict],
+    summary: dict | None = None,
+    analyzers: list[dict] | None = None,
+    base_url: str = "https://app.counterscarp.io",
+) -> dict:
+    """Structured JSON deliverable for ACP jobs and payment evaluation."""
+    summary_text = format_agent_scan_summary(
+        audit_id,
+        project_name=project_name,
+        status=status,
+        findings_data=findings_data,
+        summary=summary,
+        analyzers=analyzers,
+        base_url=base_url,
+    )
+    stats = summary or summarize_findings_data(findings_data)
+    deliverable_valid = summary_text.startswith("ScarpShield scan complete")
+    prefix = f"{base_url}/api/v1/scan/{audit_id}/report"
+
+    return {
+        "audit_id": audit_id,
+        "project_name": project_name,
+        "status": status,
+        "deliverable_valid": deliverable_valid,
+        "summary_text": summary_text,
+        "disclaimer": SCAN_DISCLAIMER,
+        "risk_score": stats.get("risk_score", 0),
+        "findings_count": stats.get("total_findings", len(findings_data)),
+        "severity_counts": stats.get("severity_counts_lower", {}),
+        "report_urls": {
+            "html": f"{prefix}/html",
+            "md": f"{prefix}/md",
+            "json": f"{prefix}/json",
+            "sarif": f"{prefix}/sarif",
+        },
+        "summary_url": f"{base_url}/api/v1/scan/{audit_id}/summary",
+    }
 
 
 # ---------------------------------------------------------------------------
