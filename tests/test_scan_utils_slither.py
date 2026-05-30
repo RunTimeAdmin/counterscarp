@@ -32,7 +32,7 @@ def test_run_slither_analysis_per_file_on_bare_directory(tmp_path: Path) -> None
         '"description":"Reentrancy","elements":[{"source_mapping":'
         '{"filename_short":"Vulnerable.sol","lines":[1]},"name":"withdraw"}]}]}}'
     )
-    mock_result = MagicMock(returncode=1, stdout=slither_json, stderr="")
+    mock_result = MagicMock(returncode=255, stdout=slither_json, stderr="")
 
     with patch("webapp.scan_utils._invoke_slither", return_value=mock_result):
         findings, status = run_slither_analysis(str(tmp_path), tmp_path)

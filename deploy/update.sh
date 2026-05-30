@@ -4,7 +4,8 @@ set -e
 
 echo "=== Updating Counterscarp Engine ==="
 cd /opt/counterscarp-engine
-git pull origin main
+git fetch origin main
+git reset --hard origin/main
 ./venv/bin/pip install -e ".[web]" --quiet
 
 # Slither + solc (optional; safe to re-run)
@@ -12,7 +13,8 @@ if [ -f scripts/install-slither-vps.sh ]; then
     bash scripts/install-slither-vps.sh || echo "WARNING: Slither install step failed — check solc/slither manually"
 fi
 
-chown -R counterscarp:counterscarp /opt/counterscarp-engine
+chown -R garrison:garrison /opt/counterscarp-engine 2>/dev/null \
+    || chown -R counterscarp:counterscarp /opt/counterscarp-engine
 systemctl restart counterscarp-engine
 if systemctl list-unit-files counterscarp-worker.service --no-legend 2>/dev/null | grep -q counterscarp-worker; then
     systemctl restart counterscarp-worker

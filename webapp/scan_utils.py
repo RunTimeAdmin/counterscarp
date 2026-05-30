@@ -230,6 +230,22 @@ def _invoke_slither(
     )
 
 
+def _slither_stdout_to_findings(stdout: str) -> list[Finding] | None:
+    """Parse Slither JSON stdout; return findings or None if output unusable."""
+    if not (stdout or "").strip():
+        return None
+    try:
+        data = _parse_slither_json(stdout)
+    except json.JSONDecodeError:
+        return None
+    if data.get("success") is False and data.get("error"):
+        return None
+    if "results" not in data:
+        return None
+    detectors = data.get("results", {}).get("detectors", [])
+    return _slither_detectors_to_findings(detectors)
+
+
 def _run_slither_on_file(resolved: Path) -> tuple[list[Finding], str]:
     """Run Slither on a single .sol file with solc fallback."""
     attempts: list[tuple[list[str], str | None]] = [
@@ -249,12 +265,9 @@ def _run_slither_on_file(resolved: Path) -> tuple[list[Finding], str]:
             return [], "timeout"
 
         last_stderr = result.stderr or last_stderr
-        if result.returncode not in (0, 1):
-            continue
-
-        data = _parse_slither_json(result.stdout)
-        detectors = data.get("results", {}).get("detectors", [])
-        return _slither_detectors_to_findings(detectors), "completed"
+        findings = _slither_stdout_to_findings(result.stdout)
+        if findings is not None:
+            return findings, "completed"
 
     logger.warning(
         "Slither failed on %s (last stderr: %s)",
@@ -293,10 +306,9 @@ def run_slither_analysis(
                 except subprocess.TimeoutExpired:
                     return [], "timeout"
 
-                if result.returncode in (0, 1):
-                    data = _parse_slither_json(result.stdout)
-                    detectors = data.get("results", {}).get("detectors", [])
-                    return _slither_detectors_to_findings(detectors), "completed"
+                findings = _slither_stdout_to_findings(result.stdout)
+                if findings is not None:
+                    return findings, "completed"
 
                 logger.warning(
                     "Slither project mode failed on %s, falling back to per-file solc",
