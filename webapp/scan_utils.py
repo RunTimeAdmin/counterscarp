@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -173,11 +174,24 @@ def format_agent_scan_summary(
         parts = []
         for analyzer in analyzers:
             name = analyzer.get("name", "Analyzer")
-            short = name.split()[0] if name else "Tool"
+            if name.startswith("Protocol"):
+                short = "Fingerprint"
+            elif name.startswith("Heuristic"):
+                short = "Heuristic"
+            elif name.startswith("Slither"):
+                short = "Slither"
+            elif name.startswith("AI"):
+                short = "AI"
+            elif name.startswith("Attack"):
+                short = "Attack"
+            else:
+                short = name.split()[0] if name else "Tool"
             st = analyzer.get("status", "unknown")
             icon = "✓" if st == "completed" else ("✗" if st == "error" else "…")
             parts.append(f"{short} {icon}")
         lines.append(f"Analyzers: {' | '.join(parts)}")
+        lines.append("")
+        lines.append(API_SCAN_COVERAGE)
         lines.append("")
 
     if total == 0:
@@ -462,6 +476,134 @@ def run_slither_analysis(
 
 
 # ---------------------------------------------------------------------------
+# Protocol fingerprint + fork logic
+# ---------------------------------------------------------------------------
+
+API_SCAN_COVERAGE = (
+    "Coverage: heuristic patterns, Slither static analysis, protocol fingerprint "
+    "+ fork logic checks, AI context, attack graph. "
+    "Not in API scan: Mythril, Medusa, Aderyn, supply-chain OSV."
+)
+
+
+def _protocol_slug(name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", name.upper()).strip("-")
+    return slug[:48] or "UNKNOWN"
+
+
+def run_protocol_fingerprint_analysis(
+    file_paths: list[str],
+    *,
+    min_similarity: float = 0.5,
+) -> tuple[list[Finding], str, dict]:
+    """Match .sol files to known protocol forks and run fork-specific checks."""
+    try:
+        from fingerprint_scanner import scan_for_protocol_similarity
+        from fork_logic_checks import run_fork_checks
+        from protocol_db import get_default_fingerprints
+    except ImportError:
+        return [], "not_installed", {}
+
+    findings: list[Finding] = []
+    match_count = 0
+    protocols_checked = len(get_default_fingerprints())
+
+    for fp_str in file_paths:
+        if not fp_str.endswith(".sol"):
+            continue
+        try:
+            source = Path(fp_str).read_text(encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Fingerprint skipped %s: %s", fp_str, exc)
+            continue
+
+        try:
+            matches = scan_for_protocol_similarity(
+                fp_str,
+                min_similarity=min_similarity,
+            )
+        except Exception as exc:
+            logger.warning("Fingerprint failed on %s: %s", fp_str, exc)
+            continue
+
+        if not matches:
+            continue
+
+        match_count += len(matches)
+        top = matches[0]
+        confidence = float(top.get("confidence", 0))
+        protocol = str(top.get("protocol", "Unknown"))
+        known = top.get("known_vulnerabilities") or []
+        high_crit = sum(
+            1
+            for item in known
+            if str(item.get("severity", "")).upper() in {"CRITICAL", "HIGH"}
+        )
+
+        if confidence >= min_similarity:
+            severity = "INFO"
+            if high_crit >= 2:
+                severity = "HIGH"
+            elif high_crit >= 1:
+                severity = "MEDIUM"
+
+            checks = top.get("recommended_checks") or []
+            description = str(top.get("risk_assessment", ""))
+            if checks:
+                description += "\n\nInherited fork risks to review:\n" + "\n".join(
+                    f"- {item}" for item in checks[:3]
+                )
+
+            findings.append(
+                Finding(
+                    rule_id=f"PROTOCOL-MATCH-{_protocol_slug(protocol)}",
+                    severity=severity,
+                    category="Protocol Fingerprint",
+                    title=f"Similar to {protocol} ({confidence:.0%} match)",
+                    description=description,
+                    file=Path(fp_str).name,
+                    line_no=0,
+                    code_snippet=protocol,
+                    remediation=(
+                        "This contract resembles a known protocol fork. Review inherited "
+                        "vulnerability patterns and confirm mitigations are in place."
+                    ),
+                    references=[],
+                )
+            )
+
+        for match in matches:
+            if float(match.get("confidence", 0)) < min_similarity:
+                continue
+            try:
+                for hf in run_fork_checks(source, match["protocol"], fp_str):
+                    base = heuristic_finding_to_finding(hf)
+                    findings.append(
+                        Finding(
+                            rule_id=f"FORK-{base.rule_id}",
+                            severity=base.severity,
+                            category="Fork Logic",
+                            title=base.title,
+                            description=base.description,
+                            file=base.file,
+                            line_no=base.line_no,
+                            code_snippet=base.code_snippet,
+                            remediation=base.remediation,
+                            references=base.references,
+                            confidence=base.confidence,
+                        )
+                    )
+            except Exception as exc:
+                logger.warning("Fork checks failed on %s: %s", fp_str, exc)
+
+    status = "completed" if protocols_checked else "skipped"
+    return findings, status, {
+        "matches_found": match_count,
+        "protocols_checked": protocols_checked,
+    }
+
+
+# ---------------------------------------------------------------------------
 # AI Copilot
 # ---------------------------------------------------------------------------
 
@@ -649,6 +791,9 @@ def build_analyzers_list(
     heuristic_count: int,
     slither_findings_count: int,
     slither_status: str,
+    fingerprint_status: str = "skipped",
+    fingerprint_findings_count: int = 0,
+    fingerprint_meta: dict | None = None,
     ai_status: str,
     attack_graph_generated: bool,
     has_findings: bool,
@@ -683,6 +828,13 @@ def build_analyzers_list(
                 for cat, rules in RULE_CATEGORIES.items()
             },
             "findings_count": heuristic_count,
+        },
+        {
+            "name": "Protocol Fingerprint Scanner",
+            "status": fingerprint_status,
+            "findings_count": fingerprint_findings_count,
+            "protocols_checked": (fingerprint_meta or {}).get("protocols_checked", 0),
+            "matches_found": (fingerprint_meta or {}).get("matches_found", 0),
         },
         {
             "name": "Slither Static Analysis",

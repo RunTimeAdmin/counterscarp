@@ -163,6 +163,13 @@ async def handle_audit_request(
 
     heuristic_count = len(findings)
 
+    from webapp.scan_utils import run_protocol_fingerprint_analysis
+
+    fingerprint_findings, fingerprint_status, fingerprint_meta = (
+        run_protocol_fingerprint_analysis(uploaded_paths)
+    )
+    findings.extend(fingerprint_findings)
+
     sol_paths = [path for path in uploaded_paths if path.endswith(".sol")]
     slither_findings, slither_status = await run_slither_batch_async(
         sol_paths,
@@ -218,6 +225,9 @@ async def handle_audit_request(
         heuristic_count=heuristic_count,
         slither_findings_count=len(slither_findings),
         slither_status=slither_status,
+        fingerprint_status=fingerprint_status,
+        fingerprint_findings_count=len(fingerprint_findings),
+        fingerprint_meta=fingerprint_meta,
         ai_status=ai_status,
         attack_graph_generated=attack_graph_generated,
         has_findings=bool(findings),

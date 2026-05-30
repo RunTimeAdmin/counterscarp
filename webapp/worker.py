@@ -210,7 +210,21 @@ async def run_audit(
                 findings.append(heuristic_finding_to_finding(hf))
         heuristic_count = len(findings)
 
-        # 2. Slither analysis
+        # 2. Protocol fingerprint + fork logic checks
+        _write_status(
+            results_dir,
+            "running",
+            "Running protocol fingerprint scan...",
+            started_at,
+        )
+        from webapp.scan_utils import run_protocol_fingerprint_analysis
+
+        fingerprint_findings, fingerprint_status, fingerprint_meta = (
+            run_protocol_fingerprint_analysis(uploaded_paths)
+        )
+        findings.extend(fingerprint_findings)
+
+        # 3. Slither analysis
         _write_status(results_dir, "running", "Running Slither analysis...", started_at)
         slither_findings: list[Finding] = []
         slither_status = "skipped"
@@ -299,6 +313,9 @@ async def run_audit(
             heuristic_count=heuristic_count,
             slither_findings_count=len(slither_findings),
             slither_status=slither_status,
+            fingerprint_status=fingerprint_status,
+            fingerprint_findings_count=len(fingerprint_findings),
+            fingerprint_meta=fingerprint_meta,
             ai_status=ai_status,
             attack_graph_generated=attack_graph_generated,
             has_findings=bool(findings),
