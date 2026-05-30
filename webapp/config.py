@@ -88,3 +88,7 @@ def validate_production_config() -> None:
 
 # PAYG credit pack configuration
 PAYG_CREDITS_EXPIRY_DAYS = int(os.environ.get("PAYG_CREDITS_EXPIRY_DAYS", "365"))
+
+# Machine-facing API keys (comma-separated ``label:secret`` pairs)
+# Generate: python -c "import secrets; print('cs_' + secrets.token_urlsafe(32))"
+COUNTERSCARP_API_KEYS = os.environ.get("COUNTERSCARP_API_KEYS", "")

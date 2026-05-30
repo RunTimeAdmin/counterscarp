@@ -1,6 +1,6 @@
 # Current Repository Status
 
-Last updated: 2026-05-18
+Last updated: 2026-05-20
 
 ## Platform Status
 
@@ -23,6 +23,11 @@ Last updated: 2026-05-18
   - `SNYK_TOKEN`
   - `SNYK_ORG`
 - After billing/secrets are configured, run `Counterscarp Security Audit` on `main` to validate the guardrail end-to-end.
+- Internal launch preflight scripts are available:
+  - `scripts/launch_preflight.sh`
+  - `scripts/launch_preflight.ps1`
+- Internal launch-day sequencing and rollback document:
+  - `docs/LAUNCH_DAY_RUNBOOK_INTERNAL.md`
 
 ## Documentation Sync
 

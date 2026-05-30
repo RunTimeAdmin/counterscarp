@@ -30,6 +30,11 @@ from webapp.config import (
     ADMIN_EMAIL,
     TEMPLATES_DIR,
     SESSION_SECRET,
+    SMTP_HOST,
+    SMTP_PORT,
+    SMTP_USER,
+    SMTP_PASSWORD,
+    SMTP_FROM,
 )
 
 # ---------------------------------------------------------------------------
@@ -65,6 +70,10 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
 # ---------------------------------------------------------------------------
 
 _csrf_serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="csrf")
+_password_reset_serializer = URLSafeTimedSerializer(
+    SESSION_SECRET,
+    salt="password-reset",
+)
 
 
 def generate_csrf_token(request: Request) -> str:
@@ -82,6 +91,36 @@ def validate_csrf_token(request: Request, form_token: str) -> bool:
     if not session_token or not form_token:
         return False
     return _hmac.compare_digest(session_token, form_token)
+
+
+def _send_password_reset_email(recipient: str, reset_link: str) -> None:
+    """Send password reset email if SMTP is configured."""
+    if not SMTP_HOST:
+        logger.warning(
+            "SMTP_HOST not configured; password reset email skipped for %s",
+            recipient,
+        )
+        return
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Reset your Counterscarp password"
+    msg["From"] = SMTP_FROM or SMTP_USER or "noreply@counterscarp.io"
+    msg["To"] = recipient
+    html = (
+        "<p>We received a password reset request for your Counterscarp account.</p>"
+        f"<p><a href=\"{reset_link}\">Reset your password</a></p>"
+        "<p>This link expires in 60 minutes. If you did not request this, you can ignore this email.</p>"
+    )
+    msg.attach(MIMEText(html, "html"))
+
+    with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT or 587)) as server:
+        server.starttls()
+        if SMTP_USER and SMTP_PASSWORD:
+            server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(msg["From"], [recipient], msg.as_string())
 
 
 def get_current_user(request: Request):
@@ -199,6 +238,184 @@ async def register_page(request: Request):
             "error": error,
             "csrf_token": generate_csrf_token(request),
         }
+    )
+
+
+@auth_router.get("/forgot-password")
+async def forgot_password_page(request: Request):
+    """Render forgot-password page."""
+    return templates.TemplateResponse(
+        request,
+        "forgot_password.html",
+        context={
+            "current_user": None,
+            "error": "",
+            "message": "",
+            "csrf_token": generate_csrf_token(request),
+        },
+    )
+
+
+@auth_router.post("/forgot-password")
+async def forgot_password_submit(
+    request: Request,
+    email: str = Form(...),
+):
+    """Handle forgot-password form without leaking account existence."""
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+    user = user_manager.get_by_email(email)
+    if user:
+        token = _password_reset_serializer.dumps(
+            {"uid": user["id"], "purpose": "password-reset"}
+        )
+        reset_link = str(request.url_for("reset_password_page")) + f"?token={token}"
+        try:
+            _send_password_reset_email(user["email"], reset_link)
+        except Exception as exc:  # pragma: no cover - external transport failure
+            logger.warning("Password reset email send failed: %s", exc)
+
+    # Generic message to prevent user enumeration.
+    return templates.TemplateResponse(
+        request,
+        "forgot_password.html",
+        context={
+            "current_user": None,
+            "error": "",
+            "message": (
+                "If an account exists for that email, a reset link has been sent."
+            ),
+            "csrf_token": generate_csrf_token(request),
+        },
+    )
+
+
+@auth_router.get("/reset-password", name="reset_password_page")
+async def reset_password_page(
+    request: Request,
+    token: str = Query(""),
+):
+    """Render reset-password page for a valid token."""
+    error = ""
+    token_valid = True
+    if not token:
+        token_valid = False
+        error = "Reset link is missing or invalid."
+    else:
+        try:
+            payload = _password_reset_serializer.loads(token, max_age=3600)
+            if payload.get("purpose") != "password-reset" or not payload.get("uid"):
+                token_valid = False
+                error = "Reset link is invalid."
+        except Exception:
+            token_valid = False
+            error = "Reset link is invalid or expired."
+
+    return templates.TemplateResponse(
+        request,
+        "reset_password.html",
+        context={
+            "current_user": None,
+            "error": error,
+            "success": "",
+            "token": token,
+            "token_valid": token_valid,
+            "csrf_token": generate_csrf_token(request),
+        },
+    )
+
+
+@auth_router.post("/reset-password")
+async def reset_password_submit(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    confirm_password: str = Form(...),
+):
+    """Reset password using a signed, time-limited token."""
+    form = await request.form()
+    session_token = request.session.get("_csrf_token")
+    if session_token:
+        csrf_token = str(form.get("_csrf_token", ""))
+        if not validate_csrf_token(request, csrf_token):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+    try:
+        payload = _password_reset_serializer.loads(token, max_age=3600)
+        if payload.get("purpose") != "password-reset" or not payload.get("uid"):
+            raise ValueError("invalid payload")
+        user_id = payload["uid"]
+    except Exception:
+        return templates.TemplateResponse(
+            request,
+            "reset_password.html",
+            context={
+                "current_user": None,
+                "error": "Reset link is invalid or expired.",
+                "success": "",
+                "token": token,
+                "token_valid": False,
+                "csrf_token": generate_csrf_token(request),
+            },
+        )
+
+    if password != confirm_password:
+        return templates.TemplateResponse(
+            request,
+            "reset_password.html",
+            context={
+                "current_user": None,
+                "error": "Passwords do not match.",
+                "success": "",
+                "token": token,
+                "token_valid": True,
+                "csrf_token": generate_csrf_token(request),
+            },
+        )
+    if len(password) < 8:
+        return templates.TemplateResponse(
+            request,
+            "reset_password.html",
+            context={
+                "current_user": None,
+                "error": "Password must be at least 8 characters.",
+                "success": "",
+                "token": token,
+                "token_valid": True,
+                "csrf_token": generate_csrf_token(request),
+            },
+        )
+
+    if not user_manager.set_password(user_id, password):
+        return templates.TemplateResponse(
+            request,
+            "reset_password.html",
+            context={
+                "current_user": None,
+                "error": "Unable to reset password for this account.",
+                "success": "",
+                "token": token,
+                "token_valid": False,
+                "csrf_token": generate_csrf_token(request),
+            },
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "reset_password.html",
+        context={
+            "current_user": None,
+            "error": "",
+            "success": "Password updated successfully. You can now sign in.",
+            "token": "",
+            "token_valid": False,
+            "csrf_token": generate_csrf_token(request),
+        },
     )
 
 

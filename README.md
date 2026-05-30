@@ -227,10 +227,16 @@ Create an account at [app.counterscarp.io](https://app.counterscarp.io) using Go
 | Document | Description |
 |----------|-------------|
 | **[QUICKSTART.md](QUICKSTART.md)** | Full install, config reference, CI/CD, offline setup, troubleshooting |
+| **[docs/CI_REUSABLE_GITHUB.md](docs/CI_REUSABLE_GITHUB.md)** | Reusable GitHub PR security workflow and drop-in integration model |
+| **[docs/CI_REUSABLE_V1_RELEASE_PLAN.md](docs/CI_REUSABLE_V1_RELEASE_PLAN.md)** | Release/tag strategy and compatibility contract for reusable CI v1 |
 | **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** | Complete config reference (`scarpshield.toml` preferred, `counterscarp.toml` supported) |
 | **[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)** | All CLI flags and examples |
 | **[docs/WEB_APP_GUIDE.md](docs/WEB_APP_GUIDE.md)** | Self-hosted web interface |
 | **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** | Production server setup |
+| **[docs/SELF_HOSTED_ENTERPRISE_BLUEPRINT.md](docs/SELF_HOSTED_ENTERPRISE_BLUEPRINT.md)** | Enterprise self-hosted profiles (single-node, HA, air-gapped) and control checklist |
+| **[docs/ENTERPRISE_CHECK_PROVIDER_API.md](docs/ENTERPRISE_CHECK_PROVIDER_API.md)** | Extension contract for proprietary checks, provenance, and audit evidence |
+| **[docs/SOLANA_GAP_MATRIX.md](docs/SOLANA_GAP_MATRIX.md)** | Solana coverage gaps, roadmap priorities, and acceptance criteria |
+| **[docs/IMPLEMENTATION_BACKLOG_P0_P1.md](docs/IMPLEMENTATION_BACKLOG_P0_P1.md)** | Ready-to-create P0/P1 engineering backlog with acceptance criteria |
 | **[docs/SECURITY_CONTAINER_ALLOWLIST.md](docs/SECURITY_CONTAINER_ALLOWLIST.md)** | Container CVE allowlist scope and guardrail policy |
 | **[docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md)** | Current hardening status, known blockers, and immediate next steps |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Adding rules and integrations |
@@ -246,7 +252,7 @@ Create an account at [app.counterscarp.io](https://app.counterscarp.io) using Go
 
 ## Credits
 
-**Built by CyberShield Austin** · [@counterscarpsec](https://twitter.com/counterscarpsec) · [@defiauditccie](https://twitter.com/defiauditccie) · [counterscarp.io](https://counterscarp.io)
+Built by David Cooper CCIE#14019 · [@defiauditccie](https://twitter.com/defiauditccie) · [counterscarp.io](https://counterscarp.io)
 
 Powered by [Slither](https://github.com/crytic/slither) · [Aderyn](https://github.com/Cyfrin/aderyn) · [Medusa](https://github.com/crytic/medusa) · [Mythril](https://github.com/ConsenSys/mythril) · [Foundry](https://github.com/foundry-rs/foundry) · [OSV.dev](https://osv.dev)
 

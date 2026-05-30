@@ -55,6 +55,7 @@ from license_manager import (
 
 from webapp.license_api import license_router
 from webapp.license_api import append_audit_log
+from webapp.routes.scan_api import router as scan_api_router
 from webapp.rate_limiter import RateLimiter, RedisRateLimiter, add_rate_limit_headers
 from webapp.stripe_integration import (
     create_checkout_session,
@@ -84,6 +85,7 @@ _redis_url = os.environ.get("REDIS_URL")
 _login_limiter = RedisRateLimiter(max_requests=5, window_seconds=900, redis_url=_redis_url, prefix="rl:login")
 _register_limiter = RedisRateLimiter(max_requests=3, window_seconds=3600, redis_url=_redis_url, prefix="rl:register")
 _audit_limiter = RedisRateLimiter(max_requests=10, window_seconds=3600, redis_url=_redis_url, prefix="rl:audit")
+_api_scan_limiter = RedisRateLimiter(max_requests=60, window_seconds=3600, redis_url=_redis_url, prefix="rl:api_scan")
 _license_limiter = RedisRateLimiter(max_requests=100, window_seconds=3600, redis_url=_redis_url, prefix="rl:license")
 _admin_limiter = RedisRateLimiter(max_requests=30, window_seconds=3600, redis_url=_redis_url, prefix="rl:admin")
 _totp_limiter = RedisRateLimiter(max_requests=10, window_seconds=1800, redis_url=_redis_url, prefix="rl:totp")
@@ -204,6 +206,7 @@ app.include_router(admin_router)
 
 # Include license validation API routes
 app.include_router(license_router)
+app.include_router(scan_api_router)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
@@ -236,74 +239,11 @@ async def async_run_slither_analysis(file_path: str) -> tuple[list[Finding], str
     Returns a tuple of (list of Finding objects, status string).
     """
     import asyncio
-    try:
-        import async_subprocess as _async_subprocess
-    except ImportError:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, run_slither_analysis, file_path, UPLOAD_DIR
-        )
 
-    try:
-        upload_dir = Path(UPLOAD_DIR).resolve()
-        resolved = Path(file_path).resolve()
-        if not resolved.is_relative_to(upload_dir):
-            raise HTTPException(status_code=400, detail="Invalid file path")
-
-        venv_bin = Path(sys.executable).parent
-        slither_bin = str(venv_bin / "slither")
-
-        result = await _async_subprocess.run_tool(
-            [slither_bin, "--json", "-", "--", str(resolved)],
-            timeout=120,
-        )
-
-        if result.returncode not in (0, 1):
-            return [], "error"
-
-        data = json.loads(result.stdout) if result.stdout else {}
-        detectors = data.get("results", {}).get("detectors", [])
-
-        slither_findings: list[Finding] = []
-        severity_map = {
-            "High": "HIGH", "Medium": "MEDIUM", "Low": "LOW",
-            "Informational": "INFO", "Optimization": "INFO",
-        }
-
-        for det in detectors:
-            elements = det.get("elements", [])
-            file_name = ""
-            line_no = 0
-            code_snippet = ""
-            if elements:
-                src = elements[0].get("source_mapping", {})
-                file_name = src.get("filename_short", "")
-                lines = src.get("lines", [])
-                line_no = lines[0] if lines else 0
-                code_snippet = elements[0].get("name", "")
-
-            finding = Finding(
-                rule_id=f"SLITHER-{det.get('check', 'unknown').upper()}",
-                severity=severity_map.get(det.get("impact", ""), "INFO"),
-                category="Slither",
-                title=det.get("check", "Unknown").replace("-", " ").title(),
-                description=det.get("description", ""),
-                file=file_name,
-                line_no=line_no,
-                code_snippet=code_snippet,
-                remediation=det.get("markdown", ""),
-                references=[],
-            )
-            slither_findings.append(finding)
-
-        return slither_findings, "completed"
-    except FileNotFoundError:
-        return [], "not_installed"
-    except Exception:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, run_slither_analysis, file_path, UPLOAD_DIR
-        )
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, run_slither_analysis, file_path, UPLOAD_DIR
+    )
 
 
 async def run_slither_batch_async(file_paths: List[str], max_concurrency: int = 4) -> tuple[list[Finding], str]:
@@ -416,6 +356,7 @@ async def startup_event():
     app.state.login_limiter = _login_limiter
     app.state.register_limiter = _register_limiter
     app.state.audit_limiter = _audit_limiter
+    app.state.api_scan_limiter = _api_scan_limiter
     app.state.license_limiter = _license_limiter
     app.state.admin_limiter = _admin_limiter
     app.state.totp_limiter = _totp_limiter

@@ -1,5 +1,7 @@
 # Plugin Development Guide
 
+For enterprise-grade output normalization, provenance fields, and audit evidence requirements, see `docs/ENTERPRISE_CHECK_PROVIDER_API.md`.
+
 ## Table of Contents
 
 - [Plugin Architecture Overview](#plugin-architecture-overview)

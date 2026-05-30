@@ -10,6 +10,8 @@ to avoid circular dependencies.
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -120,72 +122,80 @@ def summarize_findings_data(findings_data: list[dict]) -> dict:
 # Slither analysis
 # ---------------------------------------------------------------------------
 
+_PROJECT_MARKERS = (
+    "foundry.toml",
+    "hardhat.config.js",
+    "hardhat.config.ts",
+    "truffle-config.js",
+    "truffle.js",
+)
 
-def run_slither_analysis(
-    file_path: str, upload_dir: Path | None = None
-) -> tuple[list[Finding], str]:
-    """Run Slither on a file, return findings and status.
 
-    Gracefully degrades if Slither is not installed or times out.
-    Returns a tuple of (list of Finding objects, status string).
-    Status can be: 'completed', 'not_installed', 'timeout', 'error'.
+def _resolve_slither_bin() -> str:
+    """Resolve Slither from the active venv, then PATH."""
+    venv_bin = Path(sys.executable).parent
+    for name in ("slither.exe", "slither"):
+        candidate = venv_bin / name
+        if candidate.exists():
+            return str(candidate)
+    return shutil.which("slither") or "slither"
 
-    Parameters
-    ----------
-    file_path : str
-        Path to the Solidity file to analyze.
-    upload_dir : Path | None
-        If provided, validates that file_path is within this directory.
-        Raises ValueError if validation fails.
-    """
+
+def _is_slither_project_dir(path: Path) -> bool:
+    return any((path / marker).exists() for marker in _PROJECT_MARKERS)
+
+
+def _parse_slither_json(stdout: str) -> dict:
+    """Parse Slither JSON output, tolerating leading log lines."""
+    text = (stdout or "").strip()
+    if not text:
+        return {}
+    json_start = text.find("{")
+    if json_start == -1:
+        return {}
+    payload = text[json_start:]
     try:
-        resolved = Path(file_path).resolve()
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        brace_count = 0
+        end_idx = -1
+        for i, ch in enumerate(payload):
+            if ch == "{":
+                brace_count += 1
+            elif ch == "}":
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i + 1
+                    break
+        if end_idx != -1:
+            return json.loads(payload[:end_idx])
+        raise
 
-        # Optional path validation (defense in depth)
-        if upload_dir is not None:
-            upload_dir_resolved = Path(upload_dir).resolve()
-            if not resolved.is_relative_to(upload_dir_resolved):
-                raise ValueError("Invalid file path: outside upload directory")
 
-        # Use the slither binary from the same venv as this process
-        venv_bin = Path(sys.executable).parent
-        slither_bin = str(venv_bin / "slither")
+def _slither_detectors_to_findings(detectors: list) -> list[Finding]:
+    slither_findings: list[Finding] = []
+    severity_map = {
+        "High": "HIGH",
+        "Medium": "MEDIUM",
+        "Low": "LOW",
+        "Informational": "INFO",
+        "Optimization": "INFO",
+    }
 
-        result = subprocess.run(
-            [slither_bin, "--json", "-", "--", str(resolved)],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode not in (0, 1):  # 1 means findings found
-            return [], "error"
+    for det in detectors:
+        elements = det.get("elements", [])
+        file_name = ""
+        line_no = 0
+        code_snippet = ""
+        if elements:
+            src = elements[0].get("source_mapping", {})
+            file_name = src.get("filename_short", "")
+            lines = src.get("lines", [])
+            line_no = lines[0] if lines else 0
+            code_snippet = elements[0].get("name", "")
 
-        # Parse Slither JSON output
-        data = json.loads(result.stdout) if result.stdout else {}
-        detectors = data.get("results", {}).get("detectors", [])
-
-        slither_findings: list[Finding] = []
-        severity_map = {
-            "High": "HIGH",
-            "Medium": "MEDIUM",
-            "Low": "LOW",
-            "Informational": "INFO",
-            "Optimization": "INFO",
-        }
-
-        for det in detectors:
-            elements = det.get("elements", [])
-            file_name = ""
-            line_no = 0
-            code_snippet = ""
-            if elements:
-                src = elements[0].get("source_mapping", {})
-                file_name = src.get("filename_short", "")
-                lines = src.get("lines", [])
-                line_no = lines[0] if lines else 0
-                code_snippet = elements[0].get("name", "")
-
-            finding = Finding(
+        slither_findings.append(
+            Finding(
                 rule_id=f"SLITHER-{det.get('check', 'unknown').upper()}",
                 severity=severity_map.get(det.get("impact", ""), "INFO"),
                 category="Slither",
@@ -197,16 +207,132 @@ def run_slither_analysis(
                 remediation=det.get("markdown", ""),
                 references=[],
             )
-            slither_findings.append(finding)
+        )
 
-        return slither_findings, "completed"
+    return slither_findings
+
+
+def _invoke_slither(
+    args: list[str],
+    *,
+    cwd: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["PYTHONWARNINGS"] = "ignore"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return subprocess.run(
+        [_resolve_slither_bin(), *args],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=cwd,
+        env=env,
+    )
+
+
+def _run_slither_on_file(resolved: Path) -> tuple[list[Finding], str]:
+    """Run Slither on a single .sol file with solc fallback."""
+    attempts: list[tuple[list[str], str | None]] = [
+        (["--json", "-", str(resolved.name)], str(resolved.parent)),
+        (["--json", "-", "--compile-force-framework", "solc", str(resolved.name)], str(resolved.parent)),
+        (["--json", "-", "--", str(resolved)], None),
+        (["--json", "-", "--compile-force-framework", "solc", str(resolved)], None),
+    ]
+    last_stderr = ""
+
+    for args, cwd in attempts:
+        try:
+            result = _invoke_slither(args, cwd=cwd)
+        except FileNotFoundError:
+            return [], "not_installed"
+        except subprocess.TimeoutExpired:
+            return [], "timeout"
+
+        last_stderr = result.stderr or last_stderr
+        if result.returncode not in (0, 1):
+            continue
+
+        data = _parse_slither_json(result.stdout)
+        detectors = data.get("results", {}).get("detectors", [])
+        return _slither_detectors_to_findings(detectors), "completed"
+
+    logger.warning(
+        "Slither failed on %s (last stderr: %s)",
+        resolved,
+        (last_stderr or "none")[:500],
+    )
+    return [], "error"
+
+
+def run_slither_analysis(
+    file_path: str, upload_dir: Path | None = None
+) -> tuple[list[Finding], str]:
+    """Run Slither on a file or upload directory, return findings and status.
+
+    Gracefully degrades if Slither is not installed or times out.
+    Returns a tuple of (list of Finding objects, status string).
+    Status can be: 'completed', 'not_installed', 'timeout', 'error', 'skipped'.
+
+    For bare upload directories (API single-file scans without Foundry/Hardhat),
+    runs Slither per .sol file instead of treating the folder as a project root.
+    """
+    try:
+        resolved = Path(file_path).resolve()
+
+        if upload_dir is not None:
+            upload_dir_resolved = Path(upload_dir).resolve()
+            if not resolved.is_relative_to(upload_dir_resolved):
+                raise ValueError("Invalid file path: outside upload directory")
+
+        if resolved.is_dir():
+            if _is_slither_project_dir(resolved):
+                try:
+                    result = _invoke_slither(["--json", "-", "--", str(resolved)])
+                except FileNotFoundError:
+                    return [], "not_installed"
+                except subprocess.TimeoutExpired:
+                    return [], "timeout"
+
+                if result.returncode in (0, 1):
+                    data = _parse_slither_json(result.stdout)
+                    detectors = data.get("results", {}).get("detectors", [])
+                    return _slither_detectors_to_findings(detectors), "completed"
+
+                logger.warning(
+                    "Slither project mode failed on %s, falling back to per-file solc",
+                    resolved,
+                )
+
+            sol_files = sorted(resolved.glob("*.sol"))
+            if not sol_files:
+                return [], "skipped"
+
+            all_findings: list[Finding] = []
+            any_completed = False
+            for sol_file in sol_files:
+                findings, status = _run_slither_on_file(sol_file)
+                all_findings.extend(findings)
+                if status == "completed":
+                    any_completed = True
+                elif status == "not_installed":
+                    return [], "not_installed"
+                elif status == "timeout":
+                    return [], "timeout"
+
+            return all_findings, "completed" if any_completed else "error"
+
+        if resolved.suffix.lower() != ".sol":
+            return [], "skipped"
+
+        return _run_slither_on_file(resolved)
     except ValueError:
         raise
     except FileNotFoundError:
         return [], "not_installed"
     except subprocess.TimeoutExpired:
         return [], "timeout"
-    except Exception:
+    except Exception as exc:
+        logger.warning("Slither unexpected error on %s: %s", file_path, exc)
         return [], "error"
 
 

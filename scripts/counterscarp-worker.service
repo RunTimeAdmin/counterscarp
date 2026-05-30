@@ -1,0 +1,22 @@
+[Unit]
+Description=Counterscarp Engine Arq Worker
+After=network.target redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=simple
+User=garrison
+Group=garrison
+WorkingDirectory=/opt/garrison-engine
+Environment=HOME=/home/garrison
+Environment=XDG_CACHE_HOME=/home/garrison/.cache
+Environment=PYTHONUNBUFFERED=1
+Environment=REDIS_URL=redis://127.0.0.1:6379
+Environment=FREE_TOOL_MODE=1
+EnvironmentFile=-/etc/systemd/system/counterscarp-engine.service.d/override.conf
+ExecStart=/opt/counterscarp-engine/venv/bin/python -m arq webapp.worker.WorkerSettings
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

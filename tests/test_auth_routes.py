@@ -235,3 +235,47 @@ class TestGoogleLogin:
              patch.object(auth_mod, "GOOGLE_CLIENT_SECRET", ""):
             r = auth_client.get("/auth/google/callback", follow_redirects=False)
             assert r.status_code in (302, 200)
+
+
+# ---------------------------------------------------------------------------
+# TestPasswordReset
+# ---------------------------------------------------------------------------
+
+
+class TestPasswordReset:
+    def test_get_forgot_password_page_returns_200(self, auth_client) -> None:
+        r = auth_client.get("/auth/forgot-password")
+        assert r.status_code == 200
+
+    def test_post_forgot_password_generic_message(self, auth_client, manager) -> None:
+        pw = _pw("reset-generic")
+        manager.create_user(email="reset@example.com", name="Reset", **{PASSWORD_FIELD: pw})
+        r = auth_client.post("/auth/forgot-password", data={"email": "reset@example.com"})
+        assert r.status_code == 200
+        assert "If an account exists for that email" in r.text
+
+    def test_password_reset_end_to_end(self, auth_client, manager) -> None:
+        import webapp.auth as auth_mod
+
+        old_pw = _pw("old")
+        user = manager.create_user(
+            email="reset2@example.com",
+            name="Reset2",
+            **{PASSWORD_FIELD: old_pw},
+        )
+
+        token = auth_mod._password_reset_serializer.dumps(
+            {"uid": user["id"], "purpose": "password-reset"}
+        )
+        new_pw = _pw("new")
+        r = auth_client.post(
+            "/auth/reset-password",
+            data={
+                "token": token,
+                PASSWORD_FIELD: new_pw,
+                "confirm_password": new_pw,
+            },
+        )
+        assert r.status_code == 200
+        assert "Password updated successfully" in r.text
+        assert manager.verify_password("reset2@example.com", new_pw) is not None

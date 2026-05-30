@@ -294,6 +294,25 @@ class UserManager:
             return None
         return user if valid else None
 
+    def set_password(self, user_id: str, password: str) -> bool:
+        """Set or rotate password hash for a user.
+
+        Returns True if the user exists and password was updated.
+        """
+        password_hash = _bcrypt.hashpw(
+            _prepare_password_for_bcrypt(password),
+            _bcrypt.gensalt(),
+        ).decode("utf-8")
+        with self._file_lock:
+            db = self._load_db()
+            for user in db["users"]:
+                if user["id"] == user_id:
+                    user["password_hash"] = password_hash
+                    user["auth_method"] = "email"
+                    self._write_db(db)
+                    return True
+        return False
+
     def update_last_login(self, user_id: str) -> None:
         """Update the ``last_login`` timestamp for *user_id* to now (UTC)."""
         with self._file_lock:

@@ -306,7 +306,9 @@ Visit [counterscarp.io/pricing](https://counterscarp.io/pricing) to purchase a D
 |-------|-------------|
 | [CLI Reference](CLI_REFERENCE.md) | All commands, flags, profiles, and exit codes |
 | [Configuration](CONFIGURATION.md) | Full scarpshield.toml reference with examples |
+| [Reusable GitHub CI](CI_REUSABLE_GITHUB.md) | Drop-in PR workflow model for multi-repository rollout |
 | [Rules Catalog](RULES_CATALOG.md) | All 31 EVM and 35 Solana security rules |
+| [Solana Gap Matrix](SOLANA_GAP_MATRIX.md) | Solana parity gaps and implementation priorities |
 | [Web App Guide](WEB_APP_GUIDE.md) | Web UI features and API endpoints |
 | [Deployment](DEPLOYMENT.md) | Production server setup with nginx + SSL |
 | [Plugin Development](PLUGIN_DEVELOPMENT.md) | Write custom analyzers and rule plugins |

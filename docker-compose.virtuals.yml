@@ -1,0 +1,142 @@
+# ==============================================================================
+# COUNTERSCARP + VIRTUALS AGENT — DOCKER COMPOSE
+#
+# Brings up Counterscarp web API, Redis, arq worker, and the ScarpShield agent.
+#
+# Quick start (API wiring demo — no GAME key needed):
+#   cp .env.virtuals.example .env.virtuals
+#   # edit .env.virtuals — set COUNTERSCARP_AGENT_API_KEY
+#   docker compose -f docker-compose.virtuals.yml --env-file .env.virtuals up -d redis web worker
+#   docker compose -f docker-compose.virtuals.yml --env-file .env.virtuals run --rm agent-demo
+#
+# Full GAME agent (requires GAME_API_KEY from console.game.virtuals.io):
+#   docker compose -f docker-compose.virtuals.yml --env-file .env.virtuals --profile agent up -d
+#
+# ==============================================================================
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: counterscarp-engine:5.1.1
+    restart: unless-stopped
+    user: root
+    working_dir: /app
+    entrypoint: []
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /app/data /app/uploads /app/results && chown -R scarpshield:scarpshield /app/data /app/uploads /app/results && exec runuser -u scarpshield -- uvicorn webapp.main:app --host 0.0.0.0 --port 8001",
+      ]
+    environment:
+      COUNTERSCARP_ENV: development
+      FREE_TOOL_MODE: "1"
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:-docker-dev-session-secret}
+      COUNTERSCARP_API_KEYS: virtuals-agent:${COUNTERSCARP_AGENT_API_KEY}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - counterscarp-data:/app/data
+      - counterscarp-uploads:/app/uploads
+      - counterscarp-results:/app/results
+    ports:
+      - "${WEB_PORT:-8001}:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: counterscarp-engine:5.1.1
+    restart: unless-stopped
+    user: root
+    working_dir: /app
+    entrypoint: []
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /app/data /app/uploads /app/results && chown -R scarpshield:scarpshield /app/data /app/uploads /app/results && exec runuser -u scarpshield -- python -m arq webapp.worker.WorkerSettings",
+      ]
+    environment:
+      REDIS_URL: redis://redis:6379
+      FREE_TOOL_MODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - counterscarp-data:/app/data
+      - counterscarp-uploads:/app/uploads
+      - counterscarp-results:/app/results
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  agent-demo:
+    build:
+      context: ./virtuals-agent
+      dockerfile: Dockerfile
+    image: counterscarp-virtuals-agent:0.1.0
+    profiles: ["demo"]
+    entrypoint: ["python", "demo_scan.py"]
+    environment:
+      COUNTERSCARP_API_URL: http://web:8001
+      COUNTERSCARP_API_KEY: ${COUNTERSCARP_AGENT_API_KEY}
+      COUNTERSCARP_SCAN_TIMEOUT: ${COUNTERSCARP_SCAN_TIMEOUT:-600}
+    depends_on:
+      web:
+        condition: service_healthy
+      worker:
+        condition: service_started
+
+  virtuals-agent:
+    build:
+      context: ./virtuals-agent
+      dockerfile: Dockerfile
+    image: counterscarp-virtuals-agent:0.1.0
+    profiles: ["agent"]
+    restart: unless-stopped
+    environment:
+      GAME_API_KEY: ${GAME_API_KEY}
+      GAME_MODEL: ${GAME_MODEL:-Llama-3.3-70B-Instruct}
+      COUNTERSCARP_API_URL: http://web:8001
+      COUNTERSCARP_API_KEY: ${COUNTERSCARP_AGENT_API_KEY}
+      COUNTERSCARP_SCAN_TIMEOUT: ${COUNTERSCARP_SCAN_TIMEOUT:-600}
+    depends_on:
+      web:
+        condition: service_healthy
+      worker:
+        condition: service_started
+
+volumes:
+  redis-data:
+  counterscarp-data:
+  counterscarp-uploads:
+  counterscarp-results:

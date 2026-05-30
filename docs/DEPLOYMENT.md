@@ -1,5 +1,7 @@
 # Server Deployment Guide
 
+For enterprise topology and compliance-oriented controls (HA, air-gapped, evidence packaging), see `docs/SELF_HOSTED_ENTERPRISE_BLUEPRINT.md`.
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -533,6 +535,24 @@ Expected response:
 | Webhook returns 500 | `STRIPE_WEBHOOK_SECRET` not set | Set `STRIPE_WEBHOOK_SECRET` in systemd unit and reload |
 
 > **Security:** Stripe webhook signature verification is **mandatory** in v5.0.3. If `STRIPE_WEBHOOK_SECRET` is not configured, the `/api/stripe/webhook` endpoint will return HTTP 500. Retrieve the signing secret from Stripe Dashboard > Developers > Webhooks > Signing secret (`whsec_...`).
+
+### Internal Launch Preflight
+
+Use internal preflight scripts before launch-day payment testing:
+
+```bash
+bash scripts/launch_preflight.sh
+```
+
+PowerShell equivalent:
+
+```powershell
+pwsh scripts/launch_preflight.ps1
+```
+
+For full launch sequencing, rollback triggers, and evidence logging, see:
+
+- `docs/LAUNCH_DAY_RUNBOOK_INTERNAL.md` (internal only)
 
 ### Check Disk Space
 
