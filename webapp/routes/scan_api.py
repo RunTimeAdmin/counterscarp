@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 
 from webapp.api_auth import ApiClient, require_api_client
@@ -176,6 +176,63 @@ def _build_scan_response(
     return payload
 
 
+@router.get("/scan/{audit_id}/summary")
+async def get_scan_summary(
+    request: Request,
+    audit_id: str,
+    client: ApiClient = Depends(require_api_client),
+):
+    """Plain-text scan summary for agents — paste curl output directly into chat."""
+    from webapp.scan_utils import format_agent_scan_summary, summarize_findings_data
+
+    audit_id = _normalize_audit_id(audit_id)
+    results_dir = _resolve_audit_dir(RESULTS_DIR, audit_id)
+    if not results_dir.exists():
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    _assert_api_access(results_dir, client)
+    base = str(request.base_url).rstrip("/")
+
+    status_path = results_dir / "scan_status.json"
+    meta_path = results_dir / "scan_meta.json"
+    findings_path = results_dir / "findings.json"
+
+    status = "unknown"
+    if status_path.exists():
+        status = _load_json(status_path).get("status", "unknown")
+    elif findings_path.exists():
+        status = "complete"
+
+    project_name = audit_id
+    analyzers = None
+    if meta_path.exists():
+        meta = _load_json(meta_path)
+        project_name = meta.get("project_name") or project_name
+        analyzers = meta.get("analyzers")
+
+    findings_data: list = []
+    summary = None
+    if findings_path.exists():
+        raw = _load_json(findings_path)
+        if isinstance(raw, list):
+            findings_data = raw
+            summary = summarize_findings_data(findings_data)
+
+    text = format_agent_scan_summary(
+        audit_id,
+        project_name=project_name,
+        status=status,
+        findings_data=findings_data,
+        summary=summary,
+        analyzers=analyzers,
+        base_url=base,
+    )
+
+    if status in {"pending", "running", "queued"}:
+        return PlainTextResponse(text, status_code=202)
+    return PlainTextResponse(text, status_code=200)
+
+
 @router.post("/scan")
 async def create_scan(
     request: Request,
@@ -259,6 +316,7 @@ async def create_scan(
             "audit_id": audit_id,
             "status": "pending",
             "status_url": f"{base}/api/v1/scan/{audit_id}",
+            "summary_url": f"{base}/api/v1/scan/{audit_id}/summary",
             "poll_interval_seconds": 5,
         },
         status_code=202,

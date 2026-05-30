@@ -118,6 +118,119 @@ def summarize_findings_data(findings_data: list[dict]) -> dict:
     }
 
 
+_SEVERITY_ORDER = {
+    "CRITICAL": 0,
+    "HIGH": 1,
+    "MEDIUM": 2,
+    "LOW": 3,
+    "INFO": 4,
+}
+
+
+def format_agent_scan_summary(
+    audit_id: str,
+    *,
+    project_name: str,
+    status: str,
+    findings_data: list[dict],
+    summary: dict | None = None,
+    analyzers: list[dict] | None = None,
+    base_url: str = "https://app.counterscarp.io",
+) -> str:
+    """Plain-text scan summary for agents (OpenClaw, curl, chat paste)."""
+    if status in {"pending", "running", "queued"}:
+        return (
+            f"Scan still running (status: {status}). "
+            f"Poll again: GET {base_url}/api/v1/scan/{audit_id}/summary"
+        )
+
+    if status == "failed":
+        return (
+            f"ScarpShield scan failed — {project_name}\n"
+            f"Audit ID: {audit_id}\n"
+            "The scan did not complete. Retry or use https://app.counterscarp.io"
+        )
+
+    stats = summary or summarize_findings_data(findings_data)
+    counts = stats.get("severity_counts_lower") or {}
+    info_count = sum(
+        1 for f in findings_data if str(f.get("severity", "")).upper() == "INFO"
+    )
+    crit = counts.get("critical", 0)
+    high = counts.get("high", 0)
+    med = counts.get("medium", 0)
+    low = counts.get("low", 0)
+    risk = stats.get("risk_score", 0)
+    total = stats.get("total_findings", len(findings_data))
+
+    lines = [
+        f"ScarpShield scan complete — {project_name}",
+        f"Audit ID: {audit_id}",
+        "",
+    ]
+
+    if analyzers:
+        parts = []
+        for analyzer in analyzers:
+            name = analyzer.get("name", "Analyzer")
+            short = name.split()[0] if name else "Tool"
+            st = analyzer.get("status", "unknown")
+            icon = "✓" if st == "completed" else ("✗" if st == "error" else "…")
+            parts.append(f"{short} {icon}")
+        lines.append(f"Analyzers: {' | '.join(parts)}")
+        lines.append("")
+
+    if total == 0:
+        lines.extend(
+            [
+                f"Risk score: 0/100 | No issues detected by Counterscarp at scan time.",
+                "",
+                f"Full report: {base_url}/api/v1/scan/{audit_id}/report/html",
+                "Run your own scan: https://app.counterscarp.io",
+            ]
+        )
+        return "\n".join(lines)
+
+    count_tail = f"({crit} critical, {high} high, {med} medium, {low} low"
+    if info_count:
+        count_tail += f", {info_count} info"
+    count_tail += ")"
+
+    lines.extend(
+        [
+            f"Risk score: {risk}/100 | {total} findings {count_tail}",
+            "",
+            "Top issues:",
+        ]
+    )
+
+    ranked = sorted(
+        findings_data,
+        key=lambda f: (
+            _SEVERITY_ORDER.get(str(f.get("severity", "INFO")).upper(), 99),
+            str(f.get("title", "")),
+        ),
+    )
+    for idx, finding in enumerate(ranked[:5], start=1):
+        sev = str(finding.get("severity", "INFO")).upper()
+        title = finding.get("title") or finding.get("rule_id", "Finding")
+        line_no = finding.get("line_no") or "?"
+        desc = (finding.get("description") or "").split("\n")[0].strip()
+        if len(desc) > 120:
+            desc = desc[:117] + "..."
+        detail = desc or title
+        lines.append(f"{idx}. [{sev}] {title} — {detail} (line {line_no})")
+
+    lines.extend(
+        [
+            "",
+            f"Full report: {base_url}/api/v1/scan/{audit_id}/report/html",
+            "Run your own scan: https://app.counterscarp.io",
+        ]
+    )
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Slither analysis
 # ---------------------------------------------------------------------------
