@@ -39,15 +39,34 @@ def test_format_complete_scan_with_high_finding() -> None:
         status="complete",
         findings_data=findings,
         analyzers=[
-            {"name": "Heuristic Pattern Scanner", "status": "completed"},
-            {"name": "Slither Static Analysis", "status": "completed"},
+            {
+                "name": "Heuristic Pattern Scanner",
+                "status": "completed",
+                "patterns_checked": 29,
+                "categories": {"Reentrancy": {}},
+                "findings_count": 1,
+            },
+            {
+                "name": "Protocol Fingerprint Scanner",
+                "status": "completed",
+                "protocols_checked": 40,
+                "matches_found": 0,
+                "findings_count": 0,
+            },
+            {"name": "Slither Static Analysis", "status": "completed", "findings_count": 1},
+            {"name": "AI Audit Copilot", "status": "completed"},
+            {"name": "Attack Graph Generator", "status": "completed"},
         ],
     )
     assert text.startswith("ScarpShield scan complete — Vulnerable.sol")
     assert "Audit ID: abc-123" in text
+    assert "Tests run:" in text
+    assert "Heuristic Pattern Scanner — completed" in text
+    assert "29 patterns" in text
+    assert "Slither Static Analysis — completed" in text
+    assert "Not included in this scan:" in text
     assert "Risk score:" in text
     assert "[HIGH] Reentrancy Eth" in text
-    assert "Slither ✓" in text
     assert "/report/html" in text
 
 

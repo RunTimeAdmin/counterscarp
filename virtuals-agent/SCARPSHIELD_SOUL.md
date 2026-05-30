@@ -126,11 +126,9 @@ done
 
 
 
-Paste the printed text as your reply. The summary includes an **Analyzers** line and a **Coverage** line explaining what was and was not tested.
+Paste the printed text as your reply — it includes a **Tests run:** section listing every engine, what it checked, and what was not included.
 
-**Engines in API scans:** heuristic patterns (~29 rules) · Slither static analysis · protocol fingerprint + fork logic checks · AI context · attack graph.
-
-**Not in API scans:** Mythril, Medusa, Aderyn, supply-chain OSV (available in full CLI/Docker).
+If the user asks what was tested, point to the **Tests run** bullets in the summary (do not invent engines).
 
 
 

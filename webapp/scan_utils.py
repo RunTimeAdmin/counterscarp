@@ -169,30 +169,7 @@ def format_agent_scan_summary(
         f"Audit ID: {audit_id}",
         "",
     ]
-
-    if analyzers:
-        parts = []
-        for analyzer in analyzers:
-            name = analyzer.get("name", "Analyzer")
-            if name.startswith("Protocol"):
-                short = "Fingerprint"
-            elif name.startswith("Heuristic"):
-                short = "Heuristic"
-            elif name.startswith("Slither"):
-                short = "Slither"
-            elif name.startswith("AI"):
-                short = "AI"
-            elif name.startswith("Attack"):
-                short = "Attack"
-            else:
-                short = name.split()[0] if name else "Tool"
-            st = analyzer.get("status", "unknown")
-            icon = "✓" if st == "completed" else ("✗" if st == "error" else "…")
-            parts.append(f"{short} {icon}")
-        lines.append(f"Analyzers: {' | '.join(parts)}")
-        lines.append("")
-        lines.append(API_SCAN_COVERAGE)
-        lines.append("")
+    lines.extend(_format_tests_run_section(analyzers))
 
     if total == 0:
         lines.extend(
@@ -479,11 +456,70 @@ def run_slither_analysis(
 # Protocol fingerprint + fork logic
 # ---------------------------------------------------------------------------
 
-API_SCAN_COVERAGE = (
-    "Coverage: heuristic patterns, Slither static analysis, protocol fingerprint "
-    "+ fork logic checks, AI context, attack graph. "
-    "Not in API scan: Mythril, Medusa, Aderyn, supply-chain OSV."
+API_SCAN_NOT_INCLUDED = (
+    "Mythril symbolic execution, Medusa fuzzing, Aderyn static analysis, "
+    "supply-chain OSV (available in full CLI/Docker audit)"
 )
+
+
+def _analyzer_status_label(status: str) -> str:
+    return {
+        "completed": "completed",
+        "error": "failed",
+        "skipped": "skipped",
+        "not_installed": "not available",
+        "pro_required": "pro only",
+    }.get(status, status)
+
+
+def _format_tests_run_section(analyzers: list[dict] | None) -> list[str]:
+    """Human-readable list of engines executed for this scan."""
+    lines = ["Tests run:"]
+
+    if not analyzers:
+        lines.append("• Heuristic Pattern Scanner — status unknown")
+        lines.append("• Protocol Fingerprint Scanner — status unknown")
+        lines.append("• Slither Static Analysis — status unknown")
+        lines.append("• AI Audit Copilot — status unknown")
+        lines.append("• Attack Graph Generator — status unknown")
+    else:
+        for analyzer in analyzers:
+            name = analyzer.get("name", "Analyzer")
+            status = _analyzer_status_label(analyzer.get("status", "unknown"))
+            details: list[str] = []
+
+            if "Heuristic" in name:
+                patterns = analyzer.get("patterns_checked")
+                if patterns:
+                    details.append(f"{patterns} patterns")
+                categories = analyzer.get("categories") or {}
+                if categories:
+                    details.append(f"{len(categories)} categories")
+                count = analyzer.get("findings_count", 0)
+                details.append(f"{count} finding{'s' if count != 1 else ''}")
+            elif "Fingerprint" in name or "Protocol" in name:
+                protocols = analyzer.get("protocols_checked", 0)
+                matches = analyzer.get("matches_found", 0)
+                if protocols:
+                    details.append(f"{protocols} protocol fingerprints")
+                details.append(f"{matches} protocol match{'es' if matches != 1 else ''}")
+                count = analyzer.get("findings_count", 0)
+                if count:
+                    details.append(f"{count} finding{'s' if count != 1 else ''}")
+            elif "Slither" in name:
+                details.append("Slither detector suite")
+                count = analyzer.get("findings_count", 0)
+                details.append(f"{count} finding{'s' if count != 1 else ''}")
+            elif "AI" in name:
+                details.append("RAG enrichment on findings")
+            elif "Attack" in name:
+                details.append("attack-path visualization")
+
+            suffix = f" ({', '.join(details)})" if details else ""
+            lines.append(f"• {name} — {status}{suffix}")
+
+    lines.extend(["", f"Not included in this scan: {API_SCAN_NOT_INCLUDED}", ""])
+    return lines
 
 
 def _protocol_slug(name: str) -> str:
