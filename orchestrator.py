@@ -1226,6 +1226,16 @@ def main() -> None:
         action="store_true",
         help="Run environment diagnostics — check all external tool dependencies",
     )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Remove stale scan artifacts (reports, uploads, state, results) to free disk space",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --clean, show what would be deleted without removing files",
+    )
     args = parser.parse_args()
 
     # --- Doctor mode (no --target needed) ---
@@ -1233,6 +1243,15 @@ def main() -> None:
         import doctor as _doctor
         result = _doctor.run_doctor()
         sys.exit(result["exit_code"])
+
+    # --- Cleanup mode (no --target needed) ---
+    if args.clean:
+        import cleanup as _cleanup
+        sys.exit(
+            _cleanup.main(
+                ["--dry-run"] if args.dry_run else []
+            )
+        )
 
     # --- GUI mode (no --target needed) ---
     if args.gui:

@@ -157,6 +157,7 @@ py-modules = [
     "path_security",
     "license_manager",
     "doctor",
+    "cleanup",
     "state_manager",
     "signature_updater",
     "healthcheck",
