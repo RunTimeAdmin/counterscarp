@@ -636,13 +636,24 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
 
 @app.get("/pricing")
 async def pricing_page(request: Request):
-    """Render free-mode access information."""
+    """Render pricing/checkout or free-mode information."""
+    current_user = get_current_user(request)
+    context = {
+        "current_user": current_user,
+        "free_tool_mode": FREE_TOOL_MODE,
+        "csrf_token": generate_csrf_token(request),
+        **_get_grace_period_context(request),
+    }
+    if FREE_TOOL_MODE:
+        return templates.TemplateResponse(request, "free.html", context=context)
     return templates.TemplateResponse(
-        request, "free.html",
+        request,
+        "pricing.html",
         context={
-            "current_user": get_current_user(request),
-            "free_tool_mode": FREE_TOOL_MODE,
-            **_get_grace_period_context(request),
+            **context,
+            "stripe_key": STRIPE_PUBLISHABLE_KEY,
+            "products": PRODUCTS,
+            "payg_packs": PAYG_PACKS,
         },
     )
 
