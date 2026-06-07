@@ -368,4 +368,4 @@ class TestUpgradeMessageTiers:
     def test_pro_feature_message(self):
         msg = LicenseManager.get_upgrade_message(AI_COPILOT)
         assert "Pro" in msg
-        assert "$199/mo" in msg
+        assert "$149/mo" in msg

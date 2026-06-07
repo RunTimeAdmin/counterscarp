@@ -116,7 +116,7 @@ class TestProductConfiguration:
         assert PRODUCTS["dev_monthly"]["price_cents"] == 4900
 
     def test_pro_monthly_price(self):
-        assert PRODUCTS["pro_monthly"]["price_cents"] == 19900
+        assert PRODUCTS["pro_monthly"]["price_cents"] == 14900
 
     def test_team_monthly_price(self):
         assert PRODUCTS["team_monthly"]["price_cents"] == 39900

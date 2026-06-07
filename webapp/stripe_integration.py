@@ -65,7 +65,7 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
     "pro_monthly": {
         "name": "Counterscarp Pro",
         "description": "Pro tier – monthly billing",
-        "price_cents": 19900,
+        "price_cents": 14900,
         "interval": "month",
         "tier": "pro",
         "max_activations": 3,
@@ -73,7 +73,7 @@ PRODUCTS: Dict[str, Dict[str, Any]] = {
     "pro_annual": {
         "name": "Counterscarp Pro (Annual)",
         "description": "Pro tier – annual billing",
-        "price_cents": 190800,
+        "price_cents": 142800,
         "interval": "year",
         "tier": "pro",
         "max_activations": 3,

@@ -731,7 +731,7 @@ class LicenseManager:
             price = "$49/mo"
         elif required_tier == PRO:
             tier_label = "Pro"
-            price = "$199/mo"
+            price = "$149/mo"
         elif required_tier == TEAM:
             tier_label = "Team"
             price = "$399/mo"
