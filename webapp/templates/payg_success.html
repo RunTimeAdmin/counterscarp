@@ -3,7 +3,7 @@
 {% block title %}Purchase Complete — Counterscarp{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .payg-success-container {
         max-width: 600px;
         margin: 3rem auto;

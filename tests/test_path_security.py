@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,10 @@ from path_security import (
     sanitize_cli_path,
     sanitize_project_slug,
     sanitize_scan_target,
+    validate_git_branch_name,
+    validate_git_since_date,
+    validate_solidity_identifier,
+    write_private_file,
 )
 
 
@@ -57,3 +62,38 @@ class TestSanitizeCliPathTraversal:
         nested.mkdir()
         with pytest.raises(CounterscarpValidationError):
             sanitize_cli_path(str(nested / ".." / "nested"), must_exist=True, expect_file=False)
+
+    def test_confined_to_rejects_escape(self, tmp_path: Path):
+        root = tmp_path / "scan_root"
+        root.mkdir()
+        outside = tmp_path / "outside.txt"
+        outside.write_text("secret", encoding="utf-8")
+        with pytest.raises(CounterscarpValidationError):
+            sanitize_cli_path(str(outside), confined_to=root)
+
+
+class TestInputValidators:
+    def test_validate_solidity_identifier(self):
+        assert validate_solidity_identifier("InvariantTest") == "InvariantTest"
+        with pytest.raises(CounterscarpValidationError):
+            validate_solidity_identifier("../../Token")
+
+    def test_validate_git_branch_name(self):
+        assert validate_git_branch_name("main") == "main"
+        with pytest.raises(CounterscarpValidationError):
+            validate_git_branch_name("--exec=evil")
+
+    def test_validate_git_since_date(self):
+        assert validate_git_since_date("2024-01-01") == "2024-01-01"
+        with pytest.raises(CounterscarpValidationError):
+            validate_git_since_date("not-a-date")
+
+
+class TestWritePrivateFile:
+    def test_sets_owner_only_permissions(self, tmp_path: Path):
+        target = tmp_path / "secrets.env"
+        write_private_file(target, "OPENAI_API_KEY=abc\n")
+        assert target.read_text(encoding="utf-8") == "OPENAI_API_KEY=abc\n"
+        if os.name != "nt":
+            mode = stat.S_IMODE(os.stat(target).st_mode)
+            assert mode == 0o600

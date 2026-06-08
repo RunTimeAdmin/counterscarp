@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import sys
 import time
@@ -54,9 +55,10 @@ from license_manager import (
 )
 
 from webapp.license_api import license_router
-from webapp.license_api import append_audit_log
+from webapp.license_api import append_audit_log, find_license_in_db
 from webapp.routes.scan_api import router as scan_api_router
-from webapp.rate_limiter import RateLimiter, RedisRateLimiter, add_rate_limit_headers
+from webapp.rate_limiter import RateLimiter, RedisRateLimiter, add_rate_limit_headers, get_client_ip
+from path_security import write_private_file
 from webapp.stripe_integration import (
     create_checkout_session,
     create_payg_checkout,
@@ -97,6 +99,13 @@ _ALLOWED_EXTERNAL_REDIRECT_HOSTS = {
     "checkout.stripe.com",
     "pay.stripe.com",
 }
+
+
+def _enforce_license_rate_limit(request: Request) -> None:
+    """Rate-limit license status lookups to reduce enumeration oracles."""
+    client_ip = get_client_ip(request)
+    if not _license_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
 
 from webapp.scan_utils import (
@@ -170,6 +179,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security-related HTTP headers to every response."""
 
     async def dispatch(self, request, call_next):
+        nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = nonce
         response = await call_next(request)
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -178,9 +189,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "max-age=31536000; includeSubDomains"
         )
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "font-src 'self'; connect-src 'self'"
+            f"default-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
+            f"style-src 'self' 'nonce-{nonce}'; "
+            f"img-src 'self' data:; font-src 'self'; connect-src 'self'"
         )
         return response
 
@@ -443,7 +455,7 @@ async def health():
 @app.post("/audit")
 async def audit(
     request: Request,
-    project_name: str = Form(...),
+    project_name: str = Form(..., min_length=1, max_length=200),
     files: List[UploadFile] = File(...),
 ):
     """Run security audit on uploaded files."""
@@ -1240,6 +1252,12 @@ async def stripe_webhook(request: Request):
     event_id = str(event.get("id", ""))
     # Atomic idempotency check-and-mark — eliminates TOCTOU race in file fallback
     if event_id and check_and_mark_event(event_id):
+        security_logger.info(
+            "Stripe webhook dedup: event_id=%s type=%s ip=%s",
+            event_id,
+            event.get("type", "unknown"),
+            ip,
+        )
         return JSONResponse({"status": "already_processed"})
 
     event_type = event.get("type")
@@ -1486,8 +1504,9 @@ async def save_api_key(request: Request):
                     k, v = line.split("=", 1)
                     env_vars[k.strip()] = v.strip()
         env_vars["OPENAI_API_KEY"] = api_key
-        env_file.write_text(
-            "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n"
+        write_private_file(
+            env_file,
+            "\n".join(f"{k}={v}" for k, v in env_vars.items()) + "\n",
         )
     return RedirectResponse(url="/settings?saved=1", status_code=303)
 
@@ -1599,6 +1618,7 @@ def _get_grace_period_context(request: Request) -> Dict[str, Any]:
 @app.get("/api/license/status")
 async def api_license_status(request: Request):
     """Return JSON license status including grace period info."""
+    _enforce_license_rate_limit(request)
     current_user = get_current_user(request)
     if not current_user:
         return JSONResponse({
@@ -1655,22 +1675,10 @@ async def api_license_status(request: Request):
 @app.get("/license/status")
 async def license_status(request: Request):
     """Return current license tier and available features."""
+    _enforce_license_rate_limit(request)
     info = _license.get_license_info()
     return {"tier": _license.get_tier(), "features": info.features}
 
-
-
-def find_license_in_db(license_key: str) -> Optional[Dict]:
-    """Look up a license entry in licenses.json by key."""
-    licenses_path = Path(__file__).parent.parent / "data" / "licenses.json"
-    if not licenses_path.exists():
-        return None
-    with open(licenses_path, "r") as f:
-        data = json.load(f)
-    for lic in data.get("licenses", []):
-        if lic.get("key") == license_key:
-            return dict(lic)
-    return None
 
 
 def _mask_license_key(key: str) -> str:
@@ -1839,6 +1847,7 @@ async def remove_license(request: Request):
 @app.get("/settings/license-status")
 async def get_license_status(request: Request):
     """Return current license status for the settings page."""
+    _enforce_license_rate_limit(request)
     current_user = get_current_user(request)
     # Read license key from user record, fall back to env var
     key = ""

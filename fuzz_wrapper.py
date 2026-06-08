@@ -12,6 +12,7 @@ from exceptions import (
     CounterscarpToolNotFoundError,
     CounterscarpTimeoutError,
 )
+from path_security import validate_solidity_identifier
 
 # Import config loader
 try:
@@ -86,15 +87,19 @@ def run_foundry_fuzz(
     if fuzz_runs is None:
         fuzz_runs = get_fuzz_runs()
 
+    safe_contract = validate_solidity_identifier(
+        target_contract, field_name="target_contract"
+    )
+
     print("[*] Initializing Fuzz Engine (Foundry)...")
-    print(f"[*] Target: {target_contract}")
+    print(f"[*] Target: {safe_contract}")
     print(f"[*] Runs: {fuzz_runs} attempts per invariant")
 
     cmd = [
         "forge",
         "test",
         "--match-contract",
-        target_contract,
+        safe_contract,
         "--fuzz-runs",
         str(fuzz_runs),
         "-vvv",  # Verbosity 3 is required to see Counterexamples

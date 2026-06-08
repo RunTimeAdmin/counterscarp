@@ -3,7 +3,7 @@
 {% block title %}Set Up Two-Factor Authentication - Counterscarp Engine{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .auth-container {
         max-width: 500px;
         margin: 3rem auto;
@@ -154,12 +154,12 @@
             <div class="recovery-codes-box" id="recovery-codes-box" style="background:#0f1629; border:1px solid #2a2a4e; border-radius:8px; padding:1rem; font-family:'Courier New',monospace; font-size:1rem; color:#667eea; line-height:2; text-align:center; user-select:all;">
                 {% for code in recovery_codes %}{{ code }}{% if not loop.last %}<br>{% endif %}{% endfor %}
             </div>
-            <button type="button" onclick="copyRecoveryCodes()" style="width:100%; margin-top:0.75rem; padding:0.6rem 1rem; background:#2a2a4e; color:#e0e0e0; border:1px solid #444; border-radius:8px; font-size:0.9rem; cursor:pointer;" id="copy-codes-btn">Copy codes</button>
+            <button type="button" style="width:100%; margin-top:0.75rem; padding:0.6rem 1rem; background:#2a2a4e; color:#e0e0e0; border:1px solid #444; border-radius:8px; font-size:0.9rem; cursor:pointer;" id="copy-codes-btn">Copy codes</button>
         </div>
 
         <a href="/settings?msg=2FA+enabled+successfully" class="btn-auth-submit" style="display:block; text-align:center; text-decoration:none; margin-top:1rem;">Continue to Settings</a>
 
-        <script>
+        <script nonce="{{ request.state.csp_nonce }}">
         function copyRecoveryCodes() {
             var codes = [{% for code in recovery_codes %}"{{ code }}"{% if not loop.last %},{% endif %}{% endfor %}];
             var text = codes.join("\n");
@@ -168,6 +168,7 @@
                 setTimeout(function(){ document.getElementById('copy-codes-btn').textContent = 'Copy codes'; }, 2000);
             });
         }
+        document.getElementById('copy-codes-btn')?.addEventListener('click', copyRecoveryCodes);
         </script>
         {% else %}
         <h1>Set Up Two-Factor Authentication</h1>
@@ -218,7 +219,7 @@
 
 {% if not setup_complete %}
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
 (function() {
     try {
         var qr = new QRious({

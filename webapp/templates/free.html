@@ -3,7 +3,7 @@
 {% block title %}Free Tool - Counterscarp Engine{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .free-container {
         max-width: 860px;
         margin: 2rem auto;

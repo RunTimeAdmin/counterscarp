@@ -3,7 +3,7 @@
 {% block title %}Scan in Progress — Counterscarp{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .pending-container {
         max-width: 600px;
         margin: 4rem auto;
@@ -129,7 +129,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
 (function() {
     var auditId = "{{ audit_id }}";
     var progressEl = document.getElementById("progress-text");

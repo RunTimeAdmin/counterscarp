@@ -39,6 +39,22 @@ _licenses_file_lock = threading.Lock()
 _audit_log_lock = threading.Lock()
 
 
+def find_license_in_db(license_key: str) -> Optional[dict[str, Any]]:
+    """Look up a license entry in licenses.json by key (thread-safe read)."""
+    if not _LICENSE_DB_PATH.exists():
+        return None
+    with _licenses_file_lock:
+        try:
+            with open(_LICENSE_DB_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+    for lic in data.get("licenses", []):
+        if lic.get("key") == license_key:
+            return dict(lic)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Audit trail logging
 # ---------------------------------------------------------------------------

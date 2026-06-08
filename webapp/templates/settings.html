@@ -3,7 +3,7 @@
 {% block title %}Settings - Counterscarp Engine{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .settings-container {
         max-width: 700px;
         margin: 2rem auto;
@@ -432,7 +432,6 @@
                         <button type="button"
                                 class="btn-toggle-visibility"
                                 id="toggleLicenseBtn"
-                                onclick="toggleLicenseVisibility()"
                                 title="Show/hide key">
                             &#128065;
                         </button>
@@ -442,7 +441,7 @@
                 <div class="settings-actions">
                     <button type="submit" class="btn-save" id="saveLicenseBtn">Activate License</button>
                     {% if license_key_set %}
-                    <button type="button" class="btn-test" id="removeLicenseBtn" onclick="removeLicense()">Remove License</button>
+                    <button type="button" class="btn-test" id="removeLicenseBtn">Remove License</button>
                     {% endif %}
                 </div>
             </form>
@@ -496,7 +495,6 @@
                         <button type="button"
                                 class="btn-toggle-visibility"
                                 id="toggleBtn"
-                                onclick="toggleKeyVisibility()"
                                 title="Show/hide key">
                             &#128065;
                         </button>
@@ -505,7 +503,7 @@
 
                 <div class="settings-actions">
                     <button type="submit" class="btn-save" id="saveBtn">Save Key</button>
-                    <button type="button" class="btn-test" id="testBtn" onclick="testKey()">Test Connection</button>
+                    <button type="button" class="btn-test" id="testBtn">Test Connection</button>
                 </div>
             </form>
 
@@ -542,7 +540,7 @@
 <!-- Toast for save confirmation -->
 <div class="toast" id="toast">API key saved successfully</div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     // Show/hide password toggle
     function toggleKeyVisibility() {
         const input = document.getElementById('openai_api_key');
@@ -705,5 +703,10 @@
             }
         }
     }
+
+    document.getElementById('toggleLicenseBtn')?.addEventListener('click', toggleLicenseVisibility);
+    document.getElementById('removeLicenseBtn')?.addEventListener('click', removeLicense);
+    document.getElementById('toggleBtn')?.addEventListener('click', toggleKeyVisibility);
+    document.getElementById('testBtn')?.addEventListener('click', testKey);
 </script>
 {% endblock %}

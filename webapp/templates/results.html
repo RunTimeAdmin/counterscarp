@@ -56,7 +56,7 @@
         <div class="analyzers-list">
             {% for analyzer in (scan_meta.analyzers or []) %}
             <div class="analyzer-item" data-status="{{ analyzer.status }}">
-                <div class="analyzer-row" onclick="toggleAnalyzer(this)">
+                <div class="analyzer-row">
                     <span class="analyzer-status">
                         {% if analyzer.status == 'completed' %}&#10003;
                         {% elif analyzer.status == 'not_installed' %}&#9888;
@@ -205,19 +205,19 @@
         <div class="findings-header-row">
             <h3>Findings ({{ total_findings }})</h3>
             <div class="filter-tabs">
-                <button class="filter-tab active" data-filter="ALL" onclick="filterFindings('ALL', this)">All</button>
-                <button class="filter-tab" data-filter="CRITICAL" onclick="filterFindings('CRITICAL', this)">Critical</button>
-                <button class="filter-tab" data-filter="HIGH" onclick="filterFindings('HIGH', this)">High</button>
-                <button class="filter-tab" data-filter="MEDIUM" onclick="filterFindings('MEDIUM', this)">Medium</button>
-                <button class="filter-tab" data-filter="LOW" onclick="filterFindings('LOW', this)">Low</button>
-                <button class="filter-tab" data-filter="INFO" onclick="filterFindings('INFO', this)">Info</button>
+                <button class="filter-tab active" data-filter="ALL">All</button>
+                <button class="filter-tab" data-filter="CRITICAL">Critical</button>
+                <button class="filter-tab" data-filter="HIGH">High</button>
+                <button class="filter-tab" data-filter="MEDIUM">Medium</button>
+                <button class="filter-tab" data-filter="LOW">Low</button>
+                <button class="filter-tab" data-filter="INFO">Info</button>
             </div>
         </div>
         {% if findings %}
             <div class="findings-list">
                 {% for finding in findings %}
                 <div class="finding-card" data-severity="{{ finding.severity }}">
-                    <div class="finding-header" onclick="toggleFinding(this)">
+                    <div class="finding-header">
                         <div class="finding-title-section">
                             <span class="severity-badge severity-{{ finding.severity.lower() }}">
                                 {{ finding.severity }}
@@ -410,7 +410,7 @@
     {% endif %}
 </div>
 
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     /* Pro Upgrade Cards */
     .pro-upgrade-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -582,7 +582,7 @@
     }
 </style>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     // Toggle finding card expand/collapse with animation
     function toggleFinding(header) {
         const card = header.parentElement;
@@ -639,6 +639,15 @@
         document.querySelectorAll('.finding-content').forEach(content => {
             content.style.maxHeight = '0px';
             content.style.overflow = 'hidden';
+        });
+        document.querySelectorAll('.filter-tab').forEach(btn => {
+            btn.addEventListener('click', () => filterFindings(btn.dataset.filter, btn));
+        });
+        document.querySelectorAll('.finding-header').forEach(header => {
+            header.addEventListener('click', () => toggleFinding(header));
+        });
+        document.querySelectorAll('.analyzer-row').forEach(row => {
+            row.addEventListener('click', () => toggleAnalyzer(row));
         });
     });
 </script>

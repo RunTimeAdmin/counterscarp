@@ -3,7 +3,7 @@
 {% block title %}Smart Contract Security Audit - Scarpshield (Counterscarp Engine){% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     /* ============================================
        UPLOAD PAGE — ENHANCED LAYOUT
        ============================================ */
@@ -743,7 +743,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     const uploadZone = document.getElementById('uploadZone');
     const fileInput = document.getElementById('files');
     const fileList = document.getElementById('fileList');
@@ -808,11 +808,20 @@
         selectedFiles.forEach((file, index) => {
             const fileItem = document.createElement('div');
             fileItem.className = 'file-item';
-            fileItem.innerHTML = `
-                <span class="file-name">${file.name}</span>
-                <span class="file-size">${formatFileSize(file.size)}</span>
-                <button type="button" class="file-remove" onclick="removeFile(${index})">&times;</button>
-            `;
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'file-remove';
+            removeBtn.textContent = '\u00d7';
+            removeBtn.addEventListener('click', () => removeFile(index));
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = file.name;
+            const sizeSpan = document.createElement('span');
+            sizeSpan.className = 'file-size';
+            sizeSpan.textContent = formatFileSize(file.size);
+            fileItem.appendChild(nameSpan);
+            fileItem.appendChild(sizeSpan);
+            fileItem.appendChild(removeBtn);
             fileList.appendChild(fileItem);
         });
 

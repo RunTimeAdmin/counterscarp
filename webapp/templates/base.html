@@ -36,7 +36,7 @@
     <div class="grace-period-banner" style="background:#f59e0b;color:#000;text-align:center;padding:0.75rem;font-weight:500;">
         &#9888; Your license expires in {{ grace_days_remaining }} day(s).
         <a href="/pricing" style="color:#000;text-decoration:underline;font-weight:700;">Renew now</a> to avoid interruption.
-        <button onclick="this.parentElement.style.display='none'" style="background:none;border:none;color:#000;cursor:pointer;float:right;font-size:1.2rem;padding:0 0.5rem;" aria-label="Dismiss">&times;</button>
+        <button type="button" id="dismiss-grace-banner" style="background:none;border:none;color:#000;cursor:pointer;float:right;font-size:1.2rem;padding:0 0.5rem;" aria-label="Dismiss">&times;</button>
     </div>
     {% endif %}
     <main>
@@ -52,5 +52,10 @@
             <a href="mailto:contact@counterscarp.io">contact@counterscarp.io</a>
         </p>
     </footer>
+    <script nonce="{{ request.state.csp_nonce }}">
+    document.getElementById('dismiss-grace-banner')?.addEventListener('click', function () {
+        this.parentElement.style.display = 'none';
+    });
+    </script>
 </body>
 </html>

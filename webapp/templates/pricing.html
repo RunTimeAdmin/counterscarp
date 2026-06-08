@@ -3,7 +3,7 @@
 {% block title %}Pricing - Counterscarp Engine{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
     :root {
@@ -908,7 +908,7 @@
     <!-- Billing Toggle -->
     <div class="billing-toggle">
         <label id="monthly-label" class="active">Monthly</label>
-        <div class="toggle-switch" id="billing-toggle" onclick="toggleBilling()"></div>
+        <div class="toggle-switch" id="billing-toggle"></div>
         <label id="annual-label">Annual <span class="save-badge">Lock in your rate</span></label>
     </div>
 
@@ -1420,7 +1420,7 @@
         <h2>Frequently Asked Questions</h2>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>Is Counterscarp Engine free to use?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1430,7 +1430,7 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>What's the difference between Developer and Pro?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1440,7 +1440,7 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>Does Counterscarp Engine support Solana?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1450,7 +1450,7 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>What are machine activations?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1460,7 +1460,7 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>Can I upgrade from Developer to Pro?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1470,7 +1470,7 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>Do you offer a free trial?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1480,7 +1480,7 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>Can I use Counterscarp Engine in commercial audits?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1490,7 +1490,7 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="toggleFaq(this)">
+            <div class="faq-question">
                 <span>Is the Cloud App available?</span>
                 <span class="faq-icon"></span>
             </div>
@@ -1501,7 +1501,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     let isAnnual = false;
 
     function toggleBilling() {
@@ -1542,10 +1542,17 @@
             faqItem.classList.add('open');
         }
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('billing-toggle')?.addEventListener('click', toggleBilling);
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => toggleFaq(question));
+        });
+    });
 </script>
 
 <!-- FAQ Schema.org Structured Data -->
-<script type="application/ld+json">
+<script type="application/ld+json" nonce="{{ request.state.csp_nonce }}">
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",

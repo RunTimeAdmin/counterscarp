@@ -3,7 +3,7 @@
 {% block title %}Purchase Complete - Counterscarp Engine{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .success-container {
         max-width: 700px;
         margin: 2rem auto;
@@ -161,7 +161,7 @@
 
                 <div class="license-key-box">
                     <span class="license-key-text" id="licenseKey">{{ license_key }}</span>
-                    <button class="btn-copy" id="copyBtn" onclick="copyKey()">
+                    <button class="btn-copy" id="copyBtn">
                         Copy
                     </button>
                 </div>
@@ -229,7 +229,7 @@ key = "{{ license_key }}"</div>
     </div>
 </div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     function copyKey() {
         const keyEl = document.getElementById('licenseKey');
         const btn = document.getElementById('copyBtn');
@@ -258,5 +258,7 @@ key = "{{ license_key }}"</div>
             }, 2000);
         });
     }
+
+    document.getElementById('copyBtn')?.addEventListener('click', copyKey);
 </script>
 {% endblock %}

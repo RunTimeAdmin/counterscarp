@@ -3,7 +3,7 @@
 {% block title %}No Credits Remaining — Counterscarp{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .no-credits-container {
         max-width: 550px;
         margin: 3rem auto;

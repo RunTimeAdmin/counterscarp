@@ -12,6 +12,7 @@ from exceptions import (
     CounterscarpToolNotFoundError,
     CounterscarpTimeoutError,
 )
+from path_security import sanitize_cli_path, validate_solidity_identifier
 
 # Import config loader
 try:
@@ -75,17 +76,22 @@ def run_mythril(
     # Use config value if not provided
     if timeout is None:
         timeout = get_mythril_timeout()
+    safe_target = sanitize_cli_path(
+        target, allowed_suffixes={".sol", ".vy"}, must_exist=True, expect_file=True
+    )
     cmd = [
         "myth",
         "analyze",
-        target,
+        str(safe_target),
         "-o",
         "jsonv2",
         "--execution-timeout",
         str(timeout),
+        "--max-depth",
+        "128",
     ]
     if function:
-        cmd.extend(["--function", function])
+        cmd.extend(["--function", validate_solidity_identifier(function, field_name="function")])
 
     result = None  # Initialize to prevent UnboundLocalError
     try:

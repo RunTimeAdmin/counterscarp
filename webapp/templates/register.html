@@ -3,7 +3,7 @@
 {% block title %}Create Account - Counterscarp Engine{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ request.state.csp_nonce }}">
     .auth-container {
         max-width: 450px;
         margin: 3rem auto;
@@ -233,7 +233,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     const passwordInput = document.getElementById('password');
     const confirmInput = document.getElementById('confirm_password');
     const confirmHint = document.getElementById('confirmHint');

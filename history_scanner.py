@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
-from path_security import sanitize_cli_path
+from path_security import sanitize_cli_path, validate_git_branch_name, validate_git_since_date
 
 # Import exceptions (core module — must always be available)
 from exceptions import (
@@ -155,6 +155,9 @@ def parse_git_history(
         CounterscarpAnalysisError: If git command fails.
     """
     repo_path = str(sanitize_cli_path(repo_path, expect_file=False))
+    branch = validate_git_branch_name(branch)
+    if since:
+        since = validate_git_since_date(since)
     
     # Validate repository
     git_dir = os.path.join(repo_path, ".git")

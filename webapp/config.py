@@ -50,6 +50,11 @@ def validate_production_config() -> None:
     """Validate all required secrets are set for production deployment."""
     if COUNTERSCARP_ENV != "production":
         return
+    if FREE_TOOL_MODE:
+        import logging
+        logging.getLogger("counterscarp.config").warning(
+            "FREE_TOOL_MODE is enabled in production — payment enforcement is disabled."
+        )
     missing = []
     if not SESSION_SECRET or SESSION_SECRET == "counterscarp-dev-session-secret-INSECURE-DEFAULT":
         missing.append("SESSION_SECRET")
