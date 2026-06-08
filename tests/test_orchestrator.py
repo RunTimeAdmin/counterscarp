@@ -40,6 +40,12 @@ class TestRemediationDatabase:
         assert "Review logic" in result
         assert "TestContext" in result
 
+    def test_get_remediation_prefers_longest_partial_match(self):
+        """Most specific remediation key should win when multiple keys match."""
+        result = get_remediation("slither-reentrancy-no-eth-warning", "ctx")
+        assert "re-enter" in result.lower() or "external calls" in result.lower()
+        assert "ReentrancyGuard" not in result
+
     def test_all_remediation_entries_have_content(self):
         """Test all entries in REMEDIATION_DB have non-empty content."""
         for key, value in REMEDIATION_DB.items():

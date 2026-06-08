@@ -11,7 +11,13 @@ import shutil
 import types as _types
 from typing import List, Dict, Optional, Any, Type, cast
 from pathlib import Path
-from path_security import sanitize_cli_path, sanitize_output_path
+from path_security import (
+    sanitize_cli_path,
+    sanitize_output_path,
+    sanitize_scan_target,
+    sanitize_project_slug,
+)
+from exceptions import CounterscarpValidationError
 
 from logger import get_logger, setup_logging
 
@@ -172,12 +178,24 @@ def get_remediation(issue_type: str, context: str) -> str:
     if issue_type in REMEDIATION_DB:
         return REMEDIATION_DB[issue_type]
 
-    # Try partial match (e.g., "reentrancy" matches "reentrancy-benign")
-    for key, fix in REMEDIATION_DB.items():
-        if key in issue_type:
-            return fix
+    # Prefer the longest matching key (most specific rule wins).
+    matches = [(key, fix) for key, fix in REMEDIATION_DB.items() if key in issue_type]
+    if matches:
+        return max(matches, key=lambda item: len(item[0]))[1]
 
     return f"Review logic at `{context[:20]}...`. Ensure strict validation of inputs and access control."
+
+
+def _md_safe(text: str, max_len: int = 0) -> str:
+    """Escape user-controlled text for Markdown table cells."""
+    safe = text or ""
+    if max_len:
+        safe = safe[:max_len]
+    return (
+        safe.replace("|", "\\|")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
 
 
 def _aggregate_findings(
@@ -441,10 +459,10 @@ def _render_markdown_report(
         f.write("| # | Severity | Issue | Location | Description |\n")
         f.write("|---|----------|-------|----------|-------------|\n")
         for _idx, _finding in enumerate(top10, 1):
-            _sev = _finding.get("severity", "MEDIUM")
-            _issue = _finding.get("rule_id", "unknown")
-            _loc = _finding.get("location", "unknown")
-            _desc = _finding.get("message", "").replace("|", "\\|")
+            _sev = _md_safe(_finding.get("severity", "MEDIUM"))
+            _issue = _md_safe(_finding.get("rule_id", "unknown"))
+            _loc = _md_safe(_finding.get("location", "unknown"))
+            _desc = _md_safe(_finding.get("message", ""))
             f.write(f"| {_idx} | {_sev} | {_issue} | {_loc} | {_desc} |\n")
         f.write("\n")
 
@@ -1054,6 +1072,42 @@ async def run_phases_async(ctx: Any, phases: List[Any]) -> None:
             ])
 
 
+def _validate_scan_cli_paths(args: argparse.Namespace) -> None:
+    """Normalize and validate filesystem paths from CLI before scanning."""
+    if args.target:
+        try:
+            args.target = str(sanitize_scan_target(args.target))
+        except CounterscarpValidationError as exc:
+            logger.error("Invalid --target path: %s", exc)
+            sys.exit(1)
+    if args.upgrade_old:
+        try:
+            args.upgrade_old = str(
+                sanitize_cli_path(args.upgrade_old, allowed_suffixes={".sol"})
+            )
+        except CounterscarpValidationError as exc:
+            logger.error("Invalid --upgrade-old path: %s", exc)
+            sys.exit(1)
+    if args.upgrade_new:
+        try:
+            args.upgrade_new = str(
+                sanitize_cli_path(args.upgrade_new, allowed_suffixes={".sol"})
+            )
+        except CounterscarpValidationError as exc:
+            logger.error("Invalid --upgrade-new path: %s", exc)
+            sys.exit(1)
+    if args.solana_root:
+        try:
+            args.solana_root = str(
+                sanitize_cli_path(
+                    args.solana_root, must_exist=True, expect_file=False
+                )
+            )
+        except CounterscarpValidationError as exc:
+            logger.error("Invalid --solana-root path: %s", exc)
+            sys.exit(1)
+
+
 def main() -> None:
     """Main entry point for the Counterscarp orchestrator.
 
@@ -1285,7 +1339,7 @@ def main() -> None:
     except Exception:
         pass  # Non-fatal — never block a scan
 
-    # --- State manager initialization ---
+    # --- State manager + resume handling ---
     import time as _time
     from pathlib import Path
     from state_manager import ScanStateManager
@@ -1318,19 +1372,22 @@ def main() -> None:
         except Exception as e:
             logger.error("Failed to read resume session '%s': %s", args.resume, e)
             sys.exit(1)
+
+    _validate_scan_cli_paths(args)
+
+    if args.resume:
         # Start a new follow-on session ID so no future state writes depend on
         # user-provided resume identifiers.
         state_mgr = ScanStateManager()
         session_id = state_mgr.start_session(str(args.target), {"mode": "resume"})
         logger.info("Started resumed follow-on session: %s", session_id)
     else:
-        # Persist only minimal metadata to avoid storing raw untrusted paths.
         cli_args = {"mode": "scan"}
         session_id = state_mgr.start_session(str(args.target), cli_args)
-        logger.info(f"New scan session: {session_id}")
+        logger.info("New scan session: %s", session_id)
 
     stderr_log = str(
-        state_mgr.storage_dir / f"scan_stderr_{state_mgr._session_id}.log"
+        state_mgr.storage_dir / f"scan_stderr_{state_mgr.session_id}.log"
     )
 
     # --- Per-scan output directory (prevents overwriting previous reports) ---
@@ -1341,9 +1398,8 @@ def main() -> None:
     # from the target basename to keep it stable across resumes.
     _scan_date_str = datetime.date.today().strftime("%Y-%m-%d")
     _raw_proj = args.project_name or (os.path.basename(os.path.abspath(args.target)) if args.target else "scan")
-    # Sanitise for use as directory component
-    _proj_slug = "".join(c if c.isalnum() or c in "-_." else "_" for c in _raw_proj)
-    _session_short = str(state_mgr._session_id)[:8]
+    _proj_slug = sanitize_project_slug(_raw_proj)
+    _session_short = str(state_mgr.session_id)[:8]
     _engine_root = Path(os.path.dirname(os.path.abspath(__file__)))
     if args.output_dir:
         _reports_base = sanitize_output_path(args.output_dir)
@@ -1352,45 +1408,6 @@ def main() -> None:
     scan_output_dir = _reports_base / f"{_proj_slug}_{_scan_date_str}_{_session_short}"
     scan_output_dir.mkdir(parents=True, exist_ok=True)
     logger.info("Per-scan output directory: %s", scan_output_dir)
-
-    # --- Path validation (fast-fail before any scan work) ---
-    try:
-        args.target = str(sanitize_cli_path(args.target))
-    except Exception as e:
-        logger.error("Invalid --target path: %s", e)
-        sys.exit(1)
-    if not os.path.exists(args.target):
-        msg = f"Target path does not exist: {args.target}"
-        logger.error(msg)
-        sys.exit(1)
-    if os.path.isfile(args.target) and not args.target.lower().endswith(".sol"):
-        msg = f"Target file must be a Solidity (.sol) file, got: {args.target}"
-        logger.error(msg)
-        sys.exit(1)
-    if args.upgrade_old:
-        try:
-            args.upgrade_old = str(
-                sanitize_cli_path(args.upgrade_old, allowed_suffixes={".sol"})
-            )
-        except Exception as e:
-            logger.error("Invalid --upgrade-old path: %s", e)
-            sys.exit(1)
-    if args.upgrade_old and not os.path.exists(args.upgrade_old):
-        msg = f"--upgrade-old path does not exist: {args.upgrade_old}"
-        logger.error(msg)
-        sys.exit(1)
-    if args.upgrade_new:
-        try:
-            args.upgrade_new = str(
-                sanitize_cli_path(args.upgrade_new, allowed_suffixes={".sol"})
-            )
-        except Exception as e:
-            logger.error("Invalid --upgrade-new path: %s", e)
-            sys.exit(1)
-    if args.upgrade_new and not os.path.exists(args.upgrade_new):
-        msg = f"--upgrade-new path does not exist: {args.upgrade_new}"
-        logger.error(msg)
-        sys.exit(1)
 
     # --- Dev mode banner ---
     if args.dev:
@@ -1404,7 +1421,14 @@ def main() -> None:
     if CONFIG_AVAILABLE:
         try:
             assert load_config is not None
-            config = load_config(args.config)
+            if args.config:
+                config_path = Path(args.config).expanduser()
+                if not config_path.is_file():
+                    logger.error("Config file not found: %s", args.config)
+                    sys.exit(1)
+                config = load_config(str(config_path))
+            else:
+                config = load_config(None)
             if config:
                 logger.info("Loaded config: %s v%s", config.engine.name, config.engine.version)
                 logger.info("Fail on: %s+ severity", config.engine.fail_on_severity)
@@ -1412,21 +1436,17 @@ def main() -> None:
                     logger.info("Disabled heuristic rules: %d", len(config.heuristics.disabled_rules))
                 if config.suppressions:
                     logger.info("Active suppressions: %d", len(config.suppressions))
-        except FileNotFoundError:
-            # config path was explicitly provided but not found
-            logger.error("Config file not found: %s", args.config)
-            logger.info("Continuing with default settings...")
-        except PermissionError as e:
-            logger.error(
-                "Permission denied reading config '%s': %s",
-                args.config or "scarpshield.toml/counterscarp.toml",
-                e,
-            )
-            logger.info("Continuing with default settings...")
         except Exception as e:
+            if args.config:
+                logger.error(
+                    "Failed to load config '%s' (%s): %s",
+                    args.config,
+                    type(e).__name__,
+                    e,
+                )
+                sys.exit(1)
             logger.error(
-                "Error loading config '%s' (%s): %s",
-                args.config or "scarpshield.toml/counterscarp.toml",
+                "Error loading config (%s): %s",
                 type(e).__name__,
                 e,
             )
@@ -1691,7 +1711,7 @@ def main() -> None:
 
     # Mark scan session complete
     state_mgr.mark_session_complete()
-    logger.info(f"Scan session complete: {state_mgr._session_id}")
+    logger.info("Scan session complete: %s", state_mgr.session_id)
 
     # Final summary — always printed so users know where to find results
     logger.info("Scan complete. Log file: %s", _log_file)

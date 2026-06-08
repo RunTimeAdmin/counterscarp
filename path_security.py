@@ -91,3 +91,53 @@ def sanitize_output_path(path_value: str) -> Path:
             details={"path": cleaned},
         )
     return raw.resolve(strict=False)
+
+
+def sanitize_scan_target(path_value: str) -> Path:
+    """Validate a scan target path that may be a .sol file or project directory."""
+    if not isinstance(path_value, str):
+        raise CounterscarpValidationError(
+            "Target path must be a string",
+            details={"value_type": type(path_value).__name__},
+        )
+
+    cleaned = path_value.strip()
+    if not cleaned:
+        raise CounterscarpValidationError("Target path cannot be empty")
+
+    raw = Path(cleaned).expanduser()
+    if ".." in raw.parts:
+        raise CounterscarpValidationError(
+            "Path traversal sequence is not allowed",
+            details={"path": cleaned},
+        )
+
+    resolved_hint = raw.resolve(strict=False)
+    if resolved_hint.exists():
+        expect_file = resolved_hint.is_file()
+    else:
+        expect_file = raw.suffix.lower() == ".sol"
+
+    if expect_file:
+        return sanitize_cli_path(
+            path_value,
+            must_exist=True,
+            expect_file=True,
+            allowed_suffixes={".sol"},
+        )
+    return sanitize_cli_path(
+        path_value,
+        must_exist=True,
+        expect_file=False,
+    )
+
+
+def sanitize_project_slug(name: str) -> str:
+    """Sanitize a user-supplied project name for use as a directory component."""
+    slug = "".join(
+        c if c.isalnum() or c in "-_" else "_" for c in (name or "").strip()
+    )
+    slug = slug.strip("_") or "scan"
+    if slug in {".", ".."}:
+        return "scan"
+    return slug[:64]

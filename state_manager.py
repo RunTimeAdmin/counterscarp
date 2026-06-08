@@ -97,6 +97,11 @@ class ScanStateManager:
         """Return the preferred directory used for new state writes."""
         return self._dir
 
+    @property
+    def session_id(self) -> Optional[str]:
+        """Return the active session ID, or None if no session is active."""
+        return self._session_id
+
     # ------------------------------------------------------------------
     # Session lifecycle
     # ------------------------------------------------------------------
