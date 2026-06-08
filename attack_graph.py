@@ -22,7 +22,9 @@ from typing import Dict, List, Optional, Any, Set
 from pathlib import Path
 
 from logger import get_logger
-from exceptions import CounterscarpAnalysisError
+from exceptions import CounterscarpAnalysisError, CounterscarpValidationError
+from path_security import sanitize_cli_path
+from solidity_structure import function_containing_line, parse_solidity_structure
 
 logger = get_logger(__name__)
 
@@ -193,37 +195,7 @@ class AttackGraph:
         return list(self._adj.get(node_id, set()))
 
 
-# Regex patterns for Solidity parsing
-CONTRACT_PATTERN = re.compile(
-    r"contract\s+(\w+)\s*(?:is\s+([^{]+))?\s*\{",
-    re.MULTILINE
-)
-
-FUNCTION_PATTERN = re.compile(
-    r"function\s+(\w+)\s*\([^)]*\)\s*(.*?)(?:\{|;)",
-    re.MULTILINE | re.DOTALL
-)
-
-EXTERNAL_CALL_PATTERN = re.compile(
-    r"(\w+)\s*\.\s*(call|delegatecall|staticcall|transfer|send)\s*[\{\(]",
-    re.MULTILINE
-)
-
-STATE_READ_PATTERN = re.compile(
-    r"\b(\w+)\b(?=\s*[^=]*[^=!><]=(?!=))",
-    re.MULTILINE
-)
-
-STATE_WRITE_PATTERN = re.compile(
-    r"\b(\w+)\s*=[^=]",
-    re.MULTILINE
-)
-
-INHERITANCE_PATTERN = re.compile(
-    r"contract\s+\w+\s+is\s+([^\{]+)",
-    re.MULTILINE
-)
-
+# Regex patterns for Rust/Solana parsing
 CPI_PATTERN = re.compile(
     r"(invoke|invoke_signed)\s*\(",
     re.MULTILINE
@@ -259,94 +231,15 @@ def _generate_node_id(
 
 
 def _parse_solidity_file(file_path: str) -> Dict[str, Any]:
-    """Parse a Solidity file to extract contract structure.
-
-    Args:
-        file_path: Path to the Solidity file.
-
-    Returns:
-        Dictionary containing parsed contract information.
-    """
+    """Parse a Solidity file to extract contract structure."""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except (IOError, OSError) as e:
-        logger.warning(f"Could not read file {file_path}: {e}")
+        safe_path = sanitize_cli_path(file_path, allowed_suffixes={".sol"})
+        content = safe_path.read_text(encoding="utf-8")
+    except (OSError, CounterscarpValidationError) as e:
+        logger.warning("Could not read file %s: %s", file_path, e)
         return {}
 
-    result: Dict[str, Any] = {
-        'contracts': [],
-        'functions': [],
-        'external_calls': [],
-        'state_reads': [],
-        'state_writes': [],
-        'inheritance': []
-    }
-
-    # Extract contracts
-    for match in CONTRACT_PATTERN.finditer(content):
-        contract_name = match.group(1)
-        inheritance = match.group(2)
-        result['contracts'].append({
-            'name': contract_name,
-            'line': content[:match.start()].count('\n') + 1,
-            'inheritance': [
-                i.strip() for i in inheritance.split(',')
-            ] if inheritance else []
-        })
-
-    # Extract functions
-    for match in FUNCTION_PATTERN.finditer(content):
-        func_name = match.group(1)
-        modifiers = match.group(2)
-        line_no = content[:match.start()].count('\n') + 1
-        
-        # Determine visibility
-        visibility = 'internal'
-        if 'public' in modifiers:
-            visibility = 'public'
-        elif 'external' in modifiers:
-            visibility = 'external'
-        elif 'private' in modifiers:
-            visibility = 'private'
-
-        result['functions'].append({
-            'name': func_name,
-            'line': line_no,
-            'visibility': visibility,
-            'modifiers': modifiers.strip() if modifiers else ''
-        })
-
-    # Extract external calls
-    for match in EXTERNAL_CALL_PATTERN.finditer(content):
-        target = match.group(1)
-        call_type = match.group(2)
-        line_no = content[:match.start()].count('\n') + 1
-        
-        result['external_calls'].append({
-            'target': target,
-            'call_type': call_type,
-            'line': line_no
-        })
-
-    # Extract state variable reads and writes (simplified)
-    lines = content.split('\n')
-    for i, line in enumerate(lines, 1):
-        # Skip comments
-        clean_line = re.sub(r'//.*', '', line)
-        
-        # State writes (assignment)
-        for match in STATE_WRITE_PATTERN.finditer(clean_line):
-            var_name = match.group(1)
-            if var_name not in [
-                'return', 'if', 'for', 'while', 'require', 'assert'
-            ]:
-                result['state_writes'].append({
-                    'variable': var_name,
-                    'line': i
-                })
-
-    return result
+    return parse_solidity_structure(content)
 
 
 def _parse_rust_file(file_path: str) -> Dict[str, Any]:
@@ -359,10 +252,10 @@ def _parse_rust_file(file_path: str) -> Dict[str, Any]:
         Dictionary containing parsed program information.
     """
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except (IOError, OSError) as e:
-        logger.warning(f"Could not read file {file_path}: {e}")
+        safe_path = sanitize_cli_path(file_path, allowed_suffixes={".rs"})
+        content = safe_path.read_text(encoding="utf-8")
+    except (OSError, CounterscarpValidationError) as e:
+        logger.warning("Could not read file %s: %s", file_path, e)
         return {}
 
     result: Dict[str, Any] = {
@@ -565,11 +458,11 @@ def _process_solidity_parsed(
                     metadata={'file': file_path}
                 ))
 
-    # Add function nodes and link to contracts
+    # Add function nodes and link to their owning contract
     for func in parsed.get('functions', []):
         func_name = func['name']
         func_id = _generate_node_id('Function', func_name, file_path, func['line'])
-        func_key = f"{file_path}:{func_name}"
+        func_key = f"{file_path}:{func_name}:{func['line']}"
         
         func_node = GraphNode(
             id=func_id,
@@ -578,6 +471,8 @@ def _process_solidity_parsed(
             metadata={
                 'file': file_path,
                 'line': func['line'],
+                'end_line': func.get('end_line', func['line']),
+                'contract': func.get('contract', ''),
                 'visibility': func['visibility'],
                 'modifiers': func['modifiers'],
                 'language': 'solidity'
@@ -586,16 +481,15 @@ def _process_solidity_parsed(
         graph.add_node(func_node)
         function_nodes[func_key] = func_id
 
-        # Link function to its contract (if we can determine it)
-        for contract in parsed.get('contracts', []):
-            linked_contract_id = contract_nodes.get(contract['name'])
-            if linked_contract_id:
-                graph.add_edge(GraphEdge(
-                    source_id=linked_contract_id,
-                    target_id=func_id,
-                    type='contains',
-                    metadata={'relationship': 'has_function'}
-                ))
+        contract_name = func.get('contract')
+        linked_contract_id = contract_nodes.get(contract_name) if contract_name else None
+        if linked_contract_id:
+            graph.add_edge(GraphEdge(
+                source_id=linked_contract_id,
+                target_id=func_id,
+                type='contains',
+                metadata={'relationship': 'has_function'}
+            ))
 
     # Add external call edges
     for call in parsed.get('external_calls', []):
@@ -614,37 +508,44 @@ def _process_solidity_parsed(
                 'call_type': call_type,
                 'file': file_path,
                 'line': line_no,
+                'contract': call.get('contract', ''),
                 'language': 'solidity'
             }
         )
         graph.add_node(call_node)
 
-        # Link to nearest function (simplified)
-        for func in parsed.get('functions', []):
-            if func['line'] <= line_no:
-                func_key = f"{file_path}:{func['name']}"
-                linked_func_id = function_nodes.get(func_key)
-                if linked_func_id:
-                    edge_type = 'delegates' if call_type == 'delegatecall' else 'calls'
-                    graph.add_edge(GraphEdge(
-                        source_id=linked_func_id,
-                        target_id=call_id,
-                        type=edge_type,
-                        metadata={'call_type': call_type}
-                    ))
+        containing = function_containing_line(
+            parsed.get('functions', []),
+            line_no,
+            contract=call.get('contract'),
+        )
+        if containing:
+            func_key = f"{file_path}:{containing['name']}:{containing['line']}"
+            linked_func_id = function_nodes.get(func_key)
+            if linked_func_id:
+                edge_type = 'delegates' if call_type == 'delegatecall' else 'calls'
+                graph.add_edge(GraphEdge(
+                    source_id=linked_func_id,
+                    target_id=call_id,
+                    type=edge_type,
+                    metadata={'call_type': call_type}
+                ))
 
-    # Link vulnerabilities to functions based on line numbers
+    # Link vulnerabilities to the innermost containing function
     for node in graph.nodes:
         if node.type == 'Vulnerability':
             vuln_file = node.metadata.get('file', '')
             vuln_line = node.metadata.get('line', 0)
             
-            # Find containing function
-            if vuln_file == file_path:
-                for func in parsed.get('functions', []):
-                    func_key = f"{file_path}:{func['name']}"
+            if vuln_file == file_path and vuln_line:
+                containing = function_containing_line(
+                    parsed.get('functions', []),
+                    vuln_line,
+                )
+                if containing:
+                    func_key = f"{file_path}:{containing['name']}:{containing['line']}"
                     vuln_func_id = function_nodes.get(func_key)
-                    if vuln_func_id and func['line'] <= vuln_line:
+                    if vuln_func_id:
                         graph.add_edge(GraphEdge(
                             source_id=vuln_func_id,
                             target_id=node.id,
@@ -776,20 +677,20 @@ def trace_attack_paths(graph: AttackGraph) -> List[List[str]]:
         ...     print(" -> ".join(path))
     """
     paths: List[List[str]] = []
-    visited: Set[str] = set()
 
     def dfs(current_id: str, path: List[str], depth: int = 0) -> None:
         """Depth-first search to trace paths."""
-        if depth > 10:  # Limit recursion depth
+        if depth > 10:
             return
-        
-        if current_id in visited:
+
+        if current_id in path:
             return
 
         path.append(current_id)
         current_node = graph.get_node(current_id)
         
         if not current_node:
+            path.pop()
             return
 
         # If we reached a vulnerability, record the path
@@ -808,7 +709,6 @@ def trace_attack_paths(graph: AttackGraph) -> List[List[str]]:
     # Start DFS from each contract node
     for node in graph.nodes:
         if node.type == 'Contract':
-            visited.clear()
             dfs(node.id, [])
 
     # Also start from external entry points (public/external functions)
@@ -816,7 +716,6 @@ def trace_attack_paths(graph: AttackGraph) -> List[List[str]]:
         if node.type == 'Function':
             visibility = node.metadata.get('visibility', '')
             if visibility in {'public', 'external'}:
-                visited.clear()
                 dfs(node.id, [])
 
     logger.info(f"Found {len(paths)} potential attack paths")

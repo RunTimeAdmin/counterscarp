@@ -350,6 +350,12 @@ contract Test {
         
         # Should have vulnerability + contract + functions
         assert len(graph.nodes) >= 2
+        func_nodes = graph.get_nodes_by_type("Function")
+        contract_nodes = graph.get_nodes_by_type("Contract")
+        assert len(contract_nodes) == 1
+        assert len(func_nodes) == 2
+        contains_edges = [edge for edge in graph.edges if edge.type == "contains"]
+        assert len(contains_edges) == 2
 
     def test_build_graph_missing_source_file(self):
         """Test building graph with missing source file."""
