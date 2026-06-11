@@ -15,7 +15,7 @@ import string
 import time
 
 import pyotp
-from fastapi import APIRouter, HTTPException, Query, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Form
 from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import URLSafeTimedSerializer
 from starlette.templating import Jinja2Templates
@@ -129,6 +129,46 @@ def get_current_user(request: Request):
     if not user_id:
         return None
     return user_manager.get_by_id(user_id)
+
+
+def require_user(request: Request) -> dict:
+    """FastAPI dependency — returns the current user or raises 401/redirect.
+
+    Usage::
+
+        @app.get("/protected")
+        async def protected(current_user: dict = Depends(require_user)):
+            ...
+
+    Raises ``HTTPException(401)`` for API routes (path starts with ``/api/``),
+    and returns a ``RedirectResponse`` for browser routes.
+    """
+    user = get_current_user(request)
+    if user is None:
+        if request.url.path.startswith("/api/"):
+            raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(
+            status_code=302,
+            headers={"Location": "/auth/login"},
+        )
+    return user
+
+
+def csrf_guard(request: Request, form_token: str) -> None:
+    """Validate CSRF token from a submitted form, raising 403 on failure.
+
+    Usage::
+
+        form = await request.form()
+        csrf_guard(request, str(form.get("_csrf_token", "")))
+
+    Only validates when the session already contains a CSRF token — new
+    sessions (no token yet) pass through (same behaviour as previous inline
+    checks that tested ``if session_token:``).
+    """
+    session_token = request.session.get("_csrf_token")
+    if session_token and not validate_csrf_token(request, form_token):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
 
 def get_license_key_for_request(request: Request, current_user: dict | None) -> str:

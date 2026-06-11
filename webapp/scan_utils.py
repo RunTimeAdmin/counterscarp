@@ -49,16 +49,13 @@ from attack_graph import build_graph, export_graph_json
 from visualizer import generate_attack_graph_html
 from logger import get_logger
 from counterscarp_core.severity import SEVERITY_RANK as _SEVERITY_ORDER
+from counterscarp_core.severity_scoring import (
+    SEVERITY_WEIGHTS,
+    risk_score_from_findings,
+    pass_fail_from_counts,
+)
 
 logger = get_logger(__name__)
-
-SEVERITY_WEIGHTS: dict[str, float] = {
-    "CRITICAL": 10.0,
-    "HIGH": 5.0,
-    "MEDIUM": 2.0,
-    "LOW": 0.5,
-    "INFO": 0.1,
-}
 
 
 # ---------------------------------------------------------------------------
@@ -98,25 +95,15 @@ def count_lines(path: str) -> int:
 def summarize_findings_data(findings_data: list[dict]) -> dict:
     """Compute severity counts and normalized risk score in one pass."""
     severity_counts_lower = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    total_weight = 0.0
     for finding in findings_data:
-        sev = str(finding.get("severity", "INFO")).upper()
-        total_weight += SEVERITY_WEIGHTS.get(sev, 0.0)
-        sev_key = sev.lower()
+        sev_key = str(finding.get("severity", "INFO")).lower()
         if sev_key in severity_counts_lower:
             severity_counts_lower[sev_key] += 1
 
-    total = len(findings_data)
-    if total > 0:
-        max_weight = total * SEVERITY_WEIGHTS["CRITICAL"]
-        risk_score = round(min(100.0, (total_weight / max(max_weight, 1.0)) * 100), 1)
-    else:
-        risk_score = 0.0
-
     return {
         "severity_counts_lower": severity_counts_lower,
-        "risk_score": risk_score,
-        "total_findings": total,
+        "risk_score": risk_score_from_findings(findings_data),
+        "total_findings": len(findings_data),
     }
 
 

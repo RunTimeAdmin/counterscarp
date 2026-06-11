@@ -1,0 +1,7 @@
+ScarpShield — smart contract security agent on Virtuals, powered by Counterscarp.
+
+FREE BETA: Paste Solidity (.sol) in chat. ~2 min scan with Slither, 29+ heuristic rules, protocol fingerprinting (47 protocols), AI enrichment, attack-graph context, risk score, and HTML report links.
+
+Pre-deploy triage for builders and hackathon teams — not a formal audit or investment advice. Verify findings before mainnet.
+
+No wallet needed — just paste code. Web scanner: app.counterscarp.io

@@ -7,7 +7,7 @@ Use this after deploying `/api/v1/scan` on `app.counterscarp.io` and setting `CO
 1. Connect wallet → **Create Agent** → **Agent Console**
 2. **Runtime:** OpenClaw
 3. **Name:** ScarpShield
-4. **Description:** Smart contract security agent powered by Counterscarp. Audits Solidity and Rust code for vulnerabilities.
+4. **Description:** Paste from `AGENT_DESCRIPTION.txt` (500 char limit on Virtuals). Solidity (.sol) only in API beta.
 5. Launch (3 USDC tokenization fee → agent wallet)
 
 ## 2. Paste SOUL.md
@@ -19,7 +19,7 @@ Open **Settings → SOUL.md** (or personality editor) and paste the contents of 
 | Field | Value |
 |-------|-------|
 | **Function name** | `scan_contract` |
-| **Description** | Run a Counterscarp security audit on smart contract source code. Use when the user provides Solidity (.sol) or Rust (.rs) source code to analyze for vulnerabilities. |
+| **Description** | Run a Counterscarp security audit on Solidity (.sol) source code. Use when the user pastes contract source to analyze for vulnerabilities. |
 | **HTTP method** | `POST` |
 | **URL** | `https://app.counterscarp.io/api/v1/scan` |
 | **Content-Type** | `application/json` |

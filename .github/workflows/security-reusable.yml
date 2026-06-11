@@ -1,0 +1,143 @@
+name: CounterScarp Reusable Security Scan
+
+on:
+  workflow_call:
+    inputs:
+      target_path:
+        description: Contract source path to scan
+        required: false
+        type: string
+        default: ./contracts
+      config_path:
+        description: CounterScarp config path
+        required: false
+        type: string
+        default: scarpshield.toml
+      fail_on_severity:
+        description: Fail threshold (CRITICAL|HIGH|MEDIUM|LOW|INFO)
+        required: false
+        type: string
+        default: HIGH
+      enable_solana:
+        description: Enable Solana analyzer when Rust project detected
+        required: false
+        type: boolean
+        default: true
+      python_version:
+        description: Python version for scanner runtime
+        required: false
+        type: string
+        default: "3.11"
+      upload_sarif:
+        description: Upload SARIF report to GitHub Security tab
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  counterscarp-reusable-scan:
+    name: CounterScarp Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install CounterScarp Engine
+        run: |
+          python -m pip install --upgrade pip
+          pip install "counterscarp-engine[web]"
+
+      - name: Validate scan target
+        id: validate_target
+        shell: bash
+        run: |
+          if [ -d "${{ inputs.target_path }}" ] || [ -f "${{ inputs.target_path }}" ]; then
+            echo "target_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "target_exists=false" >> "$GITHUB_OUTPUT"
+            echo "No target found at ${{ inputs.target_path }}; skipping scan."
+          fi
+
+      - name: Run CounterScarp scan
+        if: steps.validate_target.outputs.target_exists == 'true'
+        shell: bash
+        env:
+          INPUT_TARGET_PATH: ${{ inputs.target_path }}
+          INPUT_CONFIG_PATH: ${{ inputs.config_path }}
+          INPUT_FAIL_ON_SEVERITY: ${{ inputs.fail_on_severity }}
+        run: |
+          set -o pipefail
+          case "$INPUT_FAIL_ON_SEVERITY" in
+            CRITICAL|HIGH|MEDIUM|LOW|INFO) ;;
+            *)
+              echo "Invalid fail_on_severity: $INPUT_FAIL_ON_SEVERITY"
+              exit 1
+              ;;
+          esac
+          scarpshield \
+            --target "$INPUT_TARGET_PATH" \
+            --config "$INPUT_CONFIG_PATH" \
+            --fail-on-severity "$INPUT_FAIL_ON_SEVERITY" \
+            --report \
+            --format sarif \
+            > counterscarp_output.txt 2>&1 || true
+          cat counterscarp_output.txt
+
+      - name: Run Solana analyzer
+        if: steps.validate_target.outputs.target_exists == 'true' && inputs.enable_solana
+        shell: bash
+        env:
+          INPUT_TARGET_PATH: ${{ inputs.target_path }}
+        run: |
+          if [ -d "$INPUT_TARGET_PATH/programs" ]; then
+            python -m solana_analyzer "$INPUT_TARGET_PATH/programs" > solana_output.txt 2>&1 || true
+          elif [ -f "$INPUT_TARGET_PATH/Cargo.toml" ]; then
+            python -m solana_analyzer "$INPUT_TARGET_PATH" > solana_output.txt 2>&1 || true
+          else
+            echo "No Solana project detected under target path." > solana_output.txt
+          fi
+
+      - name: Ensure SARIF file exists
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f counterscarp_audit_report.sarif ]; then
+            cat > counterscarp_audit_report.sarif <<'EOF'
+          {
+            "version": "2.1.0",
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "runs": []
+          }
+          EOF
+          fi
+
+      - name: Upload SARIF
+        if: always() && inputs.upload_sarif
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: counterscarp_audit_report.sarif
+          category: counterscarp-reusable
+
+      - name: Upload scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: counterscarp-security-artifacts
+          path: |
+            counterscarp_output.txt
+            solana_output.txt
+            counterscarp_audit_report.sarif
+            **/audit_report.md
+            **/audit_report.html
+            **/ACTION_PLAN.md
+          if-no-files-found: ignore

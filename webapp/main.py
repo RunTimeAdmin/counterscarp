@@ -32,10 +32,20 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.concurrency import run_in_threadpool
-from webapp.auth import auth_router, admin_router, get_current_user, get_license_key_for_request, generate_csrf_token, validate_csrf_token
+from webapp.auth import (
+    auth_router,
+    admin_router,
+    get_current_user,
+    get_license_key_for_request,
+    generate_csrf_token,
+    validate_csrf_token,
+    require_user,
+    csrf_guard,
+)
 from webapp.user_manager import user_manager
 from webapp.config import (
     BASE_DIR,
+    DASHBOARD_PAGE_SIZE,
     FREE_TOOL_MODE,
     MAX_FILE_SIZE,
     RESULTS_DIR,
@@ -59,6 +69,14 @@ from webapp.license_api import append_audit_log, find_license_in_db
 from webapp.routes.scan_api import router as scan_api_router
 from webapp.rate_limiter import RateLimiter, RedisRateLimiter, add_rate_limit_headers, get_client_ip
 from path_security import write_private_file
+from counterscarp_core.severity_scoring import (
+    SEVERITY_WEIGHTS,
+    risk_score_from_findings,
+    pass_fail_from_counts,
+    normalize_counts,
+)
+from webapp.dashboard_service import audit_entry_to_view, load_audits_for_user, paginate
+from webapp.stripe_webhook_handlers import dispatch_webhook_event, WebhookDeps
 from webapp.stripe_integration import (
     create_checkout_session,
     create_payg_checkout,
@@ -586,28 +604,9 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
         severity = finding.get("severity", "INFO")
         severity_counts[severity] = severity_counts.get(severity, 0) + 1
 
-    # Calculate risk score
-    severity_weights = {
-        "CRITICAL": 10.0, "HIGH": 5.0,
-        "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
-    }
-    total_weight = sum(
-        severity_weights.get(f.get("severity", "INFO"), 0)
-        for f in findings_data
-    )
-    max_possible = len(findings_data) * severity_weights["CRITICAL"]
-    risk_score = min(100.0, (total_weight / max(max_possible, 1.0)) * 100) if findings_data else 0.0
-    risk_score = round(risk_score, 1)
-
-    # Determine pass/fail
-    critical_count = severity_counts.get("CRITICAL", 0)
-    high_count = severity_counts.get("HIGH", 0)
-    if critical_count > 0 or high_count > 3:
-        pass_fail = "FAIL"
-    elif high_count > 0:
-        pass_fail = "WARNING"
-    else:
-        pass_fail = "PASS"
+    # Calculate risk score and pass/fail
+    risk_score = risk_score_from_findings(findings_data)
+    pass_fail = pass_fail_from_counts(severity_counts)
 
     # Check for attack graph
     attack_graph_exists = (results_dir / "attack_graph.html").exists()
@@ -747,7 +746,7 @@ def _remove_from_user_audit_index(user_id: str, audit_id: str) -> None:
 
 def _load_audits_from_results_dir(
     user_id: str,
-    severity_weights: Dict[str, float],
+    severity_weights: Dict[str, float] = SEVERITY_WEIGHTS,
 ) -> List[Dict[str, Any]]:
     """Load legacy dashboard audits by walking RESULTS_DIR on disk."""
     loaded: List[Dict[str, Any]] = []
@@ -828,15 +827,7 @@ def _load_audits_from_results_dir(
             except (json.JSONDecodeError, OSError):
                 pass
 
-        if findings_data:
-            total_w = sum(
-                severity_weights.get(fd.get("severity", "INFO"), 0)
-                for fd in findings_data
-            )
-            max_w = len(findings_data) * severity_weights["CRITICAL"]
-            risk_score = round(min(100.0, (total_w / max(max_w, 1.0)) * 100), 1)
-        else:
-            risk_score = 0.0
+        risk_score = risk_score_from_findings(findings_data)
 
         has_report = (
             (entry / "report.pdf").exists()
@@ -888,125 +879,42 @@ async def dashboard_page(request: Request):
     if not current_user:
         return RedirectResponse(url="/auth/login", status_code=302)
 
-    user_id = current_user.get("id")
-    audits: List[Dict] = []
+    user_id = str(current_user.get("id"))
 
-    # --- Fast path: read from per-user audit index ---
-    _used_user_index = False
-    per_user_index = _user_index_file(str(user_id))
-    if per_user_index.exists():
-        try:
-            _user_entries = json.loads(per_user_index.read_text(encoding="utf-8"))
-            if isinstance(_user_entries, list):
-                for entry in _user_entries:
-                    ts = None
-                    ts_raw = entry.get("timestamp", "")
-                    try:
-                        ts = datetime.fromisoformat(ts_raw)
-                    except (ValueError, TypeError):
-                        pass
-                    raw_sev = entry.get("severity_counts", {})
-                    audits.append({
-                        "audit_id": entry.get("audit_id", ""),
-                        "project_name": entry.get("project_name", "Unknown"),
-                        "timestamp": ts,
-                        "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
-                        "severity_counts": {
-                            "CRITICAL": raw_sev.get("critical", 0),
-                            "HIGH": raw_sev.get("high", 0),
-                            "MEDIUM": raw_sev.get("medium", 0),
-                            "LOW": raw_sev.get("low", 0),
-                        },
-                        "risk_score": entry.get("risk_score", 0.0),
-                        "has_report": True,
-                    })
-                _used_user_index = True
-        except (json.JSONDecodeError, OSError):
-            pass
-    elif _USER_AUDIT_INDEX_PATH.exists():
-        # Backward-compatible fallback for legacy global index format.
-        try:
-            _idx_data = json.loads(_USER_AUDIT_INDEX_PATH.read_text(encoding="utf-8"))
-            _user_entries = _idx_data.get(user_id, [])
-            if _user_entries:
-                for entry in _user_entries:
-                    ts = None
-                    ts_raw = entry.get("timestamp", "")
-                    try:
-                        ts = datetime.fromisoformat(ts_raw)
-                    except (ValueError, TypeError):
-                        pass
-                    raw_sev = entry.get("severity_counts", {})
-                    audits.append({
-                        "audit_id": entry.get("audit_id", ""),
-                        "project_name": entry.get("project_name", "Unknown"),
-                        "timestamp": ts,
-                        "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
-                        "severity_counts": {
-                            "CRITICAL": raw_sev.get("critical", 0),
-                            "HIGH": raw_sev.get("high", 0),
-                            "MEDIUM": raw_sev.get("medium", 0),
-                            "LOW": raw_sev.get("low", 0),
-                        },
-                        "risk_score": entry.get("risk_score", 0.0),
-                        "has_report": True,
-                    })
-                _used_user_index = True
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    severity_weights = {
-        "CRITICAL": 10.0, "HIGH": 5.0,
-        "MEDIUM": 2.0, "LOW": 0.5, "INFO": 0.1,
-    }
-
-    if not _used_user_index:
+    def _slow_path_warn(uid: str) -> None:
         global _LEGACY_FALLBACK_HITS
         _LEGACY_FALLBACK_HITS += 1
         logger.warning(
             "Dashboard slow-path hit for user %s (total fallbacks: %d). "
             "Run scripts/backfill_user_index.py to eliminate.",
-            user_id,
+            uid,
             _LEGACY_FALLBACK_HITS,
         )
-        audits.extend(
-            await run_in_threadpool(
-                _load_audits_from_results_dir,
-                str(user_id),
-                severity_weights,
-            )
-        )
 
-    # Sort by timestamp descending (None last)
+    audits = await load_audits_for_user(
+        user_id,
+        user_index_path=_user_index_file(user_id),
+        legacy_global_index_path=_USER_AUDIT_INDEX_PATH,
+        severity_weights=SEVERITY_WEIGHTS,
+        load_from_results_dir=_load_audits_from_results_dir,
+        run_in_threadpool=run_in_threadpool,
+        on_slow_path=_slow_path_warn,
+    )
     audits.sort(key=lambda a: a["timestamp"] or datetime.min, reverse=True)
 
-    # Pagination
-    page_str = request.query_params.get("page", "1")
-    try:
-        page = max(1, int(page_str))
-    except (ValueError, TypeError):
-        page = 1
-    per_page = 20
-    total = len(audits)
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    page = min(page, total_pages)
-    start = (page - 1) * per_page
-    page_audits = audits[start:start + per_page]
+    pg = paginate(audits, request.query_params.get("page", "1"), per_page=DASHBOARD_PAGE_SIZE)
 
-    scan_credits = 0
-    if current_user:
-        from webapp.user_manager import user_manager as _um
-        scan_credits = _um.get_scan_credits(current_user["id"])
+    scan_credits = user_manager.get_scan_credits(user_id)
 
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         context={
             "current_user": current_user,
-            "audits": page_audits,
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
+            "audits": pg["page_items"],
+            "page": pg["page"],
+            "total_pages": pg["total_pages"],
+            "total": pg["total"],
             "scan_credits": scan_credits,
             **_get_grace_period_context(request),
         },
@@ -1018,11 +926,7 @@ async def create_checkout(request: Request):
     if FREE_TOOL_MODE:
         return RedirectResponse(url="/pricing", status_code=303)
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    csrf_guard(request, str(form.get("_csrf_token", "")))
 
     product_key = str(form.get("product", "pro_monthly"))
     base_url = str(request.base_url).rstrip("/")
@@ -1092,11 +996,7 @@ async def payg_checkout(request: Request):
     if FREE_TOOL_MODE:
         return RedirectResponse(url="/pricing", status_code=303)
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    csrf_guard(request, str(form.get("_csrf_token", "")))
 
     current_user = get_current_user(request)
     if not current_user:
@@ -1227,179 +1127,16 @@ async def stripe_webhook(request: Request):
         )
         return JSONResponse({"status": "already_processed"})
 
-    event_type = event.get("type")
-
-    def _is_yearly_interval(interval: str) -> bool:
-        normalized = str(interval or "").strip().lower()
-        return normalized in {"year", "annual", "yearly"}
-
+    deps = WebhookDeps(
+        find_license_by_subscription=find_license_by_subscription,
+        update_license_in_db=update_license_in_db,
+        handle_checkout_completed=handle_checkout_completed,
+        append_audit_log=append_audit_log,
+        logger=logger,
+        ip=ip,
+    )
     try:
-        if event_type == "checkout.session.completed":
-            session = event["data"]["object"]
-            handle_checkout_completed(session)
-
-        elif event_type == "invoice.paid":
-            # Subscription renewal — extend license expiry
-            invoice = event["data"]["object"]
-            subscription_id = invoice.get("subscription", "")
-            if subscription_id:
-                license_entry = find_license_by_subscription(subscription_id)
-                if license_entry:
-                    interval = license_entry.get("billing_interval", "month")
-                    now = datetime.now(timezone.utc)
-                    if _is_yearly_interval(interval):
-                        new_expiry = now + timedelta(days=365)
-                    else:
-                        new_expiry = now + timedelta(days=30)
-
-                    update_license_in_db(
-                        license_entry["key"],
-                        {
-                            "expires_at": new_expiry.strftime("%Y-%m-%d"),
-                            "payment_failed_at": None,
-                        },
-                    )
-                    logger.info(
-                        f"License renewed: {license_entry['key'][:12]}... extended to {new_expiry.strftime('%Y-%m-%d')}"
-                    )
-                    append_audit_log(
-                        "subscription_renewed",
-                        license_entry["key"],
-                        "stripe_webhook",
-                        ip,
-                        {"new_expiry": new_expiry.strftime("%Y-%m-%d")},
-                    )
-
-        elif event_type == "customer.subscription.deleted":
-            subscription = event["data"]["object"]
-            subscription_id = subscription.get("id", "")
-            if subscription_id:
-                license_entry = find_license_by_subscription(subscription_id)
-                if license_entry:
-                    update_license_in_db(
-                        license_entry["key"],
-                        {
-                            "revoked": True,
-                            "revoked_at": datetime.now(timezone.utc).isoformat(),
-                            "revoke_reason": "subscription_cancelled",
-                        },
-                    )
-                    logger.info(
-                        f"License revoked (subscription cancelled): {license_entry['key'][:12]}..."
-                    )
-                    append_audit_log(
-                        "subscription_cancelled",
-                        license_entry["key"],
-                        "stripe_webhook",
-                        ip,
-                        {"reason": "subscription_cancelled"},
-                    )
-
-        elif event_type == "invoice.payment_failed":
-            invoice = event["data"]["object"]
-            subscription_id = invoice.get("subscription", "")
-            if subscription_id:
-                license_entry = find_license_by_subscription(subscription_id)
-                if license_entry:
-                    update_license_in_db(
-                        license_entry["key"],
-                        {"payment_failed_at": datetime.now(timezone.utc).isoformat()},
-                    )
-                    logger.info(
-                        f"Payment failed for license: {license_entry['key'][:12]}... (grace period active)"
-                    )
-                    append_audit_log(
-                        "payment_failed",
-                        license_entry["key"],
-                        "stripe_webhook",
-                        ip,
-                        {"subscription_id": subscription_id},
-                    )
-
-        elif event_type == "customer.subscription.created":
-            subscription = event["data"]["object"]
-            subscription_id = subscription.get("id", "")
-            customer_email = subscription.get("customer_email") or subscription.get(
-                "customer", ""
-            )
-            logger.info(
-                "Subscription created: %s for %s",
-                subscription_id,
-                customer_email,
-            )
-
-        elif event_type == "customer.subscription.updated":
-            subscription = event["data"]["object"]
-            subscription_id = subscription.get("id", "")
-            if subscription_id:
-                license_entry = find_license_by_subscription(subscription_id)
-                if license_entry:
-                    product_key = (
-                        subscription.get("items", {})
-                        .get("data", [{}])[0]
-                        .get("price", {})
-                        .get("metadata", {})
-                        .get("product_key", "")
-                    )
-                    tier_map = {
-                        "dev_monthly": "developer",
-                        "dev_annual": "developer",
-                        "pro_monthly": "pro",
-                        "pro_annual": "pro",
-                        "team_monthly": "team",
-                        "team_annual": "team",
-                    }
-                    max_activations_map = {
-                        "developer": 1,
-                        "pro": 3,
-                        "team": 5,
-                    }
-                    new_tier = tier_map.get(
-                        product_key,
-                        license_entry.get("tier", "developer"),
-                    )
-                    new_max_activations = max_activations_map.get(new_tier, 1)
-                    new_billing_interval = (
-                        "year" if product_key.endswith("_annual") else "month"
-                    )
-
-                    license_key = license_entry["key"]
-                    update_license_in_db(
-                        license_key,
-                        {
-                            "tier": new_tier,
-                            "max_activations": new_max_activations,
-                            "billing_interval": new_billing_interval,
-                        },
-                    )
-                    logger.info(
-                        f"Subscription updated: {license_key[:12]}... tier changed to {new_tier}"
-                    )
-
-        elif event_type == "customer.subscription.resumed":
-            subscription = event["data"]["object"]
-            subscription_id = subscription.get("id", "")
-            if subscription_id:
-                license_entry = find_license_by_subscription(subscription_id)
-                if license_entry:
-                    license_key = license_entry["key"]
-                    interval = license_entry.get("billing_interval", "month")
-                    now = datetime.now(timezone.utc)
-                    if _is_yearly_interval(interval):
-                        new_expiry = now + timedelta(days=365)
-                    else:
-                        new_expiry = now + timedelta(days=30)
-
-                    update_license_in_db(
-                        license_key,
-                        {
-                            "revoked": False,
-                            "revoked_at": None,
-                            "revoke_reason": None,
-                            "expires_at": new_expiry.strftime("%Y-%m-%d"),
-                        },
-                    )
-                    logger.info("Subscription resumed: %s...", license_key[:12])
+        dispatch_webhook_event(event, deps)
     except Exception:
         if event_id:
             unmark_event_processed(event_id)
@@ -1451,11 +1188,7 @@ async def save_api_key(request: Request):
     if not get_current_user(request):
         return RedirectResponse(url="/auth/login", status_code=302)
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    csrf_guard(request, str(form.get("_csrf_token", "")))
 
     api_key = str(form.get("openai_api_key", "")).strip()
     if api_key:
@@ -1673,11 +1406,7 @@ async def save_license_key(request: Request):
     if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    csrf_guard(request, str(form.get("_csrf_token", "")))
 
     license_key = str(form.get("license_key", "")).strip()
 
@@ -1777,13 +1506,8 @@ async def remove_license(request: Request):
     if not current_user:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
 
-    # CSRF validation
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    csrf_guard(request, str(form.get("_csrf_token", "")))
 
     # Log deactivation attempt
     ip = request.client.host if request.client else "unknown"

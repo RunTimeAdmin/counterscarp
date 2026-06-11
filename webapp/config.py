@@ -12,6 +12,14 @@ LOGO_PATH = BASE_DIR / "assets" / "logo_small.png"
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_EXTENSIONS = {".sol", ".rs"}
 
+# Dashboard pagination
+DASHBOARD_PAGE_SIZE: int = 20
+
+# Audit record retention (days)
+USER_AUDIT_RETENTION_DAYS: int = 90
+ADMIN_CLEANUP_AGE_DAYS: int = 30
+RESULT_STALE_DAYS: int = 7
+
 # Deployment environment — set to "production" to enforce strict secret validation
 COUNTERSCARP_ENV = os.environ.get("COUNTERSCARP_ENV", "development")
 FREE_TOOL_MODE = os.environ.get("FREE_TOOL_MODE", "1").lower() in ("1", "true", "yes", "on")
