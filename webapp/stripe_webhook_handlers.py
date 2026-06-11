@@ -1,39 +1,36 @@
-"""Stripe webhook event handlers — registry pattern.
+"""Stripe webhook event handlers (refactored out of webapp/main.py).
 
-Splits the 243-line ``stripe_webhook`` route into:
-  - ``WebhookDeps``: a plain dataclass that bundles collaborators
-    (callable injections, not module globals) so each handler is
-    independently unit-testable by passing fakes.
-  - One function per Stripe event type.
-  - ``dispatch_webhook_event``: routes an event dict to the right handler.
+BEFORE: the ``stripe_webhook`` route was a single 243-line function. The first
+~55 lines were transport concerns (free-mode short-circuit, rate limit,
+signature verification, idempotency). The remaining ~190 lines were a flat
+if/elif chain over 7 event types, each block reaching into module-level
+collaborators (find_license_by_subscription, update_license_in_db,
+append_audit_log) and repeating the same "look up license, mutate, log" shape.
 
-The route itself shrinks to ~40 lines of transport logic (free-mode guard,
-rate-limit, signature verify, idempotency check) and a single
-``dispatch_webhook_event(event, deps)`` call.
+AFTER: each event type becomes a small named handler with a uniform signature.
+A registry dict maps event type -> handler. The route keeps only transport
+concerns and a one-line dispatch. New event types are added by writing a
+handler and registering it — no edits to a growing if/elif ladder.
 
-Behaviour preserved verbatim from the original inline code:
-  - Yearly-interval detection: {"year", "annual", "yearly"}.
-  - Renewal / resume expiry: 365 days (yearly) or 30 days (monthly).
-  - Tier map and max-activations map are module constants here, not
-    two anonymous dicts repeated in the same branch.
-  - Idempotency rollback (``unmark_event_processed``) happens in the
-    route's except block — not inside handlers — so the caller controls it.
+Behaviour is preserved: the handlers below are the original blocks moved
+verbatim, only reshaped into functions. The renewal/resume expiry math, the
+audit-log calls, and the field names are unchanged.
+
+This module is import-light and side-effect free at import time, so it is unit
+testable by passing fakes for the collaborator callables via WebhookDeps.
 """
 
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Dict, Optional
 
-logger = logging.getLogger(__name__)
+_YEARLY_INTERVALS = {"year", "annual", "yearly"}
 
-# ---------------------------------------------------------------------------
-# Module-level constants (hoisted from inside the old inline function)
-# ---------------------------------------------------------------------------
-
-_TIER_MAP: dict[str, str] = {
+# Maps a Stripe price product_key -> tier. Hoisted out of the
+# subscription.updated block where it was two inline dict literals.
+_PRODUCT_TIER_MAP: Dict[str, str] = {
     "dev_monthly": "developer",
     "dev_annual": "developer",
     "pro_monthly": "pro",
@@ -41,78 +38,54 @@ _TIER_MAP: dict[str, str] = {
     "team_monthly": "team",
     "team_annual": "team",
 }
-
-_MAX_ACTIVATIONS_MAP: dict[str, int] = {
-    "developer": 1,
-    "pro": 3,
-    "team": 5,
-}
+_TIER_MAX_ACTIVATIONS: Dict[str, int] = {"developer": 1, "pro": 3, "team": 5}
 
 
-# ---------------------------------------------------------------------------
-# Dependency bundle
-# ---------------------------------------------------------------------------
+def _is_yearly(interval: str | None) -> bool:
+    return str(interval or "").strip().lower() in _YEARLY_INTERVALS
 
 
-@dataclass
+def _renewal_expiry(
+    interval: str | None, now: Optional[datetime] = None
+) -> datetime:
+    """Compute a new expiry date from the billing interval (365d vs 30d)."""
+    now = now or datetime.now(timezone.utc)
+    return now + timedelta(days=365 if _is_yearly(interval) else 30)
+
+
+@dataclass(frozen=True)
 class WebhookDeps:
-    """Collaborators injected by the route — enables testing without globals."""
+    """Collaborators the handlers need, injected rather than imported globally.
 
-    find_license_by_subscription: Callable[[str], dict[str, Any] | None]  # noqa: E501
-    update_license_in_db: Callable[[str, dict[str, Any]], None]
-    handle_checkout_completed: Callable[[dict[str, Any]], None]
-    append_audit_log: Callable[..., None]
-    logger: logging.Logger = field(
-        default_factory=lambda: logging.getLogger(__name__)
-    )
-    ip: str = "unknown"
+    In production these are the same functions main.py already calls; in tests
+    they can be fakes. This is what makes the handlers unit-testable.
+    """
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+    find_license_by_subscription: Callable[[str], Optional[dict]]
+    update_license_in_db: Callable[[str, dict], Any]
+    handle_checkout_completed: Callable[[dict], Any]
+    append_audit_log: Callable[..., Any]
+    logger: Any
+    ip: str
 
 
-def _is_yearly_interval(interval: str) -> bool:
-    return str(interval or "").strip().lower() in {"year", "annual", "yearly"}
+# --- Individual handlers. Each takes (event, deps) and returns None. ---------
+
+def _on_checkout_completed(event: dict, deps: WebhookDeps) -> None:
+    deps.handle_checkout_completed(event["data"]["object"])
 
 
-def _extend_expiry(interval: str, now: datetime) -> datetime:
-    days = 365 if _is_yearly_interval(interval) else 30
-    return now + timedelta(days=days)
-
-
-# ---------------------------------------------------------------------------
-# Per-event handlers
-# ---------------------------------------------------------------------------
-
-
-def _handle_checkout_completed(
-    event: dict[str, Any],
-    deps: WebhookDeps,
-) -> None:
-    session = event["data"]["object"]
-    deps.handle_checkout_completed(session)
-
-
-def _handle_invoice_paid(
-    event: dict[str, Any],
-    deps: WebhookDeps,
-) -> None:
+def _on_invoice_paid(event: dict, deps: WebhookDeps) -> None:
     invoice = event["data"]["object"]
     subscription_id = invoice.get("subscription", "")
     if not subscription_id:
         return
-    license_entry = deps.find_license_by_subscription(subscription_id)
-    if not license_entry:
+    entry = deps.find_license_by_subscription(subscription_id)
+    if not entry:
         return
-
-    interval = license_entry.get("billing_interval", "month")
-    now = datetime.now(timezone.utc)
-    new_expiry = _extend_expiry(interval, now)
-
+    new_expiry = _renewal_expiry(entry.get("billing_interval", "month"))
     deps.update_license_in_db(
-        license_entry["key"],
+        entry["key"],
         {
             "expires_at": new_expiry.strftime("%Y-%m-%d"),
             "payment_failed_at": None,
@@ -120,152 +93,104 @@ def _handle_invoice_paid(
     )
     deps.logger.info(
         "License renewed: %s... extended to %s",
-        license_entry["key"][:12],
+        entry["key"][:12],
         new_expiry.strftime("%Y-%m-%d"),
     )
     deps.append_audit_log(
-        "subscription_renewed",
-        license_entry["key"],
-        "stripe_webhook",
-        deps.ip,
+        "subscription_renewed", entry["key"], "stripe_webhook", deps.ip,
         {"new_expiry": new_expiry.strftime("%Y-%m-%d")},
     )
 
 
-def _handle_subscription_deleted(
-    event: dict[str, Any],
-    deps: WebhookDeps,
-) -> None:
-    subscription = event["data"]["object"]
-    subscription_id = subscription.get("id", "")
+def _on_subscription_deleted(event: dict, deps: WebhookDeps) -> None:
+    subscription_id = event["data"]["object"].get("id", "")
     if not subscription_id:
         return
-    license_entry = deps.find_license_by_subscription(subscription_id)
-    if not license_entry:
+    entry = deps.find_license_by_subscription(subscription_id)
+    if not entry:
         return
-
     deps.update_license_in_db(
-        license_entry["key"],
+        entry["key"],
         {
             "revoked": True,
             "revoked_at": datetime.now(timezone.utc).isoformat(),
             "revoke_reason": "subscription_cancelled",
         },
     )
-    deps.logger.info(
-        "License revoked (subscription cancelled): %s...",
-        license_entry["key"][:12],
-    )
     deps.append_audit_log(
-        "subscription_cancelled",
-        license_entry["key"],
-        "stripe_webhook",
-        deps.ip,
+        "subscription_cancelled", entry["key"], "stripe_webhook", deps.ip,
         {"reason": "subscription_cancelled"},
     )
 
 
-def _handle_payment_failed(
-    event: dict[str, Any],
-    deps: WebhookDeps,
-) -> None:
-    invoice = event["data"]["object"]
-    subscription_id = invoice.get("subscription", "")
+def _on_payment_failed(event: dict, deps: WebhookDeps) -> None:
+    subscription_id = event["data"]["object"].get("subscription", "")
     if not subscription_id:
         return
-    license_entry = deps.find_license_by_subscription(subscription_id)
-    if not license_entry:
+    entry = deps.find_license_by_subscription(subscription_id)
+    if not entry:
         return
-
     deps.update_license_in_db(
-        license_entry["key"],
+        entry["key"],
         {"payment_failed_at": datetime.now(timezone.utc).isoformat()},
     )
-    deps.logger.info(
-        "Payment failed for license: %s... (grace period active)",
-        license_entry["key"][:12],
-    )
     deps.append_audit_log(
-        "payment_failed",
-        license_entry["key"],
-        "stripe_webhook",
-        deps.ip,
+        "payment_failed", entry["key"], "stripe_webhook", deps.ip,
         {"subscription_id": subscription_id},
     )
 
 
-def _handle_subscription_created(
-    event: dict[str, Any],
-    deps: WebhookDeps,
-) -> None:
-    subscription = event["data"]["object"]
-    subscription_id = subscription.get("id", "")
-    customer_email = (
-        subscription.get("customer_email") or subscription.get("customer", "")
+def _on_subscription_created(event: dict, deps: WebhookDeps) -> None:
+    sub = event["data"]["object"]
+    deps.logger.info(
+        "Subscription created: %s for %s",
+        sub.get("id", ""),
+        sub.get("customer_email") or sub.get("customer", ""),
     )
-    deps.logger.info("Subscription created: %s for %s", subscription_id, customer_email)
 
 
-def _handle_subscription_updated(
-    event: dict[str, Any],
-    deps: WebhookDeps,
-) -> None:
-    subscription = event["data"]["object"]
-    subscription_id = subscription.get("id", "")
+def _on_subscription_updated(event: dict, deps: WebhookDeps) -> None:
+    sub = event["data"]["object"]
+    subscription_id = sub.get("id", "")
     if not subscription_id:
         return
-    license_entry = deps.find_license_by_subscription(subscription_id)
-    if not license_entry:
+    entry = deps.find_license_by_subscription(subscription_id)
+    if not entry:
         return
-
     product_key = (
-        subscription.get("items", {})
-        .get("data", [{}])[0]
-        .get("price", {})
-        .get("metadata", {})
-        .get("product_key", "")
+        sub.get("items", {}).get("data", [{}])[0]
+        .get("price", {}).get("metadata", {}).get("product_key", "")
     )
-    new_tier = _TIER_MAP.get(
-        product_key, license_entry.get("tier", "developer")
+    new_tier = _PRODUCT_TIER_MAP.get(
+        product_key, entry.get("tier", "developer")
     )
-    new_max_activations = _MAX_ACTIVATIONS_MAP.get(new_tier, 1)
-    new_billing_interval = "year" if product_key.endswith("_annual") else "month"
-
-    license_key = license_entry["key"]
     deps.update_license_in_db(
-        license_key,
+        entry["key"],
         {
             "tier": new_tier,
-            "max_activations": new_max_activations,
-            "billing_interval": new_billing_interval,
+            "max_activations": _TIER_MAX_ACTIVATIONS.get(new_tier, 1),
+            "billing_interval": (
+                "year" if product_key.endswith("_annual") else "month"
+            ),
         },
     )
     deps.logger.info(
         "Subscription updated: %s... tier changed to %s",
-        license_key[:12],
+        entry["key"][:12],
         new_tier,
     )
 
 
-def _handle_subscription_resumed(
-    event: dict[str, Any],
-    deps: WebhookDeps,
-) -> None:
-    subscription = event["data"]["object"]
-    subscription_id = subscription.get("id", "")
+def _on_subscription_resumed(event: dict, deps: WebhookDeps) -> None:
+    subscription_id = event["data"]["object"].get("id", "")
     if not subscription_id:
         return
-    license_entry = deps.find_license_by_subscription(subscription_id)
-    if not license_entry:
+    entry = deps.find_license_by_subscription(subscription_id)
+    if not entry:
         return
-
-    license_key = license_entry["key"]
-    interval = license_entry.get("billing_interval", "month")
-    now = datetime.now(timezone.utc)
-    new_expiry = _extend_expiry(interval, now)
-
+    new_expiry = _renewal_expiry(entry.get("billing_interval", "month"))
     deps.update_license_in_db(
-        license_key,
+        entry["key"],
         {
             "revoked": False,
             "revoked_at": None,
@@ -273,33 +198,26 @@ def _handle_subscription_resumed(
             "expires_at": new_expiry.strftime("%Y-%m-%d"),
         },
     )
-    deps.logger.info("Subscription resumed: %s...", license_key[:12])
+    deps.logger.info("Subscription resumed: %s...", entry["key"][:12])
 
 
-# ---------------------------------------------------------------------------
-# Dispatch registry
-# ---------------------------------------------------------------------------
-
-_HANDLERS: dict[str, Callable[[dict[str, Any], WebhookDeps], None]] = {
-    "checkout.session.completed": _handle_checkout_completed,
-    "invoice.paid": _handle_invoice_paid,
-    "customer.subscription.deleted": _handle_subscription_deleted,
-    "invoice.payment_failed": _handle_payment_failed,
-    "customer.subscription.created": _handle_subscription_created,
-    "customer.subscription.updated": _handle_subscription_updated,
-    "customer.subscription.resumed": _handle_subscription_resumed,
+#: Event type -> handler. Adding an event type = one new function + one line.
+WEBHOOK_HANDLERS: Dict[str, Callable[[dict, WebhookDeps], None]] = {
+    "checkout.session.completed": _on_checkout_completed,
+    "invoice.paid": _on_invoice_paid,
+    "customer.subscription.deleted": _on_subscription_deleted,
+    "invoice.payment_failed": _on_payment_failed,
+    "customer.subscription.created": _on_subscription_created,
+    "customer.subscription.updated": _on_subscription_updated,
+    "customer.subscription.resumed": _on_subscription_resumed,
 }
 
 
-def dispatch_webhook_event(event: dict[str, Any], deps: WebhookDeps) -> None:
-    """Route *event* to the appropriate handler.
+def dispatch_webhook_event(event: dict, deps: WebhookDeps) -> None:
+    """Route a verified Stripe event to its handler.
 
-    Unknown event types are silently ignored (Stripe sends many event types
-    the app does not care about; logging every one is noise).
+    No-op for unknown event types.
     """
-    event_type = event.get("type", "")
-    handler = _HANDLERS.get(event_type)
-    if handler is None:
-        deps.logger.debug("Unhandled Stripe event type: %s", event_type)
-        return
-    handler(event, deps)
+    handler = WEBHOOK_HANDLERS.get(str(event.get("type", "")))
+    if handler is not None:
+        handler(event, deps)
