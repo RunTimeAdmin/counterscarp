@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
+from counterscarp_core.severity_scoring import normalize_counts
+
 
 # ---------------------------------------------------------------------------
 # Entry converter
@@ -42,23 +44,14 @@ def audit_entry_to_view(
     except (ValueError, TypeError):
         pass
 
-    raw_sev = entry.get("severity_counts", {})
-
-    def _coerce(key_upper: str, key_lower: str) -> int:
-        # Accepts either UPPER or lower storage format
-        return int(raw_sev.get(key_upper, raw_sev.get(key_lower, 0)))
-
     return {
         "audit_id": entry.get("audit_id", ""),
         "project_name": entry.get("project_name", "Unknown"),
         "timestamp": ts,
         "timestamp_display": ts.strftime("%b %d, %Y %H:%M") if ts else "N/A",
-        "severity_counts": {
-            "CRITICAL": _coerce("CRITICAL", "critical"),
-            "HIGH": _coerce("HIGH", "high"),
-            "MEDIUM": _coerce("MEDIUM", "medium"),
-            "LOW": _coerce("LOW", "low"),
-        },
+        "severity_counts": normalize_counts(
+            entry.get("severity_counts", {}), to_upper=True
+        ),
         "risk_score": float(entry.get("risk_score", 0.0)),
         "has_report": has_report,
     }

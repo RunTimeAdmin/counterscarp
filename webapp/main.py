@@ -71,9 +71,10 @@ from webapp.rate_limiter import RateLimiter, RedisRateLimiter, add_rate_limit_he
 from path_security import write_private_file
 from counterscarp_core.severity_scoring import (
     SEVERITY_WEIGHTS,
+    empty_counts,
+    normalize_counts,
     risk_score_from_findings,
     pass_fail_from_counts,
-    normalize_counts,
 )
 from webapp.dashboard_service import audit_entry_to_view, load_audits_for_user, paginate
 from webapp.stripe_webhook_handlers import dispatch_webhook_event, WebhookDeps
@@ -596,15 +597,13 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
     with open(findings_path, "r", encoding="utf-8") as f:
         findings_data = json.load(f)
 
-    # Calculate severity counts
-    severity_counts = {
-        "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0,
-    }
+    # Calculate severity counts and risk metrics
+    severity_counts = empty_counts()
     for finding in findings_data:
-        severity = finding.get("severity", "INFO")
-        severity_counts[severity] = severity_counts.get(severity, 0) + 1
+        sev = str(finding.get("severity", "INFO")).upper()
+        if sev in severity_counts:
+            severity_counts[sev] += 1
 
-    # Calculate risk score and pass/fail
     risk_score = risk_score_from_findings(findings_data)
     pass_fail = pass_fail_from_counts(severity_counts)
 
@@ -780,13 +779,9 @@ def _load_audits_from_results_dir(
                     ts = datetime.fromisoformat(timestamp_raw)
                 except (ValueError, TypeError):
                     ts = None
-                raw_sev = idx.get("severity_counts", {})
-                sev_counts = {
-                    "CRITICAL": raw_sev.get("critical", 0),
-                    "HIGH": raw_sev.get("high", 0),
-                    "MEDIUM": raw_sev.get("medium", 0),
-                    "LOW": raw_sev.get("low", 0),
-                }
+                sev_counts = normalize_counts(
+                    idx.get("severity_counts", {}), to_upper=True
+                )
                 has_report = (
                     idx.get("has_pdf", False)
                     or idx.get("has_html", False)

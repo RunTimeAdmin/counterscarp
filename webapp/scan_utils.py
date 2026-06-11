@@ -51,6 +51,8 @@ from logger import get_logger
 from counterscarp_core.severity import SEVERITY_RANK as _SEVERITY_ORDER
 from counterscarp_core.severity_scoring import (
     SEVERITY_WEIGHTS,
+    empty_counts,
+    normalize_counts,
     risk_score_from_findings,
     pass_fail_from_counts,
 )
@@ -94,7 +96,7 @@ def count_lines(path: str) -> int:
 
 def summarize_findings_data(findings_data: list[dict]) -> dict:
     """Compute severity counts and normalized risk score in one pass."""
-    severity_counts_lower = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    severity_counts_lower = empty_counts(lowercase=True)
     for finding in findings_data:
         sev_key = str(finding.get("severity", "INFO")).lower()
         if sev_key in severity_counts_lower:
