@@ -76,7 +76,7 @@ from counterscarp_core.severity_scoring import (
     risk_score_from_findings,
     pass_fail_from_counts,
 )
-from webapp.dashboard_service import audit_entry_to_view, load_audits_for_user, paginate
+from webapp.dashboard_service import load_audits_for_user, paginate
 from webapp.stripe_webhook_handlers import dispatch_webhook_event, WebhookDeps
 from webapp.stripe_integration import (
     create_checkout_session,
