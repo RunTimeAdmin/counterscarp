@@ -364,6 +364,11 @@ async def startup_event():
     """Initialize on startup."""
     validate_production_config()
     ensure_directories()
+
+    # Initialise cross-process audit index (shared with arq worker)
+    from webapp import audit_index as _audit_index
+    _audit_index.configure(BASE_DIR / "data" / "user_audit_index")
+
     # Expose rate limiters via app.state for use in auth router
     app.state.login_limiter = _login_limiter
     app.state.register_limiter = _register_limiter
@@ -699,9 +704,9 @@ def _write_scan_index(results_dir: Path, audit_id: str, findings_data: list, sca
     index_path.write_text(json.dumps(index, indent=2), encoding="utf-8")
 
 
-_USER_AUDIT_INDEX_PATH: Path = BASE_DIR / "data" / "user_audit_index.json"
+from webapp import audit_index as _audit_index
+
 _USER_AUDIT_INDEX_DIR: Path = BASE_DIR / "data" / "user_audit_index"
-_user_audit_index_lock = __import__("threading").Lock()
 _LEGACY_FALLBACK_HITS = 0
 
 
@@ -726,56 +731,18 @@ def _get_audit_owner(results_dir: Path) -> Optional[str]:
 
 
 def _update_user_audit_index(user_id: str, audit_summary: dict) -> None:
-    """Append an audit summary to the per-user audit index for O(1) dashboard reads."""
-    if not user_id:
-        return
-    with _user_audit_index_lock:
-        index_path = _user_index_file(user_id)
-        user_audits: List[Dict[str, Any]] = []
-        if index_path.exists():
-            try:
-                loaded = json.loads(index_path.read_text(encoding="utf-8"))
-                if isinstance(loaded, list):
-                    user_audits = loaded
-            except (json.JSONDecodeError, OSError):
-                user_audits = []
-        user_audits.append(audit_summary)
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = index_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(user_audits, indent=2), encoding="utf-8")
-        tmp.replace(index_path)
+    """Append an audit summary to the per-user audit index (cross-process safe)."""
+    _audit_index.append(user_id, audit_summary)
 
 
 def _write_user_audit_index(user_id: str, user_audits: List[Dict[str, Any]]) -> None:
     """Replace per-user audit index atomically with provided list."""
-    if not user_id:
-        return
-    with _user_audit_index_lock:
-        index_path = _user_index_file(user_id)
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = index_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(user_audits, indent=2), encoding="utf-8")
-        tmp.replace(index_path)
+    _audit_index.replace(user_id, user_audits)
 
 
 def _remove_from_user_audit_index(user_id: str, audit_id: str) -> None:
     """Remove an audit entry from the per-user audit index."""
-    if not user_id:
-        return
-    with _user_audit_index_lock:
-        index_path = _user_index_file(user_id)
-        user_audits: List[Dict[str, Any]] = []
-        if index_path.exists():
-            try:
-                loaded = json.loads(index_path.read_text(encoding="utf-8"))
-                if isinstance(loaded, list):
-                    user_audits = loaded
-            except (json.JSONDecodeError, OSError):
-                user_audits = []
-        updated = [entry for entry in user_audits if entry.get("audit_id") != audit_id]
-        tmp = index_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(updated, indent=2), encoding="utf-8")
-        tmp.replace(index_path)
+    _audit_index.remove(user_id, audit_id)
 
 
 def _load_audits_from_results_dir(
@@ -907,7 +874,7 @@ def _load_audits_from_results_dir(
                 }
             )
         persisted.sort(key=lambda item: item.get("timestamp", ""))
-        _write_user_audit_index(user_id, persisted)
+        _audit_index.replace(user_id, persisted)
     except OSError as exc:
         logger.warning("Could not write per-user index for %s: %s", user_id, exc)
 

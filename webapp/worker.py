@@ -64,37 +64,12 @@ def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-import threading
-
-_user_audit_index_lock = threading.Lock()
-
-
-def _user_index_file(user_id: str) -> Path:
-    """Return a per-user audit index file path with sanitized filename."""
-    import re
-    safe_user = re.sub(r"[^a-zA-Z0-9_-]", "_", user_id)[:128]
-    return (_project_root / "data" / "user_audit_index") / f"{safe_user}.json"
+from webapp import audit_index as _audit_index
 
 
 def _update_user_audit_index_worker(user_id: str, audit_summary: dict) -> None:
-    """Append an audit summary to the per-user audit index (worker variant)."""
-    if not user_id:
-        return
-    index_path = _user_index_file(user_id)
-    with _user_audit_index_lock:
-        user_audits: list = []
-        if index_path.exists():
-            try:
-                loaded = json.loads(index_path.read_text(encoding="utf-8"))
-                if isinstance(loaded, list):
-                    user_audits = loaded
-            except (json.JSONDecodeError, OSError):
-                user_audits = []
-        user_audits.append(audit_summary)
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = index_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(user_audits, indent=2), encoding="utf-8")
-        tmp.replace(index_path)
+    """Append an audit summary to the per-user audit index (cross-process safe)."""
+    _audit_index.append(user_id, audit_summary)
 
 
 def _send_scan_notification(email: str, audit_id: str, status: str, project_name: str) -> None:
@@ -192,6 +167,8 @@ async def run_audit(
     )
     from heuristic_scanner import scan_target
     from report_generator import Finding, create_audit_report
+    from license_manager import LicenseManager
+    from webapp.web_pipeline import build_web_scan_context, run_web_pipeline
 
     results_dir = RESULTS_DIR / audit_id
     upload_dir = UPLOAD_DIR / audit_id
@@ -200,53 +177,141 @@ async def run_audit(
     started_at = _iso_now()
     _write_status(results_dir, "running", "Starting scan...", started_at)
 
+    # Resolve license tier for pipeline gating
+    _lm = LicenseManager()
+    _tier = _lm.get_tier()
+
+    # --- Engine pipeline scan (replaces bespoke per-phase calls below) ---
     try:
-        # 1. Heuristic scan
-        _write_status(results_dir, "running", "Running heuristic scan...", started_at)
+        scan_ctx = build_web_scan_context(
+            target=str(upload_dir),
+            output_dir=results_dir,
+            license_tier=_tier,
+        )
+        _write_status(results_dir, "running", "Running analysis pipeline...", started_at)
+        await run_web_pipeline(scan_ctx)
+        logger.info("Audit %s: pipeline complete", audit_id)
+    except Exception as _pipeline_exc:
+        # Pipeline failure is non-fatal for the bespoke fallback path so that
+        # users still get results. Log as error and continue with legacy flow.
+        logger.error(
+            "Audit %s: engine pipeline failed (%s) — falling back to legacy scan",
+            audit_id, _pipeline_exc,
+        )
+        scan_ctx = None  # type: ignore[assignment]
+
+    if scan_ctx is not None:
+        # Fast-path: convert pipeline context results into Finding objects
         findings: List[Finding] = []
-        for fp_str in uploaded_paths:
-            heuristic_findings = scan_target(fp_str)
-            for hf in heuristic_findings:
-                findings.append(heuristic_finding_to_finding(hf))
-        heuristic_count = len(findings)
-
-        # 2. Protocol fingerprint + fork logic checks
-        _write_status(
-            results_dir,
-            "running",
-            "Running protocol fingerprint scan...",
-            started_at,
-        )
-        from webapp.scan_utils import run_protocol_fingerprint_analysis
-
-        fingerprint_findings, fingerprint_status, fingerprint_meta = (
-            run_protocol_fingerprint_analysis(uploaded_paths)
-        )
-        findings.extend(fingerprint_findings)
-
-        # 3. Slither analysis
-        _write_status(results_dir, "running", "Running Slither analysis...", started_at)
-        slither_findings: list[Finding] = []
+        for h in scan_ctx.heuristic_results:
+            findings.append(heuristic_finding_to_finding(
+                type("_HF", (), h)()  # thin shim — heuristic_finding_to_finding expects an object
+                if False else type("_HF", (), {
+                    "rule_id": h.get("rule_id", "UNKNOWN"),
+                    "severity": h.get("severity", "INFO"),
+                    "message": h.get("message", ""),
+                    "file": h.get("file", ""),
+                    "line_no": h.get("line_no", 0),
+                    "line_text": h.get("line_text", ""),
+                    "category": h.get("category", "Heuristic"),
+                    "hint": h.get("hint", ""),
+                    "references": h.get("references", []),
+                    "suppressed": h.get("suppressed", False),
+                })()
+            ))
+        for s in scan_ctx.static_issues:
+            from webapp.scan_utils import _slither_dict_to_finding
+            if callable(getattr(__import__("webapp.scan_utils", fromlist=["_slither_dict_to_finding"]), "_slither_dict_to_finding", None)):
+                try:
+                    findings.append(
+                        __import__("webapp.scan_utils", fromlist=["_slither_dict_to_finding"])
+                        ._slither_dict_to_finding(s)
+                    )
+                except Exception:
+                    pass
+        for fp in scan_ctx.fingerprint_results:
+            try:
+                findings.append(heuristic_finding_to_finding(
+                    type("_FP", (), {
+                        "rule_id": fp.get("rule_id", "FINGERPRINT"),
+                        "severity": fp.get("severity", "INFO"),
+                        "message": fp.get("message", fp.get("description", "")),
+                        "file": fp.get("file", ""),
+                        "line_no": fp.get("line_no", 0),
+                        "line_text": fp.get("line_text", ""),
+                        "category": fp.get("category", "Fingerprint"),
+                        "hint": fp.get("hint", ""),
+                        "references": fp.get("references", []),
+                        "suppressed": False,
+                    })()
+                ))
+            except Exception:
+                pass
+        heuristic_count = len([f for f in findings if not hasattr(f, "_from_static")])
+        fingerprint_findings = [f for f in findings if getattr(f, "_category", "") == "Fingerprint"]
+        fingerprint_status = "completed" if fingerprint_findings else "skipped"
+        fingerprint_meta: dict = {}
+        slither_findings = [
+            f for f in findings
+            if getattr(f, "rule_id", "").startswith("SLITHER") or getattr(f, "_from_static", False)
+        ]
+        slither_status = "completed" if slither_findings else "skipped"
+        ai_status = "skipped"
+    else:
+        # Legacy bespoke scan path (fallback only)
+        findings = []
+        heuristic_count = 0
+        slither_findings = []
         slither_status = "skipped"
-        sol_paths = [fp for fp in uploaded_paths if fp.endswith(".sol")]
-        if sol_paths:
-            slither_project_mode = (
-                os.environ.get("SLITHER_PROJECT_MODE", "1").lower()
-                in {"1", "true", "yes", "on"}
+        fingerprint_findings = []
+        fingerprint_status = "skipped"
+        fingerprint_meta = {}
+        ai_status = "skipped"
+
+    try:
+        if scan_ctx is None:
+            # Legacy bespoke scan (fallback when pipeline fails)
+            # 1. Heuristic scan
+            _write_status(results_dir, "running", "Running heuristic scan...", started_at)
+            for fp_str in uploaded_paths:
+                heuristic_findings = scan_target(fp_str)
+                for hf in heuristic_findings:
+                    findings.append(heuristic_finding_to_finding(hf))
+            heuristic_count = len(findings)
+
+            # 2. Protocol fingerprint + fork logic checks
+            _write_status(
+                results_dir, "running", "Running protocol fingerprint scan...", started_at,
             )
-            if slither_project_mode:
-                sf, status = run_slither_analysis(str(upload_dir), UPLOAD_DIR)
-                slither_findings.extend(sf)
-                slither_status = _merge_slither_status(slither_status, status)
-            else:
-                max_workers = min(4, len(sol_paths))
-                with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                    futures = [pool.submit(run_slither_analysis, fp) for fp in sol_paths]
-                    for future in as_completed(futures):
-                        sf, status = future.result()
-                        slither_findings.extend(sf)
-                        slither_status = _merge_slither_status(slither_status, status)
-        findings.extend(slither_findings)
+            from webapp.scan_utils import run_protocol_fingerprint_analysis
+            fingerprint_findings, fingerprint_status, fingerprint_meta = (
+                run_protocol_fingerprint_analysis(uploaded_paths)
+            )
+            findings.extend(fingerprint_findings)
+
+            # 3. Slither analysis
+            _write_status(results_dir, "running", "Running Slither analysis...", started_at)
+            slither_findings_local: list[Finding] = []
+            sol_paths = [fp for fp in uploaded_paths if fp.endswith(".sol")]
+            if sol_paths:
+                slither_project_mode = (
+                    os.environ.get("SLITHER_PROJECT_MODE", "1").lower()
+                    in {"1", "true", "yes", "on"}
+                )
+                if slither_project_mode:
+                    sf, status = run_slither_analysis(str(upload_dir), UPLOAD_DIR)
+                    slither_findings_local.extend(sf)
+                    slither_status = _merge_slither_status(slither_status, status)
+                else:
+                    max_workers = min(4, len(sol_paths))
+                    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                        futures = [pool.submit(run_slither_analysis, fp) for fp in sol_paths]
+                        for future in as_completed(futures):
+                            sf, status = future.result()
+                            slither_findings_local.extend(sf)
+                            slither_status = _merge_slither_status(slither_status, status)
+            slither_findings = slither_findings_local
+            findings.extend(slither_findings)
 
         # 3. AI Copilot
         _write_status(results_dir, "running", "Running AI Copilot analysis...", started_at)
@@ -409,6 +474,12 @@ def _redis_settings() -> RedisSettings:
     return RedisSettings.from_dsn(dsn)
 
 
+async def _on_startup(ctx: dict) -> None:
+    """Initialise shared state before the first job runs."""
+    _audit_index.configure(_project_root / "data" / "user_audit_index")
+    logger.info("audit_index configured at %s", _project_root / "data" / "user_audit_index")
+
+
 class WorkerSettings:
     """arq worker configuration.
 
@@ -416,6 +487,7 @@ class WorkerSettings:
     """
 
     functions = [run_audit]
+    on_startup = _on_startup
     redis_settings = _redis_settings()
     max_jobs = 4
     job_timeout = 600  # 10 minutes per audit

@@ -50,6 +50,7 @@ _OFFLINE_RESULT: Dict[str, Any] = {
 
 # Import exceptions (core module — must always be available)
 from exceptions import CounterscarpError, CounterscarpConfigError
+from counterscarp_core.severity import SEVERITY_RANK
 
 # Import logger with fallback
 get_logger: Optional[Callable[[str], Logger]] = None
@@ -1081,7 +1082,6 @@ class AuditCopilot:
             List of enriched findings (some may have rag_status='offline').
         """
         # --- Rate-limiting: cap LLM calls to 20 highest-severity findings ---
-        _SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
         LLM_CAP = 20
 
         # Determine which findings qualify for LLM enrichment
@@ -1090,7 +1090,7 @@ class AuditCopilot:
         if self.llm_enrichment and _llm_backend != "none":
             sorted_by_severity = sorted(
                 range(len(findings)),
-                key=lambda i: _SEVERITY_ORDER.get(
+                key=lambda i: SEVERITY_RANK.get(
                     str(findings[i].get("severity", "INFO")).upper(), 4
                 ),
             )

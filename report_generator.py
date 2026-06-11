@@ -16,6 +16,7 @@ from pathlib import Path
 
 from logger import get_logger
 from exceptions import CounterscarpReportError
+from counterscarp_core.severity import SEVERITY_RANK
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -1326,8 +1327,7 @@ def create_audit_report(
     report_sections = []
     for category, category_findings in sections.items():
         # Sort by severity
-        severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
-        category_findings.sort(key=lambda f: severity_order.get(f.severity, 5))
+        category_findings.sort(key=lambda f: SEVERITY_RANK.get(f.severity, 5))
         
         section = ReportSection(
             title=f"{category} Analysis",

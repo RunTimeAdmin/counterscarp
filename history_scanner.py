@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
 from path_security import sanitize_cli_path, validate_git_branch_name, validate_git_since_date
+from counterscarp_core.severity import SEVERITY_LABELS
 
 # Import exceptions (core module — must always be available)
 from exceptions import (
@@ -603,9 +604,8 @@ def generate_trends(
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
     
     # Order by severity
-    severity_order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
     trends["severity_distribution"] = {
-        sev: severity_counts.get(sev, 0) for sev in severity_order
+        sev: severity_counts.get(sev, 0) for sev in SEVERITY_LABELS
     }
     
     # Summary stats

@@ -48,6 +48,7 @@ except (ImportError, AttributeError):
 from attack_graph import build_graph, export_graph_json
 from visualizer import generate_attack_graph_html
 from logger import get_logger
+from counterscarp_core.severity import SEVERITY_RANK as _SEVERITY_ORDER
 
 logger = get_logger(__name__)
 
@@ -119,13 +120,7 @@ def summarize_findings_data(findings_data: list[dict]) -> dict:
     }
 
 
-_SEVERITY_ORDER = {
-    "CRITICAL": 0,
-    "HIGH": 1,
-    "MEDIUM": 2,
-    "LOW": 3,
-    "INFO": 4,
-}
+# _SEVERITY_ORDER imported from counterscarp_core.severity above
 
 SCAN_DISCLAIMER = (
     "Disclaimer: Automated scan only — not a formal audit or investment advice. "

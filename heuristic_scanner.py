@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from path_security import sanitize_cli_path
+from counterscarp_core.severity import SEVERITY_RANK
 
 # Import logger
 try:
@@ -1141,10 +1142,9 @@ def print_report(findings: List[HeuristicFinding], show_suppressed: bool = False
         print("[+] No active heuristic flags detected. (This does not guarantee safety.)")
     else:
         # Sort by severity then file/line
-        severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
         findings_sorted = sorted(
             active_findings,
-            key=lambda f: (severity_order.get(f.severity, 5), f.file, f.line_no),
+            key=lambda f: (SEVERITY_RANK.get(f.severity, 5), f.file, f.line_no),
         )
 
         for f in findings_sorted:

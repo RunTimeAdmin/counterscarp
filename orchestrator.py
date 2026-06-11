@@ -18,6 +18,7 @@ from path_security import (
     sanitize_project_slug,
 )
 from exceptions import CounterscarpValidationError
+from counterscarp_core.severity import SEVERITY_RANK, sort_findings
 
 from logger import get_logger, setup_logging
 
@@ -290,8 +291,7 @@ def _aggregate_findings(
             })
 
     # Sort: CRITICAL first
-    _severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
-    all_findings.sort(key=lambda _x: _severity_order.get(_x.get("severity", "MEDIUM").upper(), 5))
+    all_findings.sort(key=lambda _x: SEVERITY_RANK.get(_x.get("severity", "MEDIUM").upper(), 5))
 
     return all_findings
 
@@ -1651,7 +1651,6 @@ def main() -> None:
     analyzer_status = ctx.analyzer_status
 
     # --- Noise Control Filters (applied after RAG enrichment, before report) ---
-    _severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
 
     # Resolve effective thresholds: CLI args take precedence over config defaults
     effective_min_confidence = args.min_confidence or getattr(
@@ -1676,10 +1675,10 @@ def main() -> None:
 
     if effective_min_severity != "INFO":
         pre_filter = len(heuristic_results)
-        min_level = _severity_order[effective_min_severity]
+        min_level = SEVERITY_RANK[effective_min_severity]
         heuristic_results = [
             h for h in heuristic_results
-            if _severity_order.get(h.get("severity", "INFO").upper(), 4) <= min_level
+            if SEVERITY_RANK.get(h.get("severity", "INFO").upper(), 4) <= min_level
         ]
         logger.info(
             "Severity filter (>=%s): %d -> %d findings",
