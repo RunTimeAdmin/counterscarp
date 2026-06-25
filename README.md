@@ -245,7 +245,7 @@ Create an account at [app.counterscarp.io](https://app.counterscarp.io) using Go
 
 ## License
 
-- **Community features:** MIT License — see [LICENSE](LICENSE)
+- **Source code:** Business Source License 1.1 — see [LICENSE](LICENSE). Free for personal use, research, and self-auditing. Converts to Apache 2.0 on 2030-06-25.
 - **Pro features:** Commercial License — see [LICENSE-PRO](LICENSE-PRO)
 
 ---

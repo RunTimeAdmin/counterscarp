@@ -8,7 +8,7 @@ IMPORTANT — READ CAREFULLY
 
 This End User License Agreement ("EULA") is a legal agreement between you ("Licensee" or "you") and Counterscarp Engine ("Licensor" or "we") for the Pro features of the Counterscarp Engine software. By activating or using any Pro feature, you acknowledge that you have read this EULA, understand it, and agree to be bound by its terms. If you do not agree with the terms of this EULA, you may not activate or use any Pro feature.
 
-The Community Edition of Counterscarp Engine, which does not require a license key, is governed by the MIT License (see the LICENSE file). This EULA applies exclusively to the Pro-gated features and functionality described in Section 3.
+The source-available edition of Counterscarp Engine, which does not require a license key, is governed by the Business Source License 1.1 (see the LICENSE file). This EULA applies exclusively to the Pro-gated features and functionality described in Section 3.
 
 
 ------------------------------------------------------------------------
@@ -283,14 +283,14 @@ SECTION 8. INTELLECTUAL PROPERTY
      shall remain the exclusive property of Licensor. No ownership rights are
      transferred to Licensee under this EULA.
 
-8.2  Community Edition. The Community Edition components of counterscarp-engine
-     are governed by the MIT License as set forth in the LICENSE file. This
-     EULA does not modify, restrict, or supersede the rights granted under
-     the MIT License for Community Edition components.
+8.2  Source-Available Edition. The source-available components of counterscarp-engine
+     are governed by the Business Source License 1.1 as set forth in the LICENSE
+     file. This EULA does not modify, restrict, or supersede the rights granted
+     under the Business Source License 1.1 for those components.
 
 8.3  Scope of EULA. This EULA applies only to the Pro-gated features and
-     functionality described in Section 3. Use of Community Edition features
-     without a License Key remains governed by the MIT License.
+     functionality described in Section 3. Use of source-available features
+     without a License Key remains governed by the Business Source License 1.1.
 
 8.4  Feedback. Licensee may provide suggestions, feedback, or ideas
      regarding the Software. Licensor is free to use such feedback without

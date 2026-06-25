@@ -7,7 +7,7 @@ name = "counterscarp-engine"
 version = "5.1.1"
 description = "Scarpshield (Counterscarp Engine): smart contract security auditing platform"
 requires-python = ">=3.10"
-license = "MIT"
+license = "BUSL-1.1"
 authors = [{name = "Scarpshield / Counterscarp Engine Team"}]
 readme = "README.md"
 keywords = ["security", "audit", "smart-contracts", "solidity", "solana", "blockchain"]

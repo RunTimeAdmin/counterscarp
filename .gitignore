@@ -56,6 +56,13 @@ uploads/
 .env.virtuals
 data/.env.local
 
+# Payment and license enforcement (private — not distributed publicly)
+license_manager.py
+license_manager.pyi
+webapp/license_api.py
+webapp/stripe_integration.py
+webapp/stripe_webhook_handlers.py
+
 # Workspace artifacts
 _*.txt
 _*.py
