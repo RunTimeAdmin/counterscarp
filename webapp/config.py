@@ -93,6 +93,9 @@ def validate_production_config() -> None:
     # TOTP encryption key is always required in production
     if not os.environ.get("TOTP_ENCRYPTION_KEY"):
         missing.append("TOTP_ENCRYPTION_KEY")
+    # At-rest data store encryption key is always required in production
+    if not os.environ.get("DATA_ENCRYPTION_KEY"):
+        missing.append("DATA_ENCRYPTION_KEY")
     if missing:
         raise RuntimeError(
             f"Missing required secrets for production: {', '.join(missing)}. "

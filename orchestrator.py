@@ -269,7 +269,7 @@ def _aggregate_findings(
     if medusa_results and isinstance(medusa_results, dict):
         for item in medusa_results.get("findings", []):
             all_findings.append({
-                "severity": item.get("severity", "HIGH").upper(),
+                "severity": item.get("severity", "MEDIUM").upper(),
                 "rule_id": item.get("test") or item.get("rule_id") or item.get("title", "medusa_violation"),
                 "location": f"{item.get('file', 'unknown')}:{item.get('line_no', item.get('line', '?'))}",
                 "message": (item.get("message") or item.get("description", ""))[:80],

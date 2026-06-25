@@ -5,6 +5,7 @@ and info lookups.  These routes are consumed by the client-side
 LicenseManager in license_manager.py.
 """
 
+import hmac as _hmac
 import json
 import logging
 import os
@@ -24,6 +25,7 @@ from counterscarp_core.schemas import (
     ValidateResponse,
 )
 from license_manager import ALL_PRO_FEATURES
+from webapp.data_crypto import read_json as _read_json, write_json as _write_json
 from webapp.rate_limiter import RateLimiter, add_rate_limit_headers
 
 logger = logging.getLogger(__name__)
@@ -39,18 +41,19 @@ _licenses_file_lock = threading.Lock()
 _audit_log_lock = threading.Lock()
 
 
+def _key_matches(stored: str, candidate: str) -> bool:
+    """Constant-time license key comparison to prevent timing-based enumeration."""
+    return _hmac.compare_digest(stored.encode("utf-8"), candidate.encode("utf-8"))
+
+
 def find_license_in_db(license_key: str) -> Optional[dict[str, Any]]:
     """Look up a license entry in licenses.json by key (thread-safe read)."""
     if not _LICENSE_DB_PATH.exists():
         return None
     with _licenses_file_lock:
-        try:
-            with open(_LICENSE_DB_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return None
+        data = _read_json(_LICENSE_DB_PATH, {"licenses": [], "version": 1})
     for lic in data.get("licenses", []):
-        if lic.get("key") == license_key:
+        if _key_matches(lic.get("key", ""), license_key):
             return dict(lic)
     return None
 
@@ -85,20 +88,11 @@ def link_license_to_user(email: str, user_id: str) -> Optional[str]:
     """Atomically link first unlinked license for *email* to *user_id*. Returns key or None."""
     key: Optional[str] = None
     with _licenses_file_lock:
-        if not _LICENSE_DB_PATH.exists():
-            return None
-        try:
-            with open(_LICENSE_DB_PATH, "r", encoding="utf-8") as f:
-                db = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return None
+        db = _read_json(_LICENSE_DB_PATH, {"licenses": [], "version": 1})
         for lic in db.get("licenses", []):
             if lic.get("customer_email", "").lower() == email.lower() and not lic.get("user_id"):
                 lic["user_id"] = user_id
-                tmp = _LICENSE_DB_PATH.with_suffix(".tmp")
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump(db, f, indent=2)
-                tmp.replace(_LICENSE_DB_PATH)
+                _write_json(_LICENSE_DB_PATH, db)
                 key = str(lic["key"])
                 break
     if key:
@@ -151,10 +145,7 @@ _DEFAULT_DB: dict = {"licenses": [], "version": 1}
 
 def _load_db() -> dict[str, Any]:
     """Load the licenses database from disk."""
-    if not _LICENSE_DB_PATH.exists():
-        return {"licenses": [], "version": 1}
-    with open(_LICENSE_DB_PATH, "r", encoding="utf-8") as f:
-        db: dict[str, Any] = json.load(f)
+    db: dict[str, Any] = _read_json(_LICENSE_DB_PATH, {"licenses": [], "version": 1})
     # Validate structure — guard against corrupted files
     if not isinstance(db.get("licenses"), list):
         logger.error(
@@ -167,11 +158,7 @@ def _load_db() -> dict[str, Any]:
 
 def _save_db(db: dict) -> None:
     """Persist the licenses database to disk (atomic write)."""
-    _LICENSE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = _LICENSE_DB_PATH.with_suffix(".tmp")
-    with open(temp_path, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=2)
-    temp_path.replace(_LICENSE_DB_PATH)
+    _write_json(_LICENSE_DB_PATH, db)
 
 
 def _mask_key(key: str) -> str:
@@ -226,10 +213,10 @@ def validate_license(req: ValidateRequest, request: Request):
                     valid=False, error="License service temporarily unavailable"
                 )
 
-            # 1. Key exists
+            # 1. Key exists (constant-time comparison to prevent enumeration)
             license_entry = None
             for entry in db["licenses"]:
-                if entry["key"] == req.license_key:
+                if _key_matches(entry.get("key", ""), req.license_key):
                     license_entry = entry
                     break
 
@@ -259,7 +246,12 @@ def validate_license(req: ValidateRequest, request: Request):
                     if exp_dt < datetime.now(timezone.utc):
                         license_appears_expired = True
                 except (ValueError, TypeError):
-                    pass  # If we can't parse, allow through
+                    # Unparseable expiry date — treat as expired (fail closed).
+                    logger.warning(
+                        "Could not parse expires_at %r for key %s... — treating as expired",
+                        expires_at, req.license_key[:10],
+                    )
+                    license_appears_expired = True
 
             if license_appears_expired and license_entry.get("stripe_subscription_id"):
                 # Missed renewal webhook — check Stripe directly
@@ -380,7 +372,7 @@ def deactivate_license(req: DeactivateRequest, request: Request):
 
         license_entry = None
         for entry in db["licenses"]:
-            if entry["key"] == req.license_key:
+            if _key_matches(entry.get("key", ""), req.license_key):
                 license_entry = entry
                 break
 
@@ -435,7 +427,7 @@ def license_info(request: Request, key: str = Query(..., description="License ke
 
         license_entry = None
         for entry in db["licenses"]:
-            if entry["key"] == key:
+            if _key_matches(entry.get("key", ""), key):
                 license_entry = entry
                 break
 

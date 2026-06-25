@@ -21,7 +21,8 @@ import os
 import bcrypt as _bcrypt
 from cryptography.fernet import Fernet
 
-from webapp.config import BASE_DIR, SESSION_SECRET
+from webapp.config import BASE_DIR, COUNTERSCARP_ENV, SESSION_SECRET
+from webapp.data_crypto import read_json as _read_json, write_json as _write_json
 
 _logger = logging.getLogger(__name__)
 
@@ -62,16 +63,22 @@ def _derive_fernet_key() -> bytes:
         digest = hashlib.sha256(totp_key_env.encode("utf-8")).digest()
         return base64.urlsafe_b64encode(digest)
 
-    # Fallback to SESSION_SECRET
+    # No dedicated key — refuse to continue in production.
+    if COUNTERSCARP_ENV == "production":
+        raise RuntimeError(
+            "TOTP_ENCRYPTION_KEY must be set in production. "
+            "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
+    # Dev fallback to SESSION_SECRET with warnings.
     _logger.warning(
         "TOTP_ENCRYPTION_KEY not set — falling back to SESSION_SECRET. "
-        "Set a dedicated key for production."
+        "Set a dedicated key before going to production."
     )
-
     if SESSION_SECRET == _KNOWN_INSECURE_DEFAULT:
         _logger.critical(
-            "TOTP encryption is using the hardcoded insecure default "
-            "SESSION_SECRET. All TOTP secrets are trivially decryptable! "
+            "TOTP encryption is using the hardcoded insecure default SESSION_SECRET. "
+            "All TOTP secrets are trivially decryptable. "
             "Set TOTP_ENCRYPTION_KEY or a strong SESSION_SECRET immediately."
         )
 
@@ -140,18 +147,13 @@ class UserManager:
             return {"users": [], "version": 1}
         if self._cache is not None and mtime == self._cache_mtime:
             return self._cache
-        with open(_USERS_DB_PATH, "r", encoding="utf-8") as f:
-            self._cache = json.load(f)
+        self._cache = _read_json(_USERS_DB_PATH, {"users": [], "version": 1})
         self._cache_mtime = mtime
         return self._cache
 
     def _write_db(self, db: Dict) -> None:
         """Persist the users database to disk."""
-        _USERS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _USERS_DB_PATH.with_suffix(".tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(db, f, indent=2)
-        tmp.replace(_USERS_DB_PATH)
+        _write_json(_USERS_DB_PATH, db)
         self._cache = db
         self._cache_mtime = _USERS_DB_PATH.stat().st_mtime
 

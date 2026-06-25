@@ -5,6 +5,7 @@ The lightweight ``RateLimiter`` class requires only Python stdlib.
 ``RateLimiter`` automatically when Redis is unavailable or not configured.
 """
 
+import ipaddress
 import os
 import time
 from collections import defaultdict
@@ -171,5 +172,10 @@ def get_client_ip(request) -> str:
     if peer in _TRUSTED_PROXIES:
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return str(forwarded.split(",")[0].strip())
+            candidate = forwarded.split(",")[0].strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass  # Malformed XFF value — fall through to real peer IP
     return peer

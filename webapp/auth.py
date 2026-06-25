@@ -162,12 +162,9 @@ def csrf_guard(request: Request, form_token: str) -> None:
         form = await request.form()
         csrf_guard(request, str(form.get("_csrf_token", "")))
 
-    Only validates when the session already contains a CSRF token — new
-    sessions (no token yet) pass through (same behaviour as previous inline
-    checks that tested ``if session_token:``).
+    Always validates — a missing or mismatched token is rejected.
     """
-    session_token = request.session.get("_csrf_token")
-    if session_token and not validate_csrf_token(request, form_token):
+    if not validate_csrf_token(request, form_token):
         raise HTTPException(status_code=403, detail="CSRF validation failed")
 
 
@@ -210,13 +207,9 @@ async def login_submit(
     password: str = Form(...),
 ):
     """Handle email/password login form submission."""
-    # CSRF validation — skip if no token was ever generated (tests / first-time visitors)
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    if not validate_csrf_token(request, str(form.get("_csrf_token", ""))):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     client_ip = get_client_ip(request)
     login_limiter = getattr(request.app.state, "login_limiter", None)
@@ -303,11 +296,8 @@ async def forgot_password_submit(
 ):
     """Handle forgot-password form without leaking account existence."""
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    if not validate_csrf_token(request, str(form.get("_csrf_token", ""))):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     user = user_manager.get_by_email(email)
     if user:
@@ -379,11 +369,8 @@ async def reset_password_submit(
 ):
     """Reset password using a signed, time-limited token."""
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    if not validate_csrf_token(request, str(form.get("_csrf_token", ""))):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     try:
         payload = _password_reset_serializer.loads(token, max_age=3600)
@@ -468,13 +455,9 @@ async def register_submit(
     confirm_password: str = Form(...),
 ):
     """Handle registration form submission."""
-    # CSRF validation — skip if no token was ever generated (tests / first-time visitors)
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
+    if not validate_csrf_token(request, str(form.get("_csrf_token", ""))):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     client_ip = get_client_ip(request)
     register_limiter = getattr(
@@ -695,14 +678,8 @@ async def totp_setup_submit(
         )
 
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(
-                status_code=403,
-                detail="CSRF validation failed",
-            )
+    if not validate_csrf_token(request, str(form.get("_csrf_token", ""))):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     secret = request.session.get("pending_totp_secret", "")
     if not secret:
@@ -797,14 +774,8 @@ async def totp_verify_submit(
 ):
     """Verify the 6-digit TOTP code during login."""
     form = await request.form()
-    session_token = request.session.get("_csrf_token")
-    if session_token:
-        csrf_token = str(form.get("_csrf_token", ""))
-        if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(
-                status_code=403,
-                detail="CSRF validation failed",
-            )
+    if not validate_csrf_token(request, str(form.get("_csrf_token", ""))):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     # --- Rate limiting (IP-based, reuse app-level limiter pattern) ---
     client_ip = get_client_ip(request)
