@@ -53,6 +53,7 @@ vulnerability_trends.md
 uploads/
 
 # Local environment secrets (API keys)
+.env.virtuals
 data/.env.local
 
 # Workspace artifacts
@@ -94,6 +95,9 @@ data/session_license_map.json
 # Scan results
 results/
 !results/examples/
+
+# Scan output subdirectories
+output/*/
 
 # Dev scripts
 fix_version.py
