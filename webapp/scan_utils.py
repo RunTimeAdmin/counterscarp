@@ -559,6 +559,9 @@ def _format_tests_run_section(analyzers: list[dict] | None) -> list[str]:
 
             suffix = f" ({', '.join(details)})" if details else ""
             lines.append(f"• {name} — {status}{suffix}")
+            err = analyzer.get("error")
+            if err and status in ("failed", "error"):
+                lines.append(f"    ↳ {err}")
 
     lines.extend(["", f"Not included in this scan: {API_SCAN_NOT_INCLUDED}", ""])
     return lines
@@ -869,6 +872,7 @@ def build_analyzers_list(
     heuristic_count: int,
     slither_findings_count: int,
     slither_status: str,
+    slither_error: str | None = None,
     fingerprint_status: str = "skipped",
     fingerprint_findings_count: int = 0,
     fingerprint_meta: dict | None = None,
@@ -893,6 +897,16 @@ def build_analyzers_list(
     if ai_status == "pro_required":
         ai_copilot_analyzer["pro_only"] = True
 
+    _slither_analyzer: dict = {
+        "name": "Slither Static Analysis",
+        "status": slither_status,
+        "findings_count": slither_findings_count,
+    }
+    # Carry the compile/analysis failure reason so the UI can show WHY Slither
+    # produced nothing, instead of a misleading "0 findings".
+    if slither_error and slither_status == "error":
+        _slither_analyzer["error"] = slither_error
+
     analyzers = [
         {
             "name": "Heuristic Pattern Scanner",
@@ -914,11 +928,7 @@ def build_analyzers_list(
             "protocols_checked": (fingerprint_meta or {}).get("protocols_checked", 0),
             "matches_found": (fingerprint_meta or {}).get("matches_found", 0),
         },
-        {
-            "name": "Slither Static Analysis",
-            "status": slither_status,
-            "findings_count": slither_findings_count,
-        },
+        _slither_analyzer,
         ai_copilot_analyzer,
     ]
 

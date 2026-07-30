@@ -80,7 +80,11 @@ class SlitherPhase(ScanPhase):
 
         ctx.static_issues = static_issues
         ctx.analyzer_status["Slither (Static Analysis)"] = {
-            "ran": bool(static_issues),
+            # "ran" means the analyzer executed to completion, NOT that it found
+            # something. A clean compile with 0 findings still ran; a compile
+            # failure did not (and carries an error). This is what lets the UI
+            # distinguish "analyzed, clean" from "could not analyze".
+            "ran": _slither_error is None,
             "finding_count": len(static_issues),
             "error": _slither_error,
         }

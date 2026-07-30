@@ -62,6 +62,7 @@
                         {% elif analyzer.status == 'not_installed' %}&#9888;
                         {% elif analyzer.status == 'skipped' %}&#9711;
                         {% elif analyzer.status == 'timeout' %}&#9202;
+                        {% elif analyzer.status == 'error' %}&#9888;
                         {% else %}&#9711;{% endif %}
                     </span>
                     <span class="analyzer-name">{{ analyzer.name }}</span>
@@ -85,6 +86,11 @@
                     <span class="analyzer-toggle">&#9662;</span>
                     {% endif %}
                 </div>
+                {% if analyzer.error %}
+                <div class="analyzer-error" style="margin:4px 0 8px 26px;color:#b91c1c;font-size:0.88em;line-height:1.4;">
+                    &#9888; Could not analyze: {{ analyzer.error }}
+                </div>
+                {% endif %}
                 {% if analyzer.categories is defined %}
                 <div class="category-list" style="display:none;">
                     {% for cat_name, cat_data in analyzer.categories.items() %}

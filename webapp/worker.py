@@ -255,7 +255,22 @@ async def run_audit(
             f for f in findings
             if getattr(f, "rule_id", "").startswith("SLITHER") or getattr(f, "_from_static", False)
         ]
-        slither_status = "completed" if slither_findings else "skipped"
+        # Reflect Slither's real outcome, not just the finding count. A compile
+        # failure yields 0 findings but MUST surface as an error (with the
+        # reason), and a clean compile with 0 findings is "completed", not
+        # "skipped". The pipeline records this in scan_ctx.analyzer_status.
+        _sl_status = (getattr(scan_ctx, "analyzer_status", {}) or {}).get(
+            "Slither (Static Analysis)", {}
+        )
+        slither_error = _sl_status.get("error")
+        if slither_error and slither_error != "Not enabled":
+            slither_status = "error"
+        elif _sl_status.get("ran") or slither_findings:
+            slither_status = "completed"
+            slither_error = None
+        else:
+            slither_status = "skipped"
+            slither_error = None
         ai_status = "skipped"
     else:
         # Legacy bespoke scan path (fallback only)
@@ -263,6 +278,7 @@ async def run_audit(
         heuristic_count = 0
         slither_findings = []
         slither_status = "skipped"
+        slither_error = None
         fingerprint_findings = []
         fingerprint_status = "skipped"
         fingerprint_meta = {}
@@ -341,6 +357,7 @@ async def run_audit(
             project_name=project_name,
             target_path=str(upload_dir),
             findings=findings,
+            analyzer_status=getattr(scan_ctx, "analyzer_status", None),
         )
 
         # Save findings JSON
@@ -378,6 +395,7 @@ async def run_audit(
             heuristic_count=heuristic_count,
             slither_findings_count=len(slither_findings),
             slither_status=slither_status,
+            slither_error=slither_error,
             fingerprint_status=fingerprint_status,
             fingerprint_findings_count=len(fingerprint_findings),
             fingerprint_meta=fingerprint_meta,
