@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import json
 import shutil
 import sys
 import argparse
 from pathlib import Path
-from typing import List, Dict, Any, Optional, cast
+from typing import List, Dict, Any, Optional, Tuple, cast
 from path_security import sanitize_cli_path
 
 # Import exceptions (core module — must always be available)
@@ -173,6 +174,219 @@ def _resolve_slither_bin() -> str:
     return "slither"
 
 
+# Directories whose .sol files are dependencies/tests, not the project's own
+# sources — excluded when inferring the required solc version from pragmas.
+_SOL_SKIP_DIRS = {
+    "node_modules", "lib", ".git", "out", "artifacts", "cache",
+    "test", "tests", "mock", "mocks",
+}
+
+
+def _resolve_sibling_bin(slither_bin: str, name: str) -> Optional[str]:
+    """Resolve a tool (e.g. solc, solc-select) from slither's own venv bin dir.
+
+    Falls back to PATH so a globally-installed tool is still found.
+    """
+    try:
+        sibling = Path(slither_bin).parent / name
+        if sibling.exists():
+            return str(sibling)
+    except (OSError, ValueError):
+        pass
+    return shutil.which(name)
+
+
+def _version_tuple(text: str) -> Optional[Tuple[int, int, int]]:
+    """Extract a leading semantic version (e.g. '0.8.34') as an int tuple."""
+    m = re.match(r"\s*v?(\d+)\.(\d+)\.(\d+)", text)
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+
+def _installed_solc_versions(
+    solc_select_bin: str,
+) -> List[Tuple[int, int, int]]:
+    """List installed solc versions via `solc-select versions`, newest first."""
+    try:
+        res = subprocess.run(
+            [solc_select_bin, "versions"],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    versions = set()
+    for line in res.stdout.splitlines():
+        vt = _version_tuple(line.strip())
+        if vt:
+            versions.add(vt)
+    return sorted(versions, reverse=True)
+
+
+def _parse_pragma_constraints(
+    pragma: str,
+) -> List[Tuple[str, Tuple[int, int, int]]]:
+    """Parse a Solidity version pragma into (operator, version) constraints.
+
+    Handles ^, ~, >=, >, <=, <, = and bare exact versions. Partial versions
+    (e.g. ``0.8``) are padded to three parts. Unrecognized tokens are skipped.
+    """
+    constraints: List[Tuple[str, Tuple[int, int, int]]] = []
+    for op, ver in re.findall(
+        r"(\^|~|>=|<=|>|<|=)?\s*(\d+(?:\.\d+){0,2})", pragma
+    ):
+        parts = [int(x) for x in ver.split(".")]
+        while len(parts) < 3:
+            parts.append(0)
+        constraints.append((op or "=", (parts[0], parts[1], parts[2])))
+    return constraints
+
+
+def _version_satisfies(
+    v: Tuple[int, int, int],
+    constraints: List[Tuple[str, Tuple[int, int, int]]],
+) -> bool:
+    """Return True if version ``v`` satisfies every parsed pragma constraint."""
+    for op, ref in constraints:
+        if op == "=":
+            if v != ref:
+                return False
+        elif op == ">":
+            if not v > ref:
+                return False
+        elif op == ">=":
+            if not v >= ref:
+                return False
+        elif op == "<":
+            if not v < ref:
+                return False
+        elif op == "<=":
+            if not v <= ref:
+                return False
+        elif op in ("^", "~"):
+            if not v >= ref:
+                return False
+            # ^ bumps the major (or minor/patch for 0.x); ~ bumps the minor.
+            if op == "^" and ref[0] > 0:
+                upper = (ref[0] + 1, 0, 0)
+            elif op == "^" and ref[1] > 0:
+                upper = (ref[0], ref[1] + 1, 0)
+            elif op == "^":
+                upper = (ref[0], ref[1], ref[2] + 1)
+            else:  # ~
+                upper = (ref[0], ref[1] + 1, 0)
+            if not v < upper:
+                return False
+    return True
+
+
+def _collect_sol_files(target: str, cap: int = 300) -> List[Path]:
+    """Collect the project's own .sol files (bounded), skipping deps/tests."""
+    tp = Path(target)
+    if tp.is_file():
+        return [tp]
+    if not tp.is_dir():
+        return []
+    top = sorted(tp.glob("*.sol"))
+    if top:
+        return top[:cap]
+    files: List[Path] = []
+    for p in sorted(tp.rglob("*.sol")):
+        if any(part in _SOL_SKIP_DIRS for part in p.parts):
+            continue
+        files.append(p)
+        if len(files) >= cap:
+            break
+    return files
+
+
+def _select_solc_version(
+    target: str, solc_select_bin: Optional[str]
+) -> Optional[str]:
+    """Pick the newest installed solc that satisfies the target's pragma(s).
+
+    Returns a version string like ``"0.8.34"`` to pass via ``SOLC_VERSION``,
+    or None when it cannot be determined (caller keeps the environment
+    default). This stops projects on a newer pragma (e.g. ``^0.8.28``) from
+    silently failing against a stale default compiler.
+    """
+    if not solc_select_bin:
+        return None
+    constraints: List[Tuple[str, Tuple[int, int, int]]] = []
+    for f in _collect_sol_files(target):
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for pragma in re.findall(r"pragma\s+solidity\s+([^;]+);", text):
+            if "||" in pragma:  # disjunctions unsupported — skip
+                continue
+            constraints.extend(_parse_pragma_constraints(pragma))
+    if not constraints:
+        return None
+    for v in _installed_solc_versions(solc_select_bin):  # newest first
+        if _version_satisfies(v, constraints):
+            return f"{v[0]}.{v[1]}.{v[2]}"
+    return None
+
+
+def _diagnose_compile_failure(
+    target: str, slither_bin: str, selected_solc: Optional[str]
+) -> Optional[str]:
+    """Probe solc directly to surface why compilation failed.
+
+    Slither on a bare directory can exit non-zero with EMPTY stdout and
+    stderr, hiding the cause. Run the solc binary on a sample source file,
+    honouring the selected compiler, and classify the error into a
+    human-readable diagnosis (version mismatch / missing deps / syntax).
+    """
+    solc_bin = _resolve_sibling_bin(slither_bin, "solc")
+    if not solc_bin:
+        return None
+    samples = _collect_sol_files(target, cap=1)
+    if not samples:
+        return None
+    sample = samples[0]
+    env = os.environ.copy()
+    if selected_solc:
+        env["SOLC_VERSION"] = selected_solc
+    try:
+        res = subprocess.run(
+            [solc_bin, sample.name],
+            cwd=str(sample.parent),
+            capture_output=True, text=True, check=False, timeout=120, env=env,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    blob = f"{res.stdout}\n{res.stderr}".strip()
+    low = blob.lower()
+    if "requires different compiler version" in low:
+        detail = f" (selected {selected_solc})" if selected_solc else ""
+        return (
+            "solc version mismatch: no installed compiler satisfies the "
+            f"contract's `pragma solidity` requirement{detail}. Install a "
+            "matching one, e.g. `solc-select install <version>`."
+        )
+    if ("not found: file not found" in low) or (
+        'source "' in low and "not found" in low
+    ):
+        return (
+            "unresolved imports / missing dependencies: the contracts import "
+            "external libraries (e.g. @openzeppelin, @account-abstraction) but "
+            "no node_modules, lib/, or remappings were provided. Submit the "
+            "full Foundry/Hardhat project (with its dependency tree), a "
+            "remappings.txt, or a flattened single-file contract."
+        )
+    if any(tok in low for tok in ("parsererror", "declarationerror", "typeerror")):
+        for line in blob.splitlines():
+            if "error" in line.lower():
+                return f"Solidity compile error: {line.strip()[:240]}"
+    for line in blob.splitlines():
+        if line.strip():
+            return f"compile probe: {line.strip()[:240]}"
+    return None
+
+
 def _parse_json_with_fallback(json_str: str, context: str = "") -> Any:
     """Parse JSON with brace-counting fallback for trailing data.
 
@@ -221,6 +435,7 @@ def _slither_per_file_fallback(
     slither_bin: str,
     original_cmd: List[str],
     stderr_log: Optional[str] = None,
+    solc_version: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Run Slither on individual .sol files using solc.
 
@@ -295,6 +510,8 @@ def _slither_per_file_fallback(
             _env = os.environ.copy()
             _env["PYTHONWARNINGS"] = "ignore"
             _env["PYTHONDONTWRITEBYTECODE"] = "1"
+            if solc_version:
+                _env["SOLC_VERSION"] = solc_version
             result = subprocess.run(
                 file_cmd,
                 cwd=project_root,
@@ -313,6 +530,12 @@ def _slither_per_file_fallback(
             json_start = output.find("{")
             if json_start == -1:
                 fail_count += 1
+                reason = (result.stderr or result.stdout or "").strip()
+                first = next(
+                    (ln for ln in reason.splitlines() if ln.strip()), ""
+                )
+                if first:
+                    errors.append(f"{sol_name}: {first[:200]}")
                 continue
 
             data = _parse_json_with_fallback(
@@ -394,6 +617,19 @@ def run_slither(
 
     # Resolve Slither binary from venv
     slither_bin = _resolve_slither_bin()
+
+    # Pragma-aware solc selection: pick the newest installed solc that
+    # satisfies the contract's `pragma solidity`, so a newer-pragma project
+    # (e.g. ^0.8.28) doesn't silently fail against a stale default compiler.
+    solc_select_bin = _resolve_sibling_bin(slither_bin, "solc-select")
+    selected_solc = _select_solc_version(target, solc_select_bin)
+    if selected_solc:
+        print(f"[*] Pragma-aware solc: using {selected_solc} (SOLC_VERSION)")
+    else:
+        print(
+            "[*] Pragma-aware solc: no matching override;"
+            " using environment default"
+        )
 
     # Detect Foundry/Hardhat project root
     project_root = find_project_root(target)
@@ -582,6 +818,8 @@ def run_slither(
         _slither_env = os.environ.copy()
         _slither_env["PYTHONWARNINGS"] = "ignore"
         _slither_env["PYTHONDONTWRITEBYTECODE"] = "1"
+        if selected_solc:
+            _slither_env["SOLC_VERSION"] = selected_solc
         result = subprocess.run(
             cmd,
             cwd=cwd,
@@ -617,16 +855,31 @@ def run_slither(
                     slither_bin,
                     cmd,
                     stderr_log,
+                    selected_solc,
                 )
                 if fallback is not None:
                     return fallback
-            print("[!] CRITICAL: Slither failed to generate JSON. Raw output:")
-            print(result.stderr)
+            # Slither can exit non-zero with EMPTY stdout+stderr on a compile
+            # failure, hiding the cause. Probe solc directly to surface it so
+            # the scan reports a real reason instead of an opaque failure.
+            diagnosis = _diagnose_compile_failure(
+                target, slither_bin, selected_solc
+            )
+            stderr_tail = (result.stderr or "").strip()[-1500:]
+            stdout_tail = (result.stdout or "").strip()[-1500:]
+            print("[!] CRITICAL: Slither produced no JSON output.")
+            if diagnosis:
+                print(f"[!] Diagnosis: {diagnosis}")
+            if stderr_tail:
+                print(f"[!] Slither stderr: {stderr_tail}")
             raise CounterscarpAnalysisError(
-                "Slither failed to produce JSON output",
+                diagnosis or "Slither failed to produce JSON output",
                 details={
                     "tool": "slither",
-                    "stderr": result.stderr,
+                    "diagnosis": diagnosis,
+                    "selected_solc": selected_solc,
+                    "stderr": stderr_tail,
+                    "stdout_tail": stdout_tail,
                     "cwd": cwd,
                 }
             )
@@ -652,7 +905,8 @@ def run_slither(
                     " analysis for target directory"
                 )
                 fallback = _slither_per_file_fallback(
-                    target, project_root or target, slither_bin, cmd, stderr_log
+                    target, project_root or target, slither_bin, cmd,
+                    stderr_log, selected_solc,
                 )
                 if fallback is not None:
                     return fallback
