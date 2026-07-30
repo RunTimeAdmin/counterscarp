@@ -55,7 +55,13 @@ _FUNC_HEADER_RE = re.compile(
     r"^(\w+)\s*\((.*?)\).*?(public|external)",
     re.DOTALL,
 )
-_ACCESS_CONTROL_RE = re.compile(r"(onlyOwner|auth|onlyRole)")
+# Access-control detection. Catch any `only*` modifier (onlyOwner, onlyRole,
+# onlyOwnerOrSelf, onlyEntryPointOrSelf, onlyKeeper, ...) plus common auth names,
+# so a guarded admin/execute function is not mistaken for an unprotected one.
+_ACCESS_CONTROL_RE = re.compile(
+    r"\bonly[A-Za-z]\w*\b|\bonlyRole\b|\bauth\b|\brequiresAuth\b|\b_checkOwner\b"
+)
+_ACCESS_MODIFIER_RE = _ACCESS_CONTROL_RE
 _LOW_LEVEL_CALL_RE = re.compile(r"(\w+)\.call\s*\{.*\}\s*\(\s*(\w+)\s*\)")
 
 # Module-level cache for DEFAULT_SAFE_PATTERNS (Task M5)
@@ -193,24 +199,90 @@ class HeuristicRule:
 def _refine_block_timestamp(
     finding: "HeuristicFinding", lines: List[str], line_idx: int
 ) -> bool:
-    """Refine BLOCK_TIMESTAMP_RANDOMNESS severity based on surrounding context."""
-    line_lower = finding.line_text.lower()
-    # Deadline comparison pattern — standard DeFi practice
-    if any(op in line_lower for op in [">=", "<=", "> ", "< ", "require(", "assert("]) and \
-       any(kw in line_lower for kw in ["deadline", "expir", "timeout", "valid"]):
-        finding.severity = "INFO"
-        finding.message = "block.timestamp used for deadline comparison (standard practice)"
-        finding.confidence = 1
-    # Even without deadline keywords, comparison operators suggest conditional check, not randomness
-    elif any(op in finding.line_text for op in [">=", "<=", ">", "<"]) and "%" not in finding.line_text:
-        finding.severity = "INFO"
-        finding.message = "block.timestamp used in comparison (likely deadline check)"
-        finding.confidence = 2
-    # Modulo or arithmetic — potential randomness
-    elif "%" in finding.line_text or "keccak256" in finding.line_text:
+    """Refine BLOCK_TIMESTAMP_RANDOMNESS. Only actual entropy use (modulo, hashing,
+    a `random`-named sink) is a real risk; a timestamp read for a deadline, a
+    cooldown comparison, an event field, or a bookkeeping assignment is not."""
+    line = finding.line_text
+    line_lower = line.lower()
+    # Genuine randomness/entropy use — the only exploitable case.
+    if "%" in line or "keccak256" in line_lower or "random" in line_lower:
         finding.severity = "HIGH"
-        finding.message = "block.timestamp used for randomness or entropy (exploitable by miners)"
+        finding.message = "block.timestamp mixed into randomness/entropy (miner-influenceable)"
         finding.confidence = 7
+    elif any(kw in line_lower for kw in ["deadline", "expir", "timeout", "valid"]):
+        finding.severity = "INFO"
+        finding.message = "block.timestamp used for a deadline check (standard practice)"
+        finding.confidence = 1
+    else:
+        # Cooldown comparison, event timestamp, or bookkeeping assignment — benign.
+        finding.severity = "INFO"
+        finding.message = "block.timestamp read for timing/bookkeeping (not randomness)"
+        finding.confidence = 1
+    return True
+
+
+def _line_has_access_control(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """True if the matched function-declaration line (or its wrap onto the next
+    line or two) carries an access-control modifier."""
+    window = finding.line_text
+    for offset in (1, 2):
+        if 0 <= line_idx + offset < len(lines):
+            window += " " + lines[line_idx + offset]
+    return bool(_ACCESS_MODIFIER_RE.search(window))
+
+
+def _refine_admin_named(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """Downgrade a name-matched admin function (rescue/withdraw/upgrade/
+    transferOwnership) when it is access-controlled. An `onlyOwner` rescue or a
+    guarded ownership transfer is the intended pattern, not a HIGH finding."""
+    if _line_has_access_control(finding, lines, line_idx):
+        finding.severity = "INFO"
+        finding.confidence = 2
+        finding.message = f"{finding.message} (access-controlled / admin-gated)"
+    return True
+
+
+def _refine_set_fee(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """Downgrade a fee/tax setter when its body enforces an upper bound
+    (a require/revert against a MAX constant, or a `<=`/`>` cap check)."""
+    body = " ".join(lines[line_idx: min(line_idx + 18, len(lines))])
+    low = body.lower()
+    has_cap = (
+        ("max" in low and ("revert" in low or "require" in low or "<=" in body or ">" in body))
+        or re.search(r"require\s*\([^)]*<=", body) is not None
+        or re.search(r">\s*[A-Z_]*MAX", body) is not None
+    )
+    if has_cap:
+        finding.severity = "INFO"
+        finding.confidence = 2
+        finding.message = "Fee/tax setter with an enforced upper bound (capped)"
+    return True
+
+
+def _refine_unsafe_cast(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """Downgrade a downcast when a bounds/overflow guard is present in the
+    enclosing function — a preceding `type(uintN).max` comparison, a SafeCast
+    call, or an overflow revert — even when it is on a different line (the raw
+    rule's same-line lookahead cannot see it)."""
+    start = max(0, line_idx - 30)
+    window = " ".join(lines[start: line_idx + 2])
+    if (
+        re.search(r"type\s*\(\s*uint\d+\s*\)\s*\.\s*max", window)
+        or "SafeCast" in window
+        or re.search(r"revert\s+\w*[Oo]verflow", window)
+        or re.search(r"require\s*\([^)]*(<=|<)\s*type\s*\(\s*uint", window)
+    ):
+        finding.severity = "INFO"
+        finding.confidence = 2
+        finding.message = "Downcast guarded by an explicit bounds/overflow check"
     return True
 
 
@@ -285,7 +357,7 @@ RULES: List[HeuristicRule] = [
     HeuristicRule(
         id="LOWLEVEL_CALL_USAGE",
         description="Use of low-level call (call(), staticcall(), callcode())",
-        severity="MEDIUM",
+        severity="LOW",
         pattern=re.compile(r"\.call\s*\(|\.staticcall\s*\("),
         hint="Wrap low-level calls with return value checks and reentrancy protection.",
         confidence=2,
@@ -306,6 +378,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"function\s+(emergencyWithdraw|withdrawAll|rescue|drain)\b"),
         hint="Ensure emergency/withdraw/rescue functions are admin-only and ideally timelocked.",
         confidence=6,
+        refine=_refine_admin_named,
     ),
     HeuristicRule(
         id="UPGRADE_FUNCTION",
@@ -314,6 +387,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"function\s+(upgradeTo|upgrade|setOwner|transferOwnership)\b"),
         hint="Confirm these functions are protected by strong access control (multi-sig, timelock).",
         confidence=5,
+        refine=_refine_admin_named,
     ),
     # Kill Chain / Behavioral / Math heuristics (first-pass approximations)
     HeuristicRule(
@@ -363,6 +437,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"function\s+set(Fee|Tax)"),
         hint="Check for upper bounds on new fee values (e.g., <= 25%).",
         confidence=4,
+        refine=_refine_set_fee,
     ),
     HeuristicRule(
         id="DIVIDE_BEFORE_MULTIPLY",
@@ -436,6 +511,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"uint(128|64|32|16|8)\(\w+\)(?!.*require|.*assert)"),
         hint="HIGH: Downcasting without overflow check can cause critical bugs. Use SafeCast library ($10K-$50K).",
         confidence=7,
+        refine=_refine_unsafe_cast,
     ),
     
     HeuristicRule(
