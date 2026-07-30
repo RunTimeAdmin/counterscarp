@@ -137,6 +137,27 @@ def _write_scan_index_worker(results_dir: Path, audit_id: str, findings_data: li
     index_path.write_text(json.dumps(index, indent=2), encoding="utf-8")
 
 
+def _count_project_sources(root: str, excludes: list) -> tuple:
+    """Count a scanned project's own source files and lines, skipping dependency
+    and test dirs. Used for ingested (git/zip) submissions, where the raw upload
+    list is empty or a single archive, so the file/line counters would show 0."""
+    from webapp.scan_utils import count_lines
+    exclude_set = set(excludes or [])
+    files = 0
+    lines = 0
+    for path in Path(root).rglob("*"):
+        if path.suffix.lower() not in (".sol", ".rs"):
+            continue
+        if exclude_set.intersection(path.parts):
+            continue
+        files += 1
+        try:
+            lines += count_lines(str(path))
+        except Exception:
+            continue
+    return files, lines
+
+
 # ---------------------------------------------------------------------------
 # Task function
 # ---------------------------------------------------------------------------
@@ -445,12 +466,20 @@ async def run_audit(
             findings_data=findings_data,
         )
 
+        # For an ingested (git/zip) submission the raw upload list is empty or a
+        # single archive, so count the compiled project's own sources instead.
+        if scan_target != str(upload_dir):
+            _files_scanned, _total_lines = _count_project_sources(scan_target, scan_excludes)
+        else:
+            _files_scanned = len(uploaded_paths)
+            _total_lines = sum(count_lines(fp) for fp in uploaded_paths)
+
         scan_meta = {
             "owner_user_id": user_id or None,
             "project_name": project_name,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "files_scanned": len(uploaded_paths),
-            "total_source_lines": sum(count_lines(fp) for fp in uploaded_paths),
+            "files_scanned": _files_scanned,
+            "total_source_lines": _total_lines,
             "analyzers": analyzers_list,
             "rules_triggered": sorted(str(fd["rule_id"]) for fd in findings_data),
         }
