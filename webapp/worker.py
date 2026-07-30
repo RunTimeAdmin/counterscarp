@@ -177,6 +177,44 @@ async def run_audit(
     started_at = _iso_now()
     _write_status(results_dir, "running", "Starting scan...", started_at)
 
+    # --- Project ingestion: a git URL (via _ingest.json) or a project .zip is
+    # turned into a compilable tree (deps installed) so imports resolve and the
+    # project's own compiler settings apply. A plain .sol upload is scanned
+    # as-is (target unchanged). Dependency dirs are excluded from findings.
+    scan_target = str(upload_dir)
+    scan_excludes: list = []
+    try:
+        from project_ingest import ingest
+        _git = None
+        _marker = upload_dir / "_ingest.json"
+        if _marker.exists():
+            try:
+                _git = (json.loads(_marker.read_text()).get("git_url") or "").strip() or None
+            except Exception:
+                _git = None
+        _zip = next(iter(sorted(upload_dir.glob("*.zip"))), None)
+        if _git or _zip:
+            _write_status(results_dir, "running",
+                          "Fetching project and installing dependencies...", started_at)
+            _res = ingest(
+                git_url=_git,
+                zip_path=(str(_zip) if (_zip and not _git) else None),
+                dest=str(upload_dir / "_ingested"),
+            )
+            scan_target = str(_res.compile_root)
+            scan_excludes = ["node_modules", "lib", "test", "tests", "artifacts",
+                             "cache", "out", "script", "mock", "mocks"]
+            logger.info(
+                "Audit %s: ingested %s project (deps=%s) -> %s | %s",
+                audit_id, _res.framework, _res.deps_installed, scan_target,
+                "; ".join(_res.notes),
+            )
+    except Exception as _ing_exc:
+        logger.error(
+            "Audit %s: project ingestion failed (%s); scanning uploads as-is",
+            audit_id, _ing_exc,
+        )
+
     # Resolve license tier for pipeline gating
     _lm = LicenseManager()
     _tier = _lm.get_tier()
@@ -184,9 +222,10 @@ async def run_audit(
     # --- Engine pipeline scan (replaces bespoke per-phase calls below) ---
     try:
         scan_ctx = build_web_scan_context(
-            target=str(upload_dir),
+            target=scan_target,
             output_dir=results_dir,
             license_tier=_tier,
+            exclude_paths=scan_excludes,
         )
         _write_status(results_dir, "running", "Running analysis pipeline...", started_at)
         await run_web_pipeline(scan_ctx)
@@ -315,7 +354,7 @@ async def run_audit(
                     in {"1", "true", "yes", "on"}
                 )
                 if slither_project_mode:
-                    sf, status = run_slither_analysis(str(upload_dir), UPLOAD_DIR)
+                    sf, status = run_slither_analysis(scan_target, UPLOAD_DIR)
                     slither_findings_local.extend(sf)
                     slither_status = _merge_slither_status(slither_status, status)
                 else:

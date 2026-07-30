@@ -546,12 +546,19 @@
                     <div class="upload-icon" aria-hidden="true">FILE</div>
                     <p class="upload-text">Drag and drop your files here</p>
                     <p class="upload-hint">or click to browse</p>
-                    <p class="upload-formats">Supports: .sol, .rs files</p>
-                    <input type="file" id="files" name="files" multiple accept=".sol,.rs">
+                    <p class="upload-formats">Supports: .sol, .rs, or a project .zip (Hardhat/Foundry)</p>
+                    <input type="file" id="files" name="files" multiple accept=".sol,.rs,.zip">
                 </div>
             </div>
 
             <div class="file-list" id="fileList"></div>
+
+            <div class="form-group">
+                <label for="git_url">or scan a public git repo</label>
+                <input type="url" id="git_url" name="git_url"
+                       placeholder="https://github.com/org/repo">
+                <p class="upload-hint">We clone it, install its dependencies, and compile through its Hardhat/Foundry config so imports resolve.</p>
+            </div>
 
             <!-- Privacy / Data Handling Trust Banner -->
             <div class="trust-banner">
@@ -801,7 +808,7 @@
         fileList.innerHTML = '';
 
         if (selectedFiles.length === 0) {
-            submitBtn.disabled = true;
+            refreshSubmit();
             return;
         }
 
@@ -830,8 +837,15 @@
         selectedFiles.forEach(file => dataTransfer.items.add(file));
         fileInput.files = dataTransfer.files;
 
-        submitBtn.disabled = false;
+        refreshSubmit();
     }
+
+    function refreshSubmit() {
+        const gitEl = document.getElementById('git_url');
+        const gitUrl = (gitEl ? gitEl.value : '').trim();
+        submitBtn.disabled = (selectedFiles.length === 0 && !gitUrl);
+    }
+    document.getElementById('git_url').addEventListener('input', refreshSubmit);
 
     function formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
@@ -845,8 +859,9 @@
     auditForm.addEventListener('submit', (e) => {
         e.preventDefault();
 
-        if (selectedFiles.length === 0) {
-            alert('Please select at least one file.');
+        const gitUrl = document.getElementById('git_url').value.trim();
+        if (selectedFiles.length === 0 && !gitUrl) {
+            alert('Select at least one file, a project .zip, or enter a git URL.');
             return;
         }
 
@@ -863,6 +878,7 @@
         formData.append('project_name', projectName);
         formData.append('_csrf_token', document.querySelector('input[name="_csrf_token"]').value);
         selectedFiles.forEach(file => formData.append('files', file));
+        if (gitUrl) formData.append('git_url', gitUrl);
 
         fetch('/audit', {
             method: 'POST',

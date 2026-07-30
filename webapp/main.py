@@ -480,15 +480,17 @@ async def health():
 async def audit(
     request: Request,
     project_name: str = Form(..., min_length=1, max_length=200),
-    files: List[UploadFile] = File(...),
+    files: List[UploadFile] = File(default=[]),
+    git_url: str = Form(default=""),
 ):
-    """Run security audit on uploaded files."""
+    """Run a security audit on uploaded files, a project .zip, or a git URL."""
     from webapp.routes.audit import handle_audit_request
 
     return await handle_audit_request(
         request=request,
         project_name=project_name,
         files=files,
+        git_url=git_url,
         audit_limiter=_audit_limiter,
         license_manager=_license,
         get_grace_period_context=_get_grace_period_context,

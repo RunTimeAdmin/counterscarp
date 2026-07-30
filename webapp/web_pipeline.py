@@ -54,9 +54,22 @@ def _build_web_phases() -> list:
 WEB_PHASES = _build_web_phases()
 
 
+class _WebArgs(types.SimpleNamespace):
+    """Argparse-Namespace stand-in whose UNSET attributes default to None.
+
+    A phase that gates on a flag we did not explicitly set then skips cleanly
+    instead of raising AttributeError and crashing the whole pipeline — which
+    is exactly what happened before (``fingerprint`` was missing, so every web
+    scan threw and silently fell back to the legacy path).
+    """
+
+    def __getattr__(self, name: str) -> Any:  # invoked only on a lookup miss
+        return None
+
+
 def _make_minimal_args(output_dir: Path, **kwargs: Any) -> Any:
     """Build a minimal argparse-Namespace-like object for ScanContext."""
-    ns = types.SimpleNamespace(
+    ns = _WebArgs(
         target=None,          # set per-scan
         report=False,         # web worker handles report generation separately
         output=str(output_dir),
@@ -69,6 +82,12 @@ def _make_minimal_args(output_dir: Path, **kwargs: Any) -> Any:
         config=None,
         min_confidence=0,
         min_severity="INFO",
+        fingerprint=True,     # protocol fingerprint (pro-gated in should_run)
+        dev=False,
+        rag=False,
+        llm=False,
+        project_name=None,
+        solana_root=None,
         upgrade_old=None,
         upgrade_new=None,
         update_from_file=None,
@@ -102,6 +121,7 @@ def build_web_scan_context(
     output_dir: Path,
     license_tier: str = "free",
     config: Any = None,
+    exclude_paths: Any = None,
 ) -> Any:
     """Construct a ``ScanContext`` suitable for a web-profile scan.
 
@@ -135,7 +155,7 @@ def build_web_scan_context(
         args=args,
         scan_output_dir=output_dir,
         stderr_log=stderr_log,
-        exclude_paths=[],
+        exclude_paths=exclude_paths or [],
         plugin_mgr=None,
     )
 

@@ -46,6 +46,7 @@ async def handle_audit_request(
     project_name: str,
     files: List[UploadFile],
     *,
+    git_url: str = "",
     audit_limiter: Any,
     license_manager: Any,
     get_grace_period_context: GracePeriodContextFn,
@@ -75,23 +76,35 @@ async def handle_audit_request(
         )
         return resp_429
 
-    if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded")
+    git_url = (git_url or "").strip()
+    if git_url and not git_url.startswith("https://"):
+        raise HTTPException(
+            status_code=400, detail="Git URL must be an https:// URL"
+        )
+
+    if not files and not git_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide Solidity files, a project .zip, or a git URL",
+        )
 
     valid_files = []
     for upload in files:
+        # A multipart form with no file selected still sends an empty part.
+        if not (upload.filename or "").strip():
+            continue
         ext = Path(upload.filename or "").suffix.lower()
-        if ext not in ALLOWED_EXTENSIONS:
+        if ext not in ALLOWED_EXTENSIONS and ext != ".zip":
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Invalid file type: {upload.filename}. "
-                    f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+                    f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}, .zip"
                 ),
             )
         valid_files.append(upload)
 
-    if not valid_files:
+    if not valid_files and not git_url:
         raise HTTPException(status_code=400, detail="No valid files to process")
 
     audit_id = str(uuid.uuid4())
@@ -116,6 +129,12 @@ async def handle_audit_request(
         )
         uploaded_paths.append(str(file_path))
         await upload.close()
+
+    # Git submission: leave a marker the worker's ingestion step reads.
+    if git_url:
+        (upload_dir / "_ingest.json").write_text(
+            json.dumps({"git_url": git_url}), encoding="utf-8"
+        )
 
     arq_pool = getattr(request.app.state, "arq_pool", None)
     current_user = get_current_user(request)
