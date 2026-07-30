@@ -223,6 +223,29 @@ def _installed_solc_versions(
     return sorted(versions, reverse=True)
 
 
+def _solc_can_run(version: str, solc_bin: str) -> bool:
+    """True iff the solc binary crytic-compile will actually invoke can run
+    ``version``.
+
+    Guards against a solc-select install list that differs from the compiler
+    on PATH: ``solc-select versions`` (which we read) and the ``solc`` shim
+    crytic uses can point at different install dirs, so selecting a version the
+    real compiler lacks would fail the scan for the wrong reason ("Solidity
+    version not found") instead of surfacing the true issue.
+    """
+    env = os.environ.copy()
+    env["SOLC_VERSION"] = version
+    try:
+        res = subprocess.run(
+            [solc_bin, "--version"],
+            capture_output=True, text=True, check=False, timeout=30, env=env,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    blob = f"{res.stdout}\n{res.stderr}".lower()
+    return res.returncode == 0 and "version:" in blob and "not installed" not in blob
+
+
 def _parse_pragma_constraints(
     pragma: str,
 ) -> List[Tuple[str, Tuple[int, int, int]]]:
@@ -324,9 +347,20 @@ def _select_solc_version(
             constraints.extend(_parse_pragma_constraints(pragma))
     if not constraints:
         return None
+    # Verify a candidate against the solc crytic will actually invoke (PATH
+    # resolution, same as the compile subprocess), not just solc-select's list.
+    verify_solc = shutil.which("solc")
     for v in _installed_solc_versions(solc_select_bin):  # newest first
-        if _version_satisfies(v, constraints):
-            return f"{v[0]}.{v[1]}.{v[2]}"
+        if not _version_satisfies(v, constraints):
+            continue
+        candidate = f"{v[0]}.{v[1]}.{v[2]}"
+        if verify_solc is None or _solc_can_run(candidate, verify_solc):
+            return candidate
+        logger.warning(
+            "solc %s satisfies the pragma and is listed by solc-select, but the "
+            "compiler on PATH cannot run it; trying an older installed version",
+            candidate,
+        )
     return None
 
 
