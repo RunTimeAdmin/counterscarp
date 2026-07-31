@@ -364,20 +364,6 @@ if _env_local.exists():
                 os.environ[_k] = _v
 
 
-def _cleanup_old_directories(base_dir: Path, max_age_days: int, logger, label: str):
-    """Remove subdirectories older than max_age_days."""
-    if not base_dir.exists():
-        return
-    cutoff = time.time() - (max_age_days * 86400)
-    removed = 0
-    for entry in base_dir.iterdir():
-        if entry.is_dir() and entry.stat().st_mtime < cutoff:
-            shutil.rmtree(entry, ignore_errors=True)
-            removed += 1
-    if removed:
-        logger.info("Removed %d old %s directories (>%d days)", removed, label, max_age_days)
-
-
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup."""
@@ -416,37 +402,26 @@ async def startup_event():
 async def startup_cleanup():
     """Run housekeeping cleanup on app startup."""
     _cleanup_logger = logging.getLogger("counterscarp.cleanup")
+    project_root = Path(__file__).parent.parent
 
-    # 1. Clean old scan state files (>30 days)
     try:
-        from state_manager import ScanStateManager
-        sm = ScanStateManager()
-        sm.cleanup_old_sessions(max_age_days=30)
-        _cleanup_logger.info("Cleaned old scan state files (>30 days)")
-    except Exception as e:
-        _cleanup_logger.warning("State cleanup failed: %s", e)
+        from cleanup import run_cleanup
 
-    # 2. Clean old report directories (>90 days)
-    try:
-        _cleanup_old_directories(
-            Path(__file__).parent.parent / "reports",
-            max_age_days=90,
-            logger=_cleanup_logger,
-            label="reports",
+        stats = run_cleanup(
+            project_root,
+            dry_run=False,
+            verbose=False,
+            include_results=True,
         )
+        if stats.files_removed or stats.dirs_removed:
+            _cleanup_logger.info(
+                "Startup cleanup freed ~%d bytes (%d files, %d dirs)",
+                stats.bytes_freed,
+                stats.files_removed,
+                stats.dirs_removed,
+            )
     except Exception as e:
-        _cleanup_logger.warning("Report cleanup failed: %s", e)
-
-    # 3. Clean old uploads (>7 days)
-    try:
-        _cleanup_old_directories(
-            Path(__file__).parent.parent / "uploads",
-            max_age_days=7,
-            logger=_cleanup_logger,
-            label="uploads",
-        )
-    except Exception as e:
-        _cleanup_logger.warning("Upload cleanup failed: %s", e)
+        _cleanup_logger.warning("Startup cleanup failed: %s", e)
 
 
 @app.get("/", response_class=HTMLResponse)

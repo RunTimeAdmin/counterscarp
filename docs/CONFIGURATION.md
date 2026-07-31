@@ -676,6 +676,7 @@ The service automatically purges stale working data on startup. The following re
 | State / cache files | `.scarpshield/` (legacy `.counterscarp/` supported) | **30 days** |
 | Report directories | `reports/` | **90 days** |
 | Upload directories | `uploads/` | **7 days** |
+| Webapp audit results | `results/` | **30 days** |
 
 **Behavior:**
 - Cleanup runs once on service startup, before the first request is handled.
@@ -684,6 +685,13 @@ The service automatically purges stale working data on startup. The following re
 - A startup log entry is written for each directory purged.
 
 > These values are hardcoded in the current release. A `[cleanup]` TOML section with per-type retention keys is planned for v5.1.0.
+
+**Manual cleanup (CLI):** Run without starting the web server:
+
+```bash
+counterscarp --clean              # remove stale artifacts under the current directory
+counterscarp --clean --dry-run    # preview what would be deleted
+```
 
 ---
 

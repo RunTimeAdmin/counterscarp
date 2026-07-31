@@ -560,13 +560,15 @@ For full launch sequencing, rollback triggers, and evidence logging, see:
 df -h /opt/counterscarp-engine
 ```
 
-Uploads and results accumulate over time. Consider setting up a cron job to clean old audit data:
+Uploads and results accumulate over time. Prefer the built-in cleanup command (same retention rules as startup housekeeping):
 
 ```bash
-# Remove results older than 30 days
-find /opt/counterscarp-engine/results -type d -mtime +30 -exec rm -rf {} +
-find /opt/counterscarp-engine/uploads -type d -mtime +30 -exec rm -rf {} +
+cd /opt/counterscarp-engine
+counterscarp --clean --dry-run   # preview
+counterscarp --clean             # purge stale state, uploads, reports, and results
 ```
+
+For Docker deployments, prune the Foundry cache volume if disk is tight: `docker volume rm sentinel-engine_foundry-cache`.
 
 ### Check Running Processes
 
@@ -647,6 +649,7 @@ On every service startup, the application automatically purges stale working dat
 | State / cache files | `.scarpshield/` (legacy `.counterscarp/` supported) | 30 days |
 | Report directories | `reports/` | 90 days |
 | Upload directories | `uploads/` | 7 days |
+| Webapp audit results | `results/` | 30 days |
 
 > **Note:** These retention periods are currently hardcoded. Configurable retention via `scarpshield.toml` (or legacy `counterscarp.toml`) is planned for a future release.
 
