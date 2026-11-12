@@ -18,7 +18,7 @@ from path_security import (
     sanitize_project_slug,
 )
 from exceptions import CounterscarpValidationError
-from counterscarp_core.severity import SEVERITY_RANK, sort_findings
+from counterscarp_core.severity import SEVERITY_RANK, Severity, sort_findings
 
 from logger import get_logger, setup_logging
 
@@ -28,7 +28,7 @@ try:
 except Exception:
     _ENGINE_VERSION = "5.0.0"
 
-from license_manager import (
+from counterscarp_core.licensing import (
     LicenseManager, AI_COPILOT, TIME_TRAVEL, FINGERPRINT,
     SOLANA, BRANDED_REPORTS, EXPLOIT_GEN
 )
@@ -199,6 +199,41 @@ def _md_safe(text: str, max_len: int = 0) -> str:
     )
 
 
+def _slither_severity(impact: Any) -> str:
+    """Slither impact as a report severity. Informational and Optimization are INFO."""
+    text = str(impact or "").strip().lower()
+    if text in ("informational", "optimization"):
+        return Severity.INFO.name
+    return Severity.parse(text, Severity.MEDIUM).name
+
+
+def _empty_section_text(
+    analyzer_status: Optional[Dict[str, Any]],
+    names: tuple,
+    label: str,
+    ok_text: str,
+) -> str:
+    """Text for a report section with no findings, true to what actually ran.
+
+    An analyzer that failed, was skipped or never ran must not read as a
+    clean result.
+    """
+    if analyzer_status is None:
+        return f"No results reported by {label}.\n\n"
+    for name in names:
+        status = analyzer_status.get(name)
+        if status is None:
+            continue
+        if status.get("ran"):
+            return f"[OK] {ok_text}\n\n"
+        if status.get("skipped") or status.get("error") == "Not enabled":
+            reason = status.get("skipped") or "not enabled"
+            return f"[--] {label} was skipped ({_md_safe(str(reason))}). No results for this section.\n\n"
+        error = _md_safe(str(status.get("error") or "unknown error"))
+        return f"[!] **{label} did not complete** ({error}). No results for this section.\n\n"
+    return f"[--] {label} was not run for this scan. No results for this section.\n\n"
+
+
 def _aggregate_findings(
     static_results: List[Dict[str, Any]],
     supply_results: List[Dict[str, Any]],
@@ -219,10 +254,10 @@ def _aggregate_findings(
     """
     all_findings: List[Dict[str, Any]] = []
 
-    # static_results
+    # static_results (Slither impact: High/Medium/Low/Informational/Optimization)
     for item in static_results:
         all_findings.append({
-            "severity": item.get("impact", "MEDIUM").upper(),
+            "severity": _slither_severity(item.get("impact")),
             "rule_id": item.get("check") or item.get("rule_id") or item.get("title", "unknown"),
             "location": f"{item.get('file', item.get('location', 'unknown'))}:{item.get('line_no', item.get('line', '?'))}",
             "message": (item.get("message") or item.get("description", ""))[:80],
@@ -307,37 +342,29 @@ def _maybe_print_cli_alias_notice() -> None:
         )
 
 
-def _compute_risk_metrics(
-    all_findings: List[Dict[str, Any]],
-    fuzz_results: List[Dict[str, Any]],
-    static_results: List[Dict[str, Any]],
-    heuristic_results: List[Dict[str, Any]],
-) -> Dict[str, Any]:
-    """Compute aggregate risk score, severity distribution, and pass/fail.
+def _compute_risk_metrics(all_findings: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compute severity distribution and the headline status.
 
     Args:
-        all_findings: Unified findings list from _aggregate_findings.
-        fuzz_results: Raw fuzz results (for critical count).
-        static_results: Raw static results (for critical count).
-        heuristic_results: Raw heuristic results (for critical count).
+        all_findings: Unified findings list from _aggregate_findings (fuzz
+            violations are already CRITICAL there).
 
     Returns:
         Dict with severity_counts, critical_count, status_icon, total_findings.
     """
-    critical_count = len(fuzz_results)
-    for result in static_results:
-        if result.get("impact", "").lower() in ("high", "critical"):
-            critical_count += 1
-    for result in heuristic_results:
-        if result.get("severity", "").upper() == "CRITICAL":
-            critical_count += 1
-    status_icon = "[CRITICAL]" if critical_count > 0 else "[STABLE]"
-
     _severity_counts: Dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     for _f in all_findings:
         _sev = _f.get("severity", "MEDIUM").upper()
         if _sev in _severity_counts:
             _severity_counts[_sev] += 1
+
+    critical_count = _severity_counts["CRITICAL"]
+    if critical_count:
+        status_icon = "[CRITICAL]"
+    elif _severity_counts["HIGH"]:
+        status_icon = "[HIGH RISK]"
+    else:
+        status_icon = "[STABLE]"
 
     _total_findings = sum(_severity_counts.values())
 
@@ -435,7 +462,10 @@ def _render_markdown_report(
     # Executive Summary
     f.write("# Security Remediation Plan\n")
     f.write(f"**Target:** `{project_name}`\n")
-    f.write(f"**Status:** {status_icon} ({critical_count} Critical Issues)\n")
+    f.write(
+        f"**Status:** {status_icon} ({critical_count} Critical, "
+        f"{_severity_counts['HIGH']} High)\n"
+    )
     f.write(f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
 
     f.write("> **Objective:** This document lists specific, actionable steps to patch identified vulnerabilities. Prioritize 'Critical' items immediately.\n\n")
@@ -480,6 +510,8 @@ def _render_markdown_report(
                 f.write(f"| {_aname} | Completed | {_acount} |\n")
             elif _astatus.get("error") == "Not enabled":
                 f.write(f"| {_aname} | Skipped (not enabled) | — |\n")
+            elif _astatus.get("skipped"):
+                f.write(f"| {_aname} | Skipped ({_astatus['skipped']}) | — |\n")
             else:
                 f.write(f"| {_aname} | **FAILED** | — |\n")
                 _failed_analyzers.append((_aname, _astatus.get("error", "Unknown error")))
@@ -491,7 +523,10 @@ def _render_markdown_report(
     # SECTION 1: SUPPLY CHAIN (DEPENDENCIES)
     f.write("## 1. Dependency Updates (Supply Chain)\n")
     if not supply_results:
-        f.write("[OK] **No Action Required.** All dependencies are up to date.\n\n")
+        f.write(_empty_section_text(
+            analyzer_status, ("Supply Chain",), "Dependency check",
+            "No known-vulnerable dependencies found.",
+        ))
     else:
         f.write("| Severity | Library | Action Required |\n")
         f.write("| :--- | :--- | :--- |\n")
@@ -506,11 +541,14 @@ def _render_markdown_report(
     # SECTION 2: CODE VULNERABILITIES (STATIC)
     f.write("## 2. Code Patches (Static Analysis)\n")
     if not static_results:
-        f.write("[OK] **No Action Required.** No critical patterns found.\n\n")
+        f.write(_empty_section_text(
+            analyzer_status, ("Slither (Static Analysis)",), "Slither",
+            "Slither reported no issues at the configured severities.",
+        ))
     else:
         for i, item in enumerate(static_results, 1):
-            impact = item.get("impact", "Unknown")
-            priority = "[IMMEDIATE]" if impact == "High" else "[HIGH]"
+            # Same severity words as the summary table.
+            priority = f"[{_slither_severity(item.get('impact'))}]"
             action = get_remediation(item.get("title", ""), item.get("description", ""))
 
             f.write(f"### {i}. {item.get('title', 'Unknown Issue')} ({priority})\n")
@@ -523,7 +561,10 @@ def _render_markdown_report(
     # SECTION 3: LOGIC FAILURES (FUZZING)
     f.write("## 3. Logic & Invariant Patches (Dynamic)\n")
     if not fuzz_results:
-        f.write("[OK] **No Action Required.** Logic held up against stress testing.\n\n")
+        f.write(_empty_section_text(
+            analyzer_status, ("Foundry Fuzz",), "Fuzzing",
+            "No invariant violations found by the fuzz run.",
+        ))
     else:
         for item in fuzz_results:
             test_name = item.get("test_name", "UnknownTest")
@@ -547,7 +588,10 @@ def _render_markdown_report(
     # SECTION 4: HEURISTIC FINDINGS (PATTERN-BASED)
     f.write("## 4. Heuristic Findings (Pattern-Based)\n")
     if not heuristic_results:
-        f.write("[OK] **No heuristic red flags detected.** (Note: this does *not* guarantee safety.)\n\n")
+        f.write(_empty_section_text(
+            analyzer_status, ("Heuristic Scanner",), "Heuristic scanner",
+            "No heuristic red flags detected. (This does *not* guarantee safety.)",
+        ))
     else:
         for item in heuristic_results:
             severity = item.get("severity", "INFO")
@@ -567,7 +611,10 @@ def _render_markdown_report(
     # SECTION 5: SYMBOLIC ANALYSIS (MYTHRIL)
     f.write("## 5. Symbolic Analysis (Mythril)\n")
     if not symbolic_results:
-        f.write("[OK] **No issues reported by Mythril for this run.**\n\n")
+        f.write(_empty_section_text(
+            analyzer_status, ("Mythril (Symbolic)",), "Mythril",
+            "No issues reported by Mythril for this run.",
+        ))
     else:
         for i, issue in enumerate(symbolic_results, 1):
             title = issue.get("title") or "Unnamed issue"
@@ -846,12 +893,7 @@ def _generate_action_plan_report(
         solana_results=solana_results,
     )
 
-    metrics = _compute_risk_metrics(
-        all_findings=all_findings,
-        fuzz_results=fuzz_results,
-        static_results=static_results,
-        heuristic_results=heuristic_results,
-    )
+    metrics = _compute_risk_metrics(all_findings=all_findings)
 
     content = _format_action_plan_section(
         project_name=project_name,

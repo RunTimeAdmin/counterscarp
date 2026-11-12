@@ -6,6 +6,7 @@ import re
 import subprocess
 import json
 import shutil
+import tempfile
 import sys
 import argparse
 from pathlib import Path
@@ -323,6 +324,143 @@ def _collect_sol_files(target: str, cap: int = 300) -> List[Path]:
     return files
 
 
+# ── Submitted (untrusted) projects ──────────────────────────────────────────
+# A submitted project must never run its own build. A Hardhat config is
+# JavaScript, and foundry.toml can point ``solc`` at a binary inside the repo,
+# so letting crytic-compile pick the framework runs the submitter's code.
+# Instead Slither compiles one generated entry file with plain solc. The
+# entry imports every project source; remappings are read from the project
+# as data and must stay inside it.
+UNTRUSTED_ENTRY = "__counterscarp_entry.sol"
+_ENTRY_SKIP_DIRS = _SOL_SKIP_DIRS | {"script", "scripts"}
+_IMPORT_RE = re.compile(r"""import\s+(?:[^'";]*?\s+from\s+)?["']([^"']+)["']""")
+_MAX_ENTRY_SOURCES = 2000
+_MAX_NPM_SCAN_FILES = 5000
+_MAX_STAGED_BYTES = 256 * 1024 * 1024
+
+
+def _untrusted_sources(root: Path) -> List[Path]:
+    """Project sources to compile: no deps, tests or scripts, nothing outside root."""
+    root = root.resolve()
+    files: List[Path] = []
+    for p in sorted(root.rglob("*.sol")):
+        rel = p.relative_to(root)
+        if any(part in _ENTRY_SKIP_DIRS for part in rel.parts[:-1]):
+            continue
+        name = rel.name
+        if name == UNTRUSTED_ENTRY or name.endswith((".t.sol", ".s.sol")):
+            continue
+        if p.is_symlink() or root not in p.resolve().parents:
+            continue
+        files.append(p)
+        if len(files) >= _MAX_ENTRY_SOURCES:
+            break
+    return files
+
+
+def _safe_remap(root: Path, remap: str) -> Optional[str]:
+    """Return the remapping if its target is a relative path inside root."""
+    remap = remap.strip()
+    if not remap or remap.startswith("#") or "=" not in remap:
+        return None
+    if any(c.isspace() for c in remap):
+        return None
+    prefix, target = remap.split("=", 1)
+    if not prefix or not target or ":" in target or Path(target).is_absolute():
+        return None
+    root = root.resolve()
+    resolved = (root / target).resolve()
+    if resolved != root and root not in resolved.parents:
+        return None
+    return f"{prefix}={target}"
+
+
+def _npm_remappings(root: Path, sources: List[Path]) -> List[str]:
+    """Remap each node_modules package the sources import, following its own imports."""
+    nm = root / "node_modules"
+    if not nm.is_dir():
+        return []
+    remaps: List[str] = []
+    seen: set = set()
+    queue = list(sources)
+    scanned = 0
+    while queue and scanned < _MAX_NPM_SCAN_FILES:
+        f = queue.pop()
+        scanned += 1
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for imp in _IMPORT_RE.findall(text):
+            parts = imp.split("/")
+            if imp.startswith(".") or any(part in ("", ".", "..") for part in parts):
+                continue
+            depth = 2 if imp.startswith("@") else 1
+            if len(parts) <= depth:
+                continue
+            pkg = "/".join(parts[:depth])
+            if pkg in seen:
+                continue
+            seen.add(pkg)
+            pkg_dir = nm / pkg
+            if pkg_dir.is_dir() and not pkg_dir.is_symlink():
+                remaps.append(f"{pkg}/=node_modules/{pkg}/")
+                queue.extend(sorted(pkg_dir.rglob("*.sol"))[:_MAX_ENTRY_SOURCES])
+    return remaps
+
+
+def _untrusted_remappings(root: Path, sources: List[Path]) -> List[str]:
+    """Remappings for a submitted project, explicit ones first."""
+    raw: List[str] = []
+    remap_file = root / "remappings.txt"
+    if remap_file.is_file():
+        raw += remap_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+    foundry_toml = root / "foundry.toml"
+    if foundry_toml.is_file():
+        try:
+            try:
+                import tomllib as _toml
+            except ImportError:  # Python 3.10
+                import tomli as _toml
+            data = _toml.loads(foundry_toml.read_text(encoding="utf-8", errors="ignore"))
+            listed = data.get("profile", {}).get("default", {}).get("remappings") or []
+            raw += [r for r in listed if isinstance(r, str)]
+        except Exception:
+            pass
+    lib = root / "lib"
+    if lib.is_dir():
+        # Foundry's default: lib/<name>/src is importable as "<name>/".
+        for d in sorted(p for p in lib.iterdir() if p.is_dir()):
+            sub = "src/" if (d / "src").is_dir() else ""
+            raw.append(f"{d.name}/=lib/{d.name}/{sub}")
+    raw += _npm_remappings(root, sources)
+
+    out: List[str] = []
+    seen: set = set()
+    for r in raw:
+        safe = _safe_remap(root, r)
+        if safe is None:
+            continue
+        prefix = safe.split("=", 1)[0]
+        if prefix not in seen:
+            seen.add(prefix)
+            out.append(safe)
+    return out
+
+
+def _write_untrusted_entry(root: Path, sources: List[Path]) -> Path:
+    """Write the entry file that pulls every source into one solc run."""
+    lines = ["// Generated by Counterscarp to compile every project source at once.", ""]
+    for i, f in enumerate(sources):
+        rel = f.relative_to(root).as_posix()
+        if any(c in rel for c in "\"\\\r\n"):
+            continue
+        lines.append(f'import "./{rel}" as __cs{i};')
+    entry = root / UNTRUSTED_ENTRY
+    entry.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return entry
+
+
 def _select_solc_version(
     target: str, solc_select_bin: Optional[str]
 ) -> Optional[str]:
@@ -619,6 +757,7 @@ def run_slither(
     target: str,
     stderr_log: Optional[str] = None,
     exclude_paths: Optional[List[str]] = None,
+    trust_build: bool = True,
 ) -> Dict[str, Any]:
     """Runs Slither via subprocess and captures JSON output.
 
@@ -630,6 +769,9 @@ def run_slither(
         stderr_log: Optional path for Slither stderr log.
         exclude_paths: Optional list of glob patterns to pass to Slither
             via ``--filter-paths`` (e.g. ``test/**``).
+        trust_build: False for code someone submitted. The project's own
+            build (forge, Hardhat) is then never run; Slither compiles
+            the sources with plain solc instead.
 
     Returns:
         Parsed JSON output from Slither.
@@ -639,6 +781,51 @@ def run_slither(
         CounterscarpAnalysisError: If Slither analysis fails or
             output cannot be parsed.
     """
+    if trust_build:
+        return _run_slither(target, stderr_log, exclude_paths, trust_build=True)
+    root = Path(target).expanduser().resolve()
+    if root.is_file():
+        root = root.parent
+    # Compile a copy holding only the .sol files, in a fresh temp directory.
+    # crytic-compile inspects its working directory (and, for Foundry, every
+    # parent) and asks any framework it finds for its config, which runs the
+    # project's toolchain even when solc is forced. A tree with no config
+    # files, outside the submitted one, leaves it nothing to find.
+    staging = Path(tempfile.mkdtemp(prefix="counterscarp-solc-"))
+    try:
+        sources = _untrusted_sources(root)
+        remaps = _untrusted_remappings(root, sources)
+        _stage_sol_files(root, staging)
+        return _run_slither(
+            str(staging), stderr_log, exclude_paths,
+            trust_build=False, untrusted_remaps=remaps,
+        )
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def _stage_sol_files(root: Path, staging: Path) -> None:
+    """Copy every regular .sol file under root into staging, same relative paths."""
+    root = root.resolve()
+    total = 0
+    for p in root.rglob("*.sol"):
+        if p.is_symlink() or not p.is_file() or root not in p.resolve().parents:
+            continue
+        total += p.stat().st_size
+        if total > _MAX_STAGED_BYTES:
+            break
+        dest = staging / p.relative_to(root)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(p, dest)
+
+
+def _run_slither(
+    target: str,
+    stderr_log: Optional[str],
+    exclude_paths: Optional[List[str]],
+    trust_build: bool,
+    untrusted_remaps: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     _target_is_file = Path(target).expanduser().is_file()
     safe_target = sanitize_cli_path(
         target,
@@ -673,8 +860,21 @@ def run_slither(
         )
     forge_available = shutil.which("forge") is not None
 
-    # Determine working directory for subprocess
-    if project_root and forge_available:
+    untrusted_remaps = untrusted_remaps or []
+    if not trust_build:
+        # Submitted code, already staged by run_slither: one solc run over a
+        # generated entry file. No framework is detected or run.
+        root_dir = Path(target).resolve()
+        sources = _untrusted_sources(root_dir)
+        _write_untrusted_entry(root_dir, sources)
+        cwd = str(root_dir)
+        effective_target = UNTRUSTED_ENTRY
+        project_root = None
+        print(
+            f"[*] Submitted project: compiling {len(sources)} source(s)"
+            f" with plain solc ({len(untrusted_remaps)} remapping(s))"
+        )
+    elif project_root and forge_available:
         # forge is available — safe to use project root as cwd
         cwd = project_root
         # Make target relative to project root so
@@ -721,6 +921,12 @@ def run_slither(
 
     # Build the Slither command
     cmd = [slither_bin, effective_target, "--json", "-"]
+
+    if not trust_build:
+        cmd += ["--compile-force-framework", "solc"]
+        if untrusted_remaps:
+            cmd += ["--solc-remaps", " ".join(untrusted_remaps)]
+        exclude_paths = list(exclude_paths or []) + [UNTRUSTED_ENTRY]
 
     # Add Foundry-specific flags if a foundry.toml was found
     is_foundry = (

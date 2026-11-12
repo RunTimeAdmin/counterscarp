@@ -33,7 +33,7 @@ class RagEnrichPhase(ScanPhase):
                 "Install: pip install sentence-transformers numpy"
             )
             return False
-        from license_manager import LicenseManager, AI_COPILOT
+        from counterscarp_core.licensing import LicenseManager, AI_COPILOT
         _license = LicenseManager()
         if not (ctx.args.dev or _license.check_pro_feature(AI_COPILOT)):
             ctx.logger.info(
@@ -138,7 +138,7 @@ class ExploitGenPhase(ScanPhase):
         exploit_results: Optional[List] = None
         try:
             from exploit_generator import ExploitGenerator
-            from license_manager import LicenseManager, EXPLOIT_GEN
+            from counterscarp_core.licensing import LicenseManager, EXPLOIT_GEN
 
             _license = LicenseManager()
             if ctx.args.dev or _license.check_pro_feature(EXPLOIT_GEN):
@@ -209,7 +209,7 @@ class ExploitGenPhase(ScanPhase):
                         "No CRITICAL/HIGH findings for exploit generation"
                     )
             else:
-                from license_manager import LicenseManager, EXPLOIT_GEN
+                from counterscarp_core.licensing import LicenseManager, EXPLOIT_GEN
                 _license2 = LicenseManager()
                 ctx.logger.info(
                     "Exploit PoC generation requires Pro tier license: %s",
@@ -251,7 +251,7 @@ class HistoryPhase(ScanPhase):
             import history_scanner  # noqa: F401
         except ImportError:
             return False
-        from license_manager import LicenseManager, TIME_TRAVEL
+        from counterscarp_core.licensing import LicenseManager, TIME_TRAVEL
         _license = LicenseManager()
         if not (ctx.args.dev or _license.check_pro_feature(TIME_TRAVEL)):
             return False

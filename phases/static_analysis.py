@@ -20,11 +20,15 @@ class SupplyChainPhase(ScanPhase):
         import supply_chain_check
 
         supply_issues: List[Dict] = []
+        ran = False
+        skipped: Optional[str] = None
+        error: Optional[str] = None
         if os.path.isdir(ctx.target):
             pkg_json = os.path.join(ctx.target, "package.json")
             if os.path.exists(pkg_json):
                 try:
                     supply_issues = supply_chain_check.scan_package_json(pkg_json)
+                    ran = True
                     ctx.logger.info(
                         "Supply chain scan complete: %d issues found", len(supply_issues)
                     )
@@ -33,16 +37,21 @@ class SupplyChainPhase(ScanPhase):
                         "Supply chain check failed for %s: %s", pkg_json, e
                     )
                     supply_issues = []
+                    error = str(e)
             else:
                 ctx.logger.info("No package.json found — skipping supply chain check")
+                skipped = "no package.json"
         else:
             ctx.logger.info("Target is not a directory — skipping supply chain check")
+            skipped = "single-file target"
 
         ctx.supply_issues = supply_issues
+        # "ran" means the check executed, not that it found something.
         ctx.analyzer_status["Supply Chain"] = {
-            "ran": bool(supply_issues),
+            "ran": ran,
             "finding_count": len(supply_issues),
-            "error": None,
+            "error": error,
+            "skipped": skipped,
         }
         return supply_issues
 
@@ -64,8 +73,14 @@ class SlitherPhase(ScanPhase):
                 ctx.target,
                 stderr_log=ctx.stderr_log,
                 exclude_paths=ctx.exclude_paths,
+                trust_build=ctx.trust_build,
             )
             static_issues = red_team_scan.filter_vulnerabilities(raw_slither)
+            if isinstance(raw_slither, dict) and raw_slither.get("success") is False:
+                # Slither answered but could not analyze (e.g. compile error).
+                _slither_error = str(
+                    raw_slither.get("error") or "Slither reported an analysis error"
+                )[:500]
             ctx.logger.info(
                 "Slither analysis complete: %d issues found", len(static_issues)
             )

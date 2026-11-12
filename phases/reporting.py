@@ -107,18 +107,18 @@ class ReportPhase(ScanPhase):
                 )
             )
 
-        # Aderyn
+        # Aderyn: every instance, high and low, with its location
         if ctx.aderyn_results and isinstance(ctx.aderyn_results, dict):
-            for issue in ctx.aderyn_results.get("high", [])[:10]:
+            for issue in ctx.aderyn_results.get("issues", []):
                 all_findings.append(
                     Finding(
-                        rule_id=issue.get("detector_name", "aderyn_finding"),
-                        severity="HIGH",
+                        rule_id=issue.get("rule_id", "aderyn_finding"),
+                        severity=issue.get("severity", "MEDIUM"),
                         category="Aderyn",
                         title=issue.get("title", "Aderyn Finding"),
                         description=issue.get("description", ""),
-                        file="",
-                        line_no=0,
+                        file=issue.get("file", ""),
+                        line_no=issue.get("line_no", 0) or 0,
                     )
                 )
 
@@ -270,7 +270,7 @@ class ReportPhase(ScanPhase):
         ctx.logger.info("Professional Markdown report: %s", os.path.abspath(md_path))
 
         # HTML/PDF reports require Pro license
-        from license_manager import LicenseManager, BRANDED_REPORTS
+        from counterscarp_core.licensing import LicenseManager, BRANDED_REPORTS
         _license = LicenseManager()
         if ctx.args.dev or _license.check_pro_feature(BRANDED_REPORTS):
             html_file = str(ctx.scan_output_dir / "audit_report.html")

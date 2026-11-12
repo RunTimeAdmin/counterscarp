@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -16,6 +17,14 @@ PASSWORD_FIELD = "".join(["pass", "word"])
 
 def _pw(label: str) -> str:
     return f"T3st!{label}#2026"
+
+
+def _csrf(client) -> str:
+    """Load the login form so the session holds a CSRF token, and return it."""
+    r = client.get("/auth/login")
+    m = re.search(r'name="_csrf_token" value="([^"]+)"', r.text)
+    assert m, "login page has no CSRF token"
+    return m.group(1)
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +112,7 @@ class TestRegisterSubmit:
     def test_register_password_mismatch_returns_200(self, auth_client) -> None:
         entered = _pw("mismatch")
         r = auth_client.post("/auth/register", data={
+            "_csrf_token": _csrf(auth_client),
             "name": "Alice",
             "email": "alice@example.com",
             PASSWORD_FIELD: entered,
@@ -114,6 +124,7 @@ class TestRegisterSubmit:
     def test_register_short_password_returns_200(self, auth_client) -> None:
         short_pw = "shrt"
         r = auth_client.post("/auth/register", data={
+            "_csrf_token": _csrf(auth_client),
             "name": "Bob",
             "email": "bob@example.com",
             PASSWORD_FIELD: short_pw,
@@ -124,6 +135,7 @@ class TestRegisterSubmit:
     def test_register_success_redirects(self, auth_client, manager) -> None:
         strong_pw = _pw("register")
         r = auth_client.post("/auth/register", data={
+            "_csrf_token": _csrf(auth_client),
             "name": "Carol",
             "email": "carol@example.com",
             PASSWORD_FIELD: strong_pw,
@@ -139,6 +151,7 @@ class TestRegisterSubmit:
             **{PASSWORD_FIELD: dupe_pw},
         )
         r = auth_client.post("/auth/register", data={
+            "_csrf_token": _csrf(auth_client),
             "name": "Dupe2",
             "email": "dupe@example.com",
             PASSWORD_FIELD: dupe_pw,
@@ -161,6 +174,7 @@ class TestLoginSubmit:
             **{PASSWORD_FIELD: login_pw},
         )
         r = auth_client.post("/auth/login", data={
+            "_csrf_token": _csrf(auth_client),
             "email": "login@example.com",
             PASSWORD_FIELD: login_pw,
         }, follow_redirects=False)
@@ -174,6 +188,7 @@ class TestLoginSubmit:
             **{PASSWORD_FIELD: correct_pw},
         )
         r = auth_client.post("/auth/login", data={
+            "_csrf_token": _csrf(auth_client),
             "email": "wrong@example.com",
             PASSWORD_FIELD: _pw("incorrect"),
         })
@@ -181,6 +196,7 @@ class TestLoginSubmit:
 
     def test_login_unknown_user_returns_200(self, auth_client) -> None:
         r = auth_client.post("/auth/login", data={
+            "_csrf_token": _csrf(auth_client),
             "email": "nobody@example.com",
             PASSWORD_FIELD: _pw("unknown"),
         })
@@ -206,6 +222,7 @@ class TestLogout:
             **{PASSWORD_FIELD: logout_pw},
         )
         auth_client.post("/auth/login", data={
+            "_csrf_token": _csrf(auth_client),
             "email": "logout@example.com",
             PASSWORD_FIELD: logout_pw,
         }, follow_redirects=False)
@@ -250,7 +267,7 @@ class TestPasswordReset:
     def test_post_forgot_password_generic_message(self, auth_client, manager) -> None:
         pw = _pw("reset-generic")
         manager.create_user(email="reset@example.com", name="Reset", **{PASSWORD_FIELD: pw})
-        r = auth_client.post("/auth/forgot-password", data={"email": "reset@example.com"})
+        r = auth_client.post("/auth/forgot-password", data={"_csrf_token": _csrf(auth_client), "email": "reset@example.com"})
         assert r.status_code == 200
         assert "If an account exists for that email" in r.text
 
@@ -271,6 +288,7 @@ class TestPasswordReset:
         r = auth_client.post(
             "/auth/reset-password",
             data={
+            "_csrf_token": _csrf(auth_client),
                 "token": token,
                 PASSWORD_FIELD: new_pw,
                 "confirm_password": new_pw,

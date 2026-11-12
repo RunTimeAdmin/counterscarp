@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+from html import escape as html_escape
 from typing import Dict, Any, Optional, List
 
 from logger import get_logger
@@ -67,7 +68,13 @@ def _generate_d3_js(graph_data: Dict[str, Any]) -> str:
         JavaScript code string.
     """
     # Convert graph data to JSON string for embedding
-    graph_json = json.dumps(graph_data)
+    # Escape <, > and & so finding text cannot close the <script> block.
+    graph_json = (
+        json.dumps(graph_data)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
     
     return f"""
         // Graph data
@@ -137,7 +144,7 @@ def _generate_d3_js(graph_data: Dict[str, Any]) -> str:
             .attr('stroke', d => edgeStyles[d.type]?.stroke || '#999')
             .attr('stroke-width', d => edgeStyles[d.type]?.strokeWidth || 1)
             .attr('stroke-dasharray', d => edgeStyles[d.type]?.dash || 'none')
-            .attr('marker-end', d => `url(#arrow-${{d.type}})`);
+            .attr('marker-end', d => `url(#arrow-${{esc(d.type)}})`);
         
         // Create nodes
         const node = g.append('g')
@@ -181,7 +188,7 @@ def _generate_d3_js(graph_data: Dict[str, Any]) -> str:
             tooltip.transition()
                 .duration(200)
                 .style('opacity', .9);
-            tooltip.html(`<strong>${{d.name}}</strong><br/>Type: ${{d.type}}`)
+            tooltip.html(`<strong>${{esc(d.name)}}</strong><br/>Type: ${{esc(d.type)}}`)
                 .style('left', (event.pageX + 10) + 'px')
                 .style('top', (event.pageY - 28) + 'px');
         }})
@@ -248,6 +255,8 @@ def _generate_html_template(
     Returns:
         Complete HTML string.
     """
+    title = html_escape(title)  # the project name is user input
+
     # Count node types for statistics
     node_counts: dict[str, int] = {}
     for node in graph_data.get('nodes', []):
@@ -267,7 +276,7 @@ def _generate_html_template(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
     <style>
         * {{
             margin: 0;
@@ -561,29 +570,29 @@ def _generate_html_template(
             <div class="panel">
                 <h3>Search</h3>
                 <input type="text" class="search-box" id="searchInput" 
-                       placeholder="Search nodes..." onkeyup="searchNodes()">
+                       placeholder="Search nodes..." data-on="keyup:searchNodes">
             </div>
             
             <div class="panel">
                 <h3>Node Filters</h3>
                 <div class="filter-group">
                     <label>
-                        <input type="checkbox" checked onchange="toggleNodeType('Contract')">
+                        <input type="checkbox" checked data-on="change:toggleNodeType:Contract">
                         <span class="color-indicator" style="background: {NODE_COLORS['Contract']}"></span>
                         Contracts
                     </label>
                     <label>
-                        <input type="checkbox" checked onchange="toggleNodeType('Function')">
+                        <input type="checkbox" checked data-on="change:toggleNodeType:Function">
                         <span class="color-indicator" style="background: {NODE_COLORS['Function']}"></span>
                         Functions
                     </label>
                     <label>
-                        <input type="checkbox" checked onchange="toggleNodeType('Vulnerability')">
+                        <input type="checkbox" checked data-on="change:toggleNodeType:Vulnerability">
                         <span class="color-indicator" style="background: {NODE_COLORS['Vulnerability']}"></span>
                         Vulnerabilities
                     </label>
                     <label>
-                        <input type="checkbox" checked onchange="toggleNodeType('ExternalCall')">
+                        <input type="checkbox" checked data-on="change:toggleNodeType:ExternalCall">
                         <span class="color-indicator" style="background: {NODE_COLORS['ExternalCall']}"></span>
                         External Calls
                     </label>
@@ -594,22 +603,22 @@ def _generate_html_template(
                 <h3>Severity Filter</h3>
                 <div class="filter-group">
                     <label>
-                        <input type="checkbox" checked onchange="toggleSeverity('CRITICAL')">
+                        <input type="checkbox" checked data-on="change:toggleSeverity:CRITICAL">
                         <span class="color-indicator" style="background: {SEVERITY_COLORS['CRITICAL']}"></span>
                         Critical
                     </label>
                     <label>
-                        <input type="checkbox" checked onchange="toggleSeverity('HIGH')">
+                        <input type="checkbox" checked data-on="change:toggleSeverity:HIGH">
                         <span class="color-indicator" style="background: {SEVERITY_COLORS['HIGH']}"></span>
                         High
                     </label>
                     <label>
-                        <input type="checkbox" checked onchange="toggleSeverity('MEDIUM')">
+                        <input type="checkbox" checked data-on="change:toggleSeverity:MEDIUM">
                         <span class="color-indicator" style="background: {SEVERITY_COLORS['MEDIUM']}"></span>
                         Medium
                     </label>
                     <label>
-                        <input type="checkbox" checked onchange="toggleSeverity('LOW')">
+                        <input type="checkbox" checked data-on="change:toggleSeverity:LOW">
                         <span class="color-indicator" style="background: {SEVERITY_COLORS['LOW']}"></span>
                         Low
                     </label>
@@ -649,9 +658,9 @@ def _generate_html_template(
         <div class="graph-area">
             <div id="graph-container"></div>
             <div class="controls">
-                <button class="control-btn" onclick="zoomIn()" title="Zoom In">+</button>
-                <button class="control-btn" onclick="zoomOut()" title="Zoom Out">−</button>
-                <button class="control-btn" onclick="resetZoom()" title="Reset">⟲</button>
+                <button class="control-btn" data-on="click:zoomIn" title="Zoom In">+</button>
+                <button class="control-btn" data-on="click:zoomOut" title="Zoom Out">−</button>
+                <button class="control-btn" data-on="click:resetZoom" title="Reset">⟲</button>
             </div>
         </div>
     </div>
@@ -713,6 +722,13 @@ def _generate_html_template(
         }}
         
         // Show node details
+        // Node fields come from scanned code: escape before using innerHTML.
+        function esc(value) {{
+            return String(value ?? '').replace(/[&<>"']/g, c => ({{
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }})[c]);
+        }}
+
         function showNodeDetails(node) {{
             const panel = document.getElementById('detailsPanel');
             const content = document.getElementById('detailsContent');
@@ -720,11 +736,11 @@ def _generate_html_template(
             let html = `
                 <div class="details-row">
                     <span class="details-label">Name:</span>
-                    <span>${{node.name}}</span>
+                    <span>${{esc(node.name)}}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Type:</span>
-                    <span>${{node.type}}</span>
+                    <span>${{esc(node.type)}}</span>
                 </div>
             `;
             
@@ -732,34 +748,34 @@ def _generate_html_template(
                 html += `
                     <div class="details-row">
                         <span class="details-label">Severity:</span>
-                        <span class="severity-badge severity-${{node.severity.toLowerCase()}}">${{node.severity}}</span>
+                        <span class="severity-badge severity-${{esc(node.severity.toLowerCase())}}">${{esc(node.severity)}}</span>
                     </div>
                     <div class="details-row">
                         <span class="details-label">Rule:</span>
-                        <span>${{node.rule_id || 'N/A'}}</span>
+                        <span>${{esc(node.rule_id || 'N/A')}}</span>
                     </div>
                     <div class="details-row">
                         <span class="details-label">File:</span>
-                        <span>${{node.file || 'N/A'}}</span>
+                        <span>${{esc(node.file || 'N/A')}}</span>
                     </div>
                     <div class="details-row">
                         <span class="details-label">Line:</span>
-                        <span>${{node.line || 'N/A'}}</span>
+                        <span>${{esc(node.line || 'N/A')}}</span>
                     </div>
                     <div class="details-row" style="margin-top: 10px;">
                         <span class="details-label">Description:</span>
-                        <p style="margin-top: 5px; color: #aaa;">${{node.description || 'No description available'}}</p>
+                        <p style="margin-top: 5px; color: #aaa;">${{esc(node.description || 'No description available')}}</p>
                     </div>
                 `;
             }} else if (node.file) {{
                 html += `
                     <div class="details-row">
                         <span class="details-label">File:</span>
-                        <span>${{node.file}}</span>
+                        <span>${{esc(node.file)}}</span>
                     </div>
                     <div class="details-row">
                         <span class="details-label">Line:</span>
-                        <span>${{node.line || 'N/A'}}</span>
+                        <span>${{esc(node.line || 'N/A')}}</span>
                     </div>
                 `;
             }}
@@ -768,7 +784,7 @@ def _generate_html_template(
                 html += `
                     <div class="details-row">
                         <span class="details-label">Visibility:</span>
-                        <span>${{node.visibility}}</span>
+                        <span>${{esc(node.visibility)}}</span>
                     </div>
                 `;
             }}
@@ -798,6 +814,13 @@ def _generate_html_template(
                 d3.zoomIdentity
             );
         }}
+
+        // The app's CSP blocks inline event handlers, so wire controls here.
+        const controlActions = {{ searchNodes, toggleNodeType, toggleSeverity, zoomIn, zoomOut, resetZoom }};
+        document.querySelectorAll('[data-on]').forEach(el => {{
+            const [eventName, action, arg] = el.dataset.on.split(':');
+            el.addEventListener(eventName, () => controlActions[action](arg));
+        }});
     </script>
 </body>
 </html>"""

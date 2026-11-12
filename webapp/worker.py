@@ -186,9 +186,9 @@ async def run_audit(
         build_analyzers_list,
         summarize_findings_data,
     )
-    from heuristic_scanner import scan_target
+    from heuristic_scanner import scan_target as heuristic_scan
     from report_generator import Finding, create_audit_report
-    from license_manager import LicenseManager
+    from counterscarp_core.licensing import LicenseManager
     from webapp.web_pipeline import build_web_scan_context, run_web_pipeline
 
     results_dir = RESULTS_DIR / audit_id
@@ -262,11 +262,12 @@ async def run_audit(
 
     if scan_ctx is not None:
         # Fast-path: convert pipeline context results into Finding objects
-        findings: List[Finding] = []
+        from webapp.scan_utils import slither_issue_to_finding
+
+        heuristic_converted: List[Finding] = []
         for h in scan_ctx.heuristic_results:
-            findings.append(heuristic_finding_to_finding(
-                type("_HF", (), h)()  # thin shim — heuristic_finding_to_finding expects an object
-                if False else type("_HF", (), {
+            heuristic_converted.append(heuristic_finding_to_finding(
+                type("_HF", (), {  # heuristic_finding_to_finding expects an object
                     "rule_id": h.get("rule_id", "UNKNOWN"),
                     "severity": h.get("severity", "INFO"),
                     "message": h.get("message", ""),
@@ -279,19 +280,11 @@ async def run_audit(
                     "suppressed": h.get("suppressed", False),
                 })()
             ))
-        for s in scan_ctx.static_issues:
-            from webapp.scan_utils import _slither_dict_to_finding
-            if callable(getattr(__import__("webapp.scan_utils", fromlist=["_slither_dict_to_finding"]), "_slither_dict_to_finding", None)):
-                try:
-                    findings.append(
-                        __import__("webapp.scan_utils", fromlist=["_slither_dict_to_finding"])
-                        ._slither_dict_to_finding(s)
-                    )
-                except Exception:
-                    pass
+        slither_findings = [slither_issue_to_finding(s) for s in scan_ctx.static_issues]
+        fingerprint_findings: List[Finding] = []
         for fp in scan_ctx.fingerprint_results:
             try:
-                findings.append(heuristic_finding_to_finding(
+                fingerprint_findings.append(heuristic_finding_to_finding(
                     type("_FP", (), {
                         "rule_id": fp.get("rule_id", "FINGERPRINT"),
                         "severity": fp.get("severity", "INFO"),
@@ -307,14 +300,10 @@ async def run_audit(
                 ))
             except Exception:
                 pass
-        heuristic_count = len([f for f in findings if not hasattr(f, "_from_static")])
-        fingerprint_findings = [f for f in findings if getattr(f, "_category", "") == "Fingerprint"]
+        findings: List[Finding] = heuristic_converted + slither_findings + fingerprint_findings
+        heuristic_count = len(heuristic_converted)
         fingerprint_status = "completed" if fingerprint_findings else "skipped"
         fingerprint_meta: dict = {}
-        slither_findings = [
-            f for f in findings
-            if getattr(f, "rule_id", "").startswith("SLITHER") or getattr(f, "_from_static", False)
-        ]
         # Reflect Slither's real outcome, not just the finding count. A compile
         # failure yields 0 findings but MUST surface as an error (with the
         # reason), and a clean compile with 0 findings is "completed", not
@@ -350,7 +339,7 @@ async def run_audit(
             # 1. Heuristic scan
             _write_status(results_dir, "running", "Running heuristic scan...", started_at)
             for fp_str in uploaded_paths:
-                heuristic_findings = scan_target(fp_str)
+                heuristic_findings = heuristic_scan(fp_str)
                 for hf in heuristic_findings:
                     findings.append(heuristic_finding_to_finding(hf))
             heuristic_count = len(findings)

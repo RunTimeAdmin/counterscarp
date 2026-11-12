@@ -2,20 +2,26 @@
 
 Turn a user submission — a public git URL or an uploaded project archive — into
 a *compilable* local tree so the depth analyzers (Slither/Aderyn) can resolve
-imports and honour the project's own compiler settings, instead of failing on
-bare ``.sol`` files with unresolved ``@openzeppelin`` imports.
+imports, instead of failing on bare ``.sol`` files with unresolved
+``@openzeppelin`` imports. Nothing from the project is executed: compiling is
+done later with plain solc (``red_team_scan.run_slither(trust_build=False)``),
+never with the project's Hardhat or forge build.
 
 Sandboxing (application level, for untrusted input):
   * git: ``https://`` only, host allowlist, no credentials in the URL, no
     interactive credential prompts (``GIT_TERMINAL_PROMPT=0``), shallow clone,
-    shallow submodules, wall-clock timeout, post-clone size cap, ``.git`` removed.
+    shallow submodules over https only, wall-clock timeout, post-clone size
+    cap, ``.git`` and all symlinks removed.
   * archive: zip-slip rejection, symlink entries skipped, per-file / total-size /
     entry-count caps (zip-bomb guard).
-  * deps: ``npm ci --ignore-scripts`` (blocks arbitrary ``postinstall`` RCE) and
-    ``forge`` submodule fetch, each under a wall-clock timeout.
+  * deps: ``npm ci --ignore-scripts`` with the project's npm/yarn config files
+    removed and an explicit ``--git``; refused when any dependency comes from
+    git, a URL or a path (npm runs a git dependency's ``prepare`` script even
+    with ``--ignore-scripts``). ``forge install`` fetches submodules over
+    https only. Each step has a wall-clock timeout.
 
-Stronger isolation (containers / user namespaces / seccomp) is a deployment
-concern layered on top of this; the caller may wrap install/compile in one.
+OS-level isolation (the systemd sandbox in ``deploy/``) is still required on a
+shared host; this module is one layer, not the whole defence.
 """
 
 from __future__ import annotations
@@ -92,6 +98,8 @@ def ingest_git(url: str, dest: Path, ref: Optional[str] = None) -> Path:
         "GCM_INTERACTIVE": "never",
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_LFS_SKIP_SMUDGE": "1",
+        # Submodule URLs come from the repo: no ssh, file:// or ext:: transports.
+        "GIT_ALLOW_PROTOCOL": "https",
     })
     cmd = [
         "git", "clone", "--depth", "1", "--single-branch", "--no-tags",
@@ -114,8 +122,24 @@ def ingest_git(url: str, dest: Path, ref: Optional[str] = None) -> Path:
         )
     # Drop VCS metadata (avoids hooks + saves space); lib/ contents remain.
     shutil.rmtree(target / ".git", ignore_errors=True)
+    _remove_symlinks(target)
     _enforce_tree_size(target)
     return target
+
+
+def _remove_symlinks(root: Path) -> None:
+    """Delete every symlink in a cloned tree, as zip extraction skips them.
+    A link could point the compiler at files outside the project."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        here = Path(dirpath)
+        for name in dirnames + filenames:
+            p = here / name
+            if p.is_symlink():
+                try:
+                    p.unlink()
+                except OSError:  # Windows directory links
+                    os.rmdir(p)
+        dirnames[:] = [d for d in dirnames if (here / d).is_dir()]
 
 
 # ── archive ─────────────────────────────────────────────────────────────────
@@ -208,6 +232,7 @@ def detect_framework(project_dir: Path) -> Tuple[str, Path]:
 def _run(cmd: List[str], cwd: Path, notes: List[str], tool: str) -> bool:
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_ALLOW_PROTOCOL"] = "https"
     env["npm_config_yes"] = "true"
     try:
         res = subprocess.run(
@@ -226,20 +251,79 @@ def _run(cmd: List[str], cwd: Path, notes: List[str], tool: str) -> bool:
     return True
 
 
+_NPM_PROJECT_CONFIGS = (".npmrc", ".yarnrc", ".yarnrc.yml", ".pnpmfile.cjs")
+
+
+def _non_registry_npm_deps(root: Path) -> List[str]:
+    """Names of dependencies that npm would fetch from git, a URL or a path.
+
+    npm runs a git dependency's ``prepare`` script even under
+    ``--ignore-scripts``, so a project that has any of these is not installed.
+    """
+    import json
+    bad: List[str] = []
+    try:
+        pkg = json.loads((root / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pkg = {}
+    for section in ("dependencies", "devDependencies",
+                    "optionalDependencies", "peerDependencies"):
+        deps = pkg.get(section) if isinstance(pkg, dict) else None
+        for name, spec in (deps or {}).items():
+            s = str(spec).strip()
+            if s.startswith("npm:"):              # alias: npm:@scope/pkg@^1.0
+                s = s[4:].rsplit("@", 1)[-1]
+            if ":" in s or "/" in s:
+                bad.append(str(name))
+    try:
+        lock = json.loads((root / "package-lock.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        lock = {}
+    # lockfile v2/v3 lists "packages"; v1 nests "dependencies".
+    entries = []
+    if isinstance(lock, dict):
+        entries += list((lock.get("packages") or {}).items())
+        stack = list((lock.get("dependencies") or {}).items())
+        while stack:
+            name, meta = stack.pop()
+            entries.append((name, meta))
+            if isinstance(meta, dict):
+                stack += list((meta.get("dependencies") or {}).items())
+    for name, meta in entries:
+        resolved = str(meta.get("resolved", "")) if isinstance(meta, dict) else ""
+        if resolved and not resolved.startswith("https://"):
+            bad.append(name.rsplit("node_modules/", 1)[-1] or name)
+    return sorted(set(bad))
+
+
 def install_deps(framework: str, root: Path, notes: List[str]) -> bool:
-    """Install the framework's dependencies in-place. npm runs with
-    ``--ignore-scripts`` so a hostile ``postinstall`` cannot execute."""
+    """Install the framework's dependencies in-place without running project code.
+
+    npm runs with ``--ignore-scripts``, an explicit ``--git`` and the project's
+    own npm/yarn config files removed, and is refused outright when a
+    dependency comes from git, a URL or a path."""
     if framework == "hardhat":
         if _dir_has_files(root / "node_modules"):
             notes.append("node_modules already present; skipping npm install")
             return True
         npm = shutil.which("npm")
-        if not npm:
-            notes.append("npm not found on PATH; cannot install Hardhat deps")
+        git = shutil.which("git")
+        if not npm or not git:
+            notes.append("npm or git not found on PATH; cannot install Hardhat deps")
             return False
+        bad = _non_registry_npm_deps(root)
+        if bad:
+            notes.append(
+                "npm deps NOT installed: dependencies from git, a URL or a "
+                f"path can run code ({', '.join(bad[:5])})"
+            )
+            return False
+        # A project .npmrc can replace the git binary or the script shell.
+        for cfg in _NPM_PROJECT_CONFIGS:
+            (root / cfg).unlink(missing_ok=True)
         has_lock = (root / "package-lock.json").exists()
         cmd = [npm, "ci" if has_lock else "install",
-               "--ignore-scripts", "--no-audit", "--no-fund"]
+               "--ignore-scripts", "--no-audit", "--no-fund", f"--git={git}"]
         ok = _run(cmd, root, notes, "npm")
         notes.append("npm deps installed" if ok else "npm deps NOT installed")
         return ok

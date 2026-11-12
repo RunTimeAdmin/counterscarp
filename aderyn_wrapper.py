@@ -11,6 +11,8 @@ import subprocess
 import json
 import sys
 import argparse
+import tempfile
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from logger import get_logger, append_stderr_log
@@ -120,26 +122,28 @@ def run_aderyn(
         )
     
     # Build command
-    cmd = ["aderyn", project_root]
-    
-    # Add output format
+    cmd = ["aderyn", project_root, "--skip-update-check"]
+
+    # Aderyn writes report.md unless told otherwise, and its stdout mixes
+    # progress text with any report. For JSON, write to a temp file we own.
+    report_dir = tempfile.TemporaryDirectory(prefix="counterscarp-aderyn-")
+    json_report = Path(report_dir.name) / "report.json"
     if output_format == "json":
-        # Keep JSON on stdout to avoid unsafe file path handling.
-        pass
+        cmd.extend(["--output", str(json_report)])
     elif output_format == "markdown":
         cmd.extend(["--output", "aderyn-report.md"])
     elif output_format == "sarif":
         cmd.extend(["--output", "aderyn-report.sarif"])
-    
+
     # Add scope if specified
     if scope:
         cmd.extend(["--scope", scope])
-    
+
     logger.info(f"Running Aderyn on {project_root}")
     logger.debug(f"Command: {' '.join(cmd)}")
     print(f"[*] Running Aderyn on {project_root}")
     print(f"[*] Command: {' '.join(cmd)}")
-    
+
     timeout = get_aderyn_timeout()
     try:
         result = subprocess.run(
@@ -151,8 +155,20 @@ def run_aderyn(
         )
         if result.stderr:
             append_stderr_log(result.stderr, "aderyn", stderr_log or "")
-        return parse_aderyn_output(result.stdout, result.stderr)
-        
+        if output_format != "json":
+            return parse_aderyn_output(result.stdout, result.stderr)
+        if not json_report.is_file():
+            detail = (result.stderr or result.stdout or "").strip()[-500:]
+            raise CounterscarpAnalysisError(
+                "Aderyn produced no JSON report",
+                details={"exit_code": result.returncode, "output": detail},
+            )
+        report_text = json_report.read_text(encoding="utf-8")
+        json.loads(report_text)  # a corrupt report is an error, not "0 findings"
+        return parse_aderyn_output(report_text, result.stderr)
+
+    except CounterscarpAnalysisError:
+        raise
     except subprocess.TimeoutExpired as e:
         logger.error(f"Aderyn timed out after {timeout}s")
         raise CounterscarpTimeoutError(
@@ -177,6 +193,8 @@ def run_aderyn(
             "Aderyn analysis failed",
             details={"error": str(e)}
         ) from e
+    finally:
+        report_dir.cleanup()
 
 
 def parse_aderyn_output(stdout: str, stderr: str) -> Dict[str, Any]:
@@ -225,7 +243,23 @@ def parse_aderyn_output(stdout: str, stderr: str) -> Dict[str, Any]:
             # Add issue counts
             findings["issue_count"] = data.get("issue_count", {})
             findings["files_summary"] = data.get("files_summary", {})
-    
+
+            # One flat entry per instance, the shape the scan pipeline and
+            # report aggregation read.
+            findings["issues"] = [
+                {
+                    "severity": severity,
+                    "rule_id": issue.get("detector_name", "aderyn_finding"),
+                    "title": issue.get("title", "Aderyn finding"),
+                    "description": issue.get("description", ""),
+                    "file": inst.get("contract_path", ""),
+                    "line_no": inst.get("line_no", 0),
+                }
+                for key, severity in (("high", "HIGH"), ("low", "LOW"), ("nc", "INFO"))
+                for issue in findings[key]
+                for inst in (issue.get("instances") or [{}])
+            ]
+
     except json.JSONDecodeError:
         # Fallback: Parse text output
         if "High" in stdout or "Low" in stdout:

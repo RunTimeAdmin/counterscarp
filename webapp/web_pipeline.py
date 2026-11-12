@@ -157,6 +157,7 @@ def build_web_scan_context(
         stderr_log=stderr_log,
         exclude_paths=exclude_paths or [],
         plugin_mgr=None,
+        trust_build=False,
     )
 
 

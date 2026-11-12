@@ -45,6 +45,7 @@ from webapp.auth import (
 from webapp.user_manager import user_manager
 from webapp.config import (
     BASE_DIR,
+    COUNTERSCARP_ENV,
     DASHBOARD_PAGE_SIZE,
     FREE_TOOL_MODE,
     MAX_FILE_SIZE,
@@ -55,7 +56,7 @@ from webapp.config import (
     validate_production_config,
 )
 
-from license_manager import (
+from counterscarp_core.licensing import (
     LicenseManager,
     FEATURE_TIERS,
     FEATURE_NAMES,
@@ -64,8 +65,8 @@ from license_manager import (
     TIER_HIERARCHY,
 )
 
-from webapp.license_api import license_router
-from webapp.license_api import append_audit_log, find_license_in_db
+from webapp.billing import license_router
+from webapp.billing import append_audit_log, find_license_in_db
 from webapp.routes.scan_api import router as scan_api_router
 from webapp.rate_limiter import RateLimiter, RedisRateLimiter, add_rate_limit_headers, get_client_ip
 from path_security import write_private_file
@@ -77,8 +78,8 @@ from counterscarp_core.severity_scoring import (
     pass_fail_from_counts,
 )
 from webapp.dashboard_service import load_audits_for_user, paginate
-from webapp.stripe_webhook_handlers import dispatch_webhook_event, WebhookDeps
-from webapp.stripe_integration import (
+from webapp.billing import dispatch_webhook_event, WebhookDeps
+from webapp.billing import (
     create_checkout_session,
     create_payg_checkout,
     find_license_by_subscription,
@@ -191,7 +192,13 @@ app = FastAPI(
     version="5.1.1",
 )
 
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+# Production is served over TLS (nginx), so the session cookie is Secure there.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET,
+    https_only=COUNTERSCARP_ENV == "production",
+    same_site="lax",
+)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -207,12 +214,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
-        response.headers["Content-Security-Policy"] = (
-            f"default-src 'self'; "
-            f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
-            f"style-src 'self' 'nonce-{nonce}'; "
-            f"img-src 'self' data:; font-src 'self'; connect-src 'self'"
-        )
+        if "content-security-policy" not in response.headers:  # route may set its own
+            response.headers["Content-Security-Policy"] = (
+                f"default-src 'self'; "
+                f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
+                f"style-src 'self' 'nonce-{nonce}'; "
+                f"img-src 'self' data:; font-src 'self'; connect-src 'self'"
+            )
         return response
 
 
@@ -306,10 +314,13 @@ async def run_slither_batch_async(file_paths: List[str], max_concurrency: int = 
 async def _save_upload_file_streaming(upload: UploadFile, destination: Path) -> int:
     """Stream uploaded content to disk with size and UTF-8 validation.
 
-    Returns the number of source lines detected while streaming.
+    A project .zip is binary: it is size-checked here and validated when the
+    worker extracts it. Returns the number of source lines detected while
+    streaming (0 for a zip).
     """
     total_bytes = 0
     line_count = 0
+    is_text = Path(upload.filename or "").suffix.lower() != ".zip"
     decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
     chunk_size = 1024 * 1024
 
@@ -328,6 +339,9 @@ async def _save_upload_file_streaming(upload: UploadFile, destination: Path) -> 
                             f"(max {MAX_FILE_SIZE // 1024 // 1024}MB)"
                         ),
                     )
+                fw.write(chunk)
+                if not is_text:
+                    continue
                 try:
                     decoded = decoder.decode(chunk, final=False)
                 except UnicodeDecodeError:
@@ -336,8 +350,9 @@ async def _save_upload_file_streaming(upload: UploadFile, destination: Path) -> 
                         detail=f"File {upload.filename} is not valid text",
                     )
                 line_count += decoded.count("\n")
-                fw.write(chunk)
 
+            if not is_text:
+                return 0
             try:
                 decoded_tail = decoder.decode(b"", final=True)
             except UnicodeDecodeError:
@@ -1616,4 +1631,24 @@ async def attack_graph(request: Request, audit_id: str = Depends(validate_audit_
     if owner_id and not current_user:
         return RedirectResponse(url="/auth/login")
 
-    return FileResponse(path=str(graph_path), media_type="text/html")
+    # The generated page carries its own inline script and style. Give the
+    # page's two script tags this response's nonce (matched exactly, so a
+    # tag smuggled in through finding data in an older graph stays blocked)
+    # and allow its inline style attributes.
+    nonce = request.state.csp_nonce
+    page = graph_path.read_text(encoding="utf-8")
+    page = re.sub(
+        r'<script src="https://(?:d3js\.org/d3\.v7\.min\.js|cdn\.jsdelivr\.net/npm/d3@7\.9\.0/dist/d3\.min\.js)"></script>',
+        f'<script nonce="{nonce}" src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>',
+        page,
+        count=1,
+    )
+    page = re.sub(r"(?m)^    <script>$", f'    <script nonce="{nonce}">', page, count=1)
+    response = HTMLResponse(page)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; font-src 'self'; connect-src 'self'"
+    )
+    return response

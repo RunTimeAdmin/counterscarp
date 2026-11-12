@@ -20,7 +20,7 @@ class SolanaPhase(ScanPhase):
     def should_run(self, ctx: ScanContext) -> bool:
         if not ctx.args.solana_root:
             return False
-        from license_manager import LicenseManager, SOLANA
+        from counterscarp_core.licensing import LicenseManager, SOLANA
         _license = LicenseManager()
         if not (ctx.args.dev or _license.check_pro_feature(SOLANA)):
             ctx.logger.info(

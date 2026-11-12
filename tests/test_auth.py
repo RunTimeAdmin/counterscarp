@@ -105,6 +105,7 @@ class TestWebappConfig:
         monkeypatch.setenv("STRIPE_PAYG_STANDARD_PRICE_ID", "price_test_standard")
         monkeypatch.setenv("STRIPE_PAYG_PRO_PACK_PRICE_ID", "price_test_pro")
         monkeypatch.setenv("TOTP_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0xMjM0NTY3ODk=")
+        monkeypatch.setenv("DATA_ENCRYPTION_KEY", "0" * 64)
         with patch.object(cfg, "COUNTERSCARP_ENV", "production"), \
              patch.object(cfg, "SESSION_SECRET", "a-real-secret-that-is-long-enough"):
             # Should not raise
