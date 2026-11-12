@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import threading
 from pathlib import Path
@@ -61,6 +62,10 @@ def _seed_users(db_path: Path, users: list) -> None:
 # ===========================================================================
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("webapp.license_api") is None,
+    reason="private billing module not installed",
+)
 class TestConsumeCredit:
     """Test atomic credit consumption in license_api.consume_credit."""
 

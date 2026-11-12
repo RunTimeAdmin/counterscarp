@@ -46,6 +46,10 @@ class ScanContext:
     # Analyzer status tracking (for report coverage table)
     analyzer_status: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
+    # False for code someone submitted (web scans): the project's own build
+    # tooling is never run, only plain solc.
+    trust_build: bool = True
+
 
 @dataclass
 class ScanPhase:

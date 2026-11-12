@@ -18,5 +18,33 @@ Environment=COUNTERSCARP_RESULTS_DIR=/opt/counterscarp-engine/results
 # Environment=STRIPE_PUBLISHABLE_KEY=pk_live_YOUR_KEY_HERE
 # Environment=STRIPE_WEBHOOK_SECRET=whsec_YOUR_SECRET_HERE
 
+# --- Sandbox -----------------------------------------------------------------
+# Scans handle code submitted by strangers. Even with the application-level
+# guards (no project build tooling is ever run), keep the service boxed in:
+# it may write only its own directory, cannot see other users' processes
+# (their command lines can hold secrets), and cannot gain privileges.
+# Check on the host with: systemd-analyze security counterscarp-engine
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/counterscarp-engine
+ProtectHome=read-only
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0077
+
 [Install]
 WantedBy=multi-user.target

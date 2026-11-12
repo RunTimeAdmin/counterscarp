@@ -141,7 +141,14 @@ async def handle_audit_request(
     user_id = current_user["id"] if current_user else ""
     license_key = get_license_key_for_request(request, current_user) or ""
 
-    if arq_pool is not None:
+    # A git URL or project zip has to be fetched, unpacked and given its
+    # dependencies first. Only the worker job does that, so without a queue
+    # it runs here instead of scanning nothing.
+    needs_ingest = bool(git_url) or any(
+        p.lower().endswith(".zip") for p in uploaded_paths
+    )
+
+    if arq_pool is not None or needs_ingest:
         status_payload = {
             "status": "pending",
             "progress": "Queued...",
@@ -158,6 +165,16 @@ async def handle_audit_request(
         pre_meta_path = results_dir / "scan_meta.json"
         with open(pre_meta_path, "w", encoding="utf-8") as meta_file:
             json.dump(pre_meta, meta_file, indent=2)
+
+        if arq_pool is None:
+            from webapp.worker import run_audit
+
+            # Final attempt: a failure marks the scan failed instead of
+            # re-raising for a queue retry that will never come.
+            await run_audit({"job_try": 3}, audit_id, uploaded_paths, license_key, user_id)
+            redirect = RedirectResponse(url=f"/results/{audit_id}", status_code=303)
+            add_rate_limit_headers(redirect, audit_limiter, client_ip)
+            return redirect
 
         await arq_pool.enqueue_job(
             "run_audit",

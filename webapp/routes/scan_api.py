@@ -114,8 +114,9 @@ def _assert_api_access(results_dir: Path, client: ApiClient) -> None:
     if not meta_path.exists():
         raise HTTPException(status_code=404, detail="Scan not found")
     meta = _load_json(meta_path)
-    owner = meta.get("api_client")
-    if owner and owner != client.client_id:
+    # Scans without an API owner were started from the web UI and belong
+    # to a web account, not to any API client.
+    if meta.get("api_client") != client.client_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import os
 import json
+from html import escape as html_escape
 from typing import Callable, Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -23,7 +24,7 @@ try:
     _ENGINE_VERSION = _pkg_version("counterscarp-engine")
 except Exception:
     _ENGINE_VERSION = "3.4.0"
-from license_manager import LicenseManager, BRANDED_REPORTS
+from counterscarp_core.licensing import LicenseManager, BRANDED_REPORTS
 
 logger = get_logger(__name__)
 
@@ -283,6 +284,20 @@ def enrich_finding(finding: Finding) -> Finding:
     return finding
 
 
+def _e(value: Any) -> str:
+    """HTML-escape any value for the report. Finding text comes from scanned
+    code (names, comments, snippets), so none of it may reach the page raw."""
+    return html_escape(str(value), quote=True)
+
+
+def _safe_href(url: Any) -> str:
+    """Escaped link target, or '#' for anything that is not http(s)."""
+    text = str(url).strip()
+    if not text.lower().startswith(("https://", "http://")):
+        return "#"
+    return _e(text)
+
+
 def generate_html_report(report: AuditReport, output_path: str, logo_path: Optional[str] = None, dev_mode: bool = False) -> Optional[str]:
     """Generate professional HTML report.
 
@@ -331,7 +346,7 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Audit Report - {report.project_name}</title>
+    <title>Security Audit Report - {_e(report.project_name)}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }}
@@ -384,12 +399,12 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
         <div class="header">
             {logo_html}<h1 style="display: inline-block; vertical-align: middle;">🛡️ Security Audit Report</h1>
             <div class="meta">
-                <strong>Project:</strong> {report.project_name}<br>
-                <strong>Target:</strong> {report.target_path}<br>
-                <strong>Generated:</strong> {report.timestamp}<br>
-                <strong>Engine:</strong> Counterscarp Engine {report.engine_version}
+                <strong>Project:</strong> {_e(report.project_name)}<br>
+                <strong>Target:</strong> {_e(report.target_path)}<br>
+                <strong>Generated:</strong> {_e(report.timestamp)}<br>
+                <strong>Engine:</strong> Counterscarp Engine {_e(report.engine_version)}
             </div>
-            <div class="status-badge">{report.pass_fail}</div>
+            <div class="status-badge">{_e(report.pass_fail)}</div>
         </div>
 
         <div class="summary">
@@ -425,38 +440,38 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
             
         html += f"""
         <div class="section">
-            <h2>{section.title}</h2>
-            {f"<p>{section.summary}</p>" if section.summary else ""}
+            <h2>{_e(section.title)}</h2>
+            {f"<p>{_e(section.summary)}</p>" if section.summary else ""}
 """
         
         for finding in section.findings:
-            severity_class = finding.severity.lower()
+            severity_class = _e(finding.severity.lower())
             html += f"""
             <div class="finding {severity_class}">
                 <div class="finding-header">
-                    <div class="finding-title">{finding.title}</div>
-                    <span class="severity-badge {severity_class}">{finding.severity}</span>
+                    <div class="finding-title">{_e(finding.title)}</div>
+                    <span class="severity-badge {severity_class}">{_e(finding.severity)}</span>
                 </div>
                 <div class="finding-meta">
-                    <strong>Category:</strong> {finding.category} | 
-                    <strong>Rule:</strong> {finding.rule_id} | 
-                    <strong>Location:</strong> {finding.file}:{finding.line_no}
-                    {f" | <strong>CWE:</strong> {finding.cwe}" if finding.cwe else ""}
-                     | <strong>Confidence:</strong> {getattr(finding, 'confidence', 5)}/10
+                    <strong>Category:</strong> {_e(finding.category)} | 
+                    <strong>Rule:</strong> {_e(finding.rule_id)} | 
+                    <strong>Location:</strong> {_e(finding.file)}:{_e(finding.line_no)}
+                    {f" | <strong>CWE:</strong> {_e(finding.cwe)}" if finding.cwe else ""}
+                     | <strong>Confidence:</strong> {_e(getattr(finding, 'confidence', 5))}/10
                 </div>
-                <div class="finding-description">{finding.description}</div>
+                <div class="finding-description">{_e(finding.description)}</div>
 """
             
             if finding.code_snippet:
                 html += f"""
-                <div class="code-block">{finding.code_snippet}</div>
+                <div class="code-block">{_e(finding.code_snippet)}</div>
 """
             
             if finding.remediation:
                 html += f"""
                 <div class="remediation">
                     <div class="remediation-title">🛠️ Remediation</div>
-                    {finding.remediation}
+                    {_e(finding.remediation)}
                 </div>
 """
             
@@ -466,11 +481,11 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
                     <strong>References:</strong><br>
 """
                 for ref in finding.references:
-                    html += f'                    <a href="{ref}" target="_blank">{ref}</a><br>\n'
+                    html += f'                    <a href="{_safe_href(ref)}" target="_blank" rel="noopener noreferrer">{_e(ref)}</a><br>\n'
                 html += "                </div>\n"
             
             if finding.duplicate_count > 0:
-                locations_text = ", ".join(finding.similar_locations[:5])
+                locations_text = ", ".join(_e(loc) for loc in finding.similar_locations[:5])
                 if finding.duplicate_count > 5:
                     locations_text += f" ... and {finding.duplicate_count - 5} more"
                 html += f'<div class="duplicate-note" style="color:#666;font-size:0.85em;margin-top:4px;">Also found in {finding.duplicate_count} other location(s): {locations_text}</div>'
@@ -481,7 +496,7 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
                 html += f"""
                 <div style="background:#1a1a2e;border-left:4px solid #7c3aed;padding:12px 16px;margin:10px 0;border-radius:4px;">
                     <strong style="color:#a78bfa;">AI Analysis</strong>
-                    <p style="color:#e0e0e0;margin:8px 0 0 0;">{rag_remediation}</p>
+                    <p style="color:#e0e0e0;margin:8px 0 0 0;">{_e(rag_remediation)}</p>
                 </div>
 """
 
@@ -497,7 +512,7 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
                     text = entry.get('text', '')
                     score = entry.get('similarity', 0.0)
                     source = entry.get('metadata', {}).get('source', '')
-                    html += f'                        <li style="color:#cbd5e1;">{text} <span style="color:#7c3aed;">(similarity: {score:.0%})</span> — <em>{source}</em></li>\n'
+                    html += f'                        <li style="color:#cbd5e1;">{_e(text)} <span style="color:#7c3aed;">(similarity: {score:.0%})</span> — <em>{_e(source)}</em></li>\n'
                 html += """                    </ul>
                 </div>
 """
@@ -513,7 +528,7 @@ def generate_html_report(report: AuditReport, output_path: str, logo_path: Optio
                 for ref in rag_references:
                     url = ref.get('url', '#')
                     source = ref.get('source', url)
-                    html += f'                        <li><a href="{url}" style="color:#60a5fa;">{source}</a></li>\n'
+                    html += f'                        <li><a href="{_safe_href(url)}" rel="noopener noreferrer" style="color:#60a5fa;">{_e(source)}</a></li>\n'
                 html += """                    </ul>
                 </div>
 """

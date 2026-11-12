@@ -3,6 +3,11 @@ import os
 
 import pytest
 
+import importlib.util
+
+if importlib.util.find_spec("license_manager") is None:
+    pytest.skip("private license module not installed", allow_module_level=True)
+
 from license_manager import (
     LicenseManager,
     LicenseError,

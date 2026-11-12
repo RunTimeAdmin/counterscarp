@@ -171,7 +171,7 @@ def _refresh_protocol_db(db_path: str) -> int:
 # ---------------------------------------------------------------------------
 
 GITHUB_RAW_BASE = (
-    "https://raw.githubusercontent.com/RunTimeAdmin/counterscarp-engine/main/data"
+    "https://raw.githubusercontent.com/RunTimeAdmin/counterscarp/main/data"
 )
 
 _FILES_TO_UPDATE = {

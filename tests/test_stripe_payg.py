@@ -11,6 +11,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import importlib.util
+
+if importlib.util.find_spec("webapp.stripe_integration") is None:
+    pytest.skip("private billing module not installed", allow_module_level=True)
+
 import webapp.user_manager as um_module
 from webapp.user_manager import UserManager
 

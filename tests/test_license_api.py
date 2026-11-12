@@ -9,6 +9,11 @@ from unittest.mock import patch
 
 import pytest
 
+import importlib.util
+
+if importlib.util.find_spec("webapp.license_api") is None:
+    pytest.skip("private billing module not installed", allow_module_level=True)
+
 import webapp.license_api as la_module
 from webapp.license_api import (
     _load_db,

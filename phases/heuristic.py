@@ -106,7 +106,7 @@ class FingerprintPhase(ScanPhase):
     def should_run(self, ctx: ScanContext) -> bool:
         if not ctx.args.fingerprint:
             return False
-        from license_manager import LicenseManager, FINGERPRINT
+        from counterscarp_core.licensing import LicenseManager, FINGERPRINT
         _license = LicenseManager()
         if not (ctx.args.dev or _license.check_pro_feature(FINGERPRINT)):
             ctx.logger.info(

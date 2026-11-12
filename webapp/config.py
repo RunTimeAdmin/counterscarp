@@ -1,5 +1,6 @@
 """Configuration for the Counterscarp Engine web application."""
 
+import importlib.util
 import os
 from pathlib import Path
 
@@ -22,7 +23,22 @@ RESULT_STALE_DAYS: int = 7
 
 # Deployment environment — set to "production" to enforce strict secret validation
 COUNTERSCARP_ENV = os.environ.get("COUNTERSCARP_ENV", "development")
-FREE_TOOL_MODE = os.environ.get("FREE_TOOL_MODE", "1").lower() in ("1", "true", "yes", "on")
+
+# Stripe checkout and license storage live in private modules that the public
+# repository does not ship (see webapp/billing.py). Without them the app can
+# only run as a free tool, whatever FREE_TOOL_MODE says.
+BILLING_AVAILABLE = all(
+    importlib.util.find_spec(name) is not None
+    for name in (
+        "webapp.license_api",
+        "webapp.stripe_integration",
+        "webapp.stripe_webhook_handlers",
+    )
+)
+FREE_TOOL_MODE = (
+    os.environ.get("FREE_TOOL_MODE", "1").lower() in ("1", "true", "yes", "on")
+    or not BILLING_AVAILABLE
+)
 
 # Authentication
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "")

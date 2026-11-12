@@ -8,6 +8,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch, mock_open
 import pytest
 
+import importlib.util
+
+if importlib.util.find_spec("webapp.stripe_integration") is None:
+    pytest.skip("private billing module not installed", allow_module_level=True)
+
 # ---------------------------------------------------------------------------
 # Stub out the `stripe` package before importing stripe_integration so that
 # we never make real network calls and don't need stripe installed.

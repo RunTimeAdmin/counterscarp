@@ -57,7 +57,7 @@ class TestGenerateAttackGraphHtml:
         with open(output_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        assert 'd3.v7.min.js' in content
+        assert 'cdn.jsdelivr.net/npm/d3@7' in content
         assert 'd3.' in content or 'd3[' in content
 
     def test_html_contains_graph_data(
@@ -316,7 +316,7 @@ class TestGenerateHtmlTemplate:
         html = _generate_html_template(
             "Test", js_code, sample_attack_graph_data)
 
-        assert 'd3js.org' in html or 'd3.v7' in html
+        assert 'cdn.jsdelivr.net/npm/d3@7' in html
 
     def test_includes_styles(self, sample_attack_graph_data):
         """Test that HTML includes CSS styles."""
@@ -399,7 +399,7 @@ class TestVisualizerIntegration:
         # Verify all expected components are present
         assert '<!DOCTYPE html>' in content
         assert 'Integration Test' in content
-        assert 'd3.v7.min.js' in content
+        assert 'cdn.jsdelivr.net/npm/d3@7' in content
         assert 'graphData' in content
         assert 'Statistics' in content
         assert 'Search' in content or 'search' in content.lower()

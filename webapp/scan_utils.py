@@ -318,15 +318,39 @@ def _parse_slither_json(stdout: str) -> dict:
         raise
 
 
+_SLITHER_SEVERITY = {
+    "High": "HIGH",
+    "Medium": "MEDIUM",
+    "Low": "LOW",
+    "Informational": "INFO",
+    "Optimization": "INFO",
+}
+_SLITHER_LOCATION_RE = re.compile(r"^(.*?) \(Lines: \[(\d+)")
+
+
+def slither_issue_to_finding(issue: dict) -> Finding:
+    """Convert one issue from ``red_team_scan.filter_vulnerabilities`` (the
+    scan pipeline's Slither output) to a Finding, matching the shape of
+    ``_slither_detectors_to_findings``."""
+    check = str(issue.get("title") or "unknown")
+    location = str(issue.get("location") or "")
+    match = _SLITHER_LOCATION_RE.match(location)
+    file_name, line_no = (match.group(1), int(match.group(2))) if match else (location, 0)
+    return Finding(
+        rule_id=f"SLITHER-{check.upper()}",
+        severity=_SLITHER_SEVERITY.get(str(issue.get("impact", "")), "INFO"),
+        category="Slither",
+        title=check.replace("-", " ").title(),
+        description=str(issue.get("description", "")),
+        file=file_name,
+        line_no=line_no,
+        references=[],
+    )
+
+
 def _slither_detectors_to_findings(detectors: list) -> list[Finding]:
     slither_findings: list[Finding] = []
-    severity_map = {
-        "High": "HIGH",
-        "Medium": "MEDIUM",
-        "Low": "LOW",
-        "Informational": "INFO",
-        "Optimization": "INFO",
-    }
+    severity_map = _SLITHER_SEVERITY
 
     for det in detectors:
         elements = det.get("elements", [])
@@ -445,21 +469,25 @@ def run_slither_analysis(
 
         if resolved.is_dir():
             if _is_slither_project_dir(resolved):
-                try:
-                    result = _invoke_slither(["--json", "-", "--", str(resolved)])
-                except FileNotFoundError:
-                    return [], "not_installed"
-                except subprocess.TimeoutExpired:
-                    return [], "timeout"
-
-                findings = _slither_stdout_to_findings(result.stdout)
-                if findings is not None:
-                    return findings, "completed"
-
-                logger.warning(
-                    "Slither project mode failed on %s, falling back to per-file solc",
-                    resolved,
+                # Submitted project: compile a staged copy with plain solc.
+                # Running Slither inside the project directory, even per
+                # file, lets crytic-compile run its forge/Hardhat config.
+                import red_team_scan
+                from exceptions import (
+                    CounterscarpAnalysisError,
+                    CounterscarpToolNotFoundError,
                 )
+                try:
+                    raw = red_team_scan.run_slither(str(resolved), trust_build=False)
+                except CounterscarpToolNotFoundError:
+                    return [], "not_installed"
+                except CounterscarpAnalysisError as exc:
+                    logger.warning("Slither failed on project %s: %s", resolved, exc)
+                    return [], "error"
+                if raw.get("success", True) is False:
+                    return [], "error"
+                detectors = raw.get("results", {}).get("detectors", [])
+                return _slither_detectors_to_findings(detectors), "completed"
 
             sol_files = sorted(resolved.glob("*.sol"))
             if not sol_files:

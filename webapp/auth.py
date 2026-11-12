@@ -22,7 +22,7 @@ from starlette.templating import Jinja2Templates
 
 from webapp.user_manager import user_manager
 from webapp.rate_limiter import get_client_ip, add_rate_limit_headers
-from webapp.license_api import link_license_to_user
+from webapp.billing import link_license_to_user
 from webapp.config import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,

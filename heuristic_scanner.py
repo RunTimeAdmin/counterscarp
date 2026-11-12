@@ -298,31 +298,108 @@ def _refine_hardcoded_address(
     return True
 
 
+_EXTERNAL_CALL_RE = re.compile(
+    r"(\w+(?:\([^)]*\))?)\.(call[{(]|transfer\(|transferFrom\(|send\()"
+)
+# The call's result is stored: "(bool ok, ...) =", "(ok, ) =", "bool ok =", "ok ="
+_CAPTURE_RE = re.compile(
+    r"(?:\(\s*bool\s+(\w+)[^=]*\)|\(\s*(\w+)\s*,[^=]*\)|\(\s*,[^=]*\)|\bbool\s+(\w+)|\b(\w+))"
+    r"\s*=\s*$"
+)
+_STATEMENT_START = (";", "{", "}")
+
+
+def _call_arguments(lines: List[str], line_idx: int, open_pos: int) -> Optional[str]:
+    """Text between the parentheses opening at ``open_pos``, following the
+    call onto later lines. None if it does not close within a few lines."""
+    depth = 0
+    out: List[str] = []
+    for i in range(line_idx, min(line_idx + 8, len(lines))):
+        segment = lines[i][open_pos:] if i == line_idx else lines[i]
+        for ch in segment:
+            if ch == "(":
+                depth += 1
+                if depth == 1:
+                    continue
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    return "".join(out)
+            if depth >= 1:
+                out.append(ch)
+        out.append(" ")
+    return None
+
+
+def _top_level_arg_count(args: str) -> int:
+    if not args.strip():
+        return 0
+    depth = 0
+    count = 1
+    for ch in args:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            count += 1
+    return count
+
+
 def _refine_unchecked_external_call(
     finding: "HeuristicFinding", lines: List[str], line_idx: int
 ) -> bool:
-    """Refine UNCHECKED_EXTERNAL_CALL severity based on return-value handling."""
-    line_text = finding.line_text.strip()
-    # Check if return value is captured: (bool success, ...) = ...
-    if re.search(r'\(\s*bool\s+\w+', line_text):
-        # Return captured — check next few lines for verification
-        check_lines = ""
-        for offset in range(1, 4):
-            if finding.line_no + offset - 1 < len(lines):
-                check_lines += lines[finding.line_no + offset - 1]
-        if re.search(r'require\s*\(|assert\s*\(|if\s*\(\s*!?\s*success', check_lines):
-            finding.severity = "INFO"
-            finding.message = "External call with captured and verified return value"
-            finding.confidence = 1
+    """Refine UNCHECKED_EXTERNAL_CALL by what the call returns and how that is used.
+
+    - ``addr.transfer(amount)`` (one argument) moves ETH and reverts on
+      failure, so there is no return value to check: dropped here.
+      TRANSFER_DOSABLE_FALLBACK still reports its DoS risk.
+    - ``call``, ``send`` and token ``transfer``/``transferFrom`` return a
+      success value. A bare statement ignores it (rule severity stands); a
+      result stored in a variable counts as checked once that variable is
+      used afterwards; any other use (require, if, return, try) is checked.
+    """
+    line = lines[line_idx].split("//", 1)[0]
+    matches = list(_EXTERNAL_CALL_RE.finditer(line))
+    if not matches:
+        return True
+
+    worst: Optional[Tuple[int, str, str, int]] = None  # (rank, severity, message, confidence)
+    for match in matches:
+        kind = match.group(2)
+        if kind.startswith("transfer("):
+            args = _call_arguments(lines, line_idx, match.end() - 1)
+            if args is not None and _top_level_arg_count(args) == 1:
+                continue  # ETH transfer: reverts on failure
+
+        prefix = line[:match.start(1)]
+        if not prefix.strip() and line_idx > 0:
+            previous = lines[line_idx - 1].split("//", 1)[0].rstrip()
+            if previous and not previous.endswith(_STATEMENT_START):
+                prefix = previous + " " + prefix  # statement began on the line above
+        prefix = prefix.rstrip()
+
+        if not prefix or prefix.endswith(_STATEMENT_START):
+            outcome = (3, finding.severity, finding.message, finding.confidence)
+        elif re.search(r"\btry\s*$", prefix):
+            outcome = (0, "INFO", "External call wrapped in try/catch", 1)
         else:
-            finding.severity = "HIGH"
-            finding.message = "External call return value captured but not verified"
-            finding.confidence = 6
-    # Also check for try/catch pattern
-    elif "try " in line_text or line_text.startswith("try"):
-        finding.severity = "INFO"
-        finding.message = "External call wrapped in try/catch"
-        finding.confidence = 1
+            capture = _CAPTURE_RE.search(prefix)
+            if capture and not re.search(r"(?:==|!=|<=|>=)\s*$", prefix):
+                name = next((g for g in capture.groups() if g), None)
+                after = line[match.end():] + " ".join(lines[line_idx + 1:line_idx + 5])
+                if name and re.search(rf"\b{re.escape(name)}\b", after):
+                    outcome = (0, "INFO", "External call with captured and verified return value", 1)
+                else:
+                    outcome = (2, "HIGH", "External call return value captured but not verified", 6)
+            else:
+                outcome = (0, "INFO", "External call return value is checked", 1)
+        if worst is None or outcome[0] > worst[0]:
+            worst = outcome
+
+    if worst is None:
+        return False  # only ETH transfers on this line
+    _, finding.severity, finding.message, finding.confidence = worst
     return True
 
 
@@ -460,9 +537,9 @@ RULES: List[HeuristicRule] = [
     
     HeuristicRule(
         id="UNCHECKED_EXTERNAL_CALL",
-        description="Low-level call/transfer without return value check (funds may be lost)",
+        description="Low-level call, send or token transfer without return value check (funds may be lost)",
         severity="CRITICAL",
-        pattern=re.compile(r"(\w+(?:\([^)]*\))?)\.(call[{(]|transfer\(|transferFrom\()"),
+        pattern=_EXTERNAL_CALL_RE,
         hint="CRITICAL: Always check return values of external calls. Unchecked calls are top bug bounty targets ($10K-$100K).",
         confidence=9,
         refine=_refine_unchecked_external_call,
