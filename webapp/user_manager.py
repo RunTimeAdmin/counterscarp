@@ -9,9 +9,10 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import base64
 import hashlib
@@ -21,6 +22,7 @@ import os
 import bcrypt as _bcrypt
 from cryptography.fernet import Fernet
 
+from webapp.audit_index import _locked as _interprocess_locked
 from webapp.config import BASE_DIR, COUNTERSCARP_ENV, SESSION_SECRET
 from webapp.data_crypto import read_json as _read_json, write_json as _write_json
 
@@ -123,7 +125,6 @@ class UserManager:
         with self._class_lock:
             if self._initialized:
                 return
-            self._file_lock = threading.Lock()
             self._cache: Optional[Dict[str, Any]] = None
             self._cache_mtime: float = 0.0
             self._ensure_db()
@@ -132,6 +133,25 @@ class UserManager:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @property
+    def _file_lock(self) -> Any:
+        """Exclusive lock on users.json across threads and processes.
+
+        The web app runs several uvicorn workers plus the arq worker, all
+        doing read-modify-write on this file; a threading.Lock only covered
+        one process, so concurrent updates could silently drop each other.
+        """
+        return self._locked_fresh()
+
+    @contextmanager
+    def _locked_fresh(self) -> Iterator[None]:
+        with _interprocess_locked(_USERS_DB_PATH):
+            # Another process may have written within the same timestamp tick
+            # (Linux file times are coarse), so the mtime cache can't be
+            # trusted once we hold the lock: always re-read.
+            self._cache = None
+            yield
 
     def _ensure_db(self) -> None:
         """Create data/users.json with an empty schema if it does not exist."""

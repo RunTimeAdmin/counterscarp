@@ -14,24 +14,24 @@
             <li><strong>Uploaded smart contract source code</strong> — submitted for scanning purposes only</li>
             <li><strong>License key and machine fingerprint</strong> — used for license validation and activation management</li>
             <li><strong>Payment information</strong> — processed by Stripe; we never see or store your card details</li>
-            <li><strong>OpenAI API key</strong> — stored locally on the server if entered via Settings, used only to call OpenAI on your behalf</li>
+            <li><strong>OpenAI API key</strong> — set by the administrator in Settings, stored on the server in a file only the service can read, used only to call OpenAI</li>
         </ul>
     </section>
 
     <section style="margin-bottom:32px;">
         <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">2. How We Use Your Data</h2>
         <ul style="color:#ccccdd;line-height:2;padding-left:24px;">
-            <li>Uploaded code is analyzed <strong>in-memory</strong> and is not stored permanently after the scan completes</li>
+            <li>Uploaded code is saved on the server only for scanning and is <strong>deleted within {{ upload_retention_hours }} hours</strong></li>
             <li>License validation sends only: your license key, machine fingerprint, product version, and timestamp</li>
             <li><strong>No source code, audit results, or personal data</strong> is transmitted to third parties</li>
-            <li>OpenAI API keys are stored locally in an encrypted environment file and used only to call OpenAI on your behalf</li>
+            <li>The OpenAI API key (if the administrator sets one) is stored in a file only the service can read; it is not encrypted</li>
         </ul>
     </section>
 
     <section style="margin-bottom:32px;">
         <h2 style="color:#ffffff;border-bottom:1px solid #1e1e3a;padding-bottom:8px;margin-bottom:16px;">3. Data Retention</h2>
         <ul style="color:#ccccdd;line-height:2;padding-left:24px;">
-            <li>Scan results are available for download during your session and deleted afterward</li>
+            <li>Scan results (findings, reports and the code snippets they quote) are kept for <strong>{{ result_retention_days }} days</strong> so you can return to them, then deleted. Signed-in users can delete a scan sooner from the dashboard.</li>
             <li>License activation records are retained for subscription management</li>
             <li>Payment records are managed by Stripe per their privacy policy</li>
         </ul>

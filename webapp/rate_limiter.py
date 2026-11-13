@@ -8,6 +8,7 @@ The lightweight ``RateLimiter`` class requires only Python stdlib.
 import ipaddress
 import os
 import time
+import uuid
 from collections import defaultdict
 from threading import Lock
 from typing import Optional
@@ -107,7 +108,9 @@ class RedisRateLimiter:
         try:
             pipe = self._redis.pipeline(True)
             pipe.zremrangebyscore(redis_key, 0, window_start)
-            pipe.zadd(redis_key, {str(now): now})
+            # Unique member per request: two hits in the same instant must
+            # count twice, not overwrite each other.
+            pipe.zadd(redis_key, {f"{now}:{uuid.uuid4().hex}": now})
             pipe.zcard(redis_key)
             pipe.expire(redis_key, self.window + 1)
             results = pipe.execute()
@@ -167,15 +170,23 @@ def add_rate_limit_headers(
 
 
 def get_client_ip(request) -> str:
-    """Extract client IP, only trusting X-Forwarded-For from trusted proxies."""
+    """Extract the client IP, trusting proxy headers only from trusted proxies.
+
+    Behind the proxy, ``X-Real-IP`` (which nginx overwrites with the peer it
+    saw) wins. Otherwise the LAST ``X-Forwarded-For`` hop is used: that is the
+    one our proxy appended. The first hop is whatever the client sent, so
+    trusting it let anyone pick their own rate-limit key.
+    """
     peer: str = request.client.host if request.client else "unknown"
     if peer in _TRUSTED_PROXIES:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            candidate = forwarded.split(",")[0].strip()
+        forwarded = request.headers.get("x-forwarded-for", "")
+        for candidate in (
+            request.headers.get("x-real-ip", "").strip(),
+            forwarded.split(",")[-1].strip(),
+        ):
             try:
                 ipaddress.ip_address(candidate)
                 return candidate
             except ValueError:
-                pass  # Malformed XFF value — fall through to real peer IP
+                continue  # missing or malformed: try the next, then the peer
     return peer

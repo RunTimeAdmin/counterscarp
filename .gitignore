@@ -65,7 +65,7 @@ webapp/stripe_webhook_handlers.py
 
 # Workspace artifacts
 _*.txt
-_*.py
+/_*.py
 !phases/__init__.py
 git_*.txt
 garrison_*.txt
@@ -111,3 +111,6 @@ fix_version.py
 
 # Local wiki clone workspace
 _repo_wiki/
+# Reviewer/tool working folders (may hold copies of private modules)
+.work/
+outputs/

@@ -271,6 +271,26 @@ class TestPasswordReset:
         assert r.status_code == 200
         assert "If an account exists for that email" in r.text
 
+    def test_reset_requests_are_rate_limited(self, auth_client, manager) -> None:
+        """Unlimited resets let anyone flood a mailbox."""
+        import webapp.auth as auth_mod
+        from webapp.rate_limiter import RateLimiter
+
+        manager.create_user(email="flood@example.com", name="F", **{PASSWORD_FIELD: _pw("flood")})
+        state = auth_client.app.state
+        state.reset_ip_limiter = RateLimiter(max_requests=5, window_seconds=3600)
+        state.reset_email_limiter = RateLimiter(max_requests=3, window_seconds=3600)
+        with patch.object(auth_mod, "_send_password_reset_email") as send:
+            codes = [
+                auth_client.post(
+                    "/auth/forgot-password",
+                    data={"_csrf_token": _csrf(auth_client), "email": "Flood@example.com"},
+                ).status_code
+                for _ in range(6)
+            ]
+        assert send.call_count == 3  # per-address cap, answered as usual
+        assert codes == [200] * 5 + [429]  # per-IP cap
+
     def test_password_reset_end_to_end(self, auth_client, manager) -> None:
         import webapp.auth as auth_mod
 
