@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from path_security import sanitize_cli_path
 from counterscarp_core.severity import SEVERITY_RANK
+from counterscarp_core.severity import SEVERITY_RANK
 
 # Import logger
 try:
@@ -62,6 +63,8 @@ _ACCESS_CONTROL_RE = re.compile(
     r"\bonly[A-Za-z]\w*\b|\bonlyRole\b|\bauth\b|\brequiresAuth\b|\b_checkOwner\b"
 )
 _ACCESS_MODIFIER_RE = _ACCESS_CONTROL_RE
+# Build output, installed packages and VCS data under a scanned directory.
+_BUILD_DIRS = {"out", "cache", "artifacts", "node_modules", "crytic-export", ".git"}
 _LOW_LEVEL_CALL_RE = re.compile(r"(\w+)\.call\s*\{.*\}\s*\(\s*(\w+)\s*\)")
 
 # Module-level cache for DEFAULT_SAFE_PATTERNS (Task M5)
@@ -149,17 +152,24 @@ class HeuristicFinding:
 
 
 def _deduplicate_findings(findings: List['HeuristicFinding']) -> List['HeuristicFinding']:
-    """Collapse duplicate rule_id hits within the same file and line region."""
-    seen: Dict[tuple, 'HeuristicFinding'] = {}
+    """Collapse duplicate rule_id hits within the same file and line region.
+
+    The most severe unsuppressed hit is the one reported; merging into
+    whichever came first let a HIGH hide behind a LOW on a nearby line.
+    """
+    groups: Dict[tuple, List['HeuristicFinding']] = {}
     for f in findings:
-        line_bucket = (f.line_no // 3) * 3
-        key = (f.rule_id, f.file, line_bucket)
-        if key in seen:
-            seen[key].similar_locations.append(f"{f.file}:{f.line_no}")
-            seen[key].duplicate_count += 1
-        else:
-            seen[key] = f
-    return list(seen.values())
+        key = (f.rule_id, f.file, (f.line_no // 3) * 3)
+        groups.setdefault(key, []).append(f)
+    result: List['HeuristicFinding'] = []
+    for group in groups.values():
+        primary = min(group, key=lambda f: (f.suppressed, SEVERITY_RANK.get(f.severity.upper(), 5)))
+        for f in group:
+            if f is not primary:
+                primary.similar_locations.append(f"{f.file}:{f.line_no}")
+                primary.duplicate_count += 1
+        result.append(primary)
+    return result
 
 
 @dataclass
@@ -202,13 +212,22 @@ def _refine_block_timestamp(
     """Refine BLOCK_TIMESTAMP_RANDOMNESS. Only actual entropy use (modulo, hashing,
     a `random`-named sink) is a real risk; a timestamp read for a deadline, a
     cooldown comparison, an event field, or a bookkeeping assignment is not."""
-    line = finding.line_text
+    line = finding.line_text.split("//", 1)[0]
     line_lower = line.lower()
+    reviewed = any(
+        re.search(r"slither-disable-(?:next-)?line[^\n]*weak-prng", lines[i])
+        for i in (line_idx - 1, line_idx)
+        if 0 <= i < len(lines)
+    )
     # Genuine randomness/entropy use — the only exploitable case.
-    if "%" in line or "keccak256" in line_lower or "random" in line_lower:
+    if _timestamp_used_as_entropy(line) and not reviewed:
         finding.severity = "HIGH"
         finding.message = "block.timestamp mixed into randomness/entropy (miner-influenceable)"
         finding.confidence = 7
+    elif reviewed:
+        finding.severity = "INFO"
+        finding.message = "block.timestamp arithmetic marked as reviewed (slither weak-prng)"
+        finding.confidence = 1
     elif any(kw in line_lower for kw in ["deadline", "expir", "timeout", "valid"]):
         finding.severity = "INFO"
         finding.message = "block.timestamp used for a deadline check (standard practice)"
@@ -219,6 +238,48 @@ def _refine_block_timestamp(
         finding.message = "block.timestamp read for timing/bookkeeping (not randomness)"
         finding.confidence = 1
     return True
+
+
+_TIMESTAMP_RE = re.compile(r"block\.timestamp|\bnow\b")
+
+
+def _modulo_operands(line: str, pos: int) -> Tuple[str, str]:
+    """The expressions directly left and right of the ``%`` at ``pos``: a
+    parenthesised group or an identifier/member chain."""
+    def grab(i: int, step: int) -> str:
+        while 0 <= i < len(line) and line[i] == " ":
+            i += step
+        if not 0 <= i < len(line):
+            return ""
+        if line[i] == (")" if step < 0 else "("):
+            depth, j = 0, i
+            while 0 <= j < len(line):
+                if line[j] in ")(":
+                    depth += 1 if line[j] == (")" if step < 0 else "(") else -1
+                    if depth == 0:
+                        break
+                j += step
+            lo, hi = sorted((i, j))
+            return line[lo: hi + 1]
+        j = i
+        while 0 <= j < len(line) and (line[j].isalnum() or line[j] in "_."):
+            j += step
+        lo, hi = sorted((i, j - step))
+        return line[lo: hi + 1]
+
+    return grab(pos - 1, -1), grab(pos + 1, 1)
+
+
+def _timestamp_used_as_entropy(line: str) -> bool:
+    """True when the timestamp itself feeds a modulo, a hash, or a value named
+    as random, not when some other term on the line uses ``%``."""
+    for m in re.finditer(r"%(?!=)", line):
+        left, right = _modulo_operands(line, m.start())
+        if _TIMESTAMP_RE.search(left) or _TIMESTAMP_RE.search(right):
+            return True
+    if "keccak256" in line and re.search(r"keccak256\s*\([^;]*(?:block\.timestamp|\bnow\b)", line):
+        return True
+    return bool(re.search(r"random|seed|lottery|winner", line, re.IGNORECASE))
 
 
 def _line_has_access_control(
@@ -279,10 +340,93 @@ def _refine_unsafe_cast(
         or "SafeCast" in window
         or re.search(r"revert\s+\w*[Oo]verflow", window)
         or re.search(r"require\s*\([^)]*(<=|<)\s*type\s*\(\s*uint", window)
+        or _cast_argument_bounded(finding.line_text, window)
     ):
         finding.severity = "INFO"
         finding.confidence = 2
         finding.message = "Downcast guarded by an explicit bounds/overflow check"
+    elif any(
+        _FORGE_LINT_CAST_RE.search(lines[i])
+        for i in (line_idx - 2, line_idx - 1, line_idx)
+        if 0 <= i < len(lines)
+    ):
+        finding.severity = "INFO"
+        finding.confidence = 2
+        finding.message = "Downcast marked as reviewed (forge-lint unsafe-typecast)"
+    return True
+
+
+_FORGE_LINT_CAST_RE = re.compile(r"forge-lint:\s*disable-(?:next-)?line\([^)]*unsafe-typecast")
+_CAST_ARG_RE = re.compile(r"uint(?:128|64|32|16|8)\((\w+)\)")
+
+
+def _cast_argument_bounded(line: str, window: str) -> bool:
+    """True when the value being downcast is compared against an upper bound
+    nearby: ``assert(x <= N)``, ``require(x <= N)`` or ``if (x > N) revert``."""
+    for arg in _CAST_ARG_RE.findall(line):
+        a = re.escape(arg)
+        if re.search(
+            rf"(?:assert|require)\s*\(\s*{a}\s*(?:<=|<)"
+            rf"|if\s*\(\s*{a}\s*(?:>=|>)[^)]*\)\s*(?:\{{\s*)?revert",
+            window,
+        ):
+            return True
+    return False
+
+
+_FUNC_START_RE = re.compile(
+    r"\b(?:function\s+\w+|constructor|modifier\s+\w+|fallback|receive)\s*\("
+)
+
+
+def _enclosing_function(
+    lines: List[str], line_idx: int, max_back: int = 150
+) -> Optional[Tuple[str, str]]:
+    """(header, body up to the line) of the function containing ``line_idx``,
+    or None when no function start is found above it."""
+    for i in range(line_idx, max(-1, line_idx - max_back), -1):
+        if _FUNC_START_RE.search(lines[i].split("//", 1)[0]):
+            text = "\n".join(lines[i: line_idx + 1])
+            brace = text.find("{")
+            if brace == -1:
+                return None
+            return text[:brace], text[brace + 1:]
+    return None
+
+
+def _refine_mint(
+    finding: "HeuristicFinding", lines: List[str], line_idx: int
+) -> bool:
+    """Grade a _mint call by who can reach it. Only a public path with no
+    access control and no limits is HIGH; an admin-gated or capped mint is a
+    supply-control question, and a constructor mint is the initial supply."""
+    fn = _enclosing_function(lines, line_idx)
+    if fn is None:
+        return True
+    header, body = fn
+    if re.search(r"\bconstructor\b|\binitializer\b", header):
+        severity, message, confidence = "INFO", "Tokens minted at deployment (initial supply)", 2
+    elif re.search(r"\b(?:internal|private)\b", header):
+        severity, message, confidence = (
+            "LOW", "Mint inside an internal function: review the functions that call it", 3)
+    elif _ACCESS_CONTROL_RE.search(header) or re.search(
+        r"_checkRole\s*\(|_checkOwner\s*\(|hasRole\s*\(|msg\.sender\s*==\s*\w*(?:owner|admin)",
+        body, re.IGNORECASE,
+    ):
+        severity, message, confidence = (
+            "MEDIUM",
+            "Privileged mint: an admin role can create tokens (check the supply cap and who holds the role)",
+            4,
+        )
+    elif re.search(r"\brevert\b|\brequire\s*\(", body):
+        severity, message, confidence = (
+            "MEDIUM",
+            "Mint callable by anyone, limited inside the function (check the limits cannot be farmed, e.g. with many addresses)",
+            5,
+        )
+    else:
+        severity, message, confidence = "HIGH", "Mint callable by anyone without access control or limits", 7
+    finding.severity, finding.message, finding.confidence = severity, message, confidence
     return True
 
 
@@ -490,6 +634,7 @@ RULES: List[HeuristicRule] = [
         pattern=re.compile(r"_mint\s*\("),
         hint="Review all mint paths; ensure they are expected (e.g., only in public mint/claim functions).",
         confidence=5,
+        refine=_refine_mint,
     ),
     HeuristicRule(
         id="FAKE_RENOUNCE_OWNER_ZERO",
@@ -1264,7 +1409,12 @@ def scan_target(
             all_findings.extend(scan_file(target, config, plugin_mgr))
     elif safe_target.is_dir():
         for file_path in safe_target.rglob("*.sol"):
-            rel_path = str(file_path.relative_to(safe_target)).replace("\\", "/")
+            rel = file_path.relative_to(safe_target)
+            # Forge writes artifacts as out/<Name>.sol/ directories; build
+            # output and installed packages are not the project's code.
+            if not file_path.is_file() or any(p in _BUILD_DIRS for p in rel.parts[:-1]):
+                continue
+            rel_path = str(rel).replace("\\", "/")
             if exclude_patterns and should_exclude(rel_path, exclude_patterns, ""):
                 logger.debug("Excluded: %s", rel_path)
                 continue
