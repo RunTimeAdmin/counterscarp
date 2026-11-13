@@ -864,6 +864,7 @@ def generate_attack_graph(
     *,
     findings: list[Finding],
     uploaded_paths: list[str],
+    upload_dir: Path,
     results_dir: Path,
     project_name: str,
     logo_path: Path | None,
@@ -880,7 +881,9 @@ def generate_attack_graph(
             }
             for f in findings
         ]
-        graph = build_graph(finding_dicts, source_files=uploaded_paths)
+        graph = build_graph(
+            finding_dicts, source_files=uploaded_paths, source_root=str(upload_dir)
+        )
         graph_json = export_graph_json(graph)
         attack_graph_path = results_dir / "attack_graph.html"
         logo_str = str(logo_path) if logo_path and logo_path.exists() else None

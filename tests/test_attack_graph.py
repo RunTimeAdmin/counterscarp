@@ -357,6 +357,28 @@ contract Test {
         contains_edges = [edge for edge in graph.edges if edge.type == "contains"]
         assert len(contains_edges) == 2
 
+    def test_build_graph_source_root_matches_relative_finding_paths(self, tmp_path):
+        """Findings carry project-relative paths; source files must be recorded
+        the same way or the vulnerability never links to its function."""
+        src = tmp_path / "src"
+        src.mkdir()
+        sol_file = src / "Vault.sol"
+        sol_file.write_text(
+            "pragma solidity ^0.8.0;\n"
+            "contract Vault {\n"
+            "    function withdraw() external {\n"
+            "        require(tx.origin == msg.sender);\n"
+            "    }\n"
+            "}\n"
+        )
+        findings = [{"rule_id": "TX_ORIGIN", "severity": "HIGH",
+                     "file": "src/Vault.sol", "line_no": 4, "message": "x"}]
+
+        graph = build_graph(findings, source_files=[str(sol_file)], source_root=str(tmp_path))
+
+        assert [e for e in graph.edges if e.type == "triggers"]
+        assert all(str(tmp_path) not in str(n.metadata) for n in graph.nodes)
+
     def test_build_graph_missing_source_file(self):
         """Test building graph with missing source file."""
         findings = [

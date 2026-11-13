@@ -1363,6 +1363,12 @@ def should_exclude(file_path: str, exclude_patterns: List[str], base_dir: str = 
     return False
 
 
+def _with_file(findings: List[HeuristicFinding], display_path: str) -> List[HeuristicFinding]:
+    for f in findings:
+        f.file = display_path
+    return findings
+
+
 def scan_target(
     target: str,
     config: Optional[CounterscarpConfig] = None,
@@ -1380,7 +1386,9 @@ def scan_target(
             normalised to forward slashes.
 
     Returns:
-        List of all heuristic findings.
+        List of all heuristic findings. ``file`` is relative to the scanned
+        directory (forward slashes), or the file name for a single-file scan,
+        so reports never show the folder the scan ran in.
     """
     target_is_file = Path(target).expanduser().is_file()
     safe_target = sanitize_cli_path(
@@ -1406,7 +1414,7 @@ def scan_target(
         if exclude_patterns and should_exclude(rel_single, exclude_patterns, ""):
             logger.debug("Excluded: %s", target)
         else:
-            all_findings.extend(scan_file(target, config, plugin_mgr))
+            all_findings.extend(_with_file(scan_file(target, config, plugin_mgr), rel_single))
     elif safe_target.is_dir():
         for file_path in safe_target.rglob("*.sol"):
             rel = file_path.relative_to(safe_target)
@@ -1418,7 +1426,7 @@ def scan_target(
             if exclude_patterns and should_exclude(rel_path, exclude_patterns, ""):
                 logger.debug("Excluded: %s", rel_path)
                 continue
-            all_findings.extend(scan_file(str(file_path), config, plugin_mgr))
+            all_findings.extend(_with_file(scan_file(str(file_path), config, plugin_mgr), rel_path))
     else:
         # Not a file or directory; nothing to do
         return []

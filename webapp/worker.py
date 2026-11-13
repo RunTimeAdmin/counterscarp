@@ -204,9 +204,9 @@ async def run_audit(
     # as-is (target unchanged). Dependency dirs are excluded from findings.
     scan_target = str(upload_dir)
     scan_excludes: list = []
+    _git = None
     try:
         from project_ingest import ingest
-        _git = None
         _marker = upload_dir / "_ingest.json"
         if _marker.exists():
             try:
@@ -404,7 +404,8 @@ async def run_audit(
 
         report = create_audit_report(
             project_name=project_name,
-            target_path=str(upload_dir),
+            # What the user submitted, not the server folder it was saved in.
+            target_path=_git or ", ".join(Path(p).name for p in uploaded_paths),
             findings=findings,
             analyzer_status=getattr(scan_ctx, "analyzer_status", None),
         )
@@ -434,6 +435,7 @@ async def run_audit(
             attack_graph_generated = generate_attack_graph(
                 findings=findings,
                 uploaded_paths=uploaded_paths,
+                upload_dir=upload_dir,
                 results_dir=results_dir,
                 project_name=project_name,
                 logo_path=LOGO_PATH,
