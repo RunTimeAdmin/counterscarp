@@ -34,13 +34,15 @@ try:
     from report_generator import generate_pdf_report as _generate_pdf_report_impl
 
     def generate_pdf_report(
-        report: AuditReport, output_path: str, logo_path: str | None = None
+        report: AuditReport, output_path: str, logo_path: str | None = None,
+        dev_mode: bool = False,
     ) -> None:
-        _generate_pdf_report_impl(report, output_path, logo_path=logo_path)
+        _generate_pdf_report_impl(report, output_path, logo_path=logo_path, dev_mode=dev_mode)
 except (ImportError, AttributeError):
 
     def generate_pdf_report(
-        report: AuditReport, output_path: str, logo_path: str | None = None
+        report: AuditReport, output_path: str, logo_path: str | None = None,
+        dev_mode: bool = False,
     ) -> None:
         raise RuntimeError("generate_pdf_report is not available in this environment")
 
@@ -826,19 +828,21 @@ def generate_reports(
     branded: bool,
     project_name: str,
     upload_dir: Path,
+    unlock_all: bool = False,
 ) -> Path | None:
     """Generate all report artifacts (HTML, PDF, Markdown, SARIF).
 
+    ``unlock_all`` (free-tool mode) skips the license check on HTML/PDF.
     Returns the HTML path if branded reports were generated, else None.
     """
     # HTML report (PRO)
     html_path: Path | None = results_dir / "report.html"
     if branded:
         logo_str = str(logo_path) if logo_path and logo_path.exists() else None
-        generate_html_report(report, str(html_path), logo_path=logo_str)
+        generate_html_report(report, str(html_path), logo_path=logo_str, dev_mode=unlock_all)
         pdf_path = results_dir / "report.pdf"
         try:
-            generate_pdf_report(report, str(pdf_path), logo_path=logo_str)
+            generate_pdf_report(report, str(pdf_path), logo_path=logo_str, dev_mode=unlock_all)
         except Exception:
             pass
     else:

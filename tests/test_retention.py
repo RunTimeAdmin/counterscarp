@@ -49,3 +49,23 @@ def test_privacy_page_states_the_real_retention() -> None:
     assert "in-memory" not in text and "deleted afterward" not in text
     assert f"{main.RESULT_RETENTION_DAYS} days" in text
     assert "encrypted environment file" not in text
+
+
+def test_web_startup_leaves_retention_to_the_queue_worker(monkeypatch) -> None:
+    """Each uvicorn worker ran the purge at the same moment (44 removals logged
+    for 38 folders). With a queue, only the arq worker purges."""
+    import asyncio
+    from unittest.mock import patch
+
+    import webapp.main as main
+
+    with patch("webapp.retention.purge_expired") as purge:
+        monkeypatch.setattr(main.app.state, "arq_pool", object(), raising=False)
+        asyncio.run(main.startup_cleanup())
+        purge.assert_not_called()
+        monkeypatch.setattr(main.app.state, "arq_pool", None, raising=False)
+        asyncio.run(main.startup_cleanup())
+        purge.assert_called_once()
+
+    from webapp.worker import WorkerSettings
+    assert [c.run_at_startup for c in WorkerSettings.cron_jobs] == [True]
