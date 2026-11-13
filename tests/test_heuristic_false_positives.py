@@ -122,6 +122,21 @@ def test_scan_target_skips_build_output_and_packages(tmp_path: Path, caplog) -> 
         "pragma solidity ^0.8.24;\ncontract B { function g() external { require(tx.origin == msg.sender); } }\n"
     )
     findings = scan_target(str(tmp_path))
-    files = {Path(f.file).relative_to(tmp_path).as_posix() for f in findings}
-    assert files == {"src/A.sol"}
+    assert {f.file for f in findings} == {"src/A.sol"}
     assert "Failed to read file" not in caplog.text
+
+
+def test_finding_paths_are_relative_to_the_scan_root(tmp_path: Path) -> None:
+    """Absolute paths showed the server's upload folder in web reports and
+    did not match Slither's project-relative paths."""
+    src = tmp_path / "src" / "sub"
+    src.mkdir(parents=True)
+    body = (
+        "pragma solidity ^0.8.24;\n"
+        "contract A { function f() external { require(tx.origin == msg.sender); } }\n"
+    )
+    (src / "A.sol").write_text(body)
+    (tmp_path / "B.sol").write_text(body.replace("contract A", "contract B"))
+
+    assert {f.file for f in scan_target(str(tmp_path))} == {"src/sub/A.sol", "B.sol"}
+    assert {f.file for f in scan_target(str(src / "A.sol"))} == {"A.sol"}

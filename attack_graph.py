@@ -310,7 +310,8 @@ def _parse_rust_file(file_path: str) -> Dict[str, Any]:
 
 def build_graph(
     findings: List[Dict[str, Any]],
-    source_files: Optional[List[str]] = None
+    source_files: Optional[List[str]] = None,
+    source_root: Optional[str] = None,
 ) -> AttackGraph:
     """Build an attack graph from findings and optional source files.
 
@@ -322,6 +323,9 @@ def build_graph(
         findings: List of finding dictionaries with rule_id, severity,
             file, line_no, etc.
         source_files: Optional list of source file paths to analyze.
+        source_root: When given, source files are recorded relative to it
+            (forward slashes), matching findings that report project-relative
+            paths, so nodes never carry the folder the scan ran in.
 
     Returns:
         Constructed AttackGraph with nodes and edges.
@@ -383,13 +387,17 @@ def build_graph(
                     logger.warning(f"Source file not found: {file_path}")
                     continue
 
+                shown = (
+                    Path(os.path.relpath(file_path, source_root)).as_posix()
+                    if source_root else file_path
+                )
                 # Determine file type and parse accordingly
                 if file_path.endswith('.sol'):
                     parsed = _parse_solidity_file(file_path)
-                    _process_solidity_parsed(graph, parsed, file_path, contract_nodes, function_nodes)
+                    _process_solidity_parsed(graph, parsed, shown, contract_nodes, function_nodes)
                 elif file_path.endswith('.rs'):
                     parsed = _parse_rust_file(file_path)
-                    _process_rust_parsed(graph, parsed, file_path, contract_nodes, function_nodes)
+                    _process_rust_parsed(graph, parsed, shown, contract_nodes, function_nodes)
                 else:
                     logger.debug(f"Unsupported file type: {file_path}")
 

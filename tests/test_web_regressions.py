@@ -106,6 +106,41 @@ def test_worker_legacy_fallback_runs_when_pipeline_fails(tmp_path: Path) -> None
     assert any(f["rule_id"] == "TX_ORIGIN_USAGE" for f in findings)
 
 
+def test_web_outputs_do_not_show_the_server_upload_folder(tmp_path: Path) -> None:
+    """Heuristic findings and the report's Target line used to carry the full
+    upload path (on the server, its folder layout)."""
+    import webapp.config as cfg
+    from webapp import worker
+
+    audit_id = "a1b2c3d4-0000-4000-8000-000000000004"
+    upload_dir = tmp_path / "uploads" / audit_id
+    upload_dir.mkdir(parents=True)
+    sol = upload_dir / "Bank.sol"
+    sol.write_text(
+        "pragma solidity ^0.8.0;\ncontract Bank {\n"
+        "    address owner;\n"
+        "    function f() external { require(tx.origin == owner); }\n}\n",
+        encoding="utf-8",
+    )
+
+    with patch.object(cfg, "RESULTS_DIR", tmp_path / "results"), \
+         patch.object(cfg, "UPLOAD_DIR", tmp_path / "uploads"), \
+         patch("red_team_scan.run_slither", return_value={"success": True, "results": {}}), \
+         patch.object(worker, "_update_user_audit_index_worker"), \
+         patch.object(worker, "_write_scan_index_worker"):
+        asyncio.run(worker.run_audit({"job_try": 3}, audit_id, [str(sol)], "", ""))
+
+    results = tmp_path / "results" / audit_id
+    findings = json.loads((results / "findings.json").read_text(encoding="utf-8"))
+    tx_origin = [f for f in findings if f["rule_id"] == "TX_ORIGIN_USAGE"]
+    assert tx_origin and tx_origin[0]["file"] == "Bank.sol"
+    assert "**Target:** `Bank.sol`" in (results / "report.md").read_text(encoding="utf-8")
+    server_paths = {str(tmp_path), tmp_path.as_posix(), json.dumps(str(tmp_path))[1:-1]}
+    for out in results.iterdir():
+        text = out.read_text(encoding="utf-8", errors="replace")
+        assert not any(p in text for p in server_paths), out.name
+
+
 def test_attack_graph_page_gets_nonce_and_its_own_csp(tmp_path: Path) -> None:
     from fastapi.testclient import TestClient
 

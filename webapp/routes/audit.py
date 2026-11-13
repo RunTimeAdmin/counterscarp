@@ -225,7 +225,7 @@ async def handle_audit_request(
 
     report = create_audit_report(
         project_name=project_name,
-        target_path=str(upload_dir),
+        target_path=", ".join(Path(p).name for p in uploaded_paths),
         findings=findings,
     )
 
@@ -252,6 +252,7 @@ async def handle_audit_request(
         attack_graph_generated = generate_attack_graph(
             findings=findings,
             uploaded_paths=uploaded_paths,
+            upload_dir=upload_dir,
             results_dir=results_dir,
             project_name=project_name,
             logo_path=LOGO_PATH,
