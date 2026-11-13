@@ -119,6 +119,16 @@ security_logger = logging.getLogger("counterscarp.security")
 
 _license = LicenseManager()
 
+
+def _web_tier() -> str:
+    """Tier that decides which features the web pages offer.
+
+    In free-tool mode (billing off) everything is unlocked: there is no
+    way to buy a tier, so gating on the server's license only hid
+    features from everyone, the operator included.
+    """
+    return "enterprise" if FREE_TOOL_MODE else _license.get_tier()
+
 _ALLOWED_EXTERNAL_REDIRECT_HOSTS = {
     "checkout.stripe.com",
     "pay.stripe.com",
@@ -461,7 +471,11 @@ async def startup_cleanup():
     except Exception as e:
         _cleanup_logger.warning("Report cleanup failed: %s", e)
 
-    # 3. Expired uploads and results (also run hourly by the arq worker)
+    # 3. Expired uploads and results. With a queue, the arq worker does this
+    #    (at its startup and hourly); here it would run once per uvicorn
+    #    worker at the same moment. Without a queue, nothing else would.
+    if getattr(app.state, "arq_pool", None) is not None:
+        return
     try:
         from webapp.retention import purge_expired
         # A thread, so a large results folder doesn't hold up startup's event loop.
@@ -473,7 +487,7 @@ async def startup_cleanup():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Render the upload page."""
-    license_tier = _license.get_tier()
+    license_tier = _web_tier()
     current_user = get_current_user(request)
     scan_credits = 0
     if current_user:
@@ -650,7 +664,7 @@ async def results(request: Request, audit_id: str = Depends(validate_audit_id)):
         with open(ai_path, "r", encoding="utf-8") as f:
             ai_summary = f.read()
 
-    license_tier = _license.get_tier()
+    license_tier = _web_tier()
     return templates.TemplateResponse(
         request,
         "results.html",
@@ -1178,7 +1192,7 @@ async def settings_page(request: Request):
         masked_key = "sk-..." + key[-4:] if len(key) > 4 else "****"
 
     # License context for the template
-    license_tier = _license.get_tier()
+    license_tier = _web_tier()
     user_license_key = get_license_key_for_request(request, current_user)
     license_key_set = bool(user_license_key)
     license_masked_key = _mask_license_key(user_license_key) if user_license_key else ""

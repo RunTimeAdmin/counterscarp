@@ -184,7 +184,7 @@ async def run_audit(
     Mirrors the orchestration logic from the ``/audit`` POST handler in
     ``main.py`` but writes progress to ``scan_status.json`` at each phase.
     """
-    from webapp.config import NO_SOLIDITY_MESSAGE, RESULTS_DIR, UPLOAD_DIR, LOGO_PATH
+    from webapp.config import FREE_TOOL_MODE, NO_SOLIDITY_MESSAGE, RESULTS_DIR, UPLOAD_DIR, LOGO_PATH
     from webapp.scan_utils import (
         heuristic_finding_to_finding,
         count_lines,
@@ -255,7 +255,8 @@ async def run_audit(
 
     # Resolve license tier for pipeline gating
     _lm = LicenseManager()
-    _tier = _lm.get_tier()
+    # Free-tool mode: nothing can be bought, so every feature runs.
+    _tier = "enterprise" if FREE_TOOL_MODE else _lm.get_tier()
 
     # --- Engine pipeline scan (replaces bespoke per-phase calls below) ---
     try:
@@ -264,6 +265,7 @@ async def run_audit(
             output_dir=results_dir,
             license_tier=_tier,
             exclude_paths=scan_excludes,
+            unlock_all=FREE_TOOL_MODE,
         )
         _write_status(results_dir, "running", "Running analysis pipeline...", started_at)
         await run_web_pipeline(scan_ctx)
@@ -443,6 +445,7 @@ async def run_audit(
             branded=True,
             project_name=project_name,
             upload_dir=upload_dir,
+            unlock_all=FREE_TOOL_MODE,
         )
 
         # 5. Attack graph
@@ -591,7 +594,7 @@ class WorkerSettings:
     """
 
     functions = [run_audit]
-    cron_jobs = [cron(purge_expired_scans, minute=17)]
+    cron_jobs = [cron(purge_expired_scans, minute=17, run_at_startup=True)]
     on_startup = _on_startup
     redis_settings = _redis_settings()
     max_jobs = 4

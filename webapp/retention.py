@@ -3,7 +3,8 @@ privacy page.
 
 Uploads (the submitted source) are only needed while a scan runs. Results
 hold findings and code snippets, kept for the dashboard for a limited time.
-Runs hourly from the arq worker and once at web startup.
+Runs in the arq worker at its startup and hourly; at web startup only when
+there is no queue.
 """
 
 from __future__ import annotations

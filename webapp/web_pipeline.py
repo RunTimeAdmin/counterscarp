@@ -36,12 +36,14 @@ logger = get_logger(__name__)
 # Fuzzing and symbolic need CLI tools and can run for minutes.
 # HistoryPhase needs a full git repo (not just uploaded files).
 # ReportPhase is CLI-only (uses ctx.args.report flag).
+# ExploitGenPhase output (PoC files) is never shown by the web app.
 _WEB_EXCLUDED = {
     "FoundryFuzzPhase",
     "MedusaFuzzPhase",
     "SymbolicPhase",
     "HistoryPhase",
     "ReportPhase",
+    "ExploitGenPhase",
 }
 
 
@@ -122,6 +124,7 @@ def build_web_scan_context(
     license_tier: str = "free",
     config: Any = None,
     exclude_paths: Any = None,
+    unlock_all: bool = False,
 ) -> Any:
     """Construct a ``ScanContext`` suitable for a web-profile scan.
 
@@ -130,6 +133,7 @@ def build_web_scan_context(
         output_dir: Per-scan results directory.
         license_tier: ``"free"``, ``"pro"``, etc. — controls phase gating.
         config: Optional ``CounterscarpConfig``; defaults to default config.
+        unlock_all: Skip license checks in the phases (free-tool mode).
 
     Returns:
         Populated ``ScanContext`` ready to pass to ``run_web_pipeline``.
@@ -144,7 +148,8 @@ def build_web_scan_context(
             config = None
 
     stderr_log = str(output_dir / "stderr.log")
-    args = _make_minimal_args(output_dir, target=target)
+    # Phases treat ``dev`` as "bypass the license check"; nothing else reads it.
+    args = _make_minimal_args(output_dir, target=target, dev=unlock_all)
 
     return ScanContext(
         target=target,

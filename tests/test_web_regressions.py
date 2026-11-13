@@ -268,3 +268,61 @@ def test_upload_form_refuses_rust_files(tmp_path: Path) -> None:
     assert resp.status_code == 400
     assert cfg.NO_SOLIDITY_MESSAGE in resp.text
     assert 'accept=".sol,.zip"' in page.text
+
+
+def test_free_mode_unlocks_reports_and_results_features(tmp_path: Path) -> None:
+    """With billing off nothing can be bought, yet features stayed gated on the
+    server's community license, so nobody (the operator included) got them."""
+    from fastapi.testclient import TestClient
+
+    import webapp.config as cfg
+    import webapp.main as main
+    from webapp import worker
+
+    audit_id = "a1b2c3d4-0000-4000-8000-000000000007"
+    upload_dir = tmp_path / "uploads" / audit_id
+    upload_dir.mkdir(parents=True)
+    sol = upload_dir / "Bank.sol"
+    sol.write_text(
+        "pragma solidity ^0.8.0;\ncontract Bank {\n    address owner;\n"
+        "    function f() external { require(tx.origin == owner); }\n}\n",
+        encoding="utf-8",
+    )
+    contexts: list = []
+    real_build = __import__("webapp.web_pipeline", fromlist=["x"]).build_web_scan_context
+
+    def spy(**kwargs):
+        contexts.append(kwargs)
+        return real_build(**kwargs)
+
+    with patch.object(cfg, "FREE_TOOL_MODE", True), \
+         patch.object(cfg, "RESULTS_DIR", tmp_path / "results"), \
+         patch.object(cfg, "UPLOAD_DIR", tmp_path / "uploads"), \
+         patch("webapp.web_pipeline.build_web_scan_context", side_effect=spy), \
+         patch("red_team_scan.run_slither", return_value={"success": True, "results": {}}), \
+         patch("webapp.scan_utils._generate_pdf_report_impl") as pdf, \
+         patch.object(worker, "_update_user_audit_index_worker"), \
+         patch.object(worker, "_write_scan_index_worker"):
+        asyncio.run(worker.run_audit({"job_try": 3}, audit_id, [str(sol)], "", ""))
+
+    results = tmp_path / "results" / audit_id
+    # PDF errors are swallowed, so check the call itself got through.
+    assert pdf.call_count == 1 and pdf.call_args.kwargs["dev_mode"] is True
+    assert contexts and contexts[0]["unlock_all"] is True
+    assert contexts[0]["license_tier"] == "enterprise"
+    assert (results / "report.html").exists()
+
+    def page(free: bool) -> str:
+        with patch.object(main, "RESULTS_DIR", tmp_path / "results"), \
+             patch.object(main, "FREE_TOOL_MODE", free), \
+             patch.object(main._license, "get_tier", return_value="community"):
+            return TestClient(main.app).get(f"/results/{audit_id}").text
+
+    unlocked, locked = page(True), page(False)
+    assert f'/results/{audit_id}/report/html"' in unlocked
+    assert f"/results/{audit_id}/attack-graph" in unlocked
+    # License locks link to /pricing (a missing PDF library greys the button
+    # out too, but that is not a license lock).
+    license_lock = 'href="/pricing" class="btn-download btn-pro-locked"'
+    assert license_lock not in unlocked
+    assert license_lock in locked
