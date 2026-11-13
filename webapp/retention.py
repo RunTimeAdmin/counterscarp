@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import time
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -32,6 +33,15 @@ def _owner(result_dir: Path) -> str:
         return ""
 
 
+def _is_scan_folder(entry: Path) -> bool:
+    """Scan folders are named by their audit ID, a UUID in canonical form.
+    Anything else there (the repo's own results/examples) is left alone."""
+    try:
+        return entry.is_dir() and str(uuid.UUID(entry.name)) == entry.name
+    except ValueError:
+        return False
+
+
 def purge_expired(
     results_dir: Path,
     upload_dir: Path,
@@ -47,7 +57,7 @@ def purge_expired(
     if results_dir.is_dir():
         cutoff = now - result_days * 86400
         for entry in results_dir.iterdir():
-            if entry.is_dir() and entry.stat().st_mtime < cutoff:
+            if _is_scan_folder(entry) and entry.stat().st_mtime < cutoff:
                 owner = _owner(entry)
                 shutil.rmtree(entry, ignore_errors=True)
                 if owner:
@@ -60,7 +70,7 @@ def purge_expired(
     if upload_dir.is_dir():
         cutoff = now - UPLOAD_RETENTION_HOURS * 3600
         for entry in upload_dir.iterdir():
-            if entry.is_dir() and entry.stat().st_mtime < cutoff:
+            if _is_scan_folder(entry) and entry.stat().st_mtime < cutoff:
                 shutil.rmtree(entry, ignore_errors=True)
                 removed_uploads += 1
 

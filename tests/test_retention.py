@@ -40,6 +40,22 @@ def test_expired_results_and_uploads_are_deleted(tmp_path: Path) -> None:
     assert [e["audit_id"] for e in audit_index.list_audits("user-1")] == [new_id]
 
 
+def test_only_scan_folders_are_purged(tmp_path: Path) -> None:
+    """The purge removed the repo's tracked results/examples folder on the
+    server, because it deleted every old folder, not only scan folders."""
+    results, uploads = tmp_path / "results", tmp_path / "uploads"
+    audit_index.configure(tmp_path / "index")
+    scan_id = "11111111-0000-4000-8000-000000000003"
+    undashed = scan_id.replace("-", "")  # parses as a UUID, but the app never names a folder this way
+    for base in (results, uploads):
+        for name in ("examples", undashed, scan_id):
+            _aged(base / name, 60)
+
+    assert purge_expired(results, uploads, result_days=30) == (1, 1)
+    for base in (results, uploads):
+        assert sorted(p.name for p in base.iterdir()) == sorted(["examples", undashed])
+
+
 def test_privacy_page_states_the_real_retention() -> None:
     from fastapi.testclient import TestClient
 
