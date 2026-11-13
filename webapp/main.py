@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -44,6 +45,7 @@ from webapp.auth import (
 )
 from webapp.user_manager import user_manager
 from webapp.config import (
+    ADMIN_EMAIL,
     BASE_DIR,
     COUNTERSCARP_ENV,
     DASHBOARD_PAGE_SIZE,
@@ -111,6 +113,8 @@ _api_scan_limiter = RedisRateLimiter(max_requests=60, window_seconds=3600, redis
 _license_limiter = RedisRateLimiter(max_requests=100, window_seconds=3600, redis_url=_redis_url, prefix="rl:license")
 _admin_limiter = RedisRateLimiter(max_requests=30, window_seconds=3600, redis_url=_redis_url, prefix="rl:admin")
 _totp_limiter = RedisRateLimiter(max_requests=10, window_seconds=1800, redis_url=_redis_url, prefix="rl:totp")
+_reset_ip_limiter = RedisRateLimiter(max_requests=5, window_seconds=3600, redis_url=_redis_url, prefix="rl:reset_ip")
+_reset_email_limiter = RedisRateLimiter(max_requests=3, window_seconds=3600, redis_url=_redis_url, prefix="rl:reset_email")
 security_logger = logging.getLogger("counterscarp.security")
 
 _license = LicenseManager()
@@ -254,6 +258,9 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["app_version"] = app.version
 templates.env.globals["free_tool_mode"] = FREE_TOOL_MODE
+from webapp.retention import RESULT_RETENTION_DAYS, UPLOAD_RETENTION_HOURS  # noqa: E402
+templates.env.globals["result_retention_days"] = RESULT_RETENTION_DAYS
+templates.env.globals["upload_retention_hours"] = UPLOAD_RETENTION_HOURS
 templates.env.globals[
     "bug_report_url"
 ] = "https://github.com/RunTimeAdmin/counterscarp/issues/new?template=bug_report.md"
@@ -411,6 +418,8 @@ async def startup_event():
     app.state.license_limiter = _license_limiter
     app.state.admin_limiter = _admin_limiter
     app.state.totp_limiter = _totp_limiter
+    app.state.reset_ip_limiter = _reset_ip_limiter
+    app.state.reset_email_limiter = _reset_email_limiter
 
     # Initialize arq Redis pool for async job queue (graceful fallback)
     app.state.arq_pool = None
@@ -452,16 +461,13 @@ async def startup_cleanup():
     except Exception as e:
         _cleanup_logger.warning("Report cleanup failed: %s", e)
 
-    # 3. Clean old uploads (>7 days)
+    # 3. Expired uploads and results (also run hourly by the arq worker)
     try:
-        _cleanup_old_directories(
-            Path(__file__).parent.parent / "uploads",
-            max_age_days=7,
-            logger=_cleanup_logger,
-            label="uploads",
-        )
+        from webapp.retention import purge_expired
+        # A thread, so a large results folder doesn't hold up startup's event loop.
+        await asyncio.to_thread(purge_expired, RESULTS_DIR, UPLOAD_DIR)
     except Exception as e:
-        _cleanup_logger.warning("Upload cleanup failed: %s", e)
+        _cleanup_logger.warning("Retention cleanup failed: %s", e)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1188,17 +1194,26 @@ async def settings_page(request: Request):
             "license_key_set": license_key_set,
             "license_masked_key": license_masked_key,
             "license_features": license_features,
+            "can_manage_ai_key": _is_admin(current_user),
             "csrf_token": generate_csrf_token(request),
             **_get_grace_period_context(request),
         },
     )
 
 
+def _is_admin(user: Optional[Dict[str, Any]]) -> bool:
+    return bool(ADMIN_EMAIL and user and user.get("email") == ADMIN_EMAIL)
+
+
 @app.post("/settings/api-key")
 async def save_api_key(request: Request):
-    """Save the OpenAI API key to env and persist it."""
-    if not get_current_user(request):
+    """Save the OpenAI API key to env and persist it (admin only: the key is
+    server-wide, used for every user's scans)."""
+    current_user = get_current_user(request)
+    if not current_user:
         return RedirectResponse(url="/auth/login", status_code=302)
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only the administrator can change the server's OpenAI key")
     form = await request.form()
     csrf_guard(request, str(form.get("_csrf_token", "")))
 
@@ -1225,9 +1240,12 @@ async def save_api_key(request: Request):
 
 @app.post("/settings/test-key")
 async def test_api_key(request: Request):
-    """Quick test that the OpenAI key works."""
-    if not get_current_user(request):
+    """Quick test that the OpenAI key works (admin only)."""
+    current_user = get_current_user(request)
+    if not current_user:
         return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+    if not _is_admin(current_user):
+        return JSONResponse({"ok": False, "error": "Forbidden"}, status_code=403)
     # Accept optional key from JSON body (for testing a new key before saving)
     body_key = None
     try:

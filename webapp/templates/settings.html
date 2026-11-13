@@ -480,7 +480,8 @@
                 {% endif %}
             </div>
 
-            <!-- Key input form -->
+            {% if can_manage_ai_key %}
+            <!-- Key input form (admin only: the key is server-wide) -->
             <form id="apiKeyForm" method="POST" action="/settings/api-key">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <div class="api-key-group">
@@ -514,13 +515,16 @@
             <div class="privacy-note">
                 <span class="note-icon">&#128274;</span>
                 <span class="note-text">
-                    <strong>Your API key is stored locally on this server and never shared.</strong>
-                    LLM costs are billed directly to your OpenAI account. Counterscarp Engine does
-                    not proxy or pay for your API usage. If you set <code>OPENAI_API_KEY</code>
-                    as a system environment variable (e.g. via systemd), it takes priority over
-                    the key saved here.
+                    <strong>The key is stored on this server in a file only the service can read,
+                    and is used for every user's AI analysis.</strong>
+                    LLM costs are billed directly to your OpenAI account. If you set
+                    <code>OPENAI_API_KEY</code> as a system environment variable (e.g. via systemd),
+                    it takes priority over the key saved here.
                 </span>
             </div>
+            {% else %}
+            <p class="card-desc">The server's OpenAI key is managed by the administrator.</p>
+            {% endif %}
         </div>
 
         {% else %}

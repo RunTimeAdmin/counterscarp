@@ -299,7 +299,23 @@ async def forgot_password_submit(
     if not validate_csrf_token(request, str(form.get("_csrf_token", ""))):
         raise HTTPException(status_code=403, detail="CSRF validation failed")
 
-    user = user_manager.get_by_email(email)
+    # Unlimited resets let anyone flood a mailbox (and our SMTP account).
+    client_ip = get_client_ip(request)
+    ip_limiter = getattr(request.app.state, "reset_ip_limiter", None)
+    if ip_limiter and not ip_limiter.is_allowed(client_ip):
+        resp_429 = JSONResponse(
+            {"detail": "Too many password reset requests. Try again later."},
+            status_code=429,
+        )
+        add_rate_limit_headers(resp_429, ip_limiter, client_ip)
+        resp_429.headers["Retry-After"] = str(ip_limiter.get_reset_time(client_ip))
+        return resp_429
+    # Per-address cap: past it, send nothing but answer exactly as usual so
+    # the response never says whether the account exists.
+    email_limiter = getattr(request.app.state, "reset_email_limiter", None)
+    email_allowed = not email_limiter or email_limiter.is_allowed(email.strip().lower())
+
+    user = user_manager.get_by_email(email) if email_allowed else None
     if user:
         token = _password_reset_serializer.dumps(
             {"uid": user["id"], "purpose": "password-reset"}

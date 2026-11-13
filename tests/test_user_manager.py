@@ -526,3 +526,42 @@ class TestUserManagerPersistence:
             tmp_db.unlink()
         result = mgr._load_db()
         assert result == {"users": [], "version": 1}
+
+
+class TestUserStoreAcrossProcesses:
+    """users.json is written by several uvicorn workers and the arq worker;
+    a per-process threading.Lock let concurrent updates drop each other."""
+
+    def test_write_from_another_process_in_the_same_tick_is_seen(self, manager, tmp_db) -> None:
+        import os
+
+        from webapp.data_crypto import read_json, write_json
+
+        user = _make_email_user(manager)
+        assert manager.get_scan_credits(user["id"]) == 0  # now cached
+        before = os.stat(tmp_db)
+        # Another worker adds credits; Linux's coarse timestamps can leave
+        # the file's mtime unchanged.
+        db = read_json(tmp_db, {})
+        db["users"][0]["scan_credits"] = 7
+        write_json(tmp_db, db)
+        os.utime(tmp_db, ns=(before.st_atime_ns, before.st_mtime_ns))
+        assert manager.get_scan_credits(user["id"]) == 7
+
+    @pytest.mark.skipif(__import__("sys").platform == "win32", reason="fcntl locking is Linux-only")
+    def test_concurrent_processes_do_not_lose_updates(self, manager, tmp_db) -> None:
+        import multiprocessing
+
+        user = _make_email_user(manager)
+
+        def bump(n: int) -> None:
+            for _ in range(n):
+                UserManager().add_scan_credits(user["id"], 1)
+
+        ctx = multiprocessing.get_context("fork")
+        procs = [ctx.Process(target=bump, args=(50,)) for _ in range(4)]
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join(60)
+        assert manager.get_scan_credits(user["id"]) == 200

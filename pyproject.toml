@@ -113,6 +113,7 @@ markers = [
 include-package-data = true
 packages = [
     "webapp",
+    "webapp.routes",
     "webapp.templates",
     "webapp.static",
     "phases",
@@ -160,6 +161,9 @@ py-modules = [
     "state_manager",
     "signature_updater",
     "healthcheck",
+    "fork_logic_checks",
+    "project_ingest",
+    "solidity_structure",
 ]
 
 [tool.setuptools.package-data]

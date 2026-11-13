@@ -112,3 +112,47 @@ class TestRateLimiterThreadSafety:
         blocked = sum(1 for r in results if not r)
         assert allowed == 5
         assert blocked == 5
+
+
+class TestClientIp:
+    """A client behind nginx could pick its own rate-limit key by sending
+    X-Forwarded-For: nginx appends to it and the app trusted the first hop."""
+
+    @staticmethod
+    def _req(peer: str, headers: dict):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(client=SimpleNamespace(host=peer), headers=headers)
+
+    def test_spoofed_first_hop_is_ignored_behind_the_proxy(self) -> None:
+        from webapp.rate_limiter import get_client_ip
+
+        # What live nginx forwards when the client sent its own XFF header.
+        spoofed = {"x-forwarded-for": "1.2.3.4, 203.0.113.9", "x-real-ip": "203.0.113.9"}
+        assert get_client_ip(self._req("127.0.0.1", spoofed)) == "203.0.113.9"
+        # Without X-Real-IP, the hop our proxy appended (the last) is used.
+        assert get_client_ip(self._req("127.0.0.1", {"x-forwarded-for": "1.2.3.4, 203.0.113.9"})) == "203.0.113.9"
+
+    def test_headers_from_untrusted_peers_are_ignored(self) -> None:
+        from webapp.rate_limiter import get_client_ip
+
+        headers = {"x-forwarded-for": "1.2.3.4", "x-real-ip": "1.2.3.4"}
+        assert get_client_ip(self._req("198.51.100.7", headers)) == "198.51.100.7"
+        assert get_client_ip(self._req("127.0.0.1", {"x-real-ip": "junk"})) == "127.0.0.1"
+
+
+def test_redis_limiter_counts_requests_in_the_same_instant() -> None:
+    from unittest.mock import MagicMock
+
+    from webapp.rate_limiter import RedisRateLimiter
+
+    limiter = RedisRateLimiter.__new__(RedisRateLimiter)
+    limiter.max_requests, limiter.window, limiter._prefix = 5, 60, "t"
+    pipe = MagicMock()
+    pipe.execute.return_value = [0, 1, 1, True]
+    limiter._redis = MagicMock(pipeline=MagicMock(return_value=pipe))
+    with patch("webapp.rate_limiter.time.time", return_value=1000.0):
+        limiter.is_allowed("k")
+        limiter.is_allowed("k")
+    members = [next(iter(c.args[1])) for c in pipe.zadd.call_args_list]
+    assert len(set(members)) == 2

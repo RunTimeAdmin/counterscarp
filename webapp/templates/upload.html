@@ -511,7 +511,7 @@
     <!-- Hero -->
     <div class="upload-hero">
         <h1>Smart Contract Security Audit</h1>
-        <p class="subtitle">Upload your Solidity or Rust smart contracts for automated security analysis</p>
+        <p class="subtitle">Upload your Solidity smart contracts for automated security analysis</p>
         <div class="features-preview">
             <span class="feature-tag">Heuristic Scanner</span>
             <span class="feature-tag">Slither Analysis</span>
@@ -546,8 +546,8 @@
                     <div class="upload-icon" aria-hidden="true">FILE</div>
                     <p class="upload-text">Drag and drop your files here</p>
                     <p class="upload-hint">or click to browse</p>
-                    <p class="upload-formats">Supports: .sol, .rs, or a project .zip (Hardhat/Foundry)</p>
-                    <input type="file" id="files" name="files" multiple accept=".sol,.rs,.zip">
+                    <p class="upload-formats">Supports: .sol or a project .zip (Hardhat/Foundry). Solana/Rust: use the CLI.</p>
+                    <input type="file" id="files" name="files" multiple accept=".sol,.zip">
                 </div>
             </div>
 
@@ -564,7 +564,7 @@
             <div class="trust-banner">
                 <span class="trust-icon" aria-hidden="true">SSL</span>
                 <span class="trust-text">
-                    <strong>Your code is analyzed on our secure server and never stored or shared beyond your scan session.</strong>
+                    <strong>Your code is never shared. Uploads are deleted within {{ upload_retention_hours }} hours and results after {{ result_retention_days }} days.</strong>
                     <a href="/privacy">See our Privacy Policy</a>
                 </span>
             </div>

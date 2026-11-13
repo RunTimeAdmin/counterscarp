@@ -19,7 +19,7 @@ from webapp.auth import (
     get_license_key_for_request,
     validate_csrf_token,
 )
-from webapp.config import ALLOWED_EXTENSIONS, LOGO_PATH, RESULTS_DIR, UPLOAD_DIR
+from webapp.config import ALLOWED_EXTENSIONS, LOGO_PATH, NO_SOLIDITY_MESSAGE, RESULTS_DIR, UPLOAD_DIR
 from webapp.rate_limiter import add_rate_limit_headers, get_client_ip
 from webapp.scan_utils import (
     build_analyzers_list,
@@ -98,6 +98,7 @@ async def handle_audit_request(
             raise HTTPException(
                 status_code=400,
                 detail=(
+                    NO_SOLIDITY_MESSAGE if ext == ".rs" else
                     f"Invalid file type: {upload.filename}. "
                     f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}, .zip"
                 ),

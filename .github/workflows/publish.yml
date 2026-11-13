@@ -46,6 +46,12 @@ jobs:
           pip install twine
           twine check dist/*
 
+      - name: Wheel must not contain private modules
+        run: |
+          if python -m zipfile -l dist/*.whl | grep -E "license_manager\.pyi?|webapp/(license_api|stripe_integration|stripe_webhook_handlers)\.py"; then
+            echo "Private licensing/billing modules found in the wheel"; exit 1
+          fi
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -69,7 +75,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install from wheel
-        run: pip install dist/*.whl
+        run: pip install "$(ls dist/*.whl)[web]"
 
       - name: Verify installation
         run: |
@@ -77,6 +83,7 @@ jobs:
           python -c "from config_loader import load_config; print('config_loader OK')"
           python -c "from heuristic_scanner import scan_target; print('heuristic_scanner OK')"
           python -c "from report_generator import generate_markdown_report; print('report_generator OK')"
+          python -c "import counterscarp_core.licensing, webapp.routes.audit, webapp.main; print('web app OK')"
 
   publish-pypi:
     name: Publish to PyPI

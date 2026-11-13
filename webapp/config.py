@@ -11,7 +11,13 @@ STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 LOGO_PATH = BASE_DIR / "assets" / "logo_small.png"
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-ALLOWED_EXTENSIONS = {".sol", ".rs"}
+# Only Solidity: the web pipeline has no Rust/Solana analysis, and accepting
+# .rs produced "0 findings" reports that looked clean.
+ALLOWED_EXTENSIONS = {".sol"}
+NO_SOLIDITY_MESSAGE = (
+    "No Solidity (.sol) files found to scan. Solana/Rust programs can only be "
+    "scanned with the Counterscarp CLI (--solana-root)."
+)
 
 # Dashboard pagination
 DASHBOARD_PAGE_SIZE: int = 20

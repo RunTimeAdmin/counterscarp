@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from arq import cron
 from arq.connections import RedisSettings
 
 # Ensure project root is on sys.path so engine modules resolve
@@ -44,6 +45,15 @@ def _merge_slither_status(current: str, new_status: str) -> str:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _has_solidity(root: Path, excludes: list) -> bool:
+    """True if *root* holds a .sol file outside dependency/build folders."""
+    skip = set(excludes) | {".git", "node_modules"}
+    return any(
+        p.is_file() and not skip.intersection(p.relative_to(root).parts[:-1])
+        for p in root.rglob("*.sol")
+    )
+
 
 def _write_status(results_dir: Path, status: str, progress: str,
                   started_at: str, completed_at: str | None = None) -> None:
@@ -174,7 +184,7 @@ async def run_audit(
     Mirrors the orchestration logic from the ``/audit`` POST handler in
     ``main.py`` but writes progress to ``scan_status.json`` at each phase.
     """
-    from webapp.config import RESULTS_DIR, UPLOAD_DIR, LOGO_PATH
+    from webapp.config import NO_SOLIDITY_MESSAGE, RESULTS_DIR, UPLOAD_DIR, LOGO_PATH
     from webapp.scan_utils import (
         heuristic_finding_to_finding,
         count_lines,
@@ -235,6 +245,13 @@ async def run_audit(
             "Audit %s: project ingestion failed (%s); scanning uploads as-is",
             audit_id, _ing_exc,
         )
+
+    # Nothing the analyzers can read: say so. Running anyway reported every
+    # analyzer "completed, 0 findings", which looks like a clean contract.
+    if not _has_solidity(Path(scan_target), scan_excludes):
+        logger.info("Audit %s: no Solidity sources in %s", audit_id, scan_target)
+        _write_status(results_dir, "failed", NO_SOLIDITY_MESSAGE, started_at, _iso_now())
+        return
 
     # Resolve license tier for pipeline gating
     _lm = LicenseManager()
@@ -557,6 +574,16 @@ async def _on_startup(ctx: dict) -> None:
     logger.info("audit_index configured at %s", _project_root / "data" / "user_audit_index")
 
 
+async def purge_expired_scans(ctx: dict) -> None:
+    """Hourly: delete uploads and results past their retention period."""
+    import asyncio
+
+    from webapp.config import RESULTS_DIR, UPLOAD_DIR
+    from webapp.retention import purge_expired
+
+    await asyncio.to_thread(purge_expired, RESULTS_DIR, UPLOAD_DIR)
+
+
 class WorkerSettings:
     """arq worker configuration.
 
@@ -564,6 +591,7 @@ class WorkerSettings:
     """
 
     functions = [run_audit]
+    cron_jobs = [cron(purge_expired_scans, minute=17)]
     on_startup = _on_startup
     redis_settings = _redis_settings()
     max_jobs = 4
